@@ -101,7 +101,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
                 tablet it runs on. */}
             <span className="min-w-[10rem] flex-1 break-words text-sm">
               {match.sideA}
-              <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
+              <span className="px-1.5 text-xs uppercase tracking-[0.06em] text-muted-foreground">
                 v
               </span>
               {match.sideB}
@@ -192,7 +192,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
                   e.stopPropagation();
                   onSend(match.key);
                 }}
-                className={`flex-shrink-0 rounded-sm px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-opacity duration-fast ease-brand hover:text-accent focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:text-ink-faint ${
+                className={`flex-shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-opacity duration-fast ease-brand hover:text-accent focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:text-ink-faint ${
                   isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                 }`}
               >
@@ -205,7 +205,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
                 Empty on purpose: reserving the height NOW means the rows don't
                 reflow the day the reason text ships. Aligned under the sides
                 column (past #n's w-6 + gap-3). */}
-            <div aria-hidden className="min-h-4 pl-9 text-2xs text-muted-foreground" />
+            <div aria-hidden className="min-h-4 pl-9 text-xs text-muted-foreground" />
           </li>
         );
       })}

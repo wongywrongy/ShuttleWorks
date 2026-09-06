@@ -94,7 +94,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="min-w-0 flex-1 text-xs leading-snug">
         {toast.code && (
-          <div className="font-mono text-[10px] uppercase tracking-wide mb-0.5">
+          <div className="font-mono text-xs uppercase tracking-wide mb-0.5">
             {toast.code}
           </div>
         )}
@@ -108,7 +108,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
             degenerating on ordinary prose, because the column is ~24rem —
             far wider than any single word. */}
         {toast.detail && (
-          <div className="mt-0.5 break-words text-[10px]">
+          <div className="mt-0.5 break-words text-xs">
             {toast.detail}
           </div>
         )}
@@ -122,7 +122,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
           }}
           className={cn(
             INTERACTIVE_BASE,
-            'rounded-sm border border-current bg-card px-2 py-0.5 text-[11px] font-semibold hover:bg-card/90'
+            'rounded-sm border border-current bg-card px-2 py-0.5 text-xs font-semibold hover:bg-card/90'
           )}
         >
           {toast.actionLabel}

@@ -110,7 +110,7 @@ export function PlanToolbar({
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="plan-toolbar">
       {review ? (
-        <span data-testid="plan-review-note" className="text-2xs text-muted-foreground">
+        <span data-testid="plan-review-note" className="text-xs text-muted-foreground">
           Day complete · reviewing the plan it ran
         </span>
       ) : (
@@ -170,7 +170,7 @@ export function PlanToolbar({
                 </button>
               ) : null}
               {schedule && !reSolve.armed && !generating ? (
-                <span data-testid="ops-replan-note" className="text-2xs text-muted-foreground">
+                <span data-testid="ops-replan-note" className="text-xs text-muted-foreground">
                   A schedule is in place; Re-plan day replaces it.
                 </span>
               ) : null}

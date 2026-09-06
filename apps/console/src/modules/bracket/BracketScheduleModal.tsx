@@ -214,7 +214,7 @@ function CandidateList({
 
   return (
     <div className="flex max-h-72 flex-col gap-1 overflow-y-auto p-2">
-      <div className="px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {candidates.length} schedule option{candidates.length === 1 ? '' : 's'}
       </div>
       {candidates.map((c, i) => {

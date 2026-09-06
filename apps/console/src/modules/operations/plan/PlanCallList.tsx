@@ -122,7 +122,7 @@ export function PlanCallList({
                 </span>
                 <span className="min-w-[10rem] flex-1 break-words text-sm">
                   {b.sideA}
-                  <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className="px-1.5 text-xs uppercase tracking-[0.06em] text-muted-foreground">
                     v
                   </span>
                   {b.sideB}

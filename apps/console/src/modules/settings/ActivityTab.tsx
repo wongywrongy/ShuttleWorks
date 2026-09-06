@@ -97,7 +97,7 @@ export function ActivityTab({ tid }: { tid?: string }) {
                     {entry.actorName} · {activityTargetLabel(entry.target)}
                   </p>
                   {activityTargetLabel(entry.target) !== entry.target ? (
-                    <details className="mt-1 text-2xs text-muted-foreground">
+                    <details className="mt-1 text-xs text-muted-foreground">
                       <summary className="cursor-pointer">Technical details</summary>
                       <code>{entry.target}</code>
                     </details>

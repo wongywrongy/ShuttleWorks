@@ -74,7 +74,7 @@ export function SyncHealthIndicator({
       data-sync-state={state}
       role="status"
       aria-live="polite"
-      className={`${state === 'connected' ? 'sr-only' : 'inline-flex items-center rounded-full border border-current/30 bg-current/5 px-2 py-0.5 text-2xs font-medium'} ${tone} ${className}`}
+      className={`${state === 'connected' ? 'sr-only' : 'inline-flex items-center rounded-full border border-current/30 bg-current/5 px-2 py-0.5 text-xs font-medium'} ${tone} ${className}`}
     >
       {copy[state]}
     </span>

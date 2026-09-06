@@ -29,13 +29,13 @@ interface Props {
 // Shared hand-rolled button styles (mirror meet's MatchDetailsPanel pattern).
 const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded border border-border ` +
-  `bg-card px-2 py-1 text-2xs font-medium text-card-foreground ` +
+  `bg-card px-2 py-1 text-xs font-medium text-card-foreground ` +
   `hover:bg-muted/40 hover:text-foreground ` +
   `disabled:cursor-not-allowed disabled:opacity-50`;
 
 const primaryActionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded ` +
-  `bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground ` +
+  `bg-primary px-2 py-1 text-xs font-medium text-primary-foreground ` +
   `hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50`;
 
 export function BracketMatchControls({ data, onChange, matchId }: Props) {

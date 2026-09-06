@@ -253,7 +253,7 @@ export function DisruptionDialog({
                 </div>
               )}
               {!closureTemporary && (
-                <div className="mt-1 text-2xs text-muted-foreground">
+                <div className="mt-1 text-xs text-muted-foreground">
                   Closes the court for the rest of the day. Use the
                   director "Reopen court" action to restore it.
                 </div>

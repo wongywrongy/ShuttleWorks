@@ -80,7 +80,7 @@ function FilterChip({
       geometry="segment"
       semantics="pressed"
       onClick={onClick}
-      className="shrink-0 whitespace-nowrap px-2.5 py-1 text-2xs"
+      className="shrink-0 whitespace-nowrap px-2.5 py-1 text-xs"
     >
       {/* Same "label · count" grammar the match lists use (HUB-2). The two
           strips claimed to share a grammar and did not: this one ran the
@@ -269,7 +269,7 @@ export function HubPage() {
             {/* Hidden with the wordmark: a shortcut hint is dead weight on a
                 touch device, and it was the half of the collision that sat
                 on top of the other half. */}
-            <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-xs border border-border bg-surface-chip px-1 text-[10px] text-muted-foreground sm:block">
+            <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-xs border border-border bg-surface-chip px-1 text-xs text-muted-foreground sm:block">
               {IS_MAC ? '⌘K' : 'Ctrl K'}
             </kbd>
           </div>
@@ -417,7 +417,7 @@ export function HubPage() {
           {!loading && tournaments.length > 0 ? (
             <div
               data-testid="hub-footer"
-              className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2 text-3xs text-muted-foreground"
+              className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground"
             >
               <span className="sw-num">
                 {footerCounts.total} workspace{footerCounts.total === 1 ? '' : 's'}

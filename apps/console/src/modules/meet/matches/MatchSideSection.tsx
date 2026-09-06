@@ -181,7 +181,7 @@ export function PlayerCard({
     return (
       <div className="group flex items-center gap-2 rounded-sm border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
         <span className="min-w-0 flex-1 break-words italic">{id}</span>
-        <span className="shrink-0 text-2xs">Not on roster</span>
+        <span className="shrink-0 text-xs">Not on roster</span>
         {onRemove ? (
           <ConfirmDeleteButton
             label={`${id} from ${side}`}

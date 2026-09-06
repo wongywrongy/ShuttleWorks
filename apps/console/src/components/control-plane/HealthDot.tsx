@@ -28,9 +28,14 @@ export const HEALTH_WORD: Record<WorkspaceHealth, string> = {
   archived: 'Archived',
 };
 
-/** The legend line for a list of dots — one row, stated once, near the dots
- *  it explains. Ordered worst-first, matching how the Hub facets read. */
-export const HEALTH_LEGEND = 'Dot: amber needs attention · green no issues reported · grey not started or archived';
+/** The legend line for the list's dot — one row, stated once, near the rows
+ *  it describes. R4 (v3 consolidated, package 07): a routine health state
+ *  ("No issues reported", "Not started yet", "Archived") no longer renders a
+ *  dot at all — a coloured dot alone never carried meaning on its own, and
+ *  repeating the reassurance on every row was the finding (V3-OC02.1). Only
+ *  the exception state still gets a dot, always paired with its words, so
+ *  the legend now explains that one case instead of three colors. */
+export const HEALTH_LEGEND = 'Dot: needs attention';
 
 export function HealthDot({ health, title }: { health: WorkspaceHealth; title?: string }) {
   return (

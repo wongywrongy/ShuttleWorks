@@ -14,13 +14,13 @@ import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../../lib/utils';
 
 const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card ` +
-  `px-2 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`;
+  `px-2 py-1 text-xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`;
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-accent px-2 py-1 ` +
-  `text-2xs font-medium text-accent-ink ${ACCENT_PRESS}`;
+  `text-xs font-medium text-accent-ink ${ACCENT_PRESS}`;
 const armedBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-destructive px-2 py-1 ` +
-  `text-2xs font-medium text-destructive-foreground hover:brightness-110`;
+  `text-xs font-medium text-destructive-foreground hover:brightness-110`;
 
 export interface RunMatchControlProps {
   match: RunMatch;
@@ -78,7 +78,7 @@ export function RunAssignmentActions({
         >
           Postpone
         </button>
-        <p className="mt-2 text-2xs text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           Returns the match to the queue. Nothing is lost.
         </p>
       </div>

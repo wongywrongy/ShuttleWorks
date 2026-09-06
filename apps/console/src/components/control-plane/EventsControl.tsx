@@ -110,7 +110,7 @@ export function EventBadge({ code, seed }: { code: string; seed?: number | null 
       // an identifier, and in accent — border, fill and ink all three — a
       // roster row of four entries read as four buttons. The chip stays (it
       // separates one code from the next); the colour goes.
-      className="rounded-sm border border-border bg-surface-chip px-1 py-px text-3xs font-semibold text-foreground sw-num"
+      className="rounded-sm border border-border bg-surface-chip px-1 py-px text-xs font-semibold text-foreground sw-num"
       // `[n]` is the badminton draw-sheet seed convention (BRST-N1) — the
       // old `(n)` parenthetical read as a count on owner review, and the
       // BRST-2 tooltip alone wasn't enough to correct it.
@@ -196,7 +196,7 @@ export function EventsControl({
                     <EventBadge key={entryCode(e)} code={entryCode(e)} />
                   ))
                 ) : (
-                  <span className="text-2xs italic text-muted-foreground">
+                  <span className="text-xs italic text-muted-foreground">
                     Not entered
                   </span>
                 )}

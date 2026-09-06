@@ -139,7 +139,7 @@ export function MatchInspector({
             {supplements?.players ?? (
               <div className="space-y-1">
                 <div className="text-sm text-foreground">{match.sideA}</div>
-                <div className="text-3xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
+                <div className="text-xs uppercase tracking-[0.06em] text-muted-foreground">vs</div>
                 <div className="text-sm text-foreground">{match.sideB}</div>
               </div>
             )}

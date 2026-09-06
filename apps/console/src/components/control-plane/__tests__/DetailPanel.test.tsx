@@ -89,8 +89,10 @@ describe('DetailPanel', () => {
     // `Eyebrow` uppercases the text content, so the DOM matches the visual
     // and a text query resolves the plain label.
     const heading = screen.getByText('AVAILABILITY');
-    // The one canonical recipe: EYEBROW_CLASS (10px semibold caps, tracked).
-    expect(heading.className).toContain('text-2xs');
+    // The one canonical recipe: EYEBROW_CLASS (12px semibold caps, tracked —
+    // raised from 11px/10px under the v3 consolidated plan's 12px caption
+    // floor, package 07, ruling R1).
+    expect(heading.className).toContain('text-xs');
     expect(heading.className).toContain('uppercase');
     expect(screen.getByText('2 windows')).toBeInTheDocument();
     expect(screen.getByText('window rows')).toBeInTheDocument();

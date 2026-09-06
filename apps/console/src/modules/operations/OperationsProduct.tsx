@@ -438,7 +438,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                         selectedBlock.source === 'meet' && !selectedBlock.done && !review ? (
                           <button
                             type="button"
-                            className={`${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card px-2 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`}
+                            className={`${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card px-2 py-1 text-xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground`}
                             data-testid="ops-rail-move-btn"
                             onClick={() => setPlanDialog({ kind: 'move', matchId: selectedBlock.id })}
                           >

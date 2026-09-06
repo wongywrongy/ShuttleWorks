@@ -23,11 +23,16 @@ export function GeneralSettingsTab({
 }) {
   // The SAME derivation the shell header and the Hub run — imported, not
   // re-implemented, so a fourth precedence order can't creep in.
+  // R3 (v3 consolidated plan, package 07): every lifecycle word this row can
+  // show — Live, Complete, Archived, or a resting phase label — is an
+  // ordinary domain fact, never an exception, so the pill always renders as
+  // plain ink (`routine`), not a tinted container.
   const derived = summary
-    ? (lifecycleBadge(summary.signals?.phase, summary.status) ?? {
-        text: PHASE_LABEL[resolvePhase(summary)],
-        tone: 'idle' as const,
-      })
+    ? {
+        text: lifecycleBadge(summary.signals?.phase, summary.status)?.text
+          ?? PHASE_LABEL[resolvePhase(summary)],
+        tone: 'routine' as const,
+      }
     : null;
 
   return (

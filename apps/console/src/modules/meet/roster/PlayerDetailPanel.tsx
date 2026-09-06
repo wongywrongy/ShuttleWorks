@@ -174,7 +174,7 @@ function PlayerDetailFields({
       <DetailPanel.Section
         eyebrow="Availability"
         right={
-          <span className="text-2xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {formatWindowSummary(player.availability ?? [])}
           </span>
         }
@@ -262,7 +262,7 @@ function UnassignButton({ player, rank }: { player: PlayerDTO; rank: string }) {
           : `Unassign ${name} from ${rank}`
       }
       className={[
-        'rounded-sm border px-2 py-0.5 text-2xs transition-colors duration-fast ease-brand disabled:cursor-not-allowed disabled:opacity-50',
+        'rounded-sm border px-2 py-0.5 text-xs transition-colors duration-fast ease-brand disabled:cursor-not-allowed disabled:opacity-50',
         confirm.armed
           ? 'border-destructive bg-destructive/10 font-medium text-destructive'
           : 'border-border text-muted-foreground hover:border-destructive/40 hover:text-destructive',

@@ -82,7 +82,7 @@ export function ModuleCatalogRow({
               normal, one visible step quieter. */}
           <span
             className={[
-              "text-2xs uppercase tracking-[0.08em]",
+              "text-xs uppercase tracking-[0.06em]",
               module.status === "enabled"
                 ? "font-semibold text-accent"
                 : module.status === "available"

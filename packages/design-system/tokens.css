@@ -190,10 +190,20 @@
     --density-section-gap:  24px;
     --density-badge-h:      22px;
 
-    /* ----- Type ladder px (strict 10/11/12/13/14/16/18/24) --------------- */
-    --text-3xs:  0.625rem;  /* 10px footnote / status pill / micro-stamp     */
-    --text-2xs:  0.6875rem; /* 11px overline / eyebrow / SectionHeader       */
-    --text-xs:   0.75rem;   /* 12px metadata / mono ids                      */
+    /* ----- Type ladder px (11/12/13/14/16/18/24; 3xs retired) ------------ */
+    /* --text-3xs (10px) is RETIRED (v3 consolidated plan, package 07,
+       ruling R1): 12px (--text-xs) is the product's caption floor — nothing
+       that carries words renders smaller. The variable and the Tailwind
+       `text-3xs` utility stay defined only because `modules/display/**` is
+       owned by a concurrent workstream mid-edit at the time of this pass and
+       still calls it; every other consumer has moved to `--text-xs`. Remove
+       both once display's remaining `text-3xs` usages are gone — tracked in
+       debt-log.md under "v3 consolidated plan". Do not add new usages. */
+    --text-3xs:  0.625rem;  /* 10px — DEPRECATED, see above */
+    --text-2xs:  0.6875rem; /* 11px — numeric tabular data in dense tables
+                               ONLY (v3 consolidated plan R1); every caption
+                               made of words uses --text-xs (12px floor).   */
+    --text-xs:   0.75rem;   /* 12px caption floor / metadata / mono ids     */
     --text-2sm:  0.8125rem; /* 13px DATA-ROW body — tables/lists/queue rows/
                                inspector facts (SP-CONSOLE-REFINE G5). Forms,
                                buttons and prose stay on --text-sm.          */

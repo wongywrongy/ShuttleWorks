@@ -35,7 +35,7 @@ import { EYEBROW_CLASS } from '../../lib/utils';
 /** Canonical type treatment for a column label. Applied per-cell by
  *  `ColumnHeaderRow`; import directly for `<th>` cells in real tables. */
 export const COLUMN_HEADER_ROW_CLASSES =
-  'text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint';
+  'text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint';
 
 /**
  * Floor for a flexible column carrying a PERSON NAME — a match side, a roster
@@ -270,7 +270,7 @@ export function GroupBandHeader({
         </span>
       ) : null}
       {detail ? (
-        <span className="min-w-0 break-words text-2xs text-muted-foreground">
+        <span className="min-w-0 break-words text-xs text-muted-foreground">
           {detail}
         </span>
       ) : null}

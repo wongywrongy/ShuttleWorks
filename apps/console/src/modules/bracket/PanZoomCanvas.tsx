@@ -221,7 +221,7 @@ export function PanZoomCanvas({
                     key={i}
                     type="button"
                     onClick={() => focusRound(i)}
-                    className="rounded-sm px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
+                    className="rounded-sm px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
                   >
                     {label}
                   </button>

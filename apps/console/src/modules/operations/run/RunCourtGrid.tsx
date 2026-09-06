@@ -158,7 +158,7 @@ export function RunCourtGrid({
         const figure = bandFigure(now);
         const head = (
           <div
-            className={`flex items-center justify-between gap-2 whitespace-nowrap px-2.5 py-1.5 text-2xs font-extrabold uppercase tracking-[0.06em] ${band.cls}`}
+            className={`flex items-center justify-between gap-2 whitespace-nowrap px-2.5 py-1.5 text-xs font-extrabold uppercase tracking-[0.06em] ${band.cls}`}
           >
             <span>Court {lane.court}</span>
             <span className="sw-num">
@@ -180,7 +180,7 @@ export function RunCourtGrid({
               data-testid={`run-court-conflict-${lane.court}`}
               className="flex flex-col overflow-hidden rounded border border-status-overdue-solid bg-status-overdue-bg/20"
             >
-              <div className="flex items-center justify-between gap-2 bg-status-overdue-solid px-2.5 py-1.5 text-2xs font-extrabold uppercase tracking-[0.06em] text-status-overdue-ink">
+              <div className="flex items-center justify-between gap-2 bg-status-overdue-solid px-2.5 py-1.5 text-xs font-extrabold uppercase tracking-[0.06em] text-status-overdue-ink">
                 <span>Court {lane.court}</span>
                 {/* V3-OC19.1: never "Resolve this in Operations" while
                  * Operations IS the current surface. */}
@@ -264,13 +264,13 @@ export function RunCourtGrid({
             <div className="flex flex-col gap-[5px] px-2.5 py-[7px]">
               <SideRow name={now.sideA} />
               <div className="border-t border-rule-soft pt-1.5">
-                <span className="mb-0.5 block text-3xs font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                <span className="mb-0.5 block text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
                   VS
                 </span>
                 <SideRow name={now.sideB} />
               </div>
             </div>
-            <div className="mt-auto flex items-center justify-between gap-2 border-t border-rule-soft px-2.5 py-[5px] text-3xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
+            <div className="mt-auto flex items-center justify-between gap-2 border-t border-rule-soft px-2.5 py-[5px] text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
               <span className="min-w-0 break-words sw-num">{identityLabel}</span>
               <span className="shrink-0 text-accent">Open ›</span>
             </div>

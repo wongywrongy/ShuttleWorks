@@ -408,14 +408,14 @@ export function RosterTab() {
                     placeholder="Filter players…"
                   />
                   <div className="mt-2 grid grid-cols-2 gap-2">
-                    <label className="text-2xs text-muted-foreground">
+                    <label className="text-xs text-muted-foreground">
                       Event
                       <select className="mt-1 h-7 w-full rounded-sm border border-border bg-card px-1.5 text-xs text-foreground" value={eventFilter} onChange={(e) => setEventFilter(e.target.value)} aria-label="Filter roster by event">
                         <option value="all">All events</option>
                         {eventOptions.map((code) => <option key={code} value={code}>{code}</option>)}
                       </select>
                     </label>
-                    <label className="text-2xs text-muted-foreground">
+                    <label className="text-xs text-muted-foreground">
                       Issues
                       <select className="mt-1 h-7 w-full rounded-sm border border-border bg-card px-1.5 text-xs text-foreground" value={issueFilter} onChange={(e) => setIssueFilter(e.target.value)} aria-label="Filter roster by issues">
                         <option value="all">All</option>

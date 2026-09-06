@@ -77,7 +77,7 @@ export function ScoreLane({
       className="inline-flex items-center justify-end gap-0.5 text-xs tabular-nums text-foreground"
     >
       {reason ? (
-        <span className="mr-1 rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="mr-1 rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {REASON_BADGE[reason]}
         </span>
       ) : null}
@@ -118,7 +118,7 @@ function CardSide({
       >
         {names}
         {reason ? (
-          <span className="ml-1.5 rounded-sm bg-muted px-1 align-middle text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="ml-1.5 rounded-sm bg-muted px-1 align-middle text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {REASON_BADGE[reason]}
           </span>
         ) : null}
@@ -184,7 +184,7 @@ function ResultSideBlock({
       <div className="min-w-0 flex-1">{rows}</div>
       {rail ? <span className="shrink-0">{rail}</span> : null}
       {reason ? (
-        <span className="shrink-0 rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="shrink-0 rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {REASON_BADGE[reason]}
         </span>
       ) : null}
@@ -265,7 +265,7 @@ export function ResultSides({
         />
       </div>
       {meta ? (
-        <div className="mt-0.5 border-t border-border pt-1 text-2xs text-muted-foreground">
+        <div className="mt-0.5 border-t border-border pt-1 text-xs text-muted-foreground">
           {meta}
         </div>
       ) : null}
@@ -322,7 +322,7 @@ export function MatchCard({
         reason={reasonSide === 'B' ? reason : null}
       />
       {meta ? (
-        <div className="mt-1 border-t border-border pt-1 text-2xs text-muted-foreground">
+        <div className="mt-1 border-t border-border pt-1 text-xs text-muted-foreground">
           {meta}
         </div>
       ) : null}

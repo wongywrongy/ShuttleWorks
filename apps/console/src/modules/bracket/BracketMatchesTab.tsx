@@ -326,7 +326,7 @@ export function BracketMatchesTab({
       render: (_value, { pu }) => {
         const result = resultByPu.get(pu.id);
         const reason = result?.reason ?? (result?.walkover ? 'walkover' : null);
-        return <span data-testid={`bracket-match-status-${pu.id}`} className="inline-flex min-w-0 items-center justify-end"><MatchStatus status={statusOf(pu.id)} />{reason ? <span className="ml-1 text-3xs text-muted-foreground">{reason === 'walkover' ? 'W.O.' : reason}</span> : null}</span>;
+        return <span data-testid={`bracket-match-status-${pu.id}`} className="inline-flex min-w-0 items-center justify-end"><MatchStatus status={statusOf(pu.id)} />{reason ? <span className="ml-1 text-xs text-muted-foreground">{reason === 'walkover' ? 'W.O.' : reason}</span> : null}</span>;
       },
     },
     {

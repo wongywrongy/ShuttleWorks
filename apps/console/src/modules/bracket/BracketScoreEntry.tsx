@@ -52,14 +52,14 @@ export function BracketScoreEntry({
 
   return (
     <div className="space-y-2" data-testid="bracket-score-entry">
-      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-2xs text-muted-foreground">
+      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-xs text-muted-foreground">
         <span />
         <span className="w-12 text-center font-medium">A</span>
         <span className="w-12 text-center font-medium">B</span>
       </div>
       {sets.map((s, i) => (
         <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-          <span className="text-2xs text-muted-foreground">Set {i + 1}</span>
+          <span className="text-xs text-muted-foreground">Set {i + 1}</span>
           <input
             type="number"
             min={0}
@@ -96,7 +96,7 @@ export function BracketScoreEntry({
             Cancel
           </button>
         ) : null}
-        <span className="text-2xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {winner
             ? `${winner === 'A' ? labelA : labelB} wins`
             : 'Enter set scores'}

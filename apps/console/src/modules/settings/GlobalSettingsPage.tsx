@@ -272,7 +272,7 @@ function SessionsPage() {
               <div className="text-sm font-medium text-foreground">{browser}</div>
               <div className={TEXT_MUTED_XS}>Current session · active now</div>
             </div>
-            <span className="rounded-sm bg-action-selected-bg px-1.5 py-0.5 text-2xs font-medium text-action-selected-foreground">
+            <span className="rounded-sm bg-action-selected-bg px-1.5 py-0.5 text-xs font-medium text-action-selected-foreground">
               This device
             </span>
           </div>

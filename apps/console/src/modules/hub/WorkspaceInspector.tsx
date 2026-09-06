@@ -52,7 +52,7 @@ function MetricTile({
   return (
     <div className="bg-surface-screen p-2.5">
       <div className={`text-lg font-bold leading-tight sw-num ${color}`}>{value}</div>
-      <div className="text-2xs text-text-muted">{label}</div>
+      <div className="text-xs text-text-muted">{label}</div>
     </div>
   );
 }
@@ -117,11 +117,19 @@ export function WorkspaceInspector({
   // to the Ready/Needs-setup fallback, which only applies when the
   // lifecycle itself says nothing.
   const lifecycle = lifecycleBadge(tournament.signals?.phase, tournament.status);
-  const pill: { text: string; tone: 'green' | 'amber' | 'idle' | 'done' } | null =
+  // R3 (v3 consolidated plan, package 07): "Ready" and the lifecycle's
+  // Archived/Complete are ordinary domain facts, not exceptions — they
+  // render as plain ink (`routine`). "Needs setup" is the one state that
+  // still earns a tinted container, because it is the exception the
+  // director is meant to notice.
+  const pill: { text: string; tone: 'routine' | 'amber' } | null =
     lifecycle
-      ? lifecycleChip(tournament.signals?.phase, tournament.status)
+      ? (() => {
+          const chip = lifecycleChip(tournament.signals?.phase, tournament.status);
+          return chip ? { text: chip.text, tone: 'routine' as const } : null;
+        })()
       : pillReady
-        ? { text: 'Ready', tone: 'green' }
+        ? { text: 'Ready', tone: 'routine' }
         : { text: 'Needs setup', tone: 'amber' };
   const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
 
@@ -264,7 +272,7 @@ export function WorkspaceInspector({
               </span>
               <span
                 className={[
-                  'text-2xs capitalize',
+                  'text-xs capitalize',
                   m.status === 'enabled' ? 'text-text-secondary font-medium' : 'text-text-muted',
                 ].join(' ')}
               >

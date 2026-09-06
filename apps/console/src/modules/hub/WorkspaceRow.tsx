@@ -131,13 +131,16 @@ export function WorkspaceRow({
   onDelete,
 }: RowProps) {
   const health = workspaceHealth(tournament);
+  // X16/V3-OC02.1 (v3 consolidated, package 07): 'complete' used to render
+  // here as "Completed" AND again as the lifecycle badge's "Complete" a few
+  // pixels away — the same fact twice. The badge (or, when it is
+  // suppressed, the facet strip's "Complete · N") already carries it, so
+  // this label now only covers phases the badge never does.
   const phaseLabel = tournament.signals?.phase === 'live'
     ? 'Live now'
-    : tournament.signals?.phase === 'complete'
-      ? 'Completed'
-      : tournament.signals?.phase === 'ready'
-        ? 'Ready'
-        : null;
+    : tournament.signals?.phase === 'ready'
+      ? 'Ready'
+      : null;
   const action = rowActionFor(tournament, group);
   // Console-mock adoption (2026-08-13): the row states its lifecycle where
   // the operator scans, not just in the inspector. Shared precedence
@@ -192,11 +195,19 @@ export function WorkspaceRow({
       {/* NAME leads — the row's anchor, and the only thing on it at full
           weight. Everything to its right is metadata or an affordance. */}
       <span className="flex min-w-[12rem] flex-1 items-center gap-2.5">
-        <HealthDot health={health} />
-        {/* The dot is `aria-hidden` (it has a title, which AT ignores on a
-            span), so the one state worth interrupting a scan for gets words. */}
-        <span className="text-2xs text-muted-foreground">{HEALTH_WORD[health]}</span>
-        {phaseLabel ? <span className="shrink-0 text-2xs font-medium text-foreground">{phaseLabel}</span> : null}
+        {/* R4 (v3 consolidated, package 07): a routine health state ("No
+            issues reported", "Not started yet", "Archived") is reassurance,
+            not signal — it repeated on every row (V3-OC02.1) and the dot
+            never carried meaning on its own anyway. Only the exception
+            (`attention`) earns a dot, and it always ships with the words
+            that say what is wrong, never the dot alone. */}
+        {health === 'attention' ? (
+          <>
+            <HealthDot health={health} />
+            <span className="text-xs text-status-warning-fg">{HEALTH_WORD[health]}</span>
+          </>
+        ) : null}
+        {phaseLabel ? <span className="shrink-0 text-xs font-medium text-foreground">{phaseLabel}</span> : null}
         {/* Wraps, never ellipsises: the name is the row's only identifying
             fact, and the row's `flex-wrap` + the 12rem floor above give it the
             width to wrap at WORD boundaries — wrapping is necessary, not

@@ -51,7 +51,7 @@ function StatItem({
       <span className={`text-lg font-bold leading-none sw-num ${tone}`} {...metaAttrs}>
         {value}
       </span>
-      <span className="text-3xs uppercase tracking-[0.06em] text-ink-faint">
+      <span className="text-xs uppercase tracking-[0.06em] text-ink-faint">
         {label}
       </span>
     </div>

@@ -116,7 +116,7 @@ function strictHeaderClass<T>(
 ): string {
   return [
     strictCellClass(column, elastic),
-    "font-semibold uppercase tracking-[0.08em] text-3xs text-ink-faint",
+    "font-semibold uppercase tracking-[0.06em] text-xs text-ink-faint",
   ]
     .filter(Boolean)
     .join(" ");
@@ -515,7 +515,7 @@ export function DenseDataTable<T>({
                             column,
                             column.id === elasticColumnId,
                           )
-                        : "px-3 py-2 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint",
+                        : "px-3 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint",
                       !strictRows
                         ? column.align === "right"
                           ? "text-right"
@@ -571,7 +571,7 @@ export function DenseDataTable<T>({
                         data-testid={group.testId}
                         aria-expanded={!collapsedGroups.has(group.key)}
                         onClick={() => toggleGroup(group.key)}
-                        className="flex min-h-8 w-full items-center gap-2 text-left text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="flex min-h-8 w-full items-center gap-2 text-left text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <CaretRight
                           aria-hidden
@@ -659,7 +659,7 @@ export function DenseDataTable<T>({
                         .filter((column) => column.mobile !== false)
                         .map((column) => (
                           <div key={column.id} className="min-w-0">
-                            <dt className="text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
+                            <dt className="text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint">
                               {column.label}
                             </dt>
                             <dd className="break-words text-2sm text-ink">

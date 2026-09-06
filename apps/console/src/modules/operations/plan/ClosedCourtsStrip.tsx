@@ -23,7 +23,7 @@ export function ClosedCourtsStrip({ onOpenDirector }: { onOpenDirector: () => vo
 
   const chip =
     `${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded-sm border border-status-warning/40 ` +
-    'bg-status-warning-bg px-2 py-0.5 text-2xs font-medium text-status-warning hover:brightness-110';
+    'bg-status-warning-bg px-2 py-0.5 text-xs font-medium text-status-warning hover:brightness-110';
 
   return (
     <div

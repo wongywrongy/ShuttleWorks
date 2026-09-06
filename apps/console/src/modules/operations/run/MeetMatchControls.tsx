@@ -26,11 +26,11 @@ import { ScoreEditor } from './ScoreEditor';
 
 const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded border border-border bg-card ` +
-  `px-2 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground ` +
+  `px-2 py-1 text-xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground ` +
   `disabled:cursor-not-allowed disabled:opacity-50`;
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded bg-accent px-2 py-1 ` +
-  `text-2xs font-medium text-accent-ink ${ACCENT_PRESS} ` +
+  `text-xs font-medium text-accent-ink ${ACCENT_PRESS} ` +
   `disabled:cursor-not-allowed disabled:opacity-50`;
 
 export interface MeetMatchControlsProps {
@@ -156,7 +156,7 @@ export function MeetMatchControls({
           >
             Undo start
           </button>
-          <p className="mt-2 text-2xs text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             Returns the match to the queue and restores its planned slot. Nothing is lost.
           </p>
       </div>
@@ -199,7 +199,7 @@ export function MeetMatchControls({
     ) : (
       <div className="space-y-1">
         <div className="text-sm text-foreground">{match.sideA}</div>
-        <div className="text-3xs uppercase tracking-[0.08em] text-muted-foreground">vs</div>
+        <div className="text-xs uppercase tracking-[0.06em] text-muted-foreground">vs</div>
         <div className="text-sm text-foreground">{match.sideB}</div>
       </div>
     );
@@ -226,7 +226,7 @@ export function MeetMatchControls({
                   <span className="w-12 flex-shrink-0 text-2xs font-medium tabular-nums text-foreground">
                     {getMatchLabel(impacted, impactedId)}
                   </span>
-                  <span className="min-w-0 flex-1 break-words text-3xs text-muted-foreground">
+                  <span className="min-w-0 flex-1 break-words text-xs text-muted-foreground">
                     {shared.join(', ') || '–'}
                   </span>
                 </button>
@@ -277,7 +277,7 @@ function PlayerRow({
               aria-pressed={confirmed}
               title={confirmed ? `Mark ${name} as not checked in` : `Check in ${name}`}
               aria-label={confirmed ? `Mark ${name} as not checked in` : `Check in ${name}`}
-              className={`inline-flex h-4 w-4 items-center justify-center rounded text-3xs ${
+              className={`inline-flex h-4 w-4 items-center justify-center rounded text-xs ${
                 confirmed
                   ? 'bg-status-live text-bg-elev'
                   : 'border border-border bg-card text-muted-foreground hover:bg-muted/40'
@@ -293,7 +293,7 @@ function PlayerRow({
             disabled={locked}
             aria-expanded={picking}
             aria-label={`Substitute ${name}`}
-            className={`rounded border border-border bg-card px-1 text-3xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`rounded border border-border bg-card px-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
               picking
                 ? 'bg-muted/40 text-foreground'
                 : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -315,8 +315,8 @@ function PlayerRow({
             }
             className={`disabled:cursor-not-allowed disabled:opacity-50 ${
               confirmRemove.armed
-                ? 'rounded border border-destructive bg-destructive px-1 text-3xs font-semibold text-destructive-foreground sw-pulse'
-                : 'rounded border border-destructive/40 bg-status-blocked-bg px-1 text-3xs text-status-blocked hover:bg-status-blocked-bg/70'
+                ? 'rounded border border-destructive bg-destructive px-1 text-xs font-semibold text-destructive-foreground sw-pulse'
+                : 'rounded border border-destructive/40 bg-status-blocked-bg px-1 text-xs text-status-blocked hover:bg-status-blocked-bg/70'
             }`}
           >
             {confirmRemove.armed ? '× confirm' : '×'}
@@ -324,13 +324,13 @@ function PlayerRow({
         </span>
       </div>
       {picking && (
-        <div className="ml-3 rounded border border-border bg-card text-2xs">
-          <div className="border-b border-border/60 px-1.5 py-1 text-3xs leading-snug text-muted-foreground">
+        <div className="ml-3 rounded border border-border bg-card text-xs">
+          <div className="border-b border-border/60 px-1.5 py-1 text-xs leading-snug text-muted-foreground">
             Replaces this player in this match only.
           </div>
           <div className="max-h-32 overflow-y-auto">
             {subCandidates.length === 0 && (
-              <div className="px-1.5 py-1 text-3xs text-muted-foreground">No available players.</div>
+              <div className="px-1.5 py-1 text-xs text-muted-foreground">No available players.</div>
             )}
             {subCandidates.map((p) => (
               <button

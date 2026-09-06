@@ -132,7 +132,7 @@ function BannerView({
       data-testid={`conflict-banner-${flavour}`}
       className={
         `mt-1 flex items-center justify-between gap-2 rounded border px-2 py-1 ` +
-        `text-2xs leading-tight ${variantClasses} ${className}`
+        `text-xs leading-tight ${variantClasses} ${className}`
       }
     >
       {/* A conflict message names WHAT collided — an ellipsis on it is the

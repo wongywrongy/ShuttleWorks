@@ -129,20 +129,20 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
         {showSource ? (
           <span
             aria-hidden
-            className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-xs text-3xs font-semibold sw-num ${squareCls}`}
+            className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-xs text-xs font-semibold sw-num ${squareCls}`}
           >
             {SOURCE_INITIAL[source]}
           </span>
         ) : null}
         <span className="min-w-0 break-words text-2xs font-semibold sw-num">{label}</span>
         {doneLabel ? (
-          <span aria-hidden className="text-3xs text-muted-foreground">
+          <span aria-hidden className="text-xs text-muted-foreground">
             ✓
           </span>
         ) : null}
       </span>
       {showSides && sideA != null && sideB != null && (
-        <span className="mt-0.5 break-words text-2xs leading-tight">
+        <span className="mt-0.5 break-words text-xs leading-tight">
           {sideA} <span className="text-muted-foreground">v</span> {sideB}
         </span>
       )}

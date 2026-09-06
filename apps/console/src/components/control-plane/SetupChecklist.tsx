@@ -29,7 +29,7 @@ function StepIcon({ step }: { step: ChecklistStep }) {
     return (
       <span
         aria-hidden
-        className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-status-live/15 text-[10px] text-status-live"
+        className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-status-live/15 text-xs text-status-live"
       >
         ✓
       </span>
@@ -39,7 +39,7 @@ function StepIcon({ step }: { step: ChecklistStep }) {
     <span
       aria-hidden
       className={[
-        'mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px]',
+        'mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-xs',
         step.blocked ? 'border-border text-text-muted' : 'border-ink-faint text-ink-faint',
       ].join(' ')}
     >

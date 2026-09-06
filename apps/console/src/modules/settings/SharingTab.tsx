@@ -361,7 +361,7 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="rounded-sm border border-border px-1.5 py-0.5 text-2xs font-medium capitalize text-muted-foreground">
+                      <span className="rounded-sm border border-border px-1.5 py-0.5 text-xs font-medium capitalize text-muted-foreground">
                         {inv.role}
                       </span>
                       <span
@@ -373,7 +373,7 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
                         {STATUS_LABEL[status]}
                       </span>
                     </div>
-                    <div className="mt-0.5 break-words text-2xs text-muted-foreground">
+                    <div className="mt-0.5 break-words text-xs text-muted-foreground">
                       {inv.email ? <>{inv.email} · </> : null}
                       {fmtExpiry(inv.expiresAt)}
                     </div>

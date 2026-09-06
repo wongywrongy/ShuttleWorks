@@ -337,7 +337,7 @@ export function GanttTimeline({
               wash) because a sticky cell has live content sliding under it. */}
           <div
             style={{ width: tier.label }}
-            className="sticky left-0 z-20 flex-shrink-0 border-r border-border bg-card px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
+            className="sticky left-0 z-20 flex-shrink-0 border-r border-border bg-card px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
           >
             {headerLabel}
           </div>
@@ -349,6 +349,10 @@ export function GanttTimeline({
                 // whitespace-nowrap + visible overflow: a time label ("12:00")
                 // must never wrap/clip into "12:0" when the column is narrower
                 // than the text — label-less neighbors make bleed harmless.
+                // text-2xs survives here under R1's numeric-tabular-data
+                // exception (v3 consolidated plan, package 07): these are
+                // `tabular-nums` time stamps in the timeline's own dense grid,
+                // not a caption made of words.
                 'flex-shrink-0 overflow-visible whitespace-nowrap border-l border-border px-0.5 py-1 text-center text-2xs tabular-nums',
                 slotId === currentSlot
                   ? 'bg-status-live/15 font-semibold text-status-live'

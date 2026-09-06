@@ -28,8 +28,11 @@ const badgeVariants = cva(
         accent: 'border-transparent bg-accent-bg text-accent',
       },
       size: {
-        default: 'h-badge px-2 text-2xs',
-        sm: 'h-[18px] px-1.5 text-3xs',
+        // Raised to the 12px caption floor (v3 consolidated plan, package
+        // 07, R1) — both sizes carry words, not bare tabular digits, so
+        // neither qualifies for the numeric-tabular-data exception.
+        default: 'h-badge px-2 text-xs',
+        sm: 'h-[18px] px-1.5 text-xs',
       },
     },
     defaultVariants: { tone: 'default', size: 'default' },

@@ -44,7 +44,7 @@ export function PhaseStepper({ phases, current, archived = false }: Props) {
               data-state={active ? 'current' : done ? 'done' : 'upcoming'}
               aria-current={active ? 'step' : undefined}
               className={[
-                'inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-2xs font-semibold uppercase tracking-[0.08em]',
+                'inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs font-semibold uppercase tracking-[0.06em]',
                 active
                   ? 'bg-accent/12 text-accent'
                   : done

@@ -361,7 +361,7 @@ function BracketRosterTabCore({
               actually on screen. One footnote for the whole table, not a
               per-row repetition and not a permanent header annotation. */}
           {anySeeded && (
-            <p className="px-5 pb-4 pt-2 text-3xs text-muted-foreground">
+            <p className="px-5 pb-4 pt-2 text-xs text-muted-foreground">
               <span className="sw-num">[n]</span> after an event code is that
               player&rsquo;s seed in the draw.
             </p>

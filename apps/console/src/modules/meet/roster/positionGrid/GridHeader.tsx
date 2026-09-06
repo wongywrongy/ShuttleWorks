@@ -54,7 +54,7 @@ function SortableHeaderCell({
         title={label?.full ? `${label.full}: drag to reorder` : 'Drag to reorder'}
       >
         {ev.prefix}
-        <span className="text-3xs font-medium text-muted-foreground">
+        <span className="text-xs font-medium text-muted-foreground">
           {isDoubles(ev.prefix) ? 'doubles' : 'singles'}
         </span>
       </span>
@@ -81,7 +81,7 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
   return (
     <thead>
       <tr>
-        <th className="w-9 border-b border-r border-border bg-muted/40 px-1 py-1.5 align-top text-center text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <th className="w-9 border-b border-r border-border bg-muted/40 px-1 py-1.5 align-top text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <div className="flex flex-col items-center gap-1">
             {/* The one deliberate ordinal in the console: this column is the
                 position/rank number players are assigned TO, not a row count
@@ -94,7 +94,7 @@ export function GridHeader({ events }: { events: GridEvent[] }) {
                 onClick={() => toggleVisible(p)}
                 aria-label={`Show ${p} column`}
                 title={`Show ${p}`}
-                className="rounded border border-dashed border-border px-1 text-3xs sw-num lowercase text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
+                className="rounded border border-dashed border-border px-1 text-xs sw-num lowercase text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
               >
                 {p}
               </button>

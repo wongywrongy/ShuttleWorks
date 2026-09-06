@@ -51,7 +51,7 @@ function Figures({ items }: { items: { value: number | string; label: string }[]
       {items.map((f) => (
         <div key={f.label}>
           <dd className="text-xl font-semibold leading-none sw-num text-foreground">{f.value}</dd>
-          <dt className="mt-1 text-2xs uppercase tracking-[0.06em] text-text-muted">{f.label}</dt>
+          <dt className="mt-1 text-xs uppercase tracking-[0.06em] text-text-muted">{f.label}</dt>
         </div>
       ))}
     </dl>

@@ -13,7 +13,7 @@ Role split: Claude (Fable) orchestrates — classifies, briefs, rules, reviews. 
 
 | Pkg | Priority | Status | Evidence |
 |---|---|---|---|
-| 01 fixture | P0 | done for 3/7 defect states; 01b (DB-direct conflicts) in progress | reports/01-fixture.md |
+| 01 fixture | P0 | done · b065ac72 + 01b (7/7 states asserted; (c) structurally impossible, debt V3-01-2) | reports/01-fixture.md, reports/01b-fixture-defects.md |
 | 02 contracts | P0 | done · 871ee621 | docs/reference/contracts/state-and-formatting.md, ADR 0029, reports/02-contracts.md |
 | 03 conflict recovery + counts | P0 | done (focused gates + full backend suite) · see git log | reports/03-conflicts.md |
 | 04 public projection | P0 | 04a done · see git log; 04b (display consolidation) after 03 | reports/04a-public-projection.md, ledger/04-strings.md |

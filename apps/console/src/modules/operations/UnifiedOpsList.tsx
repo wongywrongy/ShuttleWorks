@@ -31,11 +31,11 @@ interface Props {
 
 const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm border border-border ` +
-  `bg-card px-2 py-0.5 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground ` +
+  `bg-card px-2 py-0.5 text-xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground ` +
   `disabled:cursor-not-allowed disabled:opacity-50`;
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm bg-accent px-2 py-0.5 ` +
-  `text-2xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:cursor-not-allowed disabled:opacity-50`;
+  `text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:cursor-not-allowed disabled:opacity-50`;
 
 function RowActions({
   b,
@@ -76,7 +76,7 @@ function RowActions({
   }
   // bracket
   if (!assigned) {
-    return <span className="text-2xs text-muted-foreground">awaiting court</span>;
+    return <span className="text-xs text-muted-foreground">awaiting court</span>;
   }
   if (!b.started) {
     return (
@@ -160,7 +160,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
         {showStatusMarker ? (
           <span
             data-testid="ops-status-marker"
-            className="flex-shrink-0 text-2xs font-semibold uppercase tracking-[0.06em] text-muted-foreground"
+            className="flex-shrink-0 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground"
           >
             {statusLabel}
           </span>
@@ -177,7 +177,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
         ) : null}
         <span className="min-w-[10rem] flex-1 break-words text-2sm">
           {b.sideA}
-          <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
+          <span className="px-1.5 text-xs uppercase tracking-[0.06em] text-muted-foreground">vs</span>
           {b.sideB}
         </span>
         {onAction ? (

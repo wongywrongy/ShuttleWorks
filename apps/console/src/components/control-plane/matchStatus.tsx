@@ -4,7 +4,7 @@
  * their detail panels. Display-only: Operations owns run-state, so nothing
  * here is interactive and nothing writes.
  */
-import type { PillTone, StatusCountItem } from '@scheduler/design-system/components';
+import type { ChipTone, StatusCountItem } from '@scheduler/design-system/components';
 import { STATE_WORD } from '../../lib/stateWords';
 import { StatusPill } from '../StatusPill';
 import { EYEBROW_CLASS } from '../../lib/utils';
@@ -48,7 +48,7 @@ export function statusTallyItems(
 /** StatusPill tone per status. Since X6 only LIVE actually chips in the
  *  lists/panels (via `MatchStatus`); the map keeps all four states because
  *  `statusTallyItems` still tones the StatusBar progress strips with it. */
-export const STATUS_PILL_TONE: Record<MatchListStatus, PillTone> = {
+export const STATUS_PILL_TONE: Record<MatchListStatus, ChipTone> = {
   done: 'done',
   live: 'green',
   ready: 'blue',
@@ -80,10 +80,10 @@ export const STATUS_TREATMENT: Record<MatchListStatus, 'chip' | 'text'> = {
  *  eyebrow's semibold; PENDING and the DONE fallback drop to normal, one
  *  visible step quieter without a new unchecked color. */
 const TEXT_CLASS: Record<MatchListStatus, string> = {
-  done: 'text-2xs uppercase tracking-[0.08em] text-muted-foreground',
+  done: 'text-xs uppercase tracking-[0.06em] text-muted-foreground',
   live: '',
   ready: `${EYEBROW_CLASS} text-muted-foreground`,
-  pending: 'text-2xs uppercase tracking-[0.08em] text-muted-foreground',
+  pending: 'text-xs uppercase tracking-[0.06em] text-muted-foreground',
 };
 
 /** The one status renderer for the match lists and their detail panels. */

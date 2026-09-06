@@ -295,7 +295,7 @@ function BracketView({
             {editing ? "Done seeding" : "Edit seeding"}
           </button>
           {editing ? (
-            <span className="text-2xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {busy
                 ? "Saving…"
                 : selectedPos !== null
@@ -543,7 +543,7 @@ function MobileRoundFocus({
                   data-unit-id={id}
                   className="rounded border border-border bg-bg-elev p-3 shadow-sm"
                 >
-                  <div className="mb-2 flex items-center justify-between gap-2 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
+                  <div className="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-[0.06em] text-muted-foreground">
                     <span>Match {index + 1}</span>
                     <span>
                       {assignment
@@ -1398,7 +1398,7 @@ function BracketCell({
       {/* One step darker than the muted tier: this caption is the ONLY
           schedule information in the whole tree, and at muted-on-white it
           was very nearly invisible (DRAW-3). */}
-      <div className="flex justify-between text-3xs text-text-secondary sw-num">
+      <div className="flex justify-between text-xs text-text-secondary sw-num">
         <span>{identityLabel}</span>
         <span>
           {assignment
@@ -1452,7 +1452,7 @@ function BracketCell({
           <button
             type="button"
             onClick={() => setScoring(true)}
-            className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1 text-2xs font-medium text-muted-foreground hover:border-accent hover:text-foreground"
+            className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1 text-xs font-medium text-muted-foreground hover:border-accent hover:text-foreground"
           >
             Enter score
           </button>
@@ -1538,11 +1538,11 @@ function Side({
           : label}
       </span>
       {seeding && !bye ? (
-        <span className="text-3xs text-muted-foreground">⇄</span>
+        <span className="text-xs text-muted-foreground">⇄</span>
       ) : decided ? (
         <span className="flex shrink-0 items-center gap-1">
           {winning && walkover && sets.length === 0 ? (
-            <span className="rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {REASON_BADGE.walkover}
             </span>
           ) : null}
@@ -1564,7 +1564,7 @@ function Side({
           ))}
         </span>
       ) : onWin && !bye ? (
-        <span className="text-3xs text-muted-foreground">↵ wins</span>
+        <span className="text-xs text-muted-foreground">↵ wins</span>
       ) : null}
     </button>
   );
@@ -1657,7 +1657,7 @@ function RoundRobinView({
       )}
       {event.rounds.map((round, ri) => (
         <Card key={ri} variant="frame" className="p-4">
-          <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.08em] mb-3">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.06em] mb-3">
             Round {ri + 1}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1843,7 +1843,7 @@ function SwissView({
         )}
         {event.rounds.map((round, ri) => (
           <Card key={ri} variant="frame" className="p-4">
-            <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.08em] mb-3">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.06em] mb-3">
               {totalRounds !== null
                 ? `Round ${ri + 1} of ${totalRounds}`
                 : `Round ${ri + 1}`}

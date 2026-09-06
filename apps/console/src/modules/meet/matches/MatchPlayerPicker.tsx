@@ -94,7 +94,7 @@ export function MatchPlayerPicker({
     <>
       {eligible.length > 0 ? (
         <div className="mb-1">
-          <div className="mb-0.5 flex items-baseline justify-between px-1 text-3xs font-semibold uppercase tracking-wider text-accent">
+          <div className="mb-0.5 flex items-baseline justify-between px-1 text-xs font-semibold uppercase tracking-wider text-accent">
             <span>Eligible for {eligibleForRank}</span>
             <span className="text-muted-foreground tabular-nums">
               {eligible.length}
@@ -117,13 +117,13 @@ export function MatchPlayerPicker({
       {restByGroup.size > 0 ? (
         <div>
           {eligible.length > 0 ? (
-            <div className="mb-0.5 px-1 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="mb-0.5 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               All other rostered
             </div>
           ) : null}
           {[...restByGroup.entries()].map(([groupId, list]) => (
             <div key={groupId} className="mb-1 last:mb-0">
-              <div className="mb-0.5 px-1 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="mb-0.5 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {groups.find((gr) => gr.id === groupId)?.name ?? 'Unassigned'}
               </div>
               <div className="space-y-0.5">

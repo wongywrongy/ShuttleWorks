@@ -602,7 +602,7 @@ function DrawProgressCell({ counts }: { counts: DrawCounts }) {
 function DrawStatusCell({ status }: { status: BracketEventStatus }) {
   if (status === "draft") {
     return (
-      <span className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
+      <span className="text-xs uppercase tracking-[0.06em] text-muted-foreground">
         ○ Draft
       </span>
     );
@@ -777,7 +777,7 @@ function splitFieldPayload(
 }
 
 const FIELD_LABEL_CLASS =
-  "mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground";
+  "mb-1 block text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground";
 const FIELD_INPUT_CLASS =
   "w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm";
 
@@ -803,7 +803,7 @@ function FieldInput({
         <span className="min-w-0">
           <span className="block text-sm">{field.label}</span>
           {field.help && (
-            <span className="block text-2xs text-muted-foreground">
+            <span className="block text-xs text-muted-foreground">
               {field.help}
             </span>
           )}
@@ -827,7 +827,7 @@ function FieldInput({
           ))}
         </select>
         {field.help && (
-          <span className="mt-1 block text-2xs text-muted-foreground">
+          <span className="mt-1 block text-xs text-muted-foreground">
             {field.help}
           </span>
         )}
@@ -848,7 +848,7 @@ function FieldInput({
         className={`${FIELD_INPUT_CLASS} sw-num`}
       />
       {field.help && (
-        <span className="mt-1 block text-2xs text-muted-foreground">
+        <span className="mt-1 block text-xs text-muted-foreground">
           {field.help}
         </span>
       )}
@@ -914,7 +914,7 @@ function FormatCard({
           {descriptor.label}
         </span>
         {!descriptor.implemented && (
-          <span className="ml-auto shrink-0 text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="ml-auto shrink-0 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             Planned
           </span>
         )}
@@ -1050,7 +1050,7 @@ function NewDrawModal({
             {errors.id && (
               <span
                 role="alert"
-                className="mt-1 block text-2xs text-destructive"
+                className="mt-1 block text-xs text-destructive"
               >
                 {errors.id}
               </span>
@@ -1072,7 +1072,7 @@ function NewDrawModal({
             {errors.discipline && (
               <span
                 role="alert"
-                className="mt-1 block text-2xs text-destructive"
+                className="mt-1 block text-xs text-destructive"
               >
                 {errors.discipline}
               </span>

@@ -11,7 +11,7 @@ export function DownstreamImpact({ targets, readOnly = false }: { targets: strin
   if (readOnly || !targets.length) return null;
   return (
     <div className="border-t border-border pt-4">
-      <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
         Downstream impact
       </h3>
       <p className="mt-1 text-sm text-muted-foreground">

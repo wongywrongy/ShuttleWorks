@@ -344,7 +344,7 @@ export function UnifiedOpsBoard({
     // No border-t: the grid's last court row already carries a `border-b`
     // hairline (GanttTimeline), so a border-t here would double it on the
     // Plan board (Run is scrollbar-separated, so it keeps its own border-t).
-    <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1 text-2xs">
+    <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1 text-xs">
       <span className="text-muted-foreground">Time</span>
       <ActiveChoice
         active={auto}
@@ -388,7 +388,7 @@ export function UnifiedOpsBoard({
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
         {grid}
         {zoomBar}
-        <div className="flex items-center gap-2 border-t border-border/60 bg-muted/40 px-3 py-1.5 text-2xs" data-testid="unified-ops-status">
+        <div className="flex items-center gap-2 border-t border-border/60 bg-muted/40 px-3 py-1.5 text-xs" data-testid="unified-ops-status">
           {hoverCell && validation ? (
             validation.feasible ? (
               <span className="inline-flex items-center gap-1 text-status-done">

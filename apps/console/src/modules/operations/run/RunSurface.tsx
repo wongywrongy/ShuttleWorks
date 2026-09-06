@@ -683,7 +683,7 @@ export function RunSurface({
                           data-testid={`dispute-keep-move-${claim.matchKey}`}
                           disabled={bracketInvolved || resolvingKey != null}
                           onClick={() => handleResolveCourt(dispute, claim.matchKey, 'keep_and_move')}
-                          className="rounded border border-border bg-card px-2 py-1 text-2xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Keep this, move the other
                         </button>
@@ -692,7 +692,7 @@ export function RunSurface({
                           data-testid={`dispute-keep-unassign-${claim.matchKey}`}
                           disabled={bracketInvolved || resolvingKey != null}
                           onClick={() => handleResolveCourt(dispute, claim.matchKey, 'keep_and_unassign')}
-                          className="rounded border border-border bg-card px-2 py-1 text-2xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Keep this, unassign the other
                         </button>
@@ -701,7 +701,7 @@ export function RunSurface({
                           data-testid={`dispute-keep-finish-${claim.matchKey}`}
                           disabled={bracketInvolved || resolvingKey != null}
                           onClick={() => handleResolveCourt(dispute, claim.matchKey, 'keep_and_finish')}
-                          className="rounded border border-border bg-card px-2 py-1 text-2xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Keep this, mark the other finished
                         </button>
@@ -710,7 +710,7 @@ export function RunSurface({
                   ))}
                 </ul>
                 {bracketInvolved ? (
-                  <p className="mt-1.5 text-3xs text-muted-foreground">
+                  <p className="mt-1.5 text-xs text-muted-foreground">
                     A bracket match is involved: resolve it from the Bracket engine; only
                     meet-vs-meet court conflicts can be resolved here today.
                   </p>
@@ -751,7 +751,7 @@ export function RunSurface({
               border-b IS the board→queue seam (seamed, not gapped — one
               hairline per seam, never two adjacent 1px borders). */}
           <div>
-            <div className="px-4 pb-1 pt-3 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
+            <div className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint">
               Queue
             </div>
             <RunQueue

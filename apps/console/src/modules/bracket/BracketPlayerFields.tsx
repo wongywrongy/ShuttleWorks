@@ -71,7 +71,7 @@ export function BracketAvailabilityField({
         onChange={(availability) => onUpdate(player.id, { availability })}
       />
       {!bounds.anchored ? (
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Applies when the session start time is set.
         </p>
       ) : null}
@@ -351,14 +351,14 @@ function EventTypeEditor({
                 <span className="flex shrink-0 items-center gap-1.5">
                   {entered ? (
                     <span
-                      className="rounded-sm border border-accent/30 bg-action-selected-bg px-2 py-0.5 text-2xs font-medium text-action-selected-foreground"
+                      className="rounded-sm border border-accent/30 bg-action-selected-bg px-2 py-0.5 text-xs font-medium text-action-selected-foreground"
                       data-testid={`event-entered-${ev.id}`}
                     >
                       Entered
                     </span>
                   ) : null}
                   <span
-                    className="text-2xs italic text-muted-foreground"
+                    className="text-xs italic text-muted-foreground"
                     data-testid={`event-locked-${ev.id}`}
                     title="Participants are locked once a draw is generated."
                   >
@@ -368,7 +368,7 @@ function EventTypeEditor({
               )}
             </div>
             {isDoublesCode(ev.discipline) && entered ? (
-              <div className="flex items-center gap-2 pl-11 text-2xs text-muted-foreground">
+              <div className="flex items-center gap-2 pl-11 text-xs text-muted-foreground">
                 <span data-testid={`partner-${ev.id}`}>
                   {currentPartner
                     ? `Partner: ${formatPlayerName(currentPartner.name)}`

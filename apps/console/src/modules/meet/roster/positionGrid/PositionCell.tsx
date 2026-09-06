@@ -92,7 +92,7 @@ export function PositionCell({
       ].join(' ')}
     >
       {disabled ? (
-        <span className="block px-1.5 py-1 text-3xs italic text-muted-foreground">–</span>
+        <span className="block px-1.5 py-1 text-xs italic text-muted-foreground">–</span>
       ) : occupants.length > 0 ? (
         // Filled cell: names open the pane; the pencil button reassigns.
         <div className="px-1.5 py-1">
@@ -108,7 +108,7 @@ export function PositionCell({
                 e.stopPropagation();
                 setPickerOpen(true);
               }}
-              className="mt-0.5 inline-flex items-center gap-1 rounded-sm border border-dashed border-border px-1.5 py-0.5 text-3xs italic text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
+              className="mt-0.5 inline-flex items-center gap-1 rounded-sm border border-dashed border-border px-1.5 py-0.5 text-xs italic text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent"
             >
               ＋ add partner
             </button>

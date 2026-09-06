@@ -48,7 +48,7 @@ export function MatchStatusFilter({
             semantics="pressed"
             onClick={() => onChange(value)}
             data-testid={`${testIdPrefix}-status-${value}`}
-            className="shrink-0 whitespace-nowrap px-2.5 py-1 text-2xs"
+            className="shrink-0 whitespace-nowrap px-2.5 py-1 text-xs"
           >
             {value === 'all' ? 'All' : STATUS_LABEL[value]} ·{' '}
             <span className={`sw-num ${isActive ? 'text-text-on-accent' : countTone}`}>{count}</span>

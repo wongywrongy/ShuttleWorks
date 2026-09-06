@@ -37,7 +37,12 @@ module.exports = {
         public: ['var(--text-public)', { lineHeight: '1.5rem' }],
         section: ['var(--text-section)', { lineHeight: '1.75rem' }],
         page: ['var(--text-page)', { lineHeight: '2.25rem' }],
+        // '3xs' (10px) is RETIRED (v3 consolidated plan, package 07, R1) —
+        // kept only while `modules/display/**` still calls it (concurrent
+        // workstream); see tokens.css. Do not add new `text-3xs` usages.
         '3xs':  ['var(--text-3xs)',  { lineHeight: '0.875rem', letterSpacing: '0.02em' }],
+        // '2xs' (11px) is reserved for numeric tabular data in dense tables
+        // (v3 consolidated plan R1) — a caption made of words uses 'xs'.
         '2xs':  ['var(--text-2xs)',  { lineHeight: '1rem',   letterSpacing: '0.02em' }],
         xs:     ['var(--text-xs)',   { lineHeight: '1rem' }],
         '2sm':  ['var(--text-2sm)',  { lineHeight: '1.25rem' }],

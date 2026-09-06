@@ -114,7 +114,7 @@ export function SetupRowsEditor({
             {(listColumn ? recordColumns : columns).map((column) => (
               <span
                 key={column.field}
-                className="text-2xs font-medium uppercase tracking-[0.06em] text-muted-foreground"
+                className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground"
               >
                 {column.label}
               </span>
@@ -169,7 +169,7 @@ export function SetupRowsEditor({
                       Remove
                     </Button>
                     <div className="col-span-full min-w-0">
-                      <span className="mb-1 block text-2xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
+                      <span className="mb-1 block text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
                         {listColumn.label}
                       </span>
                       <input
@@ -185,7 +185,7 @@ export function SetupRowsEditor({
                         aria-label={`${listColumn.label} for row ${index + 1}`}
                         className={INPUT_CLASS}
                       />
-                      <p className="mt-1 whitespace-normal text-[11px] leading-4 text-muted-foreground">
+                      <p className="mt-1 whitespace-normal text-xs leading-4 text-muted-foreground">
                         {cellValue(row, listColumn) || 'No courts assigned'}
                       </p>
                     </div>
@@ -197,7 +197,7 @@ export function SetupRowsEditor({
                   column.type === 'list' ? (
                     <div key={`${rowKey}-${column.field}`} className="col-span-full min-w-0">
                       <input type="text" value={listDrafts[`${rowKey}-${column.field}`] ?? cellValue(row, column)} placeholder={column.placeholder} onFocus={() => setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${column.field}`]: cellValue(row, column) }))} onChange={(event) => { setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${column.field}`]: event.target.value })); patchRow(index, column.field, listDraftValue(event.target.value)); }} onBlur={(event) => { patchRow(index, column.field, parsedValue(event.target.value, column)); setListDrafts((drafts) => { const next = { ...drafts }; delete next[`${rowKey}-${column.field}`]; return next; }); }} aria-label={`${column.label} for row ${index + 1}`} className={INPUT_CLASS} />
-                      <p className="mt-1 whitespace-normal text-[11px] leading-4 text-muted-foreground">{cellValue(row, column) || 'No courts assigned'}</p>
+                      <p className="mt-1 whitespace-normal text-xs leading-4 text-muted-foreground">{cellValue(row, column) || 'No courts assigned'}</p>
                     </div>
                   ) : column.type === 'checkbox' ? (
                     <input
