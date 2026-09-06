@@ -18,6 +18,7 @@ const authority = {
   pending_operations: 1,
   oldest_pending_at: null,
   blocked_operations: 0,
+  acknowledged_operations: 0,
   last_blocked_error_code: null,
 };
 const record = {

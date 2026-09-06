@@ -117,6 +117,7 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: 'Running locally', link: '/how-to/running-locally' },
+          { text: 'Run the shared fixture', link: '/how-to/run-the-shared-fixture' },
           { text: 'Code intelligence (Zed)', link: '/how-to/code-intelligence' },
           { text: 'Deploy: start to finish', link: '/how-to/deploy' },
           { text: 'Configure the Yunavero domain', link: '/how-to/configure-yunavero-domain' },
