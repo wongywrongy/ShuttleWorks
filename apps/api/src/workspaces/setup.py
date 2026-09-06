@@ -257,7 +257,7 @@ _IMPACT: dict[SetupKey, list[str]] = {
     "events": ["Participants", "Competition", "publishing"],
     "rules": ["draw generation", "match duration", "results"],
     "entries": ["registration", "payment review", "eligibility"],
-    "people": ["operator contacts", "public contact details"],
+    "people": ["operator contacts"],
     "public-info": ["public site", "links", "venue displays"],
 }
 

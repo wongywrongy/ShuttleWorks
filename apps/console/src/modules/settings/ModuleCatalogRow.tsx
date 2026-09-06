@@ -108,10 +108,8 @@ export function ModuleCatalogRow({
           className={TEXT_MUTED_2XS}
         >
           {ownsData
-            ? "Owns operational data; existing matches or draws are preserved. Review them before disabling."
-            : module.id === "display"
-              ? "Display settings do not own match data."
-              : "No operational records are stored yet."}
+            ? `${meta?.name ?? module.label} has draws or matches, so it stays on. It can be turned off once they are removed through ${meta?.name ?? module.label}.`
+            : `Turning ${meta?.name ?? module.label} off hides it from this workspace's navigation. Nothing is stored yet, so nothing is deleted.`}
         </p>
         <p
           data-testid={`module-completion-${module.id}`}
@@ -122,7 +120,7 @@ export function ModuleCatalogRow({
               ? "Active with data; finish setup"
               : "Enabled; finish setup"
             : module.status === "disabled"
-              ? "Off; existing data preserved"
+              ? "Off"
               : "Available to enable"}
         </p>
       </div>
@@ -185,10 +183,9 @@ export function ModuleCatalogRow({
               Review {meta?.name ?? module.label} data impact
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              This module owns operational data in this workspace. Disabling it
-              could hide or invalidate those records, so the server keeps it
-              enabled until the data is cleared through its normal workflow. No
-              data will be removed here.
+              {meta?.name ?? module.label} has draws or matches, so it stays
+              on. It can be turned off once they are removed through{" "}
+              {meta?.name ?? module.label}.
             </p>
             <div className="mt-5 flex justify-end">
               <Button onClick={() => setImpactOpen(false)}>

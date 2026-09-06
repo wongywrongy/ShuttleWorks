@@ -485,7 +485,7 @@ def authority_status(
     repo: LocalRepository = Depends(get_repository),
 ) -> AuthorityStatus:
     try:
-        authority, highest, pending, oldest, blocked, blocked_error = (
+        authority, highest, pending, oldest, blocked, blocked_error, acknowledged = (
             SyncApplication(repo).latest_authority(tournament_id)
         )
     except ProtocolError as exc:
@@ -501,6 +501,7 @@ def authority_status(
         oldest_pending_at=oldest,
         blocked_operations=blocked,
         last_blocked_error_code=blocked_error,
+        acknowledged_operations=acknowledged,
     )
 
 

@@ -169,6 +169,20 @@ def latest_authority_status(session: Session, tournament_id: uuid.UUID):
         .order_by(SyncOutbox.permanently_blocked_at.desc())
         .limit(1)
     )
+    # Honest evidence that a sync agent has ever actually run against this
+    # workspace (any epoch, not just the current one) — the ONLY thing that
+    # legitimately grounds a cloud/"synced" claim in the console. Console
+    # writes never touch this outbox, so an all-zero count here means no
+    # such claim may be shown (V3-OC-sync, ruling R3).
+    acknowledged = session.scalar(
+        select(func.count())
+        .select_from(SyncOutbox)
+        .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
+        .where(
+            EventOperation.tournament_id == tournament_id,
+            SyncOutbox.acknowledged_at.is_not(None),
+        )
+    )
     return (
         authority,
         checkpoint.highest_contiguous_sequence if checkpoint else 0,
@@ -176,6 +190,7 @@ def latest_authority_status(session: Session, tournament_id: uuid.UUID):
         oldest,
         int(blocked or 0),
         blocked_error,
+        int(acknowledged or 0),
     )
 
 

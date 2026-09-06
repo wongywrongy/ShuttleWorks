@@ -402,10 +402,8 @@ function SectionEditor({
       return (
         <div>
           <p className="mb-3 max-w-[68ch] text-sm text-muted-foreground">
-            Contacts are stored for operator coordination. The current public
-            site does not display staff details; the Public checkbox preserves
-            publication intent for a future public projection. Email remains a
-            separate operator field and is never selected by this checkbox.
+            Staff contacts are visible to tournament operators and are never
+            published.
           </p>
           <SetupRowsEditor
             label="Contacts"
@@ -414,7 +412,6 @@ function SectionEditor({
               { field: 'role', label: 'Role', type: 'select', options: contactRoleOptions },
               { field: 'name', label: 'Name' },
               { field: 'email', label: 'Email', type: 'email' },
-              { field: 'public', label: 'Public', type: 'checkbox' },
             ]}
               rows={contactRows}
             onChange={(rows) => onChange('contacts', rows)}

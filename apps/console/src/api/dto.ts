@@ -720,6 +720,11 @@ export interface AuthorityStatusDTO {
   oldest_pending_at: string | null;
   blocked_operations: number;
   last_blocked_error_code: string | null;
+  /** Operations a cloud sync agent has ever acknowledged for this workspace
+   * (any epoch). Console writes never reach the sync outbox, so this is the
+   * only honest evidence a sync pipeline exists — a UI must not claim
+   * "synced" / "cloud copy up to date" unless this is > 0. */
+  acknowledged_operations: number;
 }
 
 /** Evidence retained when an event-node operation cannot be safely applied.

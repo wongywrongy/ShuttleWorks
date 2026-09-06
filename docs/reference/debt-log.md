@@ -19,6 +19,18 @@ program plans remain recoverable from Git; this file tracks only live debt.
 
 ---
 
+## v3 consolidated plan
+
+Debt logged out-of-scope while delivering work package 06 (`docs/audits/v3-consolidated/plan.md` §3 X1/X2, `docs/audits/v3-consolidated/maps/05-06-copy-contrast.md` Part B). WP-06 was scoped to the map's named files/lines; it did not sweep the rest of the tree.
+
+| # | What | Size |
+| --- | --- | --- |
+| V3-1 | **Console still has ~90 `opacity-N`/`disabled:opacity-N` occurrences outside WP-06's owner-file list**, e.g. `RunQueue.tsx`, `MeetMatchControls.tsx`, `DirectorToolsPanel.tsx`, `WorkspaceRow.tsx`, `BracketPlayerFields.tsx`, `RegenerateMenu.tsx`, `MatchesTab.tsx`, `AvailabilityControl.tsx`, `lib/utils.ts`. Most inspected in passing are `disabled:opacity-*` on real `disabled` controls (WCAG-exempt per plan §6), but the set was not audited file-by-file — a later package (07/08, "consolidate typography/visual states" and "standardize controls") should sweep it and fold the survivors into `packages/design-system/scripts/__tests__/../apps/console/src/platform/contracts/__tests__/inkContract.test.ts`'s owner list, or replace the curated-file approach with a codebase-wide ban once the backlog is cleared. | M |
+| V3-2 | **`apps/console/src/platform/contracts/__tests__/inkContract.test.ts` is a curated owner-file allowlist, not a codebase-wide ban.** It regression-guards only the exact files WP-06 touched (plan §6 asks for "meaningful behavior checks", and a blanket ban today would immediately fail on V3-1's backlog). Widen its `OWNER_FILES` list as each further file is remediated; retiring V3-1 fully is the trigger to convert it into an unscoped scan. | S |
+| V3-3 | **`apps/entrant/public/assets/person-ref.js` and `apps/entrant/app/components/PersonRef.tsx` are not actually duplicated "twins"** — `PersonRef.tsx` imports `personRefModel` from the `.js` file directly, so there is only one copy of the class-string logic (confirmed while implementing R3's "twin" fix, which needed only one edit). `apps/entrant/tests/uiTwins.test.ts` pins a different, genuinely duplicated pair (`CHIP`, `PRIMARY_BUTTON`). No action needed; noted so a future reader does not go looking for a second copy of the person-ref className logic. | — (note only) |
+
+---
+
 ## Open — needs an owner decision
 
 These are decisions to make, then execute. Nothing here is blocked on effort.
@@ -71,6 +83,10 @@ These are decisions to make, then execute. Nothing here is blocked on effort.
 ## Open — small and unscheduled
 
 Mechanical, each independently shippable. Grouped only so the list stays scannable.
+
+**v3 consolidated plan**
+- **Staff contact `public` field is now inert everywhere but the schema.** V3-OC12.1 / work package 05 removed the Setup "people" section's Public checkbox and its "future public projection" claim (no public serializer has ever read `contacts` — `entries_public.py`, `entries_site.py`, `display/display.py`), and `apps/api/src/workspaces/setup.py`'s people-section downstream-impact declaration no longer lists "public contact details". The `Contact.public` DB column and `public: bool` on the `SetupRowsEditor` row shape were deliberately left alone (no migration in this package's scope) — every existing row's value is simply unreachable from the UI now. Either remove the column in a real migration, or build the "future public projection" it was reserved for and re-expose the control truthfully. XS (delete column) or M (build the feature). Found by SP-V3-05.
+- **Partner-invite delivery failure has no entrant-facing recovery path.** `apps/api/src/entries/entries_json.py::_send_partner_invite` now returns whether the mail actually sent (R4), but the submission's `RedirectResponse` to the receipt page is deliberately outcome-independent (a replay must land on the same Location as the original — see the adjacent `result.replayed` comment), and no edit-entry or resend-partner-invite route exists for an entrant to retry from. `apps/entrant/app/routes/enter.tsx`'s pre-submission hint was hedged ("We'll try to email them...") rather than promising delivery, but nothing today tells an entrant *after* submission that a specific invite failed — the failure is only logged for an operator. Closing this wants either a resend action reachable from `/e/me/entries` or a receipt-page notice keyed off a non-replay-breaking signal. M. Found by SP-V3-05 (V3-OC-partner-invite, map 05-06 A4).
 
 **Demo/deployment**
 - **D34 — production's backup commands remain prose, while the demo owns executable recovery tooling.** The self-host runbook has `pg_dump`/globals examples but no versioned, checksummed backup/restore-drill wrapper. Generalize the demo seam without coupling production credentials or paths to demo defaults. M.

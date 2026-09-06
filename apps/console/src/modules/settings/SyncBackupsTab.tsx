@@ -173,22 +173,28 @@ export function SyncBackupsTab() {
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-foreground">
-                {authority.status.state === 'active' ? 'Sync is active' : 'Sync needs attention'}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Changes made here are saved locally and reconciled with the cloud when connected.
-              </div>
+              <div className="text-sm font-semibold text-foreground">Saved on this device.</div>
             </div>
-            <div className="text-right text-xs">
-              {authority.status.pending_operations === 0 ? (
-                <span className="text-status-success-fg">Cloud copy up to date</span>
-              ) : (
+            {/* A cloud row only ever appears when the outbox carries actual
+               evidence of a sync pipeline (pending, blocked, or previously
+               acknowledged operations) — console edits never reach that
+               outbox on their own, so "Sync is active" cannot be derived
+               from the authority epoch state alone (ruling R3). */}
+            {authority.status.blocked_operations > 0 ? (
+              <div className="text-right text-xs">
+                <span className="text-status-warning-fg">Needs attention</span>
+              </div>
+            ) : authority.status.pending_operations > 0 ? (
+              <div className="text-right text-xs">
                 <span className="text-status-warning">
-                  {authority.status.pending_operations} committed locally · awaiting cloud
+                  Syncing · {authority.status.pending_operations} committed locally · awaiting cloud
                 </span>
-              )}
-            </div>
+              </div>
+            ) : authority.status.acknowledged_operations > 0 ? (
+              <div className="text-right text-xs">
+                <span className="text-status-success-fg">Synced</span>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : authority.error ? (

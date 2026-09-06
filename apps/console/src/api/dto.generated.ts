@@ -3804,6 +3804,11 @@ export interface components {
             blocked_operations: number;
             /** Last Blocked Error Code */
             last_blocked_error_code?: string | null;
+            /**
+             * Acknowledged Operations
+             * @default 0
+             */
+            acknowledged_operations: number;
         };
         /** AvailabilityWindow */
         AvailabilityWindow: {

@@ -167,8 +167,8 @@ def _entries_have_closed(events, now) -> bool:
     return not any(_event_is_open(ev, now) for ev in events)
 
 
-def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: str) -> None:
-    """Mail one doubles invite.
+def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: str) -> bool:
+    """Mail one doubles invite. Returns whether it actually sent.
 
     **The body names the inviter and the event and nothing else.** It goes to
     an address a stranger typed into a form, so it must not disclose anything
@@ -178,6 +178,14 @@ def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: st
 
     Delivery failure is logged, never raised: a submission that succeeded
     must not 500 because a mail server was slow, and the desk can re-send.
+
+    The bool return is not currently carried onto the submission's redirect:
+    that Location is deliberately outcome-independent (see the call site's
+    comment on ``result.replayed``) so a retried post lands on the same URL
+    as the original. There is also no entrant-facing resend action for a
+    partner invite yet (no edit-entry route exists), so there is nowhere
+    truthful to point a "the invite failed" notice today — logging here is
+    where an operator can act on it until that exists (tracked as debt).
     """
     from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
     from core.email import send_email
@@ -201,8 +209,10 @@ def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: st
                 f"\n\n{BRAND_SIGNATURE}"
             ),
         )
+        return True
     except Exception:
         log.exception("entries: partner invite delivery failed")
+        return False
 
 
 # ---- DTOs ----------------------------------------------------------------

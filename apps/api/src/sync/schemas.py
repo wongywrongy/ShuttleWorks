@@ -164,6 +164,11 @@ class AuthorityStatus(BaseModel):
     oldest_pending_at: datetime | None = None
     blocked_operations: int = 0
     last_blocked_error_code: str | None = None
+    #: Count of operations a cloud sync agent has ever acknowledged for this
+    #: workspace (any epoch). Console writes never reach the sync outbox, so
+    #: this is the only honest evidence that a sync pipeline exists at all —
+    #: a UI must not claim "synced"/"cloud copy up to date" without it > 0.
+    acknowledged_operations: int = 0
 
 
 class OperationEnvelope(BaseModel):

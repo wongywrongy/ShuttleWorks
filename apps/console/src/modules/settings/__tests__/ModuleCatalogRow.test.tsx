@@ -24,7 +24,7 @@ describe("ModuleCatalogRow", () => {
     );
     expect(screen.getByText(/roster, build a court schedule/i)).toBeInTheDocument();
     expect(screen.getByTestId("module-impact-meet")).toHaveTextContent(
-      /owns operational data/i,
+      /has draws or matches, so it stays on/i,
     );
     expect(screen.getByTestId("module-completion-meet")).toHaveTextContent(
       /active with data/i,
@@ -68,8 +68,8 @@ describe("ModuleCatalogRow", () => {
       screen.getByRole("heading", { name: /Review Meet data impact/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/No data will be removed here/i),
-    ).toBeInTheDocument();
+      screen.getAllByText(/it can be turned off once they are removed through meet/i).length,
+    ).toBeGreaterThan(0);
     expect(onDisable).not.toHaveBeenCalled();
     fireEvent.click(
       screen.getByRole("button", { name: "Keep module enabled" }),

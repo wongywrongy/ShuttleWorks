@@ -49,6 +49,21 @@ export interface ResetLoaderData {
   view: ResetView;
   token: string;
   next: string;
+  /** `sent` view only: the configured reset-link TTL, carried on the
+   * backend's redirect query (`?ttlMinutes=`) — same value on every
+   * request regardless of whether the address has an account, so reading
+   * it here does not reopen the enumeration question. `null` when absent
+   * or unparseable; the page omits the duration sentence rather than guess. */
+  ttlMinutes: number | null;
+}
+
+/** "60" -> "1 hour", "90" -> "90 minutes", "120" -> "2 hours". */
+function formatTtl(minutes: number): string {
+  if (minutes > 0 && minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
 }
 
 export async function loader({ request }: { request: Request }) {
@@ -67,11 +82,15 @@ export async function loader({ request }: { request: Request }) {
   // for the address, which is the step that produces a usable link.
   else view = token ? 'set' : 'request';
 
+  const rawTtl = Number(url.searchParams.get('ttlMinutes'));
+  const ttlMinutes = Number.isFinite(rawTtl) && rawTtl > 0 ? Math.round(rawTtl) : null;
+
   const payload: ResetLoaderData = {
     formCsrf: csrf.token,
     view,
     token,
     next: safeNext(url.searchParams.get('next'), ''),
+    ttlMinutes,
   };
   return data(payload, csrf.responseInit);
 }
@@ -87,7 +106,7 @@ export const meta: Route.MetaFunction = () => [
 const FORM_CARD = `grid gap-4 ${CARD}`;
 
 export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, view, token, next } = loaderData;
+  const { formCsrf, view, token, next, ttlMinutes } = loaderData;
 
   return (
     <PlayShell>
@@ -145,8 +164,9 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
           <div className={FORM_CARD}>
             {/* The conditional is the point — see the module note. */}
             <Notice tone="info">
-              If that address has an account, a reset link is on its way. It is
-              good for one hour. Check the spam folder before asking again.
+              If that address has an account, a reset link is on its way.
+              {ttlMinutes ? ` It is good for ${formatTtl(ttlMinutes)}.` : ''} Check
+              the spam folder before asking again.
             </Notice>
             <Button asChild variant="outline" className="justify-self-start">
               <a href={next ? `/e/login?next=${encodeURIComponent(next)}` : '/e/login'}>

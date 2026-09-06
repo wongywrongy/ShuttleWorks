@@ -38,6 +38,16 @@ describe('email confirmation recovery', () => {
     expect(html).toContain('your saved entries are unchanged');
     expect(html).toContain('href="/e/me/entries"');
   });
+
+  it('tells a signed-in visitor the resend actually failed, with a retry action', async () => {
+    const { html } = await render('/e/verify/sent?ok=0', {
+      cookie: 'sw_play_session=opaque-session-handle',
+    });
+    expect(html).toContain('We could not send the email');
+    expect(html).not.toContain('fresh confirmation link has been sent');
+    expect(html).toContain('action="/e/account/resend-verification"');
+    expect(html).toContain('Try again');
+  });
 });
 
 describe('password reset recovery', () => {

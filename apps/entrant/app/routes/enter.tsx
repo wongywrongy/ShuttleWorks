@@ -330,7 +330,7 @@ function PlayerBlock({
                 type="email"
                 maxLength={320}
                 defaultValue={said.partners?.[event.id] ?? ''}
-                hint="We email them an invitation. Nothing is entered in their name until they accept, and you can leave this blank and add them later."
+                hint="We'll try to email them an invitation. Nothing is entered in their name until they accept, and you can leave this blank and add them later."
               />
             </div>
           ))}

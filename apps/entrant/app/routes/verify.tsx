@@ -61,6 +61,11 @@ export interface VerifyLoaderData {
   verified: boolean;
   failed: boolean;
   sent: boolean;
+  /** `sent` page only: the resend route's own outcome, carried on `?ok=0`.
+   * This route is session-gated (not enumeration-sensitive like signup or
+   * reset-request), so it is safe to tell the entrant the truth rather than
+   * always claiming the mail went out. */
+  mailFailed: boolean;
 }
 
 export async function loader({ request }: { request: Request }) {
@@ -73,6 +78,7 @@ export async function loader({ request }: { request: Request }) {
     verified: url.pathname.endsWith(DONE_SUFFIX),
     failed: url.pathname.endsWith(FAILED_SUFFIX),
     sent: url.pathname.endsWith(SENT_SUFFIX),
+    mailFailed: url.searchParams.get('ok') === '0',
   };
   return data(payload, csrf.responseInit);
 }
@@ -87,7 +93,7 @@ export const meta: Route.MetaFunction = () => [
 ];
 
 export default function VerifyPage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, token, verified, failed, sent } = loaderData;
+  const { formCsrf, token, verified, failed, sent, mailFailed } = loaderData;
   const signedIn = useContext(EntrantSessionContext);
 
   return (
@@ -139,17 +145,38 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
 
         {sent ? (
           <div className={`grid gap-4 ${CARD}`}>
-            <Notice tone="success">
-              A fresh confirmation link has been sent to your account email.
-              Open the newest message; your saved entries are unchanged.
-            </Notice>
-            <p className="text-sm text-muted-foreground">
-              Delivery can take a few minutes. Check spam or junk mail before
-              requesting another link.
-            </p>
-            <Button asChild variant="outline" className="justify-self-start">
-              <a href="/e/me/entries">See my entries</a>
-            </Button>
+            {mailFailed ? (
+              <>
+                <Notice tone="warning">
+                  We could not send the email. Try again in a moment, or
+                  contact the organizer.
+                </Notice>
+                {signedIn ? (
+                  <form method="post" action="/e/account/resend-verification">
+                    <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+                    <Button type="submit">Try again</Button>
+                  </form>
+                ) : (
+                  <Button asChild variant="outline" className="justify-self-start">
+                    <a href="/e/login?next=/e/verify/failed">Sign in to request a new link</a>
+                  </Button>
+                )}
+              </>
+            ) : (
+              <>
+                <Notice tone="success">
+                  A fresh confirmation link has been sent to your account email.
+                  Open the newest message; your saved entries are unchanged.
+                </Notice>
+                <p className="text-sm text-muted-foreground">
+                  Delivery can take a few minutes. Check spam or junk mail before
+                  requesting another link.
+                </p>
+                <Button asChild variant="outline" className="justify-self-start">
+                  <a href="/e/me/entries">See my entries</a>
+                </Button>
+              </>
+            )}
           </div>
         ) : null}
 
