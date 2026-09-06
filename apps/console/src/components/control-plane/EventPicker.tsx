@@ -237,7 +237,7 @@ export function EventPicker(props: EventPickerProps) {
                   type="button"
                   aria-label={`Remove ${code}`}
                   onClick={() => pick(id)}
-                  className="rounded-sm p-0.5 text-accent transition-colors duration-fast ease-brand hover:bg-accent/20"
+                  className="rounded-sm p-2 text-accent transition-colors duration-fast ease-brand hover:bg-accent/20"
                 >
                   <X aria-hidden className="h-2.5 w-2.5" weight="bold" />
                 </button>

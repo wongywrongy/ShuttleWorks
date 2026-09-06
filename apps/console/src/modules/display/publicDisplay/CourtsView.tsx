@@ -94,6 +94,13 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
     <div className="flex w-full flex-col divide-y divide-border rounded-sm border border-border bg-card/40">
       {courts.map(({ courtId, match, state, status, conflictMatches, nextMatch, nextStartTime, laterMatch, laterStartTime }) => {
         const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
+        // Package 26a / WCAG 1.4.1: the list row's status tint (rowTintClass
+        // below) must not be the only carrier of "on court" vs "called" —
+        // a colorblind viewer reading a called row (no elapsed timer, often
+        // no score yet) had no other signal. Reuses the same STATE_WORD
+        // vocabulary CourtCard already renders for card mode.
+        const rowStatusWord =
+          status === 'active' ? STATE_WORD.onCourt : status === 'called' ? STATE_WORD.called : null;
         const aggregate = state?.score ? `${state.score.sideA}–${state.score.sideB}` : null;
         const sideA = match ? formatPlayers(match.sideA, playerNames) : '';
         const sideB = match ? formatPlayers(match.sideB, playerNames) : '';
@@ -163,7 +170,9 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
             <span className="tabular-nums text-right font-semibold">
               {tvShowScores ? (aggregate ?? '') : ''}
             </span>
-            <span className="tabular-nums text-right text-muted-foreground">{elapsed ?? ''}</span>
+            <span className="tabular-nums text-right text-muted-foreground">
+              {elapsed ?? rowStatusWord ?? ''}
+            </span>
           </div>
         );
       })}

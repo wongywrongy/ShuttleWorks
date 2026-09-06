@@ -192,7 +192,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
                   e.stopPropagation();
                   onSend(match.key);
                 }}
-                className={`flex-shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-opacity duration-fast ease-brand hover:text-accent focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:text-ink-faint ${
+                className={`flex-shrink-0 rounded-sm px-1.5 py-1 text-xs font-medium text-muted-foreground transition-opacity duration-fast ease-brand hover:text-accent focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:text-ink-faint ${
                   isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                 }`}
               >

@@ -19,7 +19,7 @@ export function SortControl({
         value={value}
         onChange={(e) => onChange(e.target.value as HubSortId)}
         aria-label="Sort workspaces"
-        className="cursor-pointer bg-transparent pr-1 text-xs text-inherit focus:outline-none"
+        className="cursor-pointer rounded-xs bg-transparent pr-1 text-xs text-inherit focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {HUB_SORTS.map((s) => (
           <option key={s.id} value={s.id}>

@@ -277,7 +277,7 @@ function PlayerRow({
               aria-pressed={confirmed}
               title={confirmed ? `Mark ${name} as not checked in` : `Check in ${name}`}
               aria-label={confirmed ? `Mark ${name} as not checked in` : `Check in ${name}`}
-              className={`inline-flex h-4 w-4 items-center justify-center rounded text-xs ${
+              className={`inline-flex h-6 w-6 items-center justify-center rounded text-xs ${
                 confirmed
                   ? 'bg-status-live text-bg-elev'
                   : 'border border-border bg-card text-muted-foreground hover:bg-muted/40'
@@ -293,7 +293,7 @@ function PlayerRow({
             disabled={locked}
             aria-expanded={picking}
             aria-label={`Substitute ${name}`}
-            className={`rounded border border-border bg-card px-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`rounded border border-border bg-card px-1 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
               picking
                 ? 'bg-muted/40 text-foreground'
                 : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -315,8 +315,8 @@ function PlayerRow({
             }
             className={`disabled:cursor-not-allowed disabled:opacity-50 ${
               confirmRemove.armed
-                ? 'rounded border border-destructive bg-destructive px-1 text-xs font-semibold text-destructive-foreground sw-pulse'
-                : 'rounded border border-destructive/40 bg-status-blocked-bg px-1 text-xs text-status-blocked hover:bg-status-blocked-bg/70'
+                ? 'rounded border border-destructive bg-destructive px-1 py-1 text-xs font-semibold text-destructive-foreground sw-pulse'
+                : 'rounded border border-destructive/40 bg-status-blocked-bg px-1 py-1 text-xs text-status-blocked hover:bg-status-blocked-bg/70'
             }`}
           >
             {confirmRemove.armed ? '× confirm' : '×'}
@@ -340,7 +340,7 @@ function PlayerRow({
                   onSubstitute(p.id);
                   setPicking(false);
                 }}
-                className="block w-full break-words px-1.5 py-0.5 text-left text-foreground hover:bg-muted/40"
+                className="block w-full break-words px-1.5 py-1 text-left text-foreground hover:bg-muted/40"
               >
                 {p.name}
               </button>

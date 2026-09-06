@@ -143,7 +143,7 @@ function BannerView({
           type="button"
           aria-label="Dismiss conflict"
           data-testid="conflict-dismiss"
-          className="shrink-0 rounded p-0.5 hover:bg-status-danger-fg/20"
+          className="shrink-0 rounded p-1.5 hover:bg-status-danger-fg/20"
           onClick={() => {
             setVisible(false);
             onDismiss();

@@ -95,7 +95,7 @@ export function InlineSearch({
           <button
             type="button"
             onClick={() => onQueryChange('')}
-            className={`${INTERACTIVE_BASE_QUIET} absolute right-1 inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground`}
+            className={`${INTERACTIVE_BASE_QUIET} absolute right-1 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground`}
             aria-label="Clear search"
           >
             <X aria-hidden="true" className="h-3 w-3" />
@@ -122,7 +122,7 @@ export function InlineSearch({
             <button
               type="button"
               onClick={onClearAll}
-              className={`${INTERACTIVE_BASE_QUIET} rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground`}
+              className={`${INTERACTIVE_BASE_QUIET} rounded border border-border px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground`}
             >
               Clear
             </button>

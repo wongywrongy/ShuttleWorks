@@ -105,7 +105,7 @@ function FinishedRow({ match, meetOps }: { match: RunMatch; meetOps?: MeetRunOps
           }}
           onBlur={confirmUndo.reset}
           disabled={locked}
-          className={`${INTERACTIVE_BASE} shrink-0 rounded px-2 py-0.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`${INTERACTIVE_BASE} shrink-0 rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
             confirmUndo.armed
               ? 'bg-destructive text-destructive-foreground sw-pulse'
               : 'bg-muted text-foreground hover:bg-muted/80'

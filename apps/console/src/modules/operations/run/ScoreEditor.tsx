@@ -124,7 +124,7 @@ function SimpleScoreEditor({
         <button
           type="button"
           onClick={onCancel}
-          className="h-4 w-4 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted"
+          className="h-6 w-6 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted"
           aria-label="Cancel score entry"
         >
           <X aria-hidden="true" className="h-3 w-3" />
@@ -291,7 +291,7 @@ function BadmintonInlineEditor({
           <button
             type="button"
             onClick={() => setShowFormat((v) => !v)}
-            className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted"
+            className="rounded px-1.5 py-1 text-xs text-muted-foreground hover:bg-muted"
             title="Adjust format for this match"
           >
             {showFormat ? 'Done' : 'Format'}
@@ -299,7 +299,7 @@ function BadmintonInlineEditor({
           <button
             type="button"
             onClick={onCancel}
-            className="h-4 w-4 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted"
+            className="h-6 w-6 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted"
             aria-label="Cancel score entry"
           >
             <X aria-hidden="true" className="h-3 w-3" />
