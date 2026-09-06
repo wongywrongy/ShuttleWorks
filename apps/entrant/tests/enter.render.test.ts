@@ -72,8 +72,18 @@ async function handle(request: Request, body: unknown = PAGE): Promise<Response>
   return createRequestHandler(build, 'development')(request);
 }
 
-async function render(body: unknown = PAGE, path = '/e/spring-open/enter'): Promise<string> {
-  return (await handle(new Request(`http://entrant.test${path}`), body)).text();
+async function render(
+  body: unknown = PAGE,
+  path = '/e/spring-open/enter',
+  init?: RequestInit,
+): Promise<string> {
+  return (await handle(new Request(`http://entrant.test${path}`, init), body)).text();
+}
+
+/** V3-PE16.2: the entrant session cookie the footer's Sign out/Sign in split
+ * reads (`hasEntrantSession` — presence only, never the value). */
+function withSession(): RequestInit {
+  return { headers: { cookie: 'sw_play_session=test-session' } };
 }
 
 describe('the entry form, unhydrated', () => {
@@ -90,6 +100,21 @@ describe('the entry form, unhydrated', () => {
     expect(html).not.toContain('Submit entry');
     expect(html).not.toContain('Update total');
     expect(html).not.toContain('I have read and accept the regulations');
+  });
+
+  it('names the tournament in the closed state, once, with no reopening promise (V3-PE16.1)', async () => {
+    const closed = {
+      ...PAGE,
+      events: PAGE.events.map((event) => ({ ...event, isOpen: false })),
+    };
+    const html = await render(closed);
+
+    expect(html).toContain('Entries are closed for Spring Open.');
+    expect(html).toContain('View the tournament page for schedules and results.');
+    // No repetition of "no event is taking entries" and no promise the
+    // organizer has not published (no entry-window field exists on the DTO).
+    expect(html).not.toContain('No event is taking entries right now');
+    expect(html).not.toContain('may publish a new entry window');
   });
 
   it('is a plain form posting straight to FastAPI', async () => {
@@ -315,7 +340,7 @@ describe('the entry form, unhydrated', () => {
     expect(await render()).not.toContain('Per discipline');
   });
 
-  it('says no event is taking entries — with a way back — when none is', async () => {
+  it('says entries are closed — with a way back — when none is open', async () => {
     // The 0-open-events state: no form (there is nothing to submit to), a
     // sentence and a link back to the tournament page. NOT a placeholder: the
     // page states a fact and offers an action.
@@ -324,7 +349,7 @@ describe('the entry form, unhydrated', () => {
       events: PAGE.events.map((event) => ({ ...event, isOpen: false })),
     });
 
-    expect(html).toContain('No event is taking entries right now');
+    expect(html).toContain('Entries are closed for Spring Open.');
     expect(html).toContain('href="/e/spring-open"');
     expect(html).not.toContain('action="/e/api/submit/spring-open"');
   });
@@ -368,15 +393,21 @@ describe('signing in says so on the page the browser lands on', () => {
     expect(html).toContain('/e/login?next=/e/spring-open/enter/signed-in');
   });
 
-  it('keeps the sign-out control off the "you might not be signed in" claim', async () => {
-    const plain = await render();
-    const confirmed = await render(PAGE, '/e/spring-open/enter/signed-in');
+  it('renders one state-aware account action, never both (V3-PE16.2)', async () => {
+    const signedOut = await render();
+    const signedIn = await render(PAGE, '/e/spring-open/enter', withSession());
 
-    expect(plain).toContain('Signed in on this device?');
-    expect(confirmed).not.toContain('Signed in on this device?');
-    for (const html of [plain, confirmed]) {
-      expect(html).toContain('action="/e/account/logout"');
-    }
+    // Signed out: "Sign in" only — no sign-out affordance, no question
+    // asking the visitor to diagnose their own auth state.
+    expect(signedOut).not.toContain('action="/e/account/logout"');
+    expect(signedOut).not.toContain('Signed in on this device?');
+    expect(signedOut).toMatch(/<footer[\s\S]*Sign in[\s\S]*<\/footer>/);
+
+    // Signed in: "Sign out" only — the shared-device sign-out stays
+    // reachable, without a speculative question or repeated reassurance.
+    expect(signedIn).toContain('action="/e/account/logout"');
+    expect(signedIn).not.toContain('Signed in on this device?');
+    expect(signedIn).toMatch(/<footer[\s\S]*Sign out[\s\S]*<\/footer>/);
   });
 
   it('leaves room under the last field for the sticky bar to hover (E5)', async () => {

@@ -15,6 +15,7 @@ export const SSR_TEST_FILES = [
   'tests/player.render.test.ts',
   'tests/receipt.test.ts',
   'tests/recovery.render.test.ts',
+  'tests/regulations.render.test.ts',
   'tests/robots.test.ts',
   'tests/schedule.test.ts',
   'tests/signup.test.ts',

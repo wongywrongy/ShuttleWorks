@@ -59,12 +59,19 @@ import { componentFiles, readAppSource, routeFiles } from './helpers/sourceGuard
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
 afterAll(() => vite.close());
 
-async function fetchPath(path: string): Promise<Response> {
+async function fetchPath(path: string, init?: RequestInit): Promise<Response> {
   const build = (await vite.ssrLoadModule(
     'virtual:react-router/server-build',
   )) as unknown as ServerBuild;
-  return createRequestHandler(build, 'development')(new Request(`http://entrant.test${path}`));
+  return createRequestHandler(build, 'development')(new Request(`http://entrant.test${path}`, init));
 }
+
+/** V3-PE16.2: the sign-out control is now session-gated (cookie PRESENCE
+ * only, `hasEntrantSession` — never a credential relay). Most of this file's
+ * assertions are about the control's mechanics once it is showing, so the
+ * fixtures below fetch signed-in by default; one test below covers the
+ * signed-out absence. */
+const SIGNED_IN: RequestInit = { headers: { cookie: 'sw_play_session=test-session' } };
 
 /** The tag that declares `name`, whatever order React serialised it in. */
 const inputNamed = (html: string, name: string) =>
@@ -137,13 +144,13 @@ describe('the sign-out form, unhydrated', () => {
   });
 
   it('is not dressed as the page’s primary action (E4)', async () => {
-    // This page cannot know who is reading it, so "Sign out" is rendered
-    // unconditionally and is wrong in one direction or the other — a
-    // signed-out visitor is offered a control that does nothing for them.
-    // The shipped answer to that, on the copy beside it, is to HEDGE
-    // ("Signed in on this device?"), and the weight has to match the hedge:
-    // primary weight on a control the page cannot know applies is the same
-    // over-claim in CSS.
+    // V3-PE16.2: the control now renders only once the session cookie says
+    // this device is signed in, so it no longer needs the old copy hedge
+    // ("Signed in on this device?") — that question asked a visitor to
+    // diagnose their own auth state, which the finding flagged. The weight
+    // argument still holds on its own: signing out is never this page's
+    // PRIMARY action (that is submitting the entry), so the control stays
+    // the quiet outline variant either way.
     //
     // Derived from the design system rather than spelled: `bg-accent` is
     // what the `default` variant adds and nothing else does
@@ -159,8 +166,17 @@ describe('the sign-out form, unhydrated', () => {
     // `border-border-control` is `outline`'s chrome. Without this the
     // negative above would pass over a button with no classes at all.
     expect(signOut).toContain('border-border-control');
-    // The copy half of the same argument, still in place.
-    expect(html).toContain('Signed in on this device?');
+    // The old hedge is gone — a signed-in visitor is never asked to guess.
+    expect(html).not.toContain('Signed in on this device?');
+  });
+
+  it('renders no sign-out control for a signed-out visitor (V3-PE16.2)', async () => {
+    const html = await fetchEntry({});
+
+    expect(logoutForm(html)).toBe('');
+    expect(html).not.toContain('Signed in on this device?');
+    // The one account action a stranger gets instead.
+    expect(html).toMatch(/<footer[\s\S]*Sign in[\s\S]*<\/footer>/);
   });
 
   it('carries the double-submit token as a hidden field named by FORM_FIELD', async () => {
@@ -270,7 +286,7 @@ describe('nothing in the tier reaches /e/account/ except by POST', () => {
  * projection, so the shape is the one `entry.loader.test.ts` pins — trimmed to
  * the keys `entry.tsx` reads.
  */
-async function fetchEntryResponse(): Promise<Response> {
+async function fetchEntryResponse(init: RequestInit = SIGNED_IN): Promise<Response> {
   const { vi } = await import('vitest');
   process.env.API_BASE_URL = 'http://backend:8000';
   vi.stubGlobal(
@@ -284,14 +300,14 @@ async function fetchEntryResponse(): Promise<Response> {
     ),
   );
   try {
-    return await fetchPath('/e/spring-open/enter');
+    return await fetchPath('/e/spring-open/enter', init);
   } finally {
     vi.unstubAllGlobals();
   }
 }
 
-async function fetchEntry(): Promise<string> {
-  const html = await (await fetchEntryResponse()).text();
+async function fetchEntry(init: RequestInit = SIGNED_IN): Promise<string> {
+  const html = await (await fetchEntryResponse(init)).text();
   // The fixture really rendered — otherwise every assertion made against this
   // document is made against an error page with no forms at all.
   expect(html).toContain('Spring Open');

@@ -42,6 +42,7 @@ import { narrowEvents, parseEcho, type FormEcho, type PlayerEcho } from '../lib/
 import type { EntryEventDTO, EntryPageDTO } from '../lib/entryPage.types';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
+import { hasEntrantSession } from '../lib/session.server';
 import { formatCents } from '../lib/money';
 import { eventCodeLabel } from '../lib/draws.types';
 import {
@@ -71,6 +72,13 @@ export interface EnterLoaderData {
    * `justSignedIn`: an outcome, not an identity. It says the ACCOUNT exists,
    * never that this reader is signed in. */
   justSignedUp: boolean;
+  /** V3-PE16.2: cookie PRESENCE only (`hasEntrantSession`, same read
+   * `PlayShell`'s header uses) — never a credential relay (R8-D). Drives the
+   * ONE state-aware account action in the page footer: a stranger sees
+   * "Sign in" and nothing else; a signed-in device sees "Sign out" and
+   * nothing else. Distinct from `justSignedIn`, which is a one-time outcome
+   * carried by the URL, not a durable session read. */
+  signedIn: boolean;
   /** SSR render instant, ms — `now` stays a parameter below the loader. */
   nowMs: number;
 }
@@ -116,6 +124,7 @@ export async function loader({
     echo: parseEcho(url.searchParams),
     justSignedIn: url.pathname.endsWith(SIGNED_IN_SUFFIX),
     justSignedUp: url.pathname.endsWith(SIGNED_UP_SUFFIX),
+    signedIn: hasEntrantSession(request),
     nowMs: Date.now(),
   };
   return data(payload, csrf.responseInit);
@@ -364,7 +373,7 @@ function PlayerBlock({
 }
 
 export default function Enter({ loaderData, actionData }: Route.ComponentProps) {
-  const { page, idempotencyKey, formCsrf, justSignedIn, justSignedUp, nowMs } = loaderData;
+  const { page, idempotencyKey, formCsrf, justSignedIn, justSignedUp, signedIn, nowMs } = loaderData;
   // The re-posted body wins when there is one: on the 307 landing the loader
   // sees only the query string, and the entrant's own typing arrives in the
   // POST the action read. Same parser both times.
@@ -554,10 +563,15 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
         ) : null}
 
         {openEvents.length === 0 ? (
+          // V3-PE16.1: one heading (the page's own "Entries are closed",
+          // above), one paragraph naming this tournament, no repetition, and
+          // no reopening promise — `EntryPageDTO` carries no published
+          // entry-window field to point to, so none is claimed. See
+          // `docs/reference/debt-log.md` for the field this would need.
           <section className="mt-6 grid justify-items-start gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5" data-entry-closed>
-            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">No event is taking entries right now</h2>
             <p className="max-w-prose text-sm text-muted-foreground">
-              No event is taking entries right now. Your tournament information is still available, and the organizer may publish a new entry window or timetable there.
+              {`Entries are closed for ${page.tournament.name ?? 'this tournament'}. `}
+              View the tournament page for schedules and results.
             </p>
             <a
               href={`/e/${encodeURIComponent(slug)}`}
@@ -682,38 +696,42 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
           </form>
         )}
 
-        {/* Signing out lives here: the enter page is the page a signed-in
-            entrant is on, and it already mints the nonce this form needs —
-            a standalone page would mint a second nonce at Path=/ and
+        {/* V3-PE16.2: ONE state-aware account action, derived from the real
+            session (cookie PRESENCE — `hasEntrantSession`, the same read
+            `PlayShell`'s header uses; never a credential relay, R8-D). A
+            stranger sees "Sign in" and nothing about signing out; a signed-in
+            device sees "Sign out" and nothing asking it to diagnose its own
+            auth state. The enter page is where the sign-out form lives (not a
+            standalone page) because it already mints the nonce this form
+            needs — a standalone page would mint a second nonce at Path=/ and
             last-issuance-wins would invalidate a half-filled form in another
-            tab. Rendered on both variants (no node page can see the session;
-            logout is idempotent); what changes is the claim. A POST, never a
-            link: a GET that signed out would be CSRF-able by any prefetch. */}
-        <footer className="mt-10 grid gap-1 border-t border-rule-soft pt-4 text-sm">
-          {justSignedIn ? null : (
+            tab. A POST, never a link: a GET that signed out would be
+            CSRF-able by any prefetch. */}
+        <footer className="mt-10 border-t border-rule-soft pt-4 text-sm">
+          {signedIn ? (
+            <form method="post" action="/e/account/logout" className="flex flex-wrap items-baseline gap-3">
+              <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+              {/* Never omitted: `logout`'s own fallback is `/e/account/login`,
+                  which is POST-only — a 405 after a successful sign-out. */}
+              <input type="hidden" name="next" value={`/e/${encodeURIComponent(slug)}`} />
+              <Button type="submit" variant="outline" size="sm">
+                Sign out
+              </Button>
+              <span className="text-muted-foreground">
+                Signs out this device only. Entries you have already submitted
+                are unaffected.
+              </span>
+            </form>
+          ) : (
             <p className="text-muted-foreground">
-              Signed in on this device? You can sign out here.
+              <a
+                href={`/e/login?next=/e/${encodeURIComponent(slug)}/enter/signed-in`}
+                className="underline underline-offset-4"
+              >
+                Sign in
+              </a>
             </p>
           )}
-          <form method="post" action="/e/account/logout" className="flex flex-wrap items-baseline gap-3">
-            <input type="hidden" name={FORM_FIELD} value={formCsrf} />
-            {/* Never omitted: `logout`'s own fallback is `/e/account/login`,
-                which is POST-only — a 405 after a successful sign-out. */}
-            <input type="hidden" name="next" value={`/e/${encodeURIComponent(slug)}`} />
-            {/* E4: outline, not the glow button. This page cannot know who
-                is reading it, so the control is unconditional — and a
-                control the page cannot know applies must not be dressed as
-                the page's primary action, which here is submitting the
-                entry. The hedge above it is the copy half of the same
-                argument. */}
-            <Button type="submit" variant="outline" size="sm">
-              Sign out
-            </Button>
-            <span className="text-muted-foreground">
-              Signs you out on this device only. Entries you have already submitted
-              are unaffected.
-            </span>
-          </form>
         </footer>
         <script type="module" src="/e/assets/entry-wizard.js" />
       </main>
