@@ -116,10 +116,15 @@ export function lineChip(cardStatus, state) {
 
 /** "View receipt" exists whenever the card names both a slug and the
  * submission it represents — every card qualifies once the backend fills
- * in `submissionId`, so this is really just the null-safety guard. */
+ * in `shortReference`, so this is really just the null-safety guard.
+ *
+ * V3-24-1: built from the SHORT REFERENCE, not the UUID. The receipt route
+ * accepts only that shape now, so a link built from `submissionId` would be
+ * a 404 — and the address bar an entrant arrives at is then the same string
+ * the page tells them to quote. */
 export function receiptHref(card) {
-  if (!card.slug || !card.submissionId) return null;
-  return `/e/${encodeURIComponent(card.slug)}/receipt/${encodeURIComponent(card.submissionId)}`;
+  if (!card.slug || !card.shortReference) return null;
+  return `/e/${encodeURIComponent(card.slug)}/receipt/${encodeURIComponent(card.shortReference)}`;
 }
 
 /** "View results" exists only where the player page answers (§4): played
@@ -308,6 +313,22 @@ function cardEl(doc, card, emailVerified) {
         el(doc, 'span', `${CHIP} border-status-done text-status-done`, line.resultBadge),
       );
     }
+    // V3-24-1: a card folds every act this account made against one
+    // tournament, and the footer can only name one of them. A line from an
+    // OLDER act says so, because "quote your reference" is useless advice
+    // when the entrant holds two and the page shows one. A line from the
+    // card's own act stays silent — repeating the footer on every row is
+    // noise, not information.
+    if (line.shortReference && line.shortReference !== card.shortReference) {
+      row.appendChild(
+        el(
+          doc,
+          'span',
+          'text-xs text-muted-foreground',
+          `Reference ${line.shortReference}`,
+        ),
+      );
+    }
     const href = resultsHref(card, line);
     if (href && !footerHref) {
       row.appendChild(resultsLink(doc, href));
@@ -326,13 +347,21 @@ function cardEl(doc, card, emailVerified) {
 
   const price = priceLine(card);
   const receiptHrefValue = receiptHref(card);
-  if (price || footerHref || receiptHrefValue) {
+  if (price || footerHref || receiptHrefValue || card.shortReference) {
     const footer = el(
       doc,
       'footer',
       'flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft px-6 py-3 text-xs text-muted-foreground',
     );
     if (price) footer.appendChild(el(doc, 'span', undefined, price));
+    // V3-24-1: the entrant's own handle on this entry, on the surface they
+    // reach for before the receipt. It is the same string the receipt page
+    // prints and the same one in the receipt link beside it.
+    if (card.shortReference) {
+      footer.appendChild(
+        el(doc, 'span', 'tabular-nums', `Reference ${card.shortReference}`),
+      );
+    }
     const links = el(doc, 'span', 'flex items-center gap-3');
     if (receiptHrefValue) links.appendChild(receiptLink(doc, receiptHrefValue));
     if (footerHref) links.appendChild(resultsLink(doc, footerHref));

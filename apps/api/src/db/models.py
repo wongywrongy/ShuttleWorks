@@ -57,6 +57,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from db.short_reference import new_reference
 from db.blob_version import CURRENT_TOURNAMENT_SCHEMA_VERSION, VersionedJSON
 
 
@@ -1792,6 +1793,22 @@ class Submission(Base):
     )
 
     # ---- the act (R13) ------------------------------------------------
+    # The entrant-facing handle (V3-24-1): eight characters a human can read
+    # aloud, quote at a desk and re-type, in place of the 36-character UUID
+    # the receipt used to print. Server-minted, globally unique, and NOT a
+    # capability — ``entries_me._own_submission`` still resolves it only
+    # inside the calling session's account. See ``db/short_reference.py``
+    # for the alphabet and the reasoning.
+    #
+    # The ``default`` is what makes the NOT NULL safe to rely on: every path
+    # that inserts a submission — the entry form, a partner accepting a
+    # nomination, a fixture — gets a reference without having to remember
+    # to. The entries service mints its own with a uniqueness pre-check on
+    # top of this (``entries/submissions.py``); this is the backstop, and
+    # the unique index is what actually enforces the claim.
+    short_reference: Mapped[str] = mapped_column(
+        String(8), nullable=False, default=new_reference
+    )
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     # Q11: acknowledgment gates the submission, and the version agreed to is
     # recorded at that instant. "They agreed to something at some point" is
@@ -1843,6 +1860,13 @@ class Submission(Base):
             unique=True,
         ),
         Index("ix_submissions_account", "account_id"),
+        # GLOBAL, unlike the idempotency index above, and deliberately so:
+        # that key is client-supplied, so its scope is a disclosure boundary,
+        # while this one is server-minted and never compared against anything
+        # a caller sends. The only question it answers is "does this code name
+        # one row", and the honest answer is "yes, everywhere" — an entrant
+        # quoting a reference to an organizer does not also quote a workspace.
+        Index("uq_submissions_short_reference", "short_reference", unique=True),
     )
 
 

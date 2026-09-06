@@ -13,6 +13,9 @@ import {
 function receipt(over: Partial<SubmissionReceipt> = {}): SubmissionReceipt {
   return {
     submissionId: "44444444-4444-4444-8444-444444444444",
+    // V3-24-1: what the page prints, copies, downloads and asks for. The
+    // UUID is still the row's identity and is rendered nowhere.
+    shortReference: "H4KJ29QW",
     slug: "spring-open",
     tournamentName: "Spring Open",
     orgName: "Kingsway BC",
@@ -46,7 +49,7 @@ function receipt(over: Partial<SubmissionReceipt> = {}): SubmissionReceipt {
 
 function mount() {
   const root = document.createElement("section");
-  root.dataset.submissionId = "44444444-4444-4444-8444-444444444444";
+  root.dataset.reference = "H4KJ29QW";
   root.dataset.slug = "spring-open";
   document.body.appendChild(root);
   return root;
@@ -69,7 +72,9 @@ describe("receipt decisions", () => {
 
   it("builds a complete downloadable text receipt", () => {
     const text = receiptText(receipt());
-    expect(text).toContain("Reference: 44444444-4444-4444-8444-444444444444");
+    expect(text).toContain("Reference: H4KJ29QW");
+    // The UUID is not a second reference the entrant has to reconcile.
+    expect(text).not.toContain("44444444-4444-4444-8444-444444444444");
     expect(text).toContain(
       "XD · Mixed Doubles · Ada Chen with Sam Ali · awaiting",
     );
@@ -124,7 +129,7 @@ describe("receipt DOM", () => {
     expect(root.textContent).toContain("Account access");
     expect(link?.getAttribute("href")).toContain("/e/login?next=");
     expect(decodeURIComponent(link?.getAttribute("href") ?? "")).toContain(
-      "/e/spring-open/receipt/44444444-4444-4444-8444-444444444444",
+      "/e/spring-open/receipt/H4KJ29QW",
     );
   });
 

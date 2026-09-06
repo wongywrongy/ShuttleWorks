@@ -1409,9 +1409,18 @@ async def submit_entry_json(
     # A tournament that priced nothing has not declared its entries free, so
     # the key is absent rather than ``0``: ``None`` stringified would read as a
     # total of "None", and a zero would be a claim about money nobody made.
+    #
+    # V3-24-1: the path segment is the submission's SHORT REFERENCE, not its
+    # UUID. It is the string the receipt prints under "Reference" and the one
+    # the entrant reads back to an organizer, so it is also the one in the
+    # address bar — an entrant who can see two different identifiers for one
+    # entry has been given a puzzle instead of a receipt. A replay answers
+    # the same submission and therefore the same reference, so the Location
+    # is still byte-identical to the original's.
     total_cents = result.submission.fee_total_cents
     query = "" if total_cents is None else f"?{urlencode({'totalCents': total_cents})}"
+    reference = quote(result.submission.short_reference, safe="")
     return RedirectResponse(
-        url=f"/e/{quote(page.slug, safe='')}/receipt/{result.submission.id}{query}",
+        url=f"/e/{quote(page.slug, safe='')}/receipt/{reference}{query}",
         status_code=303,
     )

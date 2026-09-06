@@ -53,6 +53,7 @@ prohibition on architecture-speak in operator copy still applies to everything e
 
 ### Identity and scoring
 
+<!-- docs-paths-ignore-next-line: records the file this ruling named; it was folded into apps/console/src/platform/domain/sides.ts in the v3 post-closure sweep (2026-09-06, debt row V3-10-3) -->
 **R-ID-1 — `apps/console/src/lib/names.ts` is the canonical formatter, and the
 venue board's difference is deliberate.** Operator surfaces render "SURNAME Given"
 (BWF draw-sheet convention). The venue board alone uses `sideSurnameLine`

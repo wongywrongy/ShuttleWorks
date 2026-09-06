@@ -49,7 +49,17 @@ from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 from shared.sport.badminton import schedule_config_for_bracket
-from shared.sides import MatchSideDTO, bye_side, resolved_side, undetermined_side, winner_of_side
+from shared.sides import (
+    MatchSideDTO,
+    PersonRefDTO,
+    bye_side,
+    is_pair_discipline,
+    resolved_side,
+    roster_display_names,
+    team_side,
+    undetermined_side,
+    winner_of_side,
+)
 from core.dependencies import (
     AuthUser,
     get_current_user,
@@ -952,6 +962,17 @@ def _hydrate_assignments(session_cfg: dict, state: TournamentState) -> None:
         )
 
 
+def _roster_names_for(repo: LocalRepository, tournament_id: uuid.UUID) -> Dict[str, str]:
+    """Bracket-roster id -> display name for one workspace.
+
+    For the session constructions that do NOT go through
+    ``_hydrate_session`` (create-from-body, JSON import, CSV import), which
+    have a tournament row but no ``data`` blob already in hand.
+    """
+    tournament = repo.tournaments.get_by_id(tournament_id)
+    return roster_display_names(tournament.data if tournament else None)
+
+
 def _hydrate_session(repo: LocalRepository, tournament_id: uuid.UUID) -> Optional[BracketSession]:
     """Reconstruct the in-memory bracket session from persisted rows.
 
@@ -1013,6 +1034,7 @@ def _hydrate_session(repo: LocalRepository, tournament_id: uuid.UUID) -> Optiona
         match_versions=match_versions,
         applied_command_ids=applied_command_ids,
         player_extras=player_extras,
+        roster_names=roster_display_names(data_blob),
     )
 
 
@@ -1228,9 +1250,91 @@ def _slot_out(slot: BracketSlot) -> BracketSlotOut:
     )
 
 
+def _participant_side(
+    participant: Participant,
+    roster_names: Dict[str, str],
+    *,
+    pair_event: bool,
+) -> MatchSideDTO:
+    """A resolved participant as a structured side (match-card §2.1).
+
+    Three shapes, in order:
+
+    * a TEAM whose ``member_ids`` ALL resolve against the bracket roster —
+      one ``PersonRefDTO`` per member, stacked (V3-10-1). Covers both the
+      entries seam's pairs (``entries.py``'s ``team_id`` branch writes the two
+      roster seats into ``member_ids``) and the console's hand-built ones
+      (``ParticipantPicker`` writes ``members: [pickedA.id, pickedB.id]``);
+    * a pair slot known to be one member short — the known person plus
+      ``pending_member`` (V3-10-2). Either a TEAM with a single member id, or
+      an entry-backed PLAYER sitting in a doubles draw, which is exactly what
+      the entries seam leaves behind when a partner invite is unaccepted;
+    * anything else — the stored (possibly composite) name as ONE person,
+      unchanged. A member id with no roster row makes the composite label the
+      only honest text there is, and it is never split on ``' / '`` (D15).
+    """
+    metadata = participant.metadata if isinstance(participant.metadata, dict) else {}
+    seed = metadata.get("seed")
+    member_ids = list(participant.member_ids or [])
+    is_team = participant.type == ParticipantType.TEAM
+
+    if is_team and member_ids:
+        resolved = [
+            PersonRefDTO(id=member_id, name=roster_names[member_id])
+            for member_id in member_ids
+            if member_id in roster_names
+        ]
+        if len(resolved) == len(member_ids):
+            return team_side(
+                resolved,
+                seed=seed,
+                participant_key=participant.id,
+                # A one-member TEAM is a pair slot with a member missing
+                # outright; a two-member one is complete. This one signal is
+                # NOT gated on the discipline: the TEAM type is itself the
+                # claim "this participant is a pair", and it is trustworthy
+                # where a free-text discipline ("Mixed Doubles") is not.
+                missing=1 if len(member_ids) == 1 else 0,
+            )
+        if len(member_ids) == 1:
+            # The one member did not resolve, but the SHAPE is still a pair
+            # slot one member short, and the stored label still names the one
+            # person the draw has. Do not lose the discriminant to a missing
+            # roster row.
+            return team_side(
+                [PersonRefDTO(id=participant.id, name=participant.name)],
+                seed=seed,
+                participant_key=participant.id,
+                missing=1,
+            )
+        # Partial resolution of a full pair: the composite label is the only
+        # text that names everybody. Falls through to the single-person
+        # branch below.
+
+    if (
+        pair_event
+        and not is_team
+        # Entry-backed ONLY. An imported or hand-added PLAYER row may
+        # legitimately hold a whole pair under one name, and "partner to be
+        # confirmed" over that would be a false claim (see shared/sides.py).
+        and (metadata.get("entryPlayerId") or metadata.get("sourceEntryId"))
+    ):
+        return team_side(
+            [PersonRefDTO(id=participant.id, name=participant.name)],
+            seed=seed,
+            participant_key=participant.id,
+            missing=1,
+        )
+
+    return resolved_side(id=participant.id, name=participant.name, seed=seed)
+
+
 def _bracket_side(
     slot: BracketSlot,
     participants: Dict[str, Participant],
+    roster_names: Dict[str, str],
+    *,
+    pair_event: bool,
 ) -> MatchSideDTO:
     """One side of a play unit, structured (shared/sides.py, package 10a).
 
@@ -1243,12 +1347,7 @@ def _bracket_side(
     if participant_id and participant_id != "__BYE__":
         participant = participants.get(participant_id)
         if participant is not None:
-            metadata = participant.metadata if isinstance(participant.metadata, dict) else {}
-            return resolved_side(
-                id=participant.id,
-                name=participant.name,
-                seed=metadata.get("seed"),
-            )
+            return _participant_side(participant, roster_names, pair_event=pair_event)
         return undetermined_side()
     if slot.feeder_play_unit_id:
         return winner_of_side(slot.feeder_play_unit_id, loser=slot.feeder_take == "loser")
@@ -1261,6 +1360,8 @@ def _play_unit_out(
     play_unit_id: str,
     round_index: int,
     match_index: int,
+    *,
+    pair_event: bool,
 ) -> PlayUnitOut:
     play_unit = session.state.play_units[play_unit_id]
     slot_a, slot_b = draw.slots[play_unit_id]
@@ -1272,8 +1373,18 @@ def _play_unit_out(
         side_a=list(play_unit.side_a) if play_unit.side_a else None,
         side_b=list(play_unit.side_b) if play_unit.side_b else None,
         sides=[
-            _bracket_side(slot_a, session.state.participants),
-            _bracket_side(slot_b, session.state.participants),
+            _bracket_side(
+                slot_a,
+                session.state.participants,
+                session.roster_names,
+                pair_event=pair_event,
+            ),
+            _bracket_side(
+                slot_b,
+                session.state.participants,
+                session.roster_names,
+                pair_event=pair_event,
+            ),
         ],
         duration_slots=play_unit.expected_duration_slots or 1,
         dependencies=list(play_unit.dependencies),
@@ -1289,7 +1400,13 @@ def _play_unit_out(
     )
 
 
-def _draw_play_units_out(session: BracketSession, draw: Draw) -> List[PlayUnitOut]:
+def _draw_play_units_out(
+    session: BracketSession, draw: Draw, event_id: str
+) -> List[PlayUnitOut]:
+    # Whether this draw takes PAIRS is a property of the event, not of a
+    # slot, so it is decided once here rather than per side.
+    meta = session.events.get(event_id)
+    pair_event = is_pair_discipline(meta.discipline if meta else None, event_id)
     output: List[PlayUnitOut] = []
     for round_index, round_play_unit_ids in enumerate(draw.rounds):
         for match_index, play_unit_id in enumerate(round_play_unit_ids):
@@ -1300,6 +1417,7 @@ def _draw_play_units_out(session: BracketSession, draw: Draw) -> List[PlayUnitOu
                     play_unit_id,
                     round_index,
                     match_index,
+                    pair_event=pair_event,
                 )
             )
     return output
@@ -1356,7 +1474,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
     events_out: List[EventOut] = []
 
     for event_id, draw in session.draws.items():
-        play_units_out.extend(_draw_play_units_out(session, draw))
+        play_units_out.extend(_draw_play_units_out(session, draw, event_id))
         events_out.append(_event_out(session, event_id, draw))
 
     assignments_out = [
@@ -1785,6 +1903,7 @@ def create_bracket(
                 interval_minutes=body.interval_minutes,
             )
         ),
+        roster_names=_roster_names_for(repo, tournament_id),
         rest_between_rounds=body.rest_between_rounds,
         start_time=body.start_time,
     )
@@ -3192,6 +3311,7 @@ def import_tournament_json(
         config=slot.config,
         rest_between_rounds=slot.rest_between_rounds,
         start_time=slot.start_time,
+        roster_names=_roster_names_for(repo, tournament_id),
     )
 
     for ev_id, draw in slot.draws.items():
@@ -3289,6 +3409,7 @@ async def import_tournament_csv(
         config=slot.config,
         rest_between_rounds=slot.rest_between_rounds,
         start_time=slot.start_time,
+        roster_names=_roster_names_for(repo, tournament_id),
     )
 
     for ev_id, draw in slot.draws.items():

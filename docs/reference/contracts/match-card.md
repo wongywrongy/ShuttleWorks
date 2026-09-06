@@ -1,7 +1,9 @@
 # Contract: the match card family
 
 **Status:** Proposed — 2026-09-06, v3 consolidated plan work package 09. Baseline `37168e03`.
-Documentation only: nothing on this page has been implemented yet.
+Amended by work package 29 (structured sides on the wire): §2.0 below records, member by member,
+what each tier's wire actually carries — the page no longer describes anything unimplemented
+without saying so.
 
 This page is the **acceptance oracle for packages 10, 11 and 17**. Package 09's brief was to
 "correct the MatchCard specification and mockup". The second pass's HTML mockup is not in the
@@ -68,6 +70,27 @@ and no class names — only semantics, ink *roles*, size *floors* and behaviour.
 Tier-neutral, TypeScript-style. Both tiers converge on this shape; the console's move from
 pre-joined side strings to structured sides is the D17 change already ruled in
 state-and-formatting §6.4 (and split into package 10a by ruling C4).
+
+::: warning §2.0 — what the wire carries today (amended, v3 package 29)
+This page was written as an acceptance oracle before any of it shipped, and the shape below is
+still the target. Three of its members are **not on either wire**, and this section says so
+rather than leaving the page describing an aspiration (V3-11-3). A contract that overstates what
+exists cannot be used to judge anything.
+
+| Contract member | On the wire? | What the wire carries instead, and why |
+| --- | --- | --- |
+| `Side.persons` / `Side.unresolved` (§2.1) | **Yes**, both tiers | Operator: `PlayUnitOut.sides` (`shared/sides.py`). Public: `SideDTO.unresolved` / `PlayerMatchSideDTO.unresolved` / `ScheduleSideDTO.unresolved` (`entries_site.py`). Every discriminant in §2.1 is emitted except `withheld` (see below). |
+| `unresolved: { kind: 'withheld' }` | **No, deliberately** | Person publication is gated **per person**, not per side: one side may hold one published and one withheld person, which a side-level flag cannot say. The backend already mints the withheld one as `PersonReferenceDTO(resolution: 'dead', label: 'Player not published')` and the renderer prints it (§2.3). The `withheld` member stays in the union for a tier that ever needs a whole-side gate; nothing emits it today. |
+| `unresolved.known` on the PUBLIC tier | Present but **always empty** | The side's own `persons` (or, on `SideDTO`, the `TeamDTO` joined by `participantKey`) is the known set and has already been through the publication and erasure gates. Projecting the same people a second time would put two gated copies of one identity on one wire, free to diverge. The operator wire, which has no publication gate, populates it. |
+| `unresolved.winner_of.matchIdentity` | **Not a `MatchIdentity`** | The operator wire carries the RAW feeder play-unit id in `reference`, and `matchIdentity.ts` / `bracketLabels.ts` resolve it — §6.3/D16 keeps one round-label speller per tier. The public wire, which has no such authority, carries the already-formatted human reference ("SF 1") in the same field, from the same locator that spells the legacy `placeholder` string. |
+| `outcome: MatchOutcome` with `kind` | **No** | The public wire states the same fact as `status` (`scheduled` / `called` / `live` / `delayed` / `completed` / `walkover` / `retired` / `cancelled`, `null` when unrecognised — never coerced, D7) plus `decided` and a per-side `winner` boolean. `retiredSide` / `absentSide` are **not stored anywhere**: a bracket result records `winner_side`, `walkover` and a free-text `reason`, so which side retired is not a fact the product holds. Adding an `outcome` object would re-project `status` and invent the other half. |
+| `Game.state` / `Game.winner` | **No** | The score is a flat `number[][]` of recorded game scores. Per-game completion is a function of the scoring configuration (`pointsPerSet`, `deuceEnabled`, `setsToWin`) and the public tier does not carry that configuration, so `state` cannot be computed honestly there — and §2.7 rule 2 forbids deriving it from "which number is larger". §2.7's four rules still bind every renderer; they are enforced by the renderer never emphasising a cell off the match winner, not by a `state` field. |
+| `publication.scoresPublished` | **Yes**, added in package 29 | `PlayerMatchDTO.scoresPublished`. It is not recoverable from `score === null` — an unplayed match has no score either — and before it existed the accessible summary announced "Score not published" over every future match on the calendar. |
+| `publication.personsPublished` | **No, and not needed** | Same reason as `withheld`: person publication arrives already applied, per person, as a dead reference with the fixed label. There is no per-match person-publication fact for a renderer to read. |
+| `identity` / `reference` / `matchState` | Console only | `matchIdentity.ts` derives them console-side. The public tier carries `MatchNodeDTO.position` (rendered as "Match {n}") and `status`. |
+
+Everything else in §2 is implemented on both tiers.
+:::
 
 ```ts
 interface MatchCardData {
@@ -136,7 +159,30 @@ side as singles, and never emit `TBD`, `–`, `No players` or `''`.
 Labels are fixed by state-and-formatting §6.1 and are identical operator-side and public-side:
 **Bye**, *(known names) · partner to be confirmed*, **Winner of {reference}**, **Loser of
 {reference}**, **To be decided**. `withheld` renders **"Player not published"** as a dead reference
-(§2.3).
+(§2.3) — and see §2.0: that dead reference is how withholding actually reaches both tiers; no
+producer emits the side-level `withheld` discriminant.
+
+**How `pending_member` is decided (v3 package 29).** It is a *structural* fact, never inferred from
+a name. Exactly two signals produce it, on both tiers, from the same rule:
+
+- a TEAM participant carrying **one** member id — a pair slot with a member missing outright. Not
+  gated on the discipline: the TEAM type is itself the claim "this participant is a pair", and it
+  is trustworthy where a free-text discipline ("Mixed Doubles") is not.
+- an **entry-backed** lone person in a pair discipline (MD/WD/XD/BD/GD) — the entries seam drops an
+  entrant whose partner invite is not accepted into the draw as a singleton for the director to
+  pair by hand, so a lone entry-backed person in a doubles draw *is* a side one player short.
+
+An imported or hand-added PLAYER row in a doubles draw is deliberately **excluded**: a historical
+importer may legitimately store a whole pair under one name, and printing "partner to be confirmed"
+over it would be a false statement about someone else's draw.
+
+**Where the two persons of a pair come from.** `bracket_participants` stores a doubles pair as one
+row with a composite `name` ("Ana Silva / Ben Ito") and two roster ids in `member_ids`. Both tiers
+resolve those ids against `tournaments.data.bracketPlayers` — `shared/sides.py::roster_display_names`
+operator-side, `entries_site.py::_bracket_roster_names` public-side — and emit one `PersonRef` per
+member. The composite label is **never split** on `' / '` to get there (D15). Where a member id has
+no roster row, the composite label is the only text that names everybody and is emitted as ONE
+person.
 
 ::: warning `bye` is a side, not an absence
 A bye side renders the word "Bye" in the side's own block, in the same ink and at the same size as

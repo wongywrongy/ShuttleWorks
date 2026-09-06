@@ -2,12 +2,12 @@
  * The Gate B fixture matrix (match-card contract §5) for the entrant tier.
  *
  * Built on the entrant wire shape (`MatchCardData` = `PlayerMatchDTO` plus
- * the schedule/draw adapter fields) rather than the contract's aspirational
- * tier-neutral `MatchCardData` (§2) verbatim — the entrant DTO does not yet
- * carry a discriminated `Side.unresolved` (that is package 10/10a's D17
- * wire-shape work), so an unresolved side here is expressed the only way
- * the current wire can: `persons: []` plus a `placeholder` string. MC-04
- * (`incompletePair`) is annotated below with the specific gap this leaves.
+ * the schedule/draw adapter fields). Since v3 package 29 that wire carries
+ * the contract's discriminated `Side.unresolved` (§2.1), so every unresolved
+ * side below states its `kind` — `bye`, `winner_of`, `pending_member` — and
+ * the `placeholder` string beside it is only the legacy prose twin the
+ * renderer no longer reads first. MC-04 is a REAL pending pair now, not the
+ * one-person-side approximation it pinned in package 11.
  *
  * Every timestamp is a real instant; nothing here hardcodes a weekday or
  * date string (contract §2.6) — `scheduledTime` is the wire's naive
@@ -79,33 +79,42 @@ export const matchCardFixtures = {
   } satisfies MatchCardData,
 
   /**
-   * MC-04: doubles, one side one player short of a pair.
-   *
-   * GAP (logged in the package 11 report as a blocked item): the wire has
-   * no `pending_member` discriminant (contract §2.1's `UnresolvedSide`),
-   * so a one-player doubles side renders exactly as a resolved SINGLES
-   * side today — there is no "partner to be confirmed" text and no way to
-   * distinguish this from an actual singles match at this layer. This
-   * fixture pins that CURRENT, imperfect behaviour rather than an
-   * aspirational one, so a future wire change is a visible test update,
-   * not a silent one.
+   * MC-04: doubles, one side one player short of a pair — contract §2.1's
+   * `pending_member`, the case `persons` and `unresolved` exist to express
+   * TOGETHER. The known player is named AND the side says "partner to be
+   * confirmed"; it never renders as an ordinary singles side and never
+   * invents a second person. `known` is empty by design on the public tier
+   * (`persons` above is the publication-gated known set — see
+   * `entries_site.py::PublicUnresolvedSideDTO`).
    */
   incompletePair: {
     ...base,
     eventCode: 'MD',
     sides: [
-      { persons: [person('p1', 'Ada Lovelace')], placeholder: null, winner: false },
+      {
+        persons: [person('p1', 'Ada Lovelace')],
+        placeholder: null,
+        winner: false,
+        unresolved: { kind: 'pending_member', known: [], missing: 1 },
+      },
       { persons: [person('p3', 'Katherine Johnson'), person('p4', 'Hedy Lamarr')], placeholder: null, winner: false },
     ],
     matchNumber: 4,
   } satisfies MatchCardData,
 
-  /** MC-05: side A resolved, side B `winner_of` QF1; slot approved, court absent. */
+  /** MC-05: side A resolved, side B `winner_of` QF1; slot approved, court
+   *  absent. The label is BUILT from the discriminant's `reference`, not
+   *  read off the placeholder sentence beside it (§6.1, D16). */
   unresolvedPredecessor: {
     ...base,
     sides: [
       { persons: [person('p1', 'Ada Lovelace')], placeholder: null, winner: false },
-      { persons: [], placeholder: 'Winner of QF1', winner: false },
+      {
+        persons: [],
+        placeholder: 'Winner of QF1',
+        winner: false,
+        unresolved: { kind: 'winner_of', reference: 'QF1' },
+      },
     ],
     scheduledTime: '14:00',
     court: null,
@@ -171,10 +180,12 @@ export const matchCardFixtures = {
   } satisfies MatchCardData,
 
   /**
-   * MC-11: side B withheld (not published). The entrant wire already mints
-   * this as a dead reference carrying the fixed label (contract §2.3) —
-   * `apps/api/src/entries/entries_site.py:_person_ref` — rather than a
-   * `withheld` discriminant the card branches on.
+   * MC-11: side B withheld (not published). Publication is gated PER PERSON,
+   * so the entrant wire mints this as a dead reference carrying the fixed
+   * label (contract §2.3) — `entries_site.py::_person_ref` — rather than a
+   * side-level `withheld` discriminant: a side may hold one published and
+   * one withheld person, which a side-level flag could not say. Package 29
+   * kept it that way deliberately; match-card §2.1 records the reason.
    */
   withheldSide: {
     ...base,
@@ -191,7 +202,7 @@ export const matchCardFixtures = {
     ...base,
     sides: [
       { persons: [person('p1', 'Ada Lovelace')], placeholder: null, winner: false },
-      { persons: [], placeholder: 'Bye', winner: false },
+      { persons: [], placeholder: 'Bye', winner: false, unresolved: { kind: 'bye' } },
     ],
     score: null,
     matchNumber: 12,

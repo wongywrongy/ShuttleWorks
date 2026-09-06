@@ -44,7 +44,10 @@ ITEM_KEYS = {
     "walkover",
     "updatedAt",
 }
-SIDE_KEYS = {"participantKey", "persons", "placeholder"}
+# v3 pkg 29: ``unresolved`` is the discriminated reason a side is not a
+# resolved name (match-card contract §2.1). It carries no person data of its
+# own on the public tier — ``known`` is always empty there.
+SIDE_KEYS = {"participantKey", "persons", "placeholder", "unresolved"}
 PERSON_KEYS = {"identity", "resolution", "label"}
 IDENTITY_KEYS = {"id", "name"}
 

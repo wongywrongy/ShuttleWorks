@@ -143,6 +143,10 @@ function nodeToMatch(
   teams: Map<string, TeamDTO>,
   eventCode: string,
   round: string | null,
+  /** Contract §2.3: publication is data. A null score means "withheld" only
+   *  when this is false; otherwise the match simply has no score yet
+   *  (v3 package 29, V3-11-3). */
+  scoresPublished: boolean,
 ): MatchCardData {
   const decided =
     node.result?.winnerSide === "A" || node.result?.winnerSide === "B";
@@ -157,6 +161,7 @@ function nodeToMatch(
         persons: team?.persons ?? [],
         seed: team?.seed,
         placeholder: side.bye ? "Bye" : side.placeholder,
+        unresolved: side.unresolved ?? null,
         winner:
           decided && node.result?.winnerSide === (index === 0 ? "A" : "B"),
       };
@@ -173,6 +178,7 @@ function nodeToMatch(
     courtLabel: node.courtLabel,
     sourceUrl: node.sourceUrl,
     sourceRef: node.sourceRef,
+    scoresPublished,
     // Contract §3.6/§4.3, V3-PE10.1: the node's own 1-based position within
     // its round, already on the wire (`MatchNodeDTO.position`) — rendered as
     // a small visible reference so "Winner of {reference}" resolves to a
@@ -382,6 +388,7 @@ function MatchList({
   teams,
   eventCode,
   slug,
+  scoresPublished,
   highlightPersonId,
   highlightPersonName,
 }: {
@@ -389,6 +396,7 @@ function MatchList({
   teams: Map<string, TeamDTO>;
   eventCode: string;
   slug: string;
+  scoresPublished: boolean;
   highlightPersonId?: string | null;
   highlightPersonName?: string | null;
 }) {
@@ -411,7 +419,7 @@ function MatchList({
               <MatchCard
                 key={node.nodeKey}
                 slug={slug}
-                match={nodeToMatch(node, teams, eventCode, round.label)}
+                match={nodeToMatch(node, teams, eventCode, round.label, scoresPublished)}
                 highlightPersonId={highlightPersonId}
                 highlightPersonName={highlightPersonName}
                 compactList
@@ -544,6 +552,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
           teams={teams}
           eventCode={draw.eventCode}
           slug={slug}
+          scoresPublished={draw.resultsPublished}
           highlightPersonId={selectedPersonId}
           highlightPersonName={selectedPersonLabel}
         />
@@ -589,6 +598,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                           teams,
                           draw.eventCode,
                           round.label,
+                          draw.resultsPublished,
                         )}
                         highlightPersonId={selectedPersonId}
                         highlightPersonName={selectedPersonLabel}
@@ -706,6 +716,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                               teams,
                               draw.eventCode,
                               round.label,
+                              draw.resultsPublished,
                             )}
                           />
                         ))}
@@ -732,6 +743,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                     teams={teams}
                     eventCode={draw.eventCode}
                     slug={slug}
+                    scoresPublished={draw.resultsPublished}
                     highlightPersonId={selectedPersonId}
                     highlightPersonName={selectedPersonLabel}
                   />

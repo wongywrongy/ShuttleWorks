@@ -183,6 +183,7 @@ function scheduleToMatch(
     return {
       persons: side?.persons ?? [],
       placeholder: side?.placeholder ?? (side ? null : "To be decided"),
+      unresolved: side?.unresolved ?? null,
       winner: winnerIndex === index,
       seed: side?.seed ?? null,
     };

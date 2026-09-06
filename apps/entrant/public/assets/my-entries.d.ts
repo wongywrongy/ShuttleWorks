@@ -26,6 +26,10 @@ export interface MyEntryLine {
   /** V3-PE37.1: true only when this line's partner invite is durably known
    *  to have failed to send (`Entry.partner_invite_mail_sent is False`). */
   partnerInviteMailFailed: boolean;
+  /** V3-24-1: the short reference of the submission this line came from —
+   *  not always the card's own, because a card folds every act this account
+   *  made against one tournament. */
+  shortReference: string;
 }
 
 export interface MyTournamentCard {
@@ -46,6 +50,9 @@ export interface MyTournamentCard {
   /** The submission this card represents (the newest, when a card folds
    *  more than one act). */
   submissionId: string;
+  /** V3-24-1: that submission's short reference — the eight characters the
+   *  entrant quotes, and what the receipt link is built from. */
+  shortReference: string;
   /** E2: the earliest still-open withdrawal deadline across the card's
    *  withdrawable lines, ISO UTC. Null when nothing can be withdrawn, or
    *  when the withdrawable lines carry no deadline at all. */

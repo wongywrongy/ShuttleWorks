@@ -2040,31 +2040,32 @@ No strings resolved to this surface by either a package ledger or the scan's fil
 | `apps/entrant/public/assets/my-entries.js:68` | (scan-derived) | prop:label | Entered | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
 | `apps/entrant/public/assets/my-entries.js:69` | (scan-derived) | prop:label | Played | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
 | `apps/entrant/public/assets/my-entries.js:70` | (scan-derived) | prop:label | Withdrawn | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/public/assets/my-entries.js:621` | (scan-derived) | dom-text | Your entries could not be loaded. Please try again in a moment. | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/public/assets/my-entries.js:650` | (scan-derived) | dom-text | Your entries could not be loaded. Please try again in a moment. | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/public/assets/my-entries.js:362` | (scan-derived) | dom-text | Reference {CODE} | keep | (same as current) | states the entry's own reference so a signed-in entrant can quote it | package 30 | (none — scan-derived) | `docs/audits/v3-consolidated/reports/30-short-reference.md` |
 
 ## PE39 — Signed-out receipt gate with placeholder reference
 **Scan-derived strings** (18 candidates from `tools/string-ledger-scan.mjs`):
 
 | string key/file:line | route/surface | state | current text | keep/change/cut/conditional | final text | factual prerequisite | owner | original finding IDs | checked evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| `apps/entrant/app/routes/receipt.tsx:159` | (scan-derived) | jsx-text | Entry receipt | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/app/routes/receipt.tsx:162` | (scan-derived) | jsx-text | Receipt details load after this page checks your account. Keep the reference below if you need to ask the organizer about it. | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/app/routes/receipt.tsx:168` | (scan-derived) | prop:title | Your entry | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/app/routes/receipt.tsx:170` | (scan-derived) | jsx-text | Tournament | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/app/routes/receipt.tsx:174` | (scan-derived) | jsx-text | Reference | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/app/routes/receipt.tsx:176` | (scan-derived) | jsx-text | Copy reference | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/app/routes/receipt.tsx:188` | (scan-derived) | prop:title | Loading receipt details | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/app/routes/receipt.tsx:189` | (scan-derived) | jsx-text | Checking the signed-in account for this entry | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/app/routes/receipt.tsx:201` | (scan-derived) | jsx-text | Back to the tournament page | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/app/routes/receipt.tsx:167` | (scan-derived) | jsx-text | Entry receipt | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/app/routes/receipt.tsx:170` | (scan-derived) | jsx-text | Receipt details load after this page checks your account. Keep the reference below if you need to ask the organizer about it. | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/app/routes/receipt.tsx:175` | (scan-derived) | prop:title | Your entry | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/app/routes/receipt.tsx:177` | (scan-derived) | jsx-text | Tournament | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/app/routes/receipt.tsx:181` | (scan-derived) | jsx-text | Reference | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/app/routes/receipt.tsx:183` | (scan-derived) | jsx-text | Copy reference | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/app/routes/receipt.tsx:195` | (scan-derived) | prop:title | Loading receipt details | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/app/routes/receipt.tsx:197` | (scan-derived) | jsx-text | Checking the signed-in account for this entry | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/app/routes/receipt.tsx:209` | (scan-derived) | jsx-text | Back to the tournament page | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
 | `apps/entrant/public/assets/receipt.js:28` | (scan-derived) | prop:label | Confirmed | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
 | `apps/entrant/public/assets/receipt.js:29` | (scan-derived) | prop:label | Submitted | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
 | `apps/entrant/public/assets/receipt.js:30` | (scan-derived) | prop:label | Withdrawn | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
 | `apps/entrant/public/assets/receipt.js:145` | (scan-derived) | dom-text | Entry received | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
 | `apps/entrant/public/assets/receipt.js:319` | (scan-derived) | dom-text | Reference copied | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
 | `apps/entrant/public/assets/receipt.js:321` | (scan-derived) | dom-text | Copy unavailable — quote the full reference above | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/public/assets/receipt.js:351` | (scan-derived) | prop:label | Sign in and return | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/public/assets/receipt.js:361` | (scan-derived) | prop:label | See my entries | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
-| `apps/entrant/public/assets/receipt.js:380` | (scan-derived) | prop:label | Try again | keep | (same as current) |  | package 25 review | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json + package ledger |
+| `apps/entrant/public/assets/receipt.js:355` | (scan-derived) | prop:label | Sign in and return | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/public/assets/receipt.js:365` | (scan-derived) | prop:label | See my entries | unreviewed | (unreviewed — scan-only) |  | (unassigned) | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json |
+| `apps/entrant/public/assets/receipt.js:384` | (scan-derived) | prop:label | Try again | keep | (same as current) |  | package 25 review | (none — scan-derived) | tools/string-ledger-scan.mjs scan.json + package ledger |
 
 
 ## Public shared chrome

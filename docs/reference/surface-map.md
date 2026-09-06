@@ -56,7 +56,7 @@ plus the page-scoped scripts in `apps/entrant/public/assets/`.
 | Entry wizard | `/e/SLUG/enter` | `TextField`, `Notice`, `Button` + `BUTTON_SECONDARY`, `StickyTotalBar`, `CARD`, `CHIP`, `StatusChip` |
 | Account (login / signup / verify / reset / partner) | `/e/login`, `/e/signup`, `/e/verify`, `/e/reset`, `/e/partner` | `TextField`, `Notice`, `Button`, `CARD`, `MessagePage` |
 | My entries | `/e/me/entries` | entry cards (`LIST_CARD` bands, built by `my-entries.js`), `CHIP` |
-| Receipt | `/e/SLUG/receipt/ID` | `SectionCard variant="eyebrow"`, definition rows |
+| Receipt | `/e/SLUG/receipt/REFERENCE` | `SectionCard variant="eyebrow"`, definition rows |
 | Player page | `/e/SLUG/players/KEY` | hero band, `PersonRef`, `MatchCard` |
 
 ## What pins each surface

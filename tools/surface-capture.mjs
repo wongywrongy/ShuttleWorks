@@ -47,8 +47,9 @@ const WS = process.env.WS_ID ?? "a86a39b3-0eb4-4c12-9106-5ff1bd1e5aa2";
 const SLUG = process.env.SLUG ?? "2026-korea-masters-t030";
 const DRAW_KEY = process.env.DRAW_KEY ?? "MS";
 const DOUBLES_DRAW_KEY = process.env.DOUBLES_DRAW_KEY ?? "MD";
-const SUBMISSION_ID =
-  process.env.SUBMISSION_ID ?? "11111111-1111-4111-8111-111111111111";
+// V3-24-1: the receipt path segment is an eight-character reference, and the
+// route 404s anything else — a UUID default here would capture a 404 page.
+const SUBMISSION_ID = process.env.SUBMISSION_ID ?? "H4KJ29QW";
 const DISPLAY_TOKEN = process.env.DISPLAY_TOKEN ?? "";
 const AUTH_ME_URL = process.env.AUTH_ME_URL ?? "";
 const PLAYER_KEY = process.env.PLAYER_KEY ?? "";

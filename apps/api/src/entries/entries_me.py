@@ -40,6 +40,7 @@ from entries.entries_public import _get_record, _moment_iso, _scalar_rows
 from entries.entries_site import PublicPersonIdentityDTO, PersonReferenceDTO
 from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
+from db import short_reference
 from db.models import (
     Entry,
     EntryEvent,
@@ -80,6 +81,13 @@ class MyEntryLineDTO(BaseModel):
     # disagreeing about whether entries are still open.
     entryId: str
     canWithdraw: bool = False
+    # V3-24-1: the reference of the ACT this line came from. A card folds
+    # every submission this account made against one tournament, so the
+    # card's own reference names only the newest — an entrant asking the
+    # organizer about the line they entered in March needs March's code,
+    # not September's.
+    shortReference: str
+
     # "Winner" | "Runner-up" | "Semifinalist" — the §3.1 carve-out's one
     # publication-gated field: present only while the workspace has
     # ``results_published`` on, absent again the moment it goes off.
@@ -123,6 +131,11 @@ class MyTournamentCardDTO(BaseModel):
     # ``submitted_at`` descending, then the id, so two acts committed in the
     # same instant still resolve to one stable answer across dialects.
     submissionId: str
+    # V3-24-1: the same submission's short reference — what the receipt
+    # link is built from and what the card shows the entrant. ``submissionId``
+    # stays beside it because it is still the row's identity, and a projection
+    # that renamed the id would be claiming the UUID had stopped existing.
+    shortReference: str
     # E2: the latest moment self-serve withdrawal is still open on this
     # card — the MINIMUM ``withdraws_until`` over the lines that can still
     # be withdrawn, because the first deadline to pass is the one that
@@ -160,6 +173,10 @@ class SubmissionReceiptDTO(BaseModel):
     """The durable receipt for one act owned by the current entrant."""
 
     submissionId: str
+    # V3-24-1: the printed "Reference". The receipt page renders THIS, never
+    # ``submissionId`` — the entrant is given one string to quote, and it is
+    # the one in their address bar.
+    shortReference: str
     slug: Optional[str] = None
     tournamentName: Optional[str] = None
     orgName: Optional[str] = None
@@ -447,6 +464,9 @@ def my_entries(
             else {}
         )
         lines = []
+        # V3-24-1: submission id -> the reference the entrant holds for it,
+        # so a line can name its own act without a per-line read.
+        reference_by_submission = {s.id: s.short_reference for s in own_subs}
         # The deadlines of the lines that can still be withdrawn — collected
         # here rather than re-derived, because ``_can_withdraw`` is the only
         # place that knows the answer and asking twice is how the card and
@@ -477,6 +497,7 @@ def my_entries(
                     resultBadge=event_badges.get(roster_id(entry.entry_player_id)),
                     partner=partner_ref_by_entry.get(entry.id),
                     partnerInviteMailFailed=entry.partner_invite_mail_sent is False,
+                    shortReference=reference_by_submission[entry.submission_id],
                 )
             )
         lines.sort(key=lambda line: (_ref_name(line.player), line.eventCode))
@@ -494,6 +515,11 @@ def my_entries(
             if tournament is not None and tournament.org_id
             else None
         )
+        # The card's own act: the newest of this account's submissions
+        # against this tournament — ``submitted_at`` descending, then the id,
+        # so two acts committed in the same instant still resolve to one
+        # stable answer across dialects.
+        newest = max(own_subs, key=lambda s: (s.submitted_at, str(s.id)))
         cards.append(
             MyTournamentCardDTO(
                 slug=page.slug if page is not None else None,
@@ -511,9 +537,8 @@ def my_entries(
                 feeTotalCents=sum(quotes) if quotes else None,
                 submittedAt=_moment_iso(max(s.submitted_at for s in own_subs)),
                 events=lines,
-                submissionId=str(
-                    max(own_subs, key=lambda s: (s.submitted_at, str(s.id))).id
-                ),
+                submissionId=str(newest.id),
+                shortReference=newest.short_reference,
                 withdrawsUntil=(
                     _moment_iso(min(withdraw_deadlines))
                     if withdraw_deadlines
@@ -529,23 +554,36 @@ def my_entries(
 
 
 def _own_submission(
-    repo: LocalRepository, entrant: AuthEntrant, submission_id: str
+    repo: LocalRepository, entrant: AuthEntrant, reference: str
 ) -> Submission:
     """Resolve a submission inside the caller's account scope.
 
-    A receipt id is a handle, never a capability.  Invalid, missing, and
-    another account's ids therefore share the same 404.
+    A receipt reference is a handle, never a capability.  Malformed,
+    unknown, and another account's references therefore share the same 404.
+
+    **V3-24-1 shortened the handle and left this rule exactly where it
+    was.**  The lookup is by ``short_reference`` now instead of by primary
+    key, and the ``account_id`` predicate is still in the same ``where``,
+    still not optional, still the only thing standing between a reference
+    and the act it names.  That matters more than it did: eight characters
+    are guessable in a way a UUID is not, so the correct reading has always
+    been that the account gate is what authorizes and the handle is only
+    what selects.  Guessing a valid reference for someone else's entry buys
+    the same 404 as guessing nonsense.
+
+    The shape is checked before the query, not because a parameterized
+    lookup would be unsafe, but so a string that cannot be a reference is
+    refused in one place rather than becoming a table scan for every
+    stranger who edits the URL.
     """
 
-    try:
-        wanted = uuid.UUID(submission_id)
-    except (ValueError, TypeError):
+    if not short_reference.is_reference(reference):
         raise http_error(404, ErrorCode.ENTRY_NOT_FOUND, "No such submission")
 
     submission = repo.execute_query(
         _first_scalar,
         select(Submission).where(
-            Submission.id == wanted,
+            Submission.short_reference == reference,
             Submission.account_id == uuid.UUID(entrant.id),
         ),
     )
@@ -555,19 +593,26 @@ def _own_submission(
 
 
 @router.get(
-    "/submissions/{submission_id}",
+    "/submissions/{reference}",
     response_model=SubmissionReceiptDTO,
 )
 def submission_receipt(
-    submission_id: str,
+    reference: str,
     response: Response,
     entrant: AuthEntrant = Depends(get_current_entrant),
     repo: LocalRepository = Depends(get_repository),
 ) -> SubmissionReceiptDTO:
-    """Return the complete receipt for one act owned by the current account."""
+    """Return the complete receipt for one act owned by the current account.
+
+    The path segment is the submission's short reference (V3-24-1) — the
+    same string the receipt page shows and the browser's address bar
+    carries. The parameter is named for what it is: it stopped being the
+    row's id, and a route that still said ``submission_id`` would be
+    describing the old wire to everyone who reads the OpenAPI document.
+    """
 
     response.headers["Cache-Control"] = "private, no-store"
-    submission = _own_submission(repo, entrant, submission_id)
+    submission = _own_submission(repo, entrant, reference)
     tournament = repo.execute_query(
         _get_record, Tournament, submission.tournament_id
     )
@@ -673,6 +718,7 @@ def submission_receipt(
 
     return SubmissionReceiptDTO(
         submissionId=str(submission.id),
+        shortReference=submission.short_reference,
         slug=page.slug if page is not None else None,
         tournamentName=tournament.name if tournament is not None else None,
         orgName=org.name if org is not None else None,
@@ -847,6 +893,11 @@ class ExportedEntryDTO(BaseModel):
 
 class ExportedSubmissionDTO(BaseModel):
     tournamentName: Optional[str] = None
+    # V3-24-1: the reference the entrant was given for this act. Stored data
+    # about their own submission, and the string they would quote to ask
+    # about it — an export that left it out would be a summary of what is
+    # stored rather than the projection of it this document claims to be.
+    shortReference: str
     submittedAt: str
     feeTotalCents: Optional[int] = None
     paidAt: Optional[str] = None
@@ -972,6 +1023,7 @@ def export_my_account(
         submissions=[
             ExportedSubmissionDTO(
                 tournamentName=names.get(s.tournament_id),
+                shortReference=s.short_reference,
                 submittedAt=_moment_iso(s.submitted_at),
                 feeTotalCents=s.fee_total_cents,
                 paidAt=_moment_iso(s.paid_at) if s.paid_at else None,

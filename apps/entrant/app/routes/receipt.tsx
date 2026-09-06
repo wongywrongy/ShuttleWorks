@@ -1,5 +1,5 @@
 /**
- * `/e/{slug}/receipt/{submissionId}` — the G in POST/redirect/GET.
+ * `/e/{slug}/receipt/{reference}` — the G in POST/redirect/GET.
  *
  * `POST /e/api/submit/{slug}` answers 303 here (`api/entries_json.py:714-720`),
  * so the browser's history entry is a GET and a reload re-fetches a page
@@ -22,7 +22,7 @@
  *
  * The consequence, stated rather than glossed: entrant B pasting entrant A's
  * receipt URL sees a page assembled from a public projection, their own query
- * string and a UUID they already had. Nothing of A's is on it. That is a
+ * string and a reference they already had. Nothing of A's is on it. That is a
  * property of the missing read, so `tests/receipt.test.ts` pins the outbound
  * call list and pins that A, B and an anonymous stranger are served the same
  * bytes — both go red the moment a read appears.
@@ -73,13 +73,20 @@ export interface ReceiptLoaderData {
   /** The route param, not a copy of it read back off the projection — the
    * fetch only succeeded because they already agree (`loader`, above). */
   slug: string;
-  submissionId: string;
+  reference: string;
 }
 
-/** The redirect only ever names a submission's UUID. Anything else is a
- * stranger's sentence, and this page would render it as the "Reference" under
- * the organizer's own name — content injection, not XSS. */
-const SUBMISSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The redirect only ever names a submission's short reference (V3-24-1;
+ * it named the UUID until then). Anything else is a stranger's sentence, and
+ * this page would render it as the "Reference" under the organizer's own
+ * name — content injection, not XSS.
+ *
+ * A copy of `db/short_reference.py`'s alphabet, because a Node route
+ * cannot import Python. Shortening the handle changed nothing about
+ * authorization: this page still reads no submission at all, and the
+ * account-scoped fetch the browser makes is still gated on the session
+ * cookie this tier does not hold. */
+const REFERENCE = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/;
 
 /** The uniform 404, constructed fresh — never copied from upstream, so the
  * causes stay byte-identical here as they already are in the backend. */
@@ -91,10 +98,10 @@ export async function loader({
   params,
 }: {
   request: Request;
-  params: { slug?: string; submissionId?: string };
+  params: { slug?: string; reference?: string };
 }): Promise<ReceiptLoaderData> {
-  const { slug, submissionId } = params;
-  if (!slug || !submissionId || !SUBMISSION_ID.test(submissionId)) throw notFound();
+  const { slug, reference } = params;
+  if (!slug || !reference || !REFERENCE.test(reference)) throw notFound();
 
   let projection: EntryPageDTO;
   try {
@@ -109,7 +116,7 @@ export async function loader({
       tournamentName: projection.tournament.name,
     },
     slug,
-    submissionId,
+    reference,
   };
 }
 
@@ -123,7 +130,7 @@ export async function loader({
  * loader returns), so this reads only `data.page` — the same allowlist
  * `tournament.tsx` and `enter.tsx` hold themselves to (I6) — and falls back to
  * a generic title rather than guessing a name for a page that never
- * resolved. `slug` and `submissionId` sit right next to `page` on
+ * resolved. `slug` and `reference` sit right next to `page` on
  * `ReceiptLoaderData` and are just as public, but the title has no use for
  * either, so neither is read.
  */
@@ -134,7 +141,7 @@ export const meta: Route.MetaFunction = ({ data }) => {
 };
 
 export default function Receipt({ loaderData }: Route.ComponentProps) {
-  const { page, slug, submissionId } = loaderData;
+  const { page, slug, reference } = loaderData;
 
   return (
     // E1: the shell every other page wears. The receipt is the last screen of
@@ -172,14 +179,14 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
           </p>
           <p className="break-all">
             <span className="text-muted-foreground">Reference</span>{' '}
-            <code className="tabular-nums">{submissionId}</code>
-            <button type="button" data-copy-reference={submissionId} className="ms-2 text-accent underline underline-offset-4">Copy reference</button>
+            <code className="tabular-nums">{reference}</code>
+            <button type="button" data-copy-reference={reference} className="ms-2 text-accent underline underline-offset-4">Copy reference</button>
           </p>
         </SectionCard>
 
         <section
           id="receipt-details-root"
-          data-submission-id={submissionId}
+          data-reference={reference}
           data-slug={slug}
           aria-live="polite"
           aria-busy="true"

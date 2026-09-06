@@ -2593,7 +2593,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/e/api/me/submissions/{submission_id}": {
+    "/e/api/me/submissions/{reference}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2603,8 +2603,14 @@ export interface paths {
         /**
          * Submission Receipt
          * @description Return the complete receipt for one act owned by the current account.
+         *
+         *     The path segment is the submission's short reference (V3-24-1) — the
+         *     same string the receipt page shows and the browser's address bar
+         *     carries. The parameter is named for what it is: it stopped being the
+         *     row's id, and a route that still said ``submission_id`` would be
+         *     describing the old wire to everyone who reads the OpenAPI document.
          */
-        get: operations["submission_receipt_e_api_me_submissions__submission_id__get"];
+        get: operations["submission_receipt_e_api_me_submissions__reference__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5459,6 +5465,8 @@ export interface components {
         ExportedSubmissionDTO: {
             /** Tournamentname */
             tournamentName?: string | null;
+            /** Shortreference */
+            shortReference: string;
             /** Submittedat */
             submittedAt: string;
             /** Feetotalcents */
@@ -6028,8 +6036,8 @@ export interface components {
          * @description One side of a match — the operator-wire twin of the public ``Side``.
          *
          *     ``persons`` and ``unresolved`` are NOT mutually exclusive (match-card
-         *     contract §2.1): a partially-known doubles side would carry both, once a
-         *     future package can populate ``pending_member`` (see module docstring).
+         *     contract §2.1): a partially-known doubles side carries both — see
+         *     ``team_side`` and the ``pending_member`` note in the module docstring.
          */
         MatchSideDTO: {
             /** Persons */
@@ -6182,6 +6190,8 @@ export interface components {
              * @default false
              */
             canWithdraw: boolean;
+            /** Shortreference */
+            shortReference: string;
             /** Resultbadge */
             resultBadge?: string | null;
             partner?: components["schemas"]["PersonReferenceDTO"] | null;
@@ -6223,6 +6233,8 @@ export interface components {
             events: components["schemas"]["MyEntryLineDTO"][];
             /** Submissionid */
             submissionId: string;
+            /** Shortreference */
+            shortReference: string;
             /** Withdrawsuntil */
             withdrawsUntil?: string | null;
         };
@@ -6701,6 +6713,11 @@ export interface components {
             durationMinutes?: number | null;
             /** Updatedat */
             updatedAt?: string | null;
+            /**
+             * Scorespublished
+             * @default true
+             */
+            scoresPublished: boolean;
         };
         /** PlayerMatchSideDTO */
         PlayerMatchSideDTO: {
@@ -6715,6 +6732,7 @@ export interface components {
             winner: boolean;
             /** Seed */
             seed?: number | null;
+            unresolved?: components["schemas"]["PublicUnresolvedSideDTO"] | null;
         };
         /** PlayerPageDTO */
         PlayerPageDTO: {
@@ -6847,6 +6865,43 @@ export interface components {
             id?: string | null;
             /** Name */
             name: string;
+        };
+        /**
+         * PublicUnresolvedSideDTO
+         * @description Why a side has no (or an incomplete) resolved person — the public
+         *     twin of ``shared/sides.py``'s ``UnresolvedSideDTO`` (match-card §2.1).
+         *
+         *     Same field NAMES as the operator wire so one client model reads both
+         *     tiers, with two deliberate differences:
+         *
+         *     * ``reference`` carries the FORMATTED human match reference ("QF 3"),
+         *       not a raw play-unit id. The public tier has no ``matchIdentity.ts`` to
+         *       resolve one, so the reference and the legacy ``placeholder`` sentence
+         *       are spelled by one function (``_feeder_reference``) off one locator —
+         *       two spellings of one reference would be the D16 failure over again.
+         *     * ``known`` is always EMPTY here. The side's own ``persons`` (or, on
+         *       ``SideDTO``, the ``TeamDTO`` the client joins by ``participantKey``)
+         *       is the known set, and it has already been through the publication and
+         *       erasure gates in ``_participant_people``. Projecting the same people a
+         *       second time would put two gated copies of one identity on one wire,
+         *       free to diverge. The field is kept so the shape matches the contract
+         *       and the operator wire.
+         */
+        PublicUnresolvedSideDTO: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "bye" | "pending_member" | "winner_of" | "loser_of" | "withheld" | "undetermined";
+            /** Known */
+            known?: components["schemas"]["PersonReferenceDTO"][];
+            /**
+             * Missing
+             * @default 0
+             */
+            missing: number;
+            /** Reference */
+            reference?: string | null;
         };
         /**
          * PublicationDTO
@@ -7305,6 +7360,7 @@ export interface components {
             persons?: components["schemas"]["PersonReferenceDTO"][];
             /** Placeholder */
             placeholder?: string | null;
+            unresolved?: components["schemas"]["PublicUnresolvedSideDTO"] | null;
         };
         /**
          * SchoolImpact
@@ -7475,6 +7531,7 @@ export interface components {
             feederNodeKey?: string | null;
             /** Feedertake */
             feederTake?: ("winner" | "loser") | null;
+            unresolved?: components["schemas"]["PublicUnresolvedSideDTO"] | null;
         };
         /** SignupResponse */
         SignupResponse: {
@@ -7672,6 +7729,8 @@ export interface components {
         SubmissionReceiptDTO: {
             /** Submissionid */
             submissionId: string;
+            /** Shortreference */
+            shortReference: string;
             /** Slug */
             slug?: string | null;
             /** Tournamentname */
@@ -12339,12 +12398,12 @@ export interface operations {
             };
         };
     };
-    submission_receipt_e_api_me_submissions__submission_id__get: {
+    submission_receipt_e_api_me_submissions__reference__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                submission_id: string;
+                reference: string;
             };
             cookie?: never;
         };

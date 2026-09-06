@@ -1,5 +1,5 @@
 /**
- * `/e/{slug}/receipt/{submissionId}` — the G in POST/redirect/GET.
+ * `/e/{slug}/receipt/{reference}` — the G in POST/redirect/GET.
  *
  * `POST /e/api/submit/{slug}` answers 303 here (`api/entries_json.py:714-719`),
  * so the browser's history entry is a GET and a reload re-fetches a page
@@ -36,7 +36,10 @@ import {
   routeFiles,
 } from './helpers/sourceGuards';
 
-const SUBMISSION = '44444444-4444-4444-8444-444444444444';
+// V3-24-1: the path segment is the submission's SHORT REFERENCE now, not
+// its UUID — eight characters from the unambiguous alphabet
+// (`apps/api/src/db/short_reference.py`), which is what the route validates.
+const SUBMISSION = 'H4KJ29QW';
 
 /**
  * The REAL `GET /e/api/page/{slug}` projection (`api/entries_json.py:97-188`):
@@ -101,16 +104,16 @@ function stubUpstream(status = 200) {
 
 function get(
   slug: string | undefined,
-  submissionId: string | undefined,
+  reference: string | undefined,
   query = '',
   headers: HeadersInit = {},
 ) {
   return loader({
     request: new Request(
-      `http://entrant.test/e/${slug ?? ''}/receipt/${submissionId ?? ''}${query}`,
+      `http://entrant.test/e/${slug ?? ''}/receipt/${reference ?? ''}${query}`,
       { headers },
     ),
-    params: { slug, submissionId },
+    params: { slug, reference },
   });
 }
 
@@ -129,7 +132,7 @@ describe('receipt loader', () => {
 
     const data = await get('spring-open', SUBMISSION, '?totalCents=3500');
 
-    expect(data.submissionId).toBe(SUBMISSION);
+    expect(data.reference).toBe(SUBMISSION);
     expect(data).not.toHaveProperty('totalCents');
     expect(data.page.tournamentName).toBe('Spring Open');
   });
@@ -170,7 +173,7 @@ describe('receipt loader', () => {
     expect([...sent[0].headers.keys()]).toEqual(['accept']);
   });
 
-  it('404s a missing submission id without calling the API at all', async () => {
+  it('404s a missing reference without calling the API at all', async () => {
     vi.stubGlobal('fetch', stubUpstream());
 
     await expect(get('spring-open', undefined)).rejects.toSatisfy(
@@ -179,19 +182,26 @@ describe('receipt loader', () => {
     expect(sent).toEqual([]);
   });
 
-  it('404s a submission id that is not a UUID, before rendering it', async () => {
+  it('404s anything that is not a reference, before rendering it', async () => {
     // The path segment is attacker-chosen and lands on a branded page as the
     // "Reference". React escapes it, so this is not XSS — it is content
     // injection: `/e/spring-open/receipt/YOUR%20ENTRY%20WAS%20REJECTED%20CALL…`
     // renders that sentence inside the organizer's own receipt. The redirect
-    // only ever names a UUID, so anything else is refused at the boundary.
+    // only ever names a short reference, so anything else is refused at the
+    // boundary — including the UUID that used to be the handle (V3-24-1),
+    // which is not a second door into the same page.
     vi.stubGlobal('fetch', stubUpstream());
 
-    await expect(
-      get('spring-open', 'YOUR ENTRY WAS REJECTED - CALL 555-0100'),
-    ).rejects.toSatisfy(
-      (thrown: unknown) => thrown instanceof Response && thrown.status === 404,
-    );
+    for (const segment of [
+      'YOUR ENTRY WAS REJECTED - CALL 555-0100',
+      '44444444-4444-4444-8444-444444444444',
+      'h4kj29qw',
+      'H4KJ29Q0',
+    ]) {
+      await expect(get('spring-open', segment)).rejects.toSatisfy(
+        (thrown: unknown) => thrown instanceof Response && thrown.status === 404,
+      );
+    }
     expect(sent).toEqual([]);
   });
 
@@ -259,7 +269,7 @@ async function fetchEntrant(path: string, headers: HeadersInit = {}): Promise<Re
 
 const RECEIPT = `/e/spring-open/receipt/${SUBMISSION}?totalCents=3500`;
 
-describe('GET /e/{slug}/receipt/{submissionId}', () => {
+describe('GET /e/{slug}/receipt/{reference}', () => {
   it('server-renders the public reference and mounts the account-scoped detail loader', async () => {
     vi.stubGlobal('fetch', stubUpstream());
 

@@ -1,5 +1,6 @@
 /** Public Schedule / Live projection, mirrored from entries_site.py. */
 import type { PersonReferenceDTO } from "./person.types";
+import type { UnresolvedSideDTO } from "./side";
 import { formatCalendarDay } from "./format";
 export type ScheduleState =
   | "scheduled"
@@ -22,6 +23,7 @@ export interface ScheduleSideDTO {
   persons: PersonReferenceDTO[];
   placeholder: string | null;
   seed?: number | null;
+  unresolved?: UnresolvedSideDTO | null;
 }
 
 export interface ScheduleMatchDTO {

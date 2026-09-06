@@ -137,3 +137,67 @@ describe('bracketDisplayData', () => {
     expect(sideLabel(doubles, 'a', data.participants)).toBe('Alice / Bob');
   });
 });
+
+// ---------------------------------------------------------------------------
+// v3 package 29 — the board reads the wire's structured `sides`.
+// ---------------------------------------------------------------------------
+
+describe('sideLabel prefers the wire’s structured sides (V3-10-1/V3-10-2)', () => {
+  const unit = (sides: unknown) =>
+    ({
+      id: 'u9',
+      event_id: 'MD',
+      round_index: 0,
+      match_index: 0,
+      side_a: null,
+      side_b: null,
+      slot_a: { participant_id: 'T1', feeder_play_unit_id: null },
+      slot_b: { participant_id: 'T2', feeder_play_unit_id: null },
+      duration_slots: 1,
+      dependencies: [],
+      sides,
+    }) as unknown as PlayUnitDTO;
+
+  const participants = [
+    { id: 'T1', name: 'Ana Silva / Ben Ito' },
+    { id: 'T2', name: 'Cara Diaz / Dev Rao' },
+  ] as never;
+
+  it('stacks a doubles pair from the wire’s two persons, not the composite name', () => {
+    const pu = unit([
+      {
+        persons: [
+          { id: 'p-ana', name: 'Ana Silva' },
+          { id: 'p-ben', name: 'Ben Ito' },
+        ],
+        unresolved: null,
+        seed: 1,
+        participantKey: 'T1',
+      },
+      { persons: [{ id: 'T2', name: 'Cara Diaz / Dev Rao' }], unresolved: null, seed: null, participantKey: 'T2' },
+    ]);
+    // The board's own CONDENSED density still joins for one line, but it
+    // joins the two RESOLVED persons — nothing was split back apart.
+    expect(sideLabel(pu, 'a', participants)).toBe('Ana Silva / Ben Ito');
+  });
+
+  it('a pending pair says so instead of passing as singles', () => {
+    const pu = unit([
+      {
+        persons: [{ id: 'p-ana', name: 'Ana Silva' }],
+        unresolved: { kind: 'pending_member', known: [{ id: 'p-ana', name: 'Ana Silva' }], missing: 1 },
+        seed: null,
+        participantKey: 'T1',
+      },
+      { persons: [], unresolved: { kind: 'bye' }, seed: null, participantKey: null },
+    ]);
+    expect(sideLabel(pu, 'a', participants)).toBe('Ana Silva / partner to be confirmed');
+    expect(sideLabel(pu, 'b', participants)).toBe('Bye');
+  });
+
+  it('falls back to the legacy slot derivation when the wire has no sides', () => {
+    const pu = unit(undefined);
+    expect(sideLabel(pu, 'a', participants)).toBe('Ana Silva / Ben Ito');
+    expect(sideLabel(unit(undefined), 'b', [] as never)).toBe(UNDETERMINED_SIDE_LABEL);
+  });
+});

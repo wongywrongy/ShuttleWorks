@@ -44,7 +44,7 @@ export function paymentSummary(receipt) {
 export function receiptText(receipt) {
   const lines = [
     receipt.tournamentName ?? "Tournament entry",
-    `Reference: ${receipt.submissionId}`,
+    `Reference: ${receipt.shortReference}`,
     `Status: ${receiptStatus(receipt.status).label}`,
     `Submitted: ${formatMoment(receipt.submittedAt) || receipt.submittedAt}`,
     `Payment: ${paymentSummary(receipt)}`,
@@ -191,8 +191,8 @@ export function renderReceipt(root, receipt) {
   summary.appendChild(facts);
   const copy = el(doc, "button", "mt-3 text-left text-sm font-medium text-accent underline underline-offset-4", "Copy reference");
   copy.type = "button";
-  copy.dataset.copyReference = receipt.submissionId;
-  copy.addEventListener("click", () => copyReference(copy, receipt.submissionId));
+  copy.dataset.copyReference = receipt.shortReference;
+  copy.addEventListener("click", () => copyReference(copy, receipt.shortReference));
   summary.appendChild(copy);
 
   const events = card(doc, "Events");
@@ -302,7 +302,7 @@ export function renderReceipt(root, receipt) {
     const href = URL.createObjectURL(blob);
     const anchor = doc.createElement("a");
     anchor.href = href;
-    anchor.download = `shuttleworks-entry-${receipt.submissionId}.txt`;
+    anchor.download = `shuttleworks-entry-${receipt.shortReference}.txt`;
     anchor.click();
     URL.revokeObjectURL(href);
   });
@@ -327,18 +327,22 @@ for (const button of document.querySelectorAll("[data-copy-reference]")) {
 }
 
 export async function loadReceipt(root, fetchImpl = fetch) {
-  const submissionId = root.dataset.submissionId;
+  // V3-24-1: the page's handle on this act is its short reference — the
+  // same string in the address bar, in the "Reference" line above, and in
+  // the account-scoped request below. There is one identifier on this
+  // screen, and the entrant can read it.
+  const reference = root.dataset.reference;
   const slug = root.dataset.slug;
-  if (!submissionId) return;
+  if (!reference) return;
   try {
     const response = await fetchImpl(
-      `/e/api/me/submissions/${encodeURIComponent(submissionId)}`,
+      `/e/api/me/submissions/${encodeURIComponent(reference)}`,
       {
         headers: { accept: "application/json" },
       },
     );
     if (response.status === 401) {
-      const next = `/e/${encodeURIComponent(slug ?? "")}/receipt/${encodeURIComponent(submissionId)}`;
+      const next = `/e/${encodeURIComponent(slug ?? "")}/receipt/${encodeURIComponent(reference)}`;
       renderMessage(
         root,
         "Sign in to view the full receipt",

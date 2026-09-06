@@ -919,9 +919,14 @@ def test_a_submission_answers_303_to_the_receipt_route(client, page, entrant):
     assert r.status_code == 303, r.text
     rows = _submissions()
     assert len(rows) == 1
+    # V3-24-1: the path segment is the SHORT REFERENCE, not the UUID - the
+    # same string the receipt prints and the entrant quotes. Read off the
+    # row, so this is the seam (redirect names what was recorded) and not a
+    # restatement of the generator.
     assert r.headers["location"] == (
-        f"/e/{page['slug']}/receipt/{rows[0].id}?totalCents=4000"
+        f"/e/{page['slug']}/receipt/{rows[0].short_reference}?totalCents=4000"
     )
+    assert re.fullmatch(r"[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}", rows[0].short_reference)
     # The fee is computed server-side in one place and stored as computed.
     assert rows[0].fee_total_cents == 4000
     # Q11: the version agreed to, recorded at that instant.
@@ -956,7 +961,7 @@ def test_the_receipt_redirect_states_the_recorded_total_and_only_that(
     rows = _submissions()
     assert len(rows) == 1
     assert first.headers["location"] == (
-        f"/e/{page['slug']}/receipt/{rows[0].id}"
+        f"/e/{page['slug']}/receipt/{rows[0].short_reference}"
         f"?totalCents={rows[0].fee_total_cents}"
     )
 

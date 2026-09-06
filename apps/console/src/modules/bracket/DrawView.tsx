@@ -10,6 +10,7 @@ import type {
   PlayUnitDTO,
   ResultDTO,
   SegmentDTO,
+  SideDTO,
   StandingRowDTO,
   TournamentDTO,
 } from "../../api/bracketDto";
@@ -31,6 +32,7 @@ import { StandingsTable } from "./StandingsTable";
 import { EYEBROW_CLASS } from "../../lib/utils";
 import { formatBracketSlot, type BracketSlotContext } from "./formatBracketSlot";
 import { buildPlayUnitLabels } from "./bracketLabels";
+import { formatSideCondensed, formatSideLines, sideFromWire } from "../../platform/domain/sides";
 import { ACCENT_PRESS } from '../../lib/utils';
 
 /** How the SE canvas lays out its rounds. One-sided is the classic
@@ -561,7 +563,7 @@ function MobileRoundFocus({
                           : "text-foreground"
                       }
                     >
-                      {formatMobileSide(unit.side_a, nameById)}
+                      {formatMobileSide(unit.sides?.[0], unit.side_a, nameById)}
                     </span>
                     <span className="sw-num text-xs text-muted-foreground">
                       {mobileScore(result, "A")}
@@ -571,7 +573,7 @@ function MobileRoundFocus({
                     <span
                       className={`text-right ${result?.winner_side === "B" ? "font-semibold text-foreground" : "text-foreground"}`}
                     >
-                      {formatMobileSide(unit.side_b, nameById)}
+                      {formatMobileSide(unit.sides?.[1], unit.side_b, nameById)}
                     </span>
                   </div>
                   {/* SP-OPCON-1 SWP-10: internal ids never render as
@@ -601,10 +603,22 @@ function MobileRoundFocus({
   );
 }
 
+/** The mobile round inspector's condensed side (one line per side).
+ *
+ *  v3 package 29: a RESOLVED wire side wins — its persons are the two
+ *  partners the backend resolved from `member_ids`, and a pair one member
+ *  short carries "partner to be confirmed" through `formatSideCondensed`.
+ *  An unresolved wire side (bye/feeder) and a payload with no `sides` at all
+ *  keep the legacy id-join, whose "Open slot" wording this view owns. */
 function formatMobileSide(
+  wire: SideDTO | undefined,
   side: string[] | null | undefined,
   nameById: Record<string, string>,
 ): string {
+  if (wire) {
+    const built = sideFromWire(wire);
+    if (built.persons.length > 0) return formatSideCondensed(built);
+  }
   if (!side?.length) return "Open slot";
   return side.map((id) => nameById[id] ?? id).join(" / ");
 }
@@ -1367,19 +1381,30 @@ function BracketCell({
   const aName = labelFor(pu.side_a, pu.slot_a, nameById, feederLabels);
   const bName = labelFor(pu.side_b, pu.slot_b, nameById, feederLabels);
   // Stacked members for RESOLVED pair sides (owner ruling, P4 review): the
-  // card gives each player their own line, so the " / " join is noise there.
-  // A doubles side is ONE participant whose NAME carries the join — split it
-  // too. Feeder/bye placeholders and the score-entry labels keep the string.
-  // SP-DM-3 P6 kept this split deliberately (plan judgment call 3): it splits
-  // the participant's OWN stored display name (`nameById[id]` — the persisted,
-  // operator-editable `bracket_participants.name`; it never reads `labelFor`'s
-  // output), purely to line-break the card. Nothing is persisted and no member
-  // id is recovered. The decode that DID recover identity —
-  // `bracketMigration.ts`'s split-and-zip — is gone.
-  const membersOf = (ids: string[] | null) =>
-    ids?.flatMap((id) => (nameById[id] ?? id).split(" / ")) ?? null;
-  const aMembers = membersOf(pu.side_a);
-  const bMembers = membersOf(pu.side_b);
+  // card gives each player their own line.
+  //
+  // v3 package 29 (V3-10-1): the wire's structured `sides` now carries a
+  // doubles pair as TWO persons resolved from `member_ids` against the
+  // bracket roster, so this reads them off `sideFromWire` and the last
+  // ` / `-split in the draw card is GONE — a name containing a slash no
+  // longer breaks into two players, and a pair one member short renders
+  // "partner to be confirmed" on its own line instead of passing as
+  // singles. The legacy split survives only as the fallback for a payload
+  // minted before `sides` existed (it splits the participant's OWN stored
+  // display name to line-break the card; nothing is persisted and no member
+  // id is recovered — the decode that DID recover identity,
+  // `bracketMigration.ts`'s split-and-zip, is gone).
+  const membersOf = (wire: SideDTO | undefined, ids: string[] | null) => {
+    if (wire) {
+      const built = sideFromWire(wire);
+      // Only a RESOLVED side stacks; a bye/feeder placeholder keeps the
+      // single `labelFor` string the card already renders.
+      return built.persons.length > 0 ? formatSideLines(built) : null;
+    }
+    return ids?.flatMap((id) => (nameById[id] ?? id).split(" / ")) ?? null;
+  };
+  const aMembers = membersOf(pu.sides?.[0], pu.side_a);
+  const bMembers = membersOf(pu.sides?.[1], pu.side_b);
   const canRecord = !!pu.side_a && !!pu.side_b && !result && !seeding;
   const posA = pu.match_index * 2;
   const posB = posA + 1;

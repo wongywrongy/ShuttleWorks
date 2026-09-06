@@ -11,9 +11,15 @@
  *    + a roster, so a meet side gets full per-person fidelity here, with NO
  *    backend change (see D17 note in the package 10 report).
  *  - `sideFromWire` — the bracket engine's structured `SideDTO`
- *    (`shared/sides.py`, package 10a). A bracket doubles pair renders as ONE
- *    `PersonRef` today (the backend stores only the composite team name —
- *    logged debt, see `apps/api/src/shared/sides.py`'s module docstring).
+ *    (`shared/sides.py`, package 10a). Since v3 package 29 (V3-10-1) a
+ *    bracket doubles pair arrives as TWO `PersonRef`s: the backend resolves
+ *    `member_ids` against the bracket roster rather than shipping only the
+ *    composite team name, so full per-partner fidelity now reaches this file
+ *    from BOTH engines. A pair one member short arrives as
+ *    `persons: [A], unresolved: pending_member` (V3-10-2), which is what
+ *    `formatSideLines` turns into the known name plus "partner to be
+ *    confirmed". Where a member id has no roster row the backend still sends
+ *    the composite name as one person — the only honest label it has.
  *
  * `resolveFeederReference` is the seam back to the console's own identity
  * authority: the wire's `winner_of`/`loser_of` carries a RAW play-unit id

@@ -109,6 +109,10 @@ def _seed(url: str) -> None:
     """
     conn = sqlite3.connect(_db_path(url))
     conn.execute("PRAGMA foreign_keys=OFF")
+    has_short_reference = any(
+        row[1] == "short_reference"
+        for row in conn.execute("PRAGMA table_info(submissions)").fetchall()
+    )
     conn.execute(
         "INSERT INTO tournaments (id, name, status, schema_version, data,"
         " created_at, updated_at)"
@@ -125,11 +129,24 @@ def _seed(url: str) -> None:
         (SUBMISSION_ORPHANED, ACCOUNT_GONE),
         (SUBMISSION_KEPT, ACCOUNT_KEPT),
     ):
-        conn.execute(
-            "INSERT INTO submissions (tournament_id, id, account_id,"
-            " submitted_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-            (TOURNAMENT, submission, account, NOW, NOW),
-        )
+        # V3-24-1: at head, ``short_reference`` is NOT NULL and globally
+        # unique, so a hand-built row has to name one — derived from the
+        # row's own id, never a shared literal the index would refuse. This
+        # seeder also runs against the PRE-purge revision, where the column
+        # does not exist yet, so it is asked for rather than assumed.
+        if has_short_reference:
+            conn.execute(
+                "INSERT INTO submissions (tournament_id, id, account_id,"
+                " short_reference, submitted_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (TOURNAMENT, submission, account, submission[:8].upper(), NOW, NOW),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO submissions (tournament_id, id, account_id,"
+                " submitted_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (TOURNAMENT, submission, account, NOW, NOW),
+            )
     for session, account in (
         (SESSION_ORPHANED, ACCOUNT_GONE),
         (SESSION_KEPT, ACCOUNT_KEPT),

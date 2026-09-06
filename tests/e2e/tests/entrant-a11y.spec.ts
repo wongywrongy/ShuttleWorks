@@ -195,7 +195,10 @@ const SURFACES: Surface[] = [
     // verified directly against a running fixture (not guessed): the gate
     // a signed-out, no-token visitor actually reaches.
     name: 'Receipt gate (signed out)',
-    path: () => `/e/${TAIPEI_SLUG}/receipt/00000000-0000-0000-0000-000000000000`,
+    // V3-24-1: an eight-character reference, the only shape the route now
+    // accepts. Nothing is seeded behind it — the page is the same bytes for
+    // any well-formed reference, because it performs no account-scoped read.
+    path: () => `/e/${TAIPEI_SLUG}/receipt/H4KJ29QW`,
     ready: (p) => p.getByRole('heading', { name: 'Sign in to view the full receipt', level: 1 }),
   },
   {

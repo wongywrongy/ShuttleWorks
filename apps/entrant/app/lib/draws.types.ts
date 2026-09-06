@@ -7,6 +7,7 @@
  */
 
 import type { PersonReferenceDTO } from './person.types';
+import type { UnresolvedSideDTO } from './side';
 
 /** The format tag — the keys of the API's `FORMAT_REGISTRY`
  *  (`apps/api/src/bracket/formats/__init__.py`). Every write path validates
@@ -83,6 +84,9 @@ export interface SideDTO {
   bye: boolean;
   feederNodeKey: string | null;
   feederTake: 'winner' | 'loser' | null;
+  /** Contract §2.1's discriminated reason. The persons themselves are on
+   *  the `TeamDTO` this side's `participantKey` joins to. */
+  unresolved?: UnresolvedSideDTO | null;
 }
 
 export interface NodeResultDTO {

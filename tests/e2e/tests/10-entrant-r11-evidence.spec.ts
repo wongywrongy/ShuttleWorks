@@ -127,13 +127,16 @@ const CSRF = { 'X-ShuttleWorks-CSRF': '1' };
  * Not a shortcut — it is the receipt route's documented property, exercised.
  * `receipt.tsx` performs NO account-scoped read (node holds no entrant
  * credential and must not grow one), so the page is assembled from the public
- * projection, the query string and the UUID in the path. Any well-formed UUID
- * therefore renders the identical page, which is exactly what
+ * projection, the query string and the reference in the path. Any well-formed
+ * reference therefore renders the identical page, which is exactly what
  * `entrant/tests/receipt.test.ts` pins. That makes the receipt reachable here
- * without seeding an entry, and a v4-shaped literal keeps it obvious that no
- * real submission is being impersonated.
+ * without seeding an entry.
+ *
+ * V3-24-1 made the handle an eight-character reference instead of a UUID, so
+ * the literal changed shape with it — the route validates the new shape and
+ * refuses the old one, which is what would have made this page 404.
  */
-const RECEIPT_ID = '00000000-0000-4000-8000-000000000000';
+const RECEIPT_ID = 'H4KJ29QW';
 
 /**
  * Every public page a signed-out visitor can reach, as `(name, path)` of a

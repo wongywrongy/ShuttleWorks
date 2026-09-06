@@ -8,7 +8,7 @@ import type {
   PlayUnitDTO,
   Participant,
 } from '../../../api/bracketDto';
-import { formatSideCondensed, type Side } from '../../../platform/domain/sides';
+import { formatSideCondensed, sideFromWire, type Side } from '../../../platform/domain/sides';
 
 /** The one participant-per-line label the "To be decided" sentinel a board
  *  reader (`isImminentMatch` below) matches against. Kept as a named export
@@ -16,14 +16,19 @@ import { formatSideCondensed, type Side } from '../../../platform/domain/sides';
 export const UNDETERMINED_SIDE_LABEL = 'To be decided';
 
 /** Build a `Side` (match-card contract §2.1 / state-and-formatting §6.1)
- *  from a bracket play-unit's slot/direct participant ids. A resolved slot
- *  participant wins over the direct member list; an unfilled slot with no
- *  direct members is `undetermined` — never a raw `'–'` (D14). */
+ *  from a bracket play-unit. The wire's own structured `sides` wins where it
+ *  is present (v3 package 29: a doubles pair arrives as TWO persons, and a
+ *  pair one member short as `pending_member`); the slot/direct-id derivation
+ *  below is the fallback for a payload minted before that field. A resolved
+ *  slot participant wins over the direct member list; an unfilled slot with
+ *  no direct members is `undetermined` — never a raw `'–'` (D14). */
 function sideFromPlayUnit(
   pu: PlayUnitDTO,
   side: 'a' | 'b',
   participants: Participant[],
 ): Side {
+  const wire = pu.sides?.[side === 'a' ? 0 : 1];
+  if (wire) return sideFromWire(wire);
   const slot = side === 'a' ? pu.slot_a : pu.slot_b;
   const direct = side === 'a' ? pu.side_a : pu.side_b;
   if (slot.participant_id) {

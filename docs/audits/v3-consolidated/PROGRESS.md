@@ -42,6 +42,8 @@ Role split: Claude (Fable) orchestrates — classifies, briefs, rules, reviews. 
 | 27 evidence + recapture | P0 | done · 27a closure record 0e3a60f8; 27b recapture complete (this session) — 83/87 findings closed, 1 closing (V3-OC24.2, physical signage pending), 3 open (organizer/production-only, non-P0) | closure.md, runtime-findings.md, reports/27b-recapture.md |
 | 28 consistency + brand seam | P2 | done · 51d4b3cf | reports/28-consistency.md |
 | 16 venue-board publishing | P1 | done · ae9a07d3 | reports/16-venue-board.md |
+| 29 structured sides on the wire | P1 (post-closure) | done · see git log — V3-10-1/10-2/11-1/11-3 retired, no import-linter ignore | reports/29-structured-sides.md |
+| 30 short entry reference | P1 (post-closure) | done · see git log — V3-24-1 retired, no UUID fallback | reports/30-short-reference.md |
 
 
 ## Plan gates
@@ -69,6 +71,7 @@ these gates: `closure.md` section (d), `runtime-findings.md`, `reports/27b-recap
 
 (append: date · command · result)
 
+- 2026-09-06 · Wave 3 (packages 29 structured sides, 30 short entry reference) · full gate after one shared `make generate-api`: console 255 files / 2266 tests, tsc, eslint 0 errors, depcruise 0 errors; entrant 54 files / 1046 tests, typecheck, lint, depcruise clean; ruff clean; import-linter 15/15 (no new allowance); pytest 2440 passed / 72 skipped; `docs:build` clean. `npm run docs:paths` reports 70 missing path references, ALL pre-existing at e4ac9144 (72 then; the four this session introduced were fixed before commit) — see the follow-up docs pass.
 - 2026-09-06 · Wave 2 (post-closure debt sweeps: V3-1, V3-2, V3-07-2/3/4, V3-16-1, V3-10-3, V3-13-2, V3-26-7, V3-26-5) · full gate: console 255 files / 2258 tests, tsc, eslint 0 errors, depcruise 0 errors; entrant 54 files / 1040 tests, typecheck, lint, depcruise clean; test:contrast, test:classes; ruff clean; import-linter 15/15; pytest 2422 passed / 72 skipped. `inkContract.test.ts` is now a codebase-wide scan. Ten debt rows retired.
 - 2026-09-06 · FINAL · HEAD after 27b · `make check` on a detached worktree: console 256 files / 2260 tests, tsc, eslint, depcruise 0 errors; entrant 54 files / 1029 tests, typecheck, lint, depcruise; test:contrast, test:classes, figma:tokens:check; ruff; import-linter 15/15; pytest 2420 passed / 72 skipped; tools tests 43/43. CI console job on the shared fixture: console-browser-contracts 7/7, console-a11y 23/23; entrant-a11y 88/88.
 

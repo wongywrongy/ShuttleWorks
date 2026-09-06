@@ -45,6 +45,7 @@ function line(over: Partial<MyEntryLine> = {}): MyEntryLine {
     resultBadge: null,
     partner: null,
     partnerInviteMailFailed: false,
+    shortReference: 'H4KJ29QW',
     ...over,
   };
 }
@@ -63,6 +64,7 @@ function card(over: Partial<MyTournamentCard> = {}): MyTournamentCard {
     submittedAt: '2026-08-01T10:00:00+00:00',
     events: [line()],
     submissionId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    shortReference: 'H4KJ29QW',
     withdrawsUntil: null,
     ...over,
   };
@@ -138,12 +140,14 @@ describe('the pure decisions', () => {
     ).toBe('Quoted 55.00 · pay at the desk');
   });
 
-  it('links to the receipt whenever the card names a slug and a submission', () => {
-    expect(receiptHref(card())).toBe(
-      '/e/spring-open/receipt/ffffffff-ffff-4fff-8fff-ffffffffffff',
-    );
+  it('links to the receipt whenever the card names a slug and a reference', () => {
+    // V3-24-1: the link is built from the SHORT REFERENCE. The receipt route
+    // accepts only that shape, so a link built from the UUID would 404 — and
+    // the address bar the entrant lands on is then the same eight characters
+    // the page tells them to quote.
+    expect(receiptHref(card())).toBe('/e/spring-open/receipt/H4KJ29QW');
     expect(receiptHref(card({ slug: null }))).toBeNull();
-    expect(receiptHref(card({ submissionId: '' }))).toBeNull();
+    expect(receiptHref(card({ shortReference: '' }))).toBeNull();
   });
 });
 
@@ -237,10 +241,27 @@ describe('the DOM render', () => {
     const receipt = [...root.querySelectorAll('a')].find(
       (a) => a.textContent === 'View receipt',
     );
-    expect(receipt?.getAttribute('href')).toBe(
-      '/e/spring-open/receipt/ffffffff-ffff-4fff-8fff-ffffffffffff',
-    );
+    expect(receipt?.getAttribute('href')).toBe('/e/spring-open/receipt/H4KJ29QW');
     expect(root.textContent).toContain('withdrawal open until');
+    // V3-24-1: the entrant's handle on this entry, on the surface they reach
+    // for before the receipt — the same string the receipt page prints.
+    expect(root.textContent).toContain('Reference H4KJ29QW');
+  });
+
+  it('names a line\'s own act only when it is not the card\'s (V3-24-1)', () => {
+    const root = mount();
+    render(root, {
+      tournaments: [
+        card({
+          shortReference: 'H4KJ29QW',
+          events: [line(), line({ shortReference: 'PQRS2345', eventCode: 'WS' })],
+        }),
+      ],
+    });
+    // The older act's line says which reference answers for it; the line
+    // that belongs to the card's own act does not repeat the footer.
+    expect(root.textContent).toContain('Reference PQRS2345');
+    expect(root.textContent?.match(/Reference H4KJ29QW/g)).toHaveLength(1);
   });
 
   it('omits the withdrawal deadline text when there is no open deadline', () => {

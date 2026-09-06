@@ -8,13 +8,20 @@
  */
 
 import type { PersonReferenceDTO } from './person.types';
+import type { UnresolvedSideDTO } from './side';
 
 export interface PlayerMatchSideDTO {
   persons: PersonReferenceDTO[];
-  /** "Winner of SF 1" / "Loser of R1 5" / "Bye" / "TBD" when unnamed. */
+  /** Legacy prose twin of `unresolved`: "Winner of SF 1" / "Bye" / "TBD".
+   *  Renderers read `unresolved` (contract §2.1); this remains only so a
+   *  payload minted before that field still renders. */
   placeholder: string | null;
   winner: boolean;
   seed?: number | null;
+  /** Why this side has no — or an INCOMPLETE — resolved person. Not
+   *  mutually exclusive with `persons`: a doubles side one player short
+   *  carries the known person and `pending_member` together. */
+  unresolved?: UnresolvedSideDTO | null;
 }
 
 export interface PlayerMatchDTO {
@@ -33,6 +40,11 @@ export interface PlayerMatchDTO {
   status?: 'scheduled' | 'called' | 'live' | 'delayed' | 'completed' | 'walkover' | 'retired' | 'cancelled' | null;
   durationMinutes?: number | null;
   updatedAt?: string | null;
+  /** Contract §2.3: publication is DATA. `false` means the score is
+   *  WITHHELD; `true` with a null `score` means the match simply has no
+   *  score yet. Absent on a payload minted before v3 package 29, where the
+   *  renderer must not claim either. */
+  scoresPublished?: boolean;
 }
 
 export interface PlayerEventDTO {

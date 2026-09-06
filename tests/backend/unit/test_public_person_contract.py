@@ -36,15 +36,15 @@ EXPECTED = {
     HonorDTO: {"persons", "club"},
     PlayerDrawPathDTO: {"roundLabel", "opponents"},
     PlayerEventDTO: {"code", "discipline", "partner", "seed", "drawPath"},
-    PlayerMatchSideDTO: {"persons", "placeholder", "winner", "seed"},
-    PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt"},
+    PlayerMatchSideDTO: {"persons", "placeholder", "winner", "seed", "unresolved"},  # v3 pkg 29: the discriminated Side.unresolved (contract §2.1)
+    PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt", "scoresPublished"},  # v3 pkg 29
     PlayerPageDTO: {"person", "club", "events", "matches"},
     ScheduleDayFacetDTO: {"day", "count"},
-    ScheduleSideDTO: {"participantKey", "persons", "placeholder"},
+    ScheduleSideDTO: {"participantKey", "persons", "placeholder", "unresolved"},  # v3 pkg 29
     ScheduleMatchDTO: {"matchKey", "source", "eventCode", "discipline", "roundLabel", "status", "scheduledDate", "scheduledTime", "court", "sides", "score", "walkover", "updatedAt"},
     ScheduleFacetsDTO: {"days", "events", "courts", "states"},
-    MyEntryLineDTO: {"eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner", "partnerInviteMailFailed"},  # v3 pkg 24: delivery flag, no person data
-    MyTournamentCardDTO: {"slug", "tournamentName", "orgName", "entrantsPublished", "resultsPublished", "date", "venueName", "status", "feeTotalCents", "submittedAt", "events", "submissionId", "withdrawsUntil"},
+    MyEntryLineDTO: {"eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner", "partnerInviteMailFailed", "shortReference"},  # v3 pkg 24: delivery flag, no person data. pkg 30 (V3-24-1): the reference of the act this line came from - this account's own name for its own submission, no person data
+    MyTournamentCardDTO: {"slug", "tournamentName", "orgName", "entrantsPublished", "resultsPublished", "date", "venueName", "status", "feeTotalCents", "submittedAt", "events", "submissionId", "withdrawsUntil", "shortReference"},  # v3 pkg 30 (V3-24-1)
     ReceiptEntryLineDTO: {"eventCode", "discipline", "player", "partner", "state"},
 }
 

@@ -50,6 +50,7 @@ function SidePeople({ side, slug, compact = false, highlightPersonId, highlightP
     persons={references(side)}
     state={side.winner ? 'winner' : 'resolved'}
     label={side.placeholder}
+    unresolved={side.unresolved}
     seed={side.seed}
     className={`${compact ? 'block min-w-0 whitespace-normal break-words leading-tight' : 'block min-w-0'} ${highlighted ? 'font-semibold underline decoration-2 underline-offset-2' : ''}`}
   />;
@@ -108,9 +109,16 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
   // structured sides via the shared authority, never from
   // `persons.map(...).join(' / ')`.
   const competitors = sideSummaryPhrase(slug ?? '', match.sides);
+  // Contract §2.3/§2.4: "Score not published" is a claim about PUBLICATION,
+  // and a null score alone does not support it — an unplayed match has no
+  // score either. Before the wire carried `scoresPublished` (v3 package 29,
+  // V3-11-3) every future match on the calendar was announced as withheld.
+  // Withheld says so; not-yet-played omits the term entirely (§2.4).
   const scoreLabel = match.score?.length
     ? `Score ${match.score.map((game) => game.join('-')).join(', ')}`
-    : 'Score not published';
+    : match.scoresPublished === false
+      ? 'Score not published'
+      : null;
   // The tier's one match-state speller (contract §2.3) — ``null`` when the
   // status is unrecognised, in which case no state chip renders (§2.2).
   const stateLabel = scheduleStateLabel(match.status);

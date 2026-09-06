@@ -16,12 +16,18 @@ declares its own client/page/entrant, lifted not reinvented).
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 
 import pytest
 
 from tests.backend._helpers import isolate_test_database
+
+# V3-24-1: the shape the receipt route accepts, written out here rather than
+# imported, so a change to the alphabet has to be made deliberately in both
+# places instead of following the implementation silently.
+SHORT_REFERENCE = re.compile(r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$")
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 GOOD_PW = "a perfectly fine passphrase"
@@ -146,6 +152,10 @@ def _seed_submission(page, email, player_name="Robin Seeded", state="pending",
         session.commit()
         return {
             "submission": str(submission.id),
+            # V3-24-1: the handle the receipt route and the receipt page
+            # take. Read off the row rather than fabricated, so these tests
+            # exercise the generator that actually ran.
+            "reference": submission.short_reference,
             "entry": str(entry.id),
             "player": str(player.id),
         }
@@ -243,8 +253,8 @@ def test_a_bare_request_is_401(client):
 
 
 def test_a_bare_receipt_request_is_401(client):
-    submission_id = "44444444-4444-4444-8444-444444444444"
-    assert client.get(f"/e/api/me/submissions/{submission_id}").status_code == 401
+    reference = "H4KJ29QW"
+    assert client.get(f"/e/api/me/submissions/{reference}").status_code == 401
 
 
 def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile):
@@ -257,12 +267,13 @@ def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile)
         fee_total_cents=5500,
     )
 
-    response = client.get(f"/e/api/me/submissions/{seeded['submission']}")
+    response = client.get(f"/e/api/me/submissions/{seeded['reference']}")
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "private, no-store"
     body = response.json()
     assert set(body) == {
         "submissionId",
+        "shortReference",
         "slug",
         "tournamentName",
         "orgName",
@@ -277,6 +288,10 @@ def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile)
         "events",
     }
     assert body["submissionId"] == seeded["submission"]
+    # V3-24-1: the receipt's printed "Reference" and its own URL are the
+    # same eight characters, and neither is the UUID.
+    assert body["shortReference"] == seeded["reference"]
+    assert SHORT_REFERENCE.match(body["shortReference"])
     assert body["slug"] == "winter-cup"
     assert body["tournamentName"] == "Winter Cup"
     assert body["venueName"] == "North Hall"
@@ -299,10 +314,18 @@ def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile)
 
     client.cookies.clear()
     _sign_in(client, "stranger@example.com")
-    foreign = client.get(f"/e/api/me/submissions/{seeded['submission']}")
-    invalid = client.get("/e/api/me/submissions/not-a-uuid")
-    assert foreign.status_code == invalid.status_code == 404
-    assert foreign.json() == invalid.json()
+    # V3-24-1's load-bearing claim: a reference is an identifier, never
+    # access. This one is REAL, WELL-FORMED and belongs to another account -
+    # exactly the case a short, guessable handle makes worth stating - and
+    # it is answered identically to a string that could not name anything.
+    foreign = client.get(f"/e/api/me/submissions/{seeded['reference']}")
+    unknown = client.get("/e/api/me/submissions/H4KJ29QW")
+    invalid = client.get("/e/api/me/submissions/not-a-reference")
+    assert foreign.status_code == unknown.status_code == invalid.status_code == 404
+    assert foreign.json() == unknown.json() == invalid.json()
+    # And the UUID buys nothing either: the old handle is not a second door.
+    stale = client.get(f"/e/api/me/submissions/{seeded['submission']}")
+    assert stale.status_code == 404
 
 
 def test_the_answer_is_private_and_uncacheable(client, page, turnstile):
@@ -367,9 +390,11 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
         # moment its withdraw affordance stops working. Neither widens what
         # the projection discloses - both are this account's own facts.
         "submissionId",
+        "shortReference",
         "withdrawsUntil",
     }
     assert card["submissionId"] == seeded["submission"]
+    assert card["shortReference"] == seeded["reference"]
     # No deadline configured on the event, so none is invented.
     assert card["withdrawsUntil"] is None
     assert all(
@@ -394,6 +419,11 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
             # to have failed to send — an honest account-scoped fact, never
             # widening what the projection discloses.
             "partnerInviteMailFailed",
+            # V3-24-1: the reference of the act this line came from. Not a
+            # widening - it is a name for this account's own submission,
+            # already on the card - but a line and its card can disagree,
+            # so it has to be per line.
+            "shortReference",
         }
         for line in card["events"]
     )
@@ -609,6 +639,14 @@ def test_the_newest_submission_names_the_card(client, page, turnstile):
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
     assert len(card["events"]) == 2
     assert card["submissionId"] == newer["submission"]
+    assert card["shortReference"] == newer["reference"]
+    # Each LINE names the act it came from, which is not the card's act for
+    # the older of the two - the entrant holding two references needs to
+    # know which line each one answers for.
+    assert {line["shortReference"] for line in card["events"]} == {
+        older["reference"],
+        newer["reference"],
+    }
 
 
 # ---- the batching claim ---------------------------------------------------

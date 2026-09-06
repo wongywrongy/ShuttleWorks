@@ -128,6 +128,21 @@ describe('match-card contract — bracket node (§4.3)', () => {
     expect(html).not.toContain('>/<');
   });
 
+  it('MC-04: a pending pair names the known player AND says the partner is unconfirmed', () => {
+    const html = renderNode(MC.incompletePair);
+    // The known name is present...
+    expect(html).toContain('Ada Lovelace');
+    // ...AND the §6.1 phrase, so the side cannot be read as singles.
+    expect(html).toContain('partner to be confirmed');
+    // Never an invented second person and never a slash-joined pair label.
+    expect(html).not.toContain('>/<');
+  });
+
+  it('MC-04: the complete pair on the other side gains no pending phrase', () => {
+    const html = renderNode(MC.incompletePair);
+    expect((html.match(/partner to be confirmed/g) ?? []).length).toBe(2); // one visible line + the aria phrase
+  });
+
   it('long diacritic names survive whole, with no ellipsis or truncate class (MC-03)', () => {
     const html = renderNode(MC.longNamesDoubles);
     expect(html).toContain('Aleksandra Wiśniewska-Kowalczyk');
@@ -146,5 +161,42 @@ describe('match-card contract — accessible summary (§6.1 "versus"/"and")', ()
   it('an unresolved side folds into the phrase by its label, not a slash join', () => {
     const html = renderNode(MC.unresolvedPredecessor);
     expect(html).toContain('Ada Lovelace versus Winner of QF1');
+  });
+
+  it('MC-04: the pending partner is a term in the phrase, joined with "and"', () => {
+    const html = renderNode(MC.incompletePair);
+    expect(html).toContain(
+      'Ada Lovelace and partner to be confirmed versus Katherine Johnson and Hedy Lamarr',
+    );
+  });
+});
+
+describe('match-card contract — labels come from the discriminant (§2.1/§6.1)', () => {
+  it('a winner_of side is spelled from `unresolved.reference`, not the placeholder prose', () => {
+    // Same fixture, placeholder deliberately contradicting the discriminant:
+    // the renderer must follow the discriminant.
+    const match = {
+      ...MC.unresolvedPredecessor,
+      sides: [
+        MC.unresolvedPredecessor.sides[0],
+        { persons: [], placeholder: 'Winner of NONSENSE', winner: false, unresolved: { kind: 'loser_of' as const, reference: 'SF 2' } },
+      ] as typeof MC.unresolvedPredecessor.sides,
+    };
+    const html = renderNode(match);
+    expect(html).toContain('Loser of SF 2');
+    expect(html).not.toContain('NONSENSE');
+  });
+
+  it('an undetermined side reads "To be decided", never the wire\'s legacy TBD', () => {
+    const match = {
+      ...MC.unresolvedPredecessor,
+      sides: [
+        MC.unresolvedPredecessor.sides[0],
+        { persons: [], placeholder: 'TBD', winner: false, unresolved: { kind: 'undetermined' as const } },
+      ] as typeof MC.unresolvedPredecessor.sides,
+    };
+    const html = renderNode(match);
+    expect(html).toContain('To be decided');
+    expect(html).not.toMatch(/>TBD</);
   });
 });

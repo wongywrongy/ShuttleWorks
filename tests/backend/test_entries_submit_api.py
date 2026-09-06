@@ -30,7 +30,7 @@ route that is not the shipped one.**
 * ``_receipt_id`` cannot be ``location.rsplit("/", 1)[-1]``. The route
   appends ``?totalCents=N`` (the receipt page is rendered by node, which
   holds no entrant credential and so cannot read the amount back), and the
-  naive split returns ``"<uuid>?totalCents=5500"``. It is parsed with
+  naive split returns ``"<handle>?totalCents=5500"``. It is parsed with
   ``urlsplit`` instead — every replay assertion in this file depends on
   that id being the id.
 * There is no ``test_the_custom_header_is_still_a_sufficient_proof_on_its_own``.
@@ -293,8 +293,10 @@ def _quote(client, page, **overrides):
 
 
 def _receipt_id(response):
-    """The submission id out of the 303 ``Location`` — the POST/redirect/GET
-    target that makes a reload safe to press.
+    """The submission's short reference out of the 303 ``Location`` — the
+    POST/redirect/GET target that makes a reload safe to press. (It was the
+    submission's UUID until V3-24-1; the name is kept because every replay
+    assertion below reads it as "the handle the redirect named".)
 
     Parsed rather than split off the tail: the route appends
     ``?totalCents=N`` for the receipt page to display, so ``rsplit("/", 1)``
@@ -833,7 +835,9 @@ def test_a_replayed_key_returns_the_original_act_and_creates_nothing(
 def test_a_replay_redirects_to_the_same_receipt(client, page, entrant):
     first = _submit(client, page, idempotencyKey="key-1")
     second = _submit(client, page, idempotencyKey="key-1")
-    reference = str(_submissions(page["tid"])[0].id)
+    # V3-24-1: the receipt Location names the short reference, so a replay
+    # answering "the same receipt" means the same eight characters.
+    reference = _submissions(page["tid"])[0].short_reference
     assert _receipt_id(first) == reference
     assert _receipt_id(second) == reference
 

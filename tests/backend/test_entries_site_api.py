@@ -693,6 +693,25 @@ def test_the_tree_renders_rounds_seeds_schedule_and_placeholders(client, bracket
     assert [side["feederTake"] for side in final["sides"]] == ["winner", "winner"]
 
 
+def test_the_tree_carries_the_discriminated_unresolved_reason(client, bracket_page):
+    """V3-11-1: the public wire states WHY a side has no name, as a `kind` a
+    renderer switches on — not as a sentence it has to parse. The formatted
+    `reference` comes off the same locator the legacy `placeholder` uses, so
+    the two can never disagree (D16)."""
+    body = client.get(f"/e/api/page/{bracket_page['slug']}/draws/MS").json()
+    (segment,) = body["segments"]
+    (final,) = segment["rounds"][1]["matches"]
+    assert [side["unresolved"] for side in final["sides"]] == [
+        {"kind": "winner_of", "known": [], "missing": 0, "reference": "SF 1"},
+        {"kind": "winner_of", "known": [], "missing": 0, "reference": "SF 2"},
+    ]
+
+    # A resolved side has no reason at all — the persons ARE the answer, and
+    # they are reached through `participantKey` -> `teams`.
+    sf1, _sf2 = segment["rounds"][0]["matches"]
+    assert [side["unresolved"] for side in sf1["sides"]] == [None, None]
+
+
 def test_approved_slot_with_unresolved_predecessor_still_reads_scheduled(
     client, bracket_page
 ):

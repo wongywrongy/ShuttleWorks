@@ -157,7 +157,7 @@ def _open_entry_page(base_url: str) -> tuple[str, str]:
 def _submit_and_confirm_receipt(client: SimClient, slug: str, event_id: str) -> list[str]:
     """The shared assertion behind checks (9) and (10): submit one entry to
     the open event above as whoever `client`'s jar is currently signed in
-    as, follow the 303 to the receipt route's own submission id, and read
+    as, follow the 303 to the receipt route's own reference, and read
     it back through the account-scoped receipt route — the same two calls
     `enter.tsx`'s form post and `receipt.js`'s `loadReceipt` make for real.
     """
@@ -184,16 +184,18 @@ def _submit_and_confirm_receipt(client: SimClient, slug: str, event_id: str) -> 
         expect={303},
     )
     location = submit.headers.get("location", "")
-    match = re.search(r"/receipt/([0-9a-f-]{36})", location)
+    # V3-24-1: the receipt Location names the submission's SHORT REFERENCE -
+    # eight characters of the unambiguous alphabet - not its UUID.
+    match = re.search(r"/receipt/([23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8})", location)
     if match is None:
         problems.append(f"submission did not answer a receipt Location: {location!r}")
         return problems
-    submission_id = match.group(1)
+    reference = match.group(1)
 
     receipt = client.request(
-        "GET", f"/e/api/me/submissions/{submission_id}", expect={200}
+        "GET", f"/e/api/me/submissions/{reference}", expect={200}
     ).json()
-    if receipt.get("submissionId") != submission_id or not receipt.get("events"):
+    if receipt.get("shortReference") != reference or not receipt.get("events"):
         problems.append(f"the account-scoped receipt did not read back the submission: {receipt}")
     return problems
 

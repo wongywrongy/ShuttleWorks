@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-06T11:06:11.980Z",
+  "generatedAt": "2026-09-06T23:29:03.521Z",
   "roots": [
     "apps/console/src",
     "apps/entrant/app",
@@ -16,7 +16,7 @@
     "file-name-shaped and uuid-shaped tokens"
   ],
   "counts": {
-    "jsx-text": 851,
+    "jsx-text": 852,
     "prop:aria-label": 86,
     "prop:title": 86,
     "prop:label": 167,
@@ -27,7 +27,7 @@
     "label-map:ui.ts": 10,
     "dom-text": 10
   },
-  "totalKeys": 1318,
+  "totalKeys": 1319,
   "entries": [
     {
       "key": "console:apps/console/src/app/App.tsx:45:Loading…",
@@ -2137,227 +2137,227 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:64:title:No event selected",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:66:title:No event selected",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 64,
+      "line": 66,
       "text": "No event selected",
       "kind": "prop:title",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:64"
+        "apps/console/src/modules/bracket/DrawView.tsx:66"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:75:title:No draw generated",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:77:title:No draw generated",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 75,
+      "line": 77,
       "text": "No draw generated",
       "kind": "prop:title",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:75"
+        "apps/console/src/modules/bracket/DrawView.tsx:77"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:277:title:Could not record result",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:279:title:Could not record result",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 277,
+      "line": 279,
       "text": "Could not record result",
       "kind": "prop:title",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:277",
-        "apps/console/src/modules/bracket/DrawView.tsx:1212",
-        "apps/console/src/modules/bracket/DrawView.tsx:1679",
-        "apps/console/src/modules/bracket/DrawView.tsx:1866"
+        "apps/console/src/modules/bracket/DrawView.tsx:279",
+        "apps/console/src/modules/bracket/DrawView.tsx:1226",
+        "apps/console/src/modules/bracket/DrawView.tsx:1704",
+        "apps/console/src/modules/bracket/DrawView.tsx:1891"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:466:aria-label:Previous round",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:468:aria-label:Previous round",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 466,
+      "line": 468,
       "text": "Previous round",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:466"
+        "apps/console/src/modules/bracket/DrawView.tsx:468"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:470:← Previous",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:472:← Previous",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 470,
+      "line": 472,
       "text": "← Previous",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:470"
+        "apps/console/src/modules/bracket/DrawView.tsx:472"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:474:Round",
-      "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 474,
-      "text": "Round",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:474",
-        "apps/console/src/modules/bracket/DrawView.tsx:1685"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:476:aria-label:Round",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:476:Round",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
       "line": 476,
       "text": "Round",
-      "kind": "prop:aria-label",
+      "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:476"
+        "apps/console/src/modules/bracket/DrawView.tsx:476",
+        "apps/console/src/modules/bracket/DrawView.tsx:1710"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:490:aria-label:Next round",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:478:aria-label:Round",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 490,
+      "line": 478,
+      "text": "Round",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/modules/bracket/DrawView.tsx:478"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:492:aria-label:Next round",
+      "file": "apps/console/src/modules/bracket/DrawView.tsx",
+      "line": 492,
       "text": "Next round",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:490"
+        "apps/console/src/modules/bracket/DrawView.tsx:492"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:498:Next →",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:500:Next →",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 498,
+      "line": 500,
       "text": "Next →",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:498"
+        "apps/console/src/modules/bracket/DrawView.tsx:500"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:503:Find a player",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:505:Find a player",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 503,
+      "line": 505,
       "text": "Find a player",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:503"
+        "apps/console/src/modules/bracket/DrawView.tsx:505"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:510:placeholder:Search this round",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:512:placeholder:Search this round",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 510,
+      "line": 512,
       "text": "Search this round",
       "kind": "prop:placeholder",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:510"
+        "apps/console/src/modules/bracket/DrawView.tsx:512"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:516:aria-label:Round validation",
-      "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 516,
-      "text": "Round validation",
-      "kind": "prop:aria-label",
-      "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:516"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:518:Draw checks",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:518:aria-label:Round validation",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
       "line": 518,
-      "text": "Draw checks",
-      "kind": "jsx-text",
+      "text": "Round validation",
+      "kind": "prop:aria-label",
       "usage": [
         "apps/console/src/modules/bracket/DrawView.tsx:518"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:521:match",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:520:Draw checks",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 521,
+      "line": 520,
+      "text": "Draw checks",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/bracket/DrawView.tsx:520"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:523:match",
+      "file": "apps/console/src/modules/bracket/DrawView.tsx",
+      "line": 523,
       "text": "match",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:521"
+        "apps/console/src/modules/bracket/DrawView.tsx:523"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:521:has an open side",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:523:has an open side",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 521,
+      "line": 523,
       "text": "has an open side",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:521"
+        "apps/console/src/modules/bracket/DrawView.tsx:523"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:525:Round is complete",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:527:Round is complete",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 525,
+      "line": 527,
       "text": "Round is complete",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:525"
+        "apps/console/src/modules/bracket/DrawView.tsx:527"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:531:No matches in this round",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:533:No matches in this round",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 531,
+      "line": 533,
       "text": "No matches in this round match your search.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:531"
+        "apps/console/src/modules/bracket/DrawView.tsx:533"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:549:Match",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:551:Match",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 549,
+      "line": 551,
       "text": "Match",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:549"
+        "apps/console/src/modules/bracket/DrawView.tsx:551"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:597:event",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:599:event",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 597,
+      "line": 599,
       "text": "event",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:597"
+        "apps/console/src/modules/bracket/DrawView.tsx:599"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:598:round",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:600:round",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 598,
+      "line": 600,
       "text": "round",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:598"
+        "apps/console/src/modules/bracket/DrawView.tsx:600"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:1481:Enter score",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:1506:Enter score",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 1481,
+      "line": 1506,
       "text": "Enter score",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:1481"
+        "apps/console/src/modules/bracket/DrawView.tsx:1506"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:1592:↵ wins",
+      "key": "console:apps/console/src/modules/bracket/DrawView.tsx:1617:↵ wins",
       "file": "apps/console/src/modules/bracket/DrawView.tsx",
-      "line": 1592,
+      "line": 1617,
       "text": "↵ wins",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/DrawView.tsx:1592"
+        "apps/console/src/modules/bracket/DrawView.tsx:1617"
       ]
     },
     {
@@ -2904,85 +2904,85 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:126:Court closed",
+      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:133:Court closed",
       "file": "apps/console/src/modules/display/publicDisplay/CourtsView.tsx",
-      "line": 126,
+      "line": 133,
       "text": "Court closed",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:126",
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:314"
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:133",
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:323"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:140:Next",
+      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:147:Next",
       "file": "apps/console/src/modules/display/publicDisplay/CourtsView.tsx",
-      "line": 140,
+      "line": 147,
       "text": "Next",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:140",
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:486"
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:147",
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:493"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:160:No next match assigned.",
+      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:167:No next match assigned.",
       "file": "apps/console/src/modules/display/publicDisplay/CourtsView.tsx",
-      "line": 160,
+      "line": 167,
       "text": "No next match assigned.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:160"
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:167"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:306:Court",
+      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:315:Court",
       "file": "apps/console/src/modules/display/publicDisplay/CourtsView.tsx",
-      "line": 306,
+      "line": 315,
       "text": "Court",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:306"
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:315"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:348:next:",
+      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:357:next:",
       "file": "apps/console/src/modules/display/publicDisplay/CourtsView.tsx",
-      "line": 348,
+      "line": 357,
       "text": "next:",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:348"
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:357"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:353:No next match assigned",
+      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:362:No next match assigned",
       "file": "apps/console/src/modules/display/publicDisplay/CourtsView.tsx",
-      "line": 353,
+      "line": 362,
       "text": "No next match assigned",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:353"
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:362"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:369:Court free",
+      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:378:Court free",
       "file": "apps/console/src/modules/display/publicDisplay/CourtsView.tsx",
-      "line": 369,
+      "line": 378,
       "text": "Court free",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:369"
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:378"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:504:Later",
+      "key": "console:apps/console/src/modules/display/publicDisplay/CourtsView.tsx:509:Later",
       "file": "apps/console/src/modules/display/publicDisplay/CourtsView.tsx",
-      "line": 504,
+      "line": 509,
       "text": "Later",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:504"
+        "apps/console/src/modules/display/publicDisplay/CourtsView.tsx:509"
       ]
     },
     {
@@ -5589,43 +5589,43 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:292:label:unsched",
+      "key": "console:apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:293:label:unsched",
       "file": "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx",
-      "line": 292,
+      "line": 293,
       "text": "unsched",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:292"
+        "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:293"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:302:Notify (",
+      "key": "console:apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:303:Notify (",
       "file": "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx",
-      "line": 302,
+      "line": 303,
       "text": "Notify (",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:302"
+        "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:303"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:327:Changes (",
+      "key": "console:apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:328:Changes (",
       "file": "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx",
-      "line": 327,
+      "line": 328,
       "text": "Changes (",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:327"
+        "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:328"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:355:Per-school breakdown (",
+      "key": "console:apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:356:Per-school breakdown (",
       "file": "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx",
-      "line": 355,
+      "line": 356,
       "text": "Per-school breakdown (",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:355"
+        "apps/console/src/modules/operations/plan/ScheduleDiffView.tsx:356"
       ]
     },
     {
@@ -8395,7 +8395,7 @@
       "kind": "prop:label",
       "usage": [
         "apps/console/src/modules/setup/SetupProduct.tsx:276",
-        "apps/console/src/modules/setup/SetupProduct.tsx:616"
+        "apps/console/src/modules/setup/SetupProduct.tsx:603"
       ]
     },
     {
@@ -8439,435 +8439,415 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:324:label:Format",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:325:label:Format",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 324,
+      "line": 325,
       "text": "Format",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:324"
+        "apps/console/src/modules/setup/SetupProduct.tsx:325"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:330:ariaLabel:Default draw format",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:331:ariaLabel:Default draw format",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 330,
+      "line": 331,
       "text": "Default draw format",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:330"
+        "apps/console/src/modules/setup/SetupProduct.tsx:331"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:339:label:Point cap",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:340:label:Minimum rest between mat",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 339,
-      "text": "Point cap",
+      "line": 340,
+      "text": "Minimum rest between matches",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:339"
+        "apps/console/src/modules/setup/SetupProduct.tsx:340"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:347:ariaLabel:Point cap",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:348:ariaLabel:Minimum rest between mat",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 347,
-      "text": "Point cap",
+      "line": 348,
+      "text": "Minimum rest between matches",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:347"
+        "apps/console/src/modules/setup/SetupProduct.tsx:348"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:353:label:Minimum rest between mat",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:353:label:Default draw size",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
       "line": 353,
-      "text": "Minimum rest between matches",
+      "text": "Default draw size",
       "kind": "prop:label",
       "usage": [
         "apps/console/src/modules/setup/SetupProduct.tsx:353"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:361:ariaLabel:Minimum rest between mat",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:361:ariaLabel:Default draw size",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
       "line": 361,
-      "text": "Minimum rest between matches",
+      "text": "Default draw size",
       "kind": "prop:ariaLabel",
       "usage": [
         "apps/console/src/modules/setup/SetupProduct.tsx:361"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:366:label:Default draw size",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:378:label:Registration method",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 366,
-      "text": "Default draw size",
+      "line": 378,
+      "text": "Registration method",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:366"
+        "apps/console/src/modules/setup/SetupProduct.tsx:378"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:374:ariaLabel:Default draw size",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:384:ariaLabel:Registration method",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 374,
-      "text": "Default draw size",
+      "line": 384,
+      "text": "Registration method",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:374"
+        "apps/console/src/modules/setup/SetupProduct.tsx:384"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:391:label:Registration method",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:389:label:Partner instructions",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 391,
-      "text": "Registration method",
+      "line": 389,
+      "text": "Partner instructions",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:391"
+        "apps/console/src/modules/setup/SetupProduct.tsx:389"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:397:ariaLabel:Registration method",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:390:hint:An internal note. Not sh",
+      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
+      "line": 390,
+      "text": "An internal note. Not shown to entrants yet, and not enforced. Payment and approval requirements are the switches below.",
+      "kind": "prop:hint",
+      "usage": [
+        "apps/console/src/modules/setup/SetupProduct.tsx:390"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:396:label:Payment required",
+      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
+      "line": 396,
+      "text": "Payment required",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/modules/setup/SetupProduct.tsx:396"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:397:ariaLabel:Payment required",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
       "line": 397,
-      "text": "Registration method",
+      "text": "Payment required",
       "kind": "prop:ariaLabel",
       "usage": [
         "apps/console/src/modules/setup/SetupProduct.tsx:397"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:402:label:Partner instructions",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:400:label:Waitlist enabled",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 402,
-      "text": "Partner instructions",
-      "kind": "prop:label",
-      "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:402"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:403:hint:An internal note. Not sh",
-      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 403,
-      "text": "An internal note. Not shown to entrants yet, and not enforced. Payment and approval requirements are the switches below.",
-      "kind": "prop:hint",
-      "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:403"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:409:label:Payment required",
-      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 409,
-      "text": "Payment required",
-      "kind": "prop:label",
-      "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:409"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:410:ariaLabel:Payment required",
-      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 410,
-      "text": "Payment required",
-      "kind": "prop:ariaLabel",
-      "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:410"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:413:label:Waitlist enabled",
-      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 413,
+      "line": 400,
       "text": "Waitlist enabled",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:413"
+        "apps/console/src/modules/setup/SetupProduct.tsx:400"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:414:ariaLabel:Waitlist enabled",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:401:ariaLabel:Waitlist enabled",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 414,
+      "line": 401,
       "text": "Waitlist enabled",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:414"
+        "apps/console/src/modules/setup/SetupProduct.tsx:401"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:417:label:Organizer approval requi",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:404:label:Organizer approval requi",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 417,
+      "line": 404,
       "text": "Organizer approval required",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:417"
+        "apps/console/src/modules/setup/SetupProduct.tsx:404"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:418:ariaLabel:Organizer approval requi",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:405:ariaLabel:Organizer approval requi",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 418,
+      "line": 405,
       "text": "Organizer approval required",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:418"
+        "apps/console/src/modules/setup/SetupProduct.tsx:405"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:434:Staff contacts are visib",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:421:Staff contacts are visib",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 434,
+      "line": 421,
       "text": "Staff contacts are visible to tournament operators and are never published.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:434"
+        "apps/console/src/modules/setup/SetupProduct.tsx:421"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:439:label:Contacts",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:426:label:Contacts",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 439,
+      "line": 426,
       "text": "Contacts",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:439"
+        "apps/console/src/modules/setup/SetupProduct.tsx:426"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:457:label:Tournament page address",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:444:label:Tournament page address",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 457,
+      "line": 444,
       "text": "Tournament page address",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:457"
+        "apps/console/src/modules/setup/SetupProduct.tsx:444"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:458:hint:This is the slug in your",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:445:hint:This is the slug in your",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 458,
+      "line": 445,
       "text": "This is the slug in your public page's address. The rest of the address does not change.",
       "kind": "prop:hint",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:458"
+        "apps/console/src/modules/setup/SetupProduct.tsx:445"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:463:Description",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:450:Description",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 463,
+      "line": 450,
       "text": "Description",
       "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/setup/SetupProduct.tsx:450"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:459:label:Regulations link",
+      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
+      "line": 459,
+      "text": "Regulations link",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/modules/setup/SetupProduct.tsx:459"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:460:label:Logo image link",
+      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
+      "line": 460,
+      "text": "Logo image link",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/modules/setup/SetupProduct.tsx:460"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:461:label:Banner image link",
+      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
+      "line": 461,
+      "text": "Banner image link",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/modules/setup/SetupProduct.tsx:461"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:463:aria-label:Publication image previe",
+      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
+      "line": 463,
+      "text": "Publication image preview",
+      "kind": "prop:aria-label",
       "usage": [
         "apps/console/src/modules/setup/SetupProduct.tsx:463"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:472:label:Regulations link",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:475:The image could not be l",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 472,
-      "text": "Regulations link",
-      "kind": "prop:label",
-      "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:472"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:473:label:Logo image link",
-      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 473,
-      "text": "Logo image link",
-      "kind": "prop:label",
-      "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:473"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:474:label:Banner image link",
-      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 474,
-      "text": "Banner image link",
-      "kind": "prop:label",
-      "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:474"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:476:aria-label:Publication image previe",
-      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 476,
-      "text": "Publication image preview",
-      "kind": "prop:aria-label",
-      "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:476"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:488:The image could not be l",
-      "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 488,
+      "line": 475,
       "text": "The image could not be loaded from this link.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:488"
+        "apps/console/src/modules/setup/SetupProduct.tsx:475"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:496:Retry preview",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:483:Retry preview",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 496,
+      "line": 483,
       "text": "Retry preview",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:496"
+        "apps/console/src/modules/setup/SetupProduct.tsx:483"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:515:label:Publication audience",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:502:label:Publication audience",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 515,
+      "line": 502,
       "text": "Publication audience",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:515"
+        "apps/console/src/modules/setup/SetupProduct.tsx:502"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:518:Manage audience in Publi",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:505:Manage audience in Publi",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 518,
+      "line": 505,
       "text": "Manage audience in Publish Site →",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:518"
+        "apps/console/src/modules/setup/SetupProduct.tsx:505"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:586:Edit event",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:573:Edit event",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 586,
+      "line": 573,
       "text": "Edit event",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:586"
+        "apps/console/src/modules/setup/SetupProduct.tsx:573"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:613:label:Venue",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:600:label:Venue",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 613,
+      "line": 600,
       "text": "Venue",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:613"
+        "apps/console/src/modules/setup/SetupProduct.tsx:600"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:628:Venue details and courts",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:615:Venue details and courts",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 628,
+      "line": 615,
       "text": "Venue details and courts are locked here because the current schedule uses them.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:628"
+        "apps/console/src/modules/setup/SetupProduct.tsx:615"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:633:Manage the schedule in O",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:620:Manage the schedule in O",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 633,
+      "line": 620,
       "text": "Manage the schedule in Operations · Plan",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:633"
+        "apps/console/src/modules/setup/SetupProduct.tsx:620"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:749:title:Setup",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:736:title:Setup",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 749,
+      "line": 736,
       "text": "Setup",
       "kind": "prop:title",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:749"
+        "apps/console/src/modules/setup/SetupProduct.tsx:736"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:751:title:Setup needs attention",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:738:title:Setup needs attention",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 751,
+      "line": 738,
       "text": "Setup needs attention",
       "kind": "prop:title",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:751"
+        "apps/console/src/modules/setup/SetupProduct.tsx:738"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:753:Loading setup sections…",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:740:Loading setup sections…",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 753,
+      "line": 740,
       "text": "Loading setup sections…",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:753",
-        "apps/console/src/modules/setup/SetupProduct.tsx:883"
+        "apps/console/src/modules/setup/SetupProduct.tsx:740",
+        "apps/console/src/modules/setup/SetupProduct.tsx:870"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:757:Readiness checklist",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:744:Readiness checklist",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 757,
+      "line": 744,
       "text": "Readiness checklist",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:757"
+        "apps/console/src/modules/setup/SetupProduct.tsx:744"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:758:Complete the sections in",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:745:Complete the sections in",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 758,
+      "line": 745,
       "text": "Complete the sections in any order. Blocking issues explain what must change before the event can run.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:758"
+        "apps/console/src/modules/setup/SetupProduct.tsx:745"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:776:blocking issue",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:763:blocking issue",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 776,
+      "line": 763,
       "text": "blocking issue",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:776"
+        "apps/console/src/modules/setup/SetupProduct.tsx:763"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:784:Overall:",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:771:Overall:",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 784,
+      "line": 771,
       "text": "Overall:",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:784",
-        "apps/console/src/modules/setup/SetupProduct.tsx:816"
+        "apps/console/src/modules/setup/SetupProduct.tsx:771",
+        "apps/console/src/modules/setup/SetupProduct.tsx:803"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:818:View full checklist",
+      "key": "console:apps/console/src/modules/setup/SetupProduct.tsx:805:View full checklist",
       "file": "apps/console/src/modules/setup/SetupProduct.tsx",
-      "line": 818,
+      "line": 805,
       "text": "View full checklist",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupProduct.tsx:818"
+        "apps/console/src/modules/setup/SetupProduct.tsx:805"
       ]
     },
     {
@@ -9905,333 +9885,333 @@
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:264:title:Events",
-      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 264,
-      "text": "Events",
-      "kind": "prop:title",
-      "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:264"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:266:label:Meet type",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:266:title:Events",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
       "line": 266,
-      "text": "Meet type",
-      "kind": "prop:label",
+      "text": "Events",
+      "kind": "prop:title",
       "usage": [
         "apps/console/src/platform/engine-config/EngineConfigForm.tsx:266"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:272:ariaLabel:Meet type",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:268:label:Meet type",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 272,
+      "line": 268,
+      "text": "Meet type",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:268"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:274:ariaLabel:Meet type",
+      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
+      "line": 274,
       "text": "Meet type",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:272"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:274"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:285:title:Scoring",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:287:title:Scoring",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 285,
+      "line": 287,
       "text": "Scoring",
       "kind": "prop:title",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:285"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:287"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:294:title:Timing",
-      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 294,
-      "text": "Timing",
-      "kind": "prop:title",
-      "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:294"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:296:label:Rest between matches",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:296:title:Timing",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
       "line": 296,
-      "text": "Rest between matches",
-      "kind": "prop:label",
+      "text": "Timing",
+      "kind": "prop:title",
       "usage": [
         "apps/console/src/platform/engine-config/EngineConfigForm.tsx:296"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:304:ariaLabel:Rest between matches",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:298:label:Rest between matches",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 304,
+      "line": 298,
+      "text": "Rest between matches",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:298"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:306:ariaLabel:Rest between matches",
+      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
+      "line": 306,
       "text": "Rest between matches",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:304"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:306"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:309:label:Break (optional)",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:311:label:Break (optional)",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 309,
+      "line": 311,
       "text": "Break (optional)",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:309"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:311"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:314:ariaLabel:Break start",
-      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 314,
-      "text": "Break start",
-      "kind": "prop:ariaLabel",
-      "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:314"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:316:ariaLabel:Break end",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:316:ariaLabel:Break start",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
       "line": 316,
-      "text": "Break end",
+      "text": "Break start",
       "kind": "prop:ariaLabel",
       "usage": [
         "apps/console/src/platform/engine-config/EngineConfigForm.tsx:316"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:321:Clear",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:318:ariaLabel:Break end",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 321,
+      "line": 318,
+      "text": "Break end",
+      "kind": "prop:ariaLabel",
+      "usage": [
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:318"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:323:Clear",
+      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
+      "line": 323,
       "text": "Clear",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:321"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:323"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:336:Add break",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:338:Add break",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 336,
+      "line": 338,
       "text": "Add break",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:336"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:338"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:344:label:Rest between rounds",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:346:label:Rest between rounds",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 344,
+      "line": 346,
       "text": "Rest between rounds",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:344"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:346"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:360:ariaLabel:Rest between rounds (slo",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:362:ariaLabel:Rest between rounds (slo",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 360,
+      "line": 362,
       "text": "Rest between rounds (slots)",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:360"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:362"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:368:title:Optimization goals",
-      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 368,
-      "text": "Optimization goals",
-      "kind": "prop:title",
-      "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:368"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:370:label:Maximize court utilizati",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:370:title:Optimization goals",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
       "line": 370,
-      "text": "Maximize court utilization",
-      "kind": "prop:label",
+      "text": "Optimization goals",
+      "kind": "prop:title",
       "usage": [
         "apps/console/src/platform/engine-config/EngineConfigForm.tsx:370"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:375:ariaLabel:Maximize court utilizati",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:372:label:Maximize court utilizati",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 375,
+      "line": 372,
+      "text": "Maximize court utilization",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:372"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:377:ariaLabel:Maximize court utilizati",
+      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
+      "line": 377,
       "text": "Maximize court utilization",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:375"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:377"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:388:label:Court utilization weight",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:390:label:Court utilization weight",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 388,
+      "line": 390,
       "text": "Court utilization weight",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:388"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:390"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:395:ariaLabel:Court utilization weight",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:397:ariaLabel:Court utilization weight",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 395,
+      "line": 397,
       "text": "Court utilization weight",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:395"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:397"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:402:label:Game spacing",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:404:label:Game spacing",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 402,
+      "line": 404,
       "text": "Game spacing",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:402"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:404"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:407:ariaLabel:Enforce game spacing",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:409:ariaLabel:Enforce game spacing",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 407,
+      "line": 409,
       "text": "Enforce game spacing",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:407"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:409"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:412:label:Compact schedule",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:414:label:Compact schedule",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 412,
+      "line": 414,
       "text": "Compact schedule",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:412"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:414"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:417:ariaLabel:Compact schedule",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:419:ariaLabel:Compact schedule",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 417,
+      "line": 419,
       "text": "Compact schedule",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:417"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:419"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:422:label:Allow player overlap",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:424:label:Allow player overlap",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 422,
+      "line": 424,
       "text": "Allow player overlap",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:422"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:424"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:427:ariaLabel:Allow player overlap",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:429:ariaLabel:Allow player overlap",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 427,
+      "line": 429,
       "text": "Allow player overlap",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:427"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:429"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:436:title:Advanced scheduling",
-      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 436,
-      "text": "Advanced scheduling",
-      "kind": "prop:title",
-      "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:436"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:438:label:Reproducible run",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:438:title:Advanced scheduling",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
       "line": 438,
-      "text": "Reproducible run",
-      "kind": "prop:label",
+      "text": "Advanced scheduling",
+      "kind": "prop:title",
       "usage": [
         "apps/console/src/platform/engine-config/EngineConfigForm.tsx:438"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:443:ariaLabel:Reproducible scheduling ",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:440:label:Reproducible run",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 443,
+      "line": 440,
+      "text": "Reproducible run",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:440"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:445:ariaLabel:Reproducible scheduling ",
+      "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
+      "line": 445,
       "text": "Reproducible scheduling run",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:443"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:445"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:449:label:Scheduling time limit",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:451:label:Scheduling time limit",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 449,
+      "line": 451,
       "text": "Scheduling time limit",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:449"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:451"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:457:ariaLabel:Scheduling time limit in",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:459:ariaLabel:Scheduling time limit in",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 457,
+      "line": 459,
       "text": "Scheduling time limit in seconds",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:457"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:459"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:463:label:Freeze window",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:465:label:Freeze window",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 463,
+      "line": 465,
       "text": "Freeze window",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:463"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:465"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:471:ariaLabel:Freeze window in slots",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:473:ariaLabel:Freeze window in slots",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 471,
+      "line": 473,
       "text": "Freeze window in slots",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:471"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:473"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:494:Saved",
+      "key": "console:apps/console/src/platform/engine-config/EngineConfigForm.tsx:496:Saved",
       "file": "apps/console/src/platform/engine-config/EngineConfigForm.tsx",
-      "line": 494,
+      "line": 496,
       "text": "Saved",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:494"
+        "apps/console/src/platform/engine-config/EngineConfigForm.tsx:496"
       ]
     },
     {
@@ -10295,83 +10275,103 @@
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:49:label:Score type",
-      "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
-      "line": 49,
-      "text": "Score type",
-      "kind": "prop:label",
-      "usage": [
-        "apps/console/src/platform/engine-config/ScoringFields.tsx:49"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:55:ariaLabel:Score type",
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:55:label:Score type",
       "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
       "line": 55,
       "text": "Score type",
-      "kind": "prop:ariaLabel",
+      "kind": "prop:label",
       "usage": [
         "apps/console/src/platform/engine-config/ScoringFields.tsx:55"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:75:label:Points per game",
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:61:ariaLabel:Score type",
       "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
-      "line": 75,
-      "text": "Points per game",
-      "kind": "prop:label",
+      "line": 61,
+      "text": "Score type",
+      "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/ScoringFields.tsx:75"
+        "apps/console/src/platform/engine-config/ScoringFields.tsx:61"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:81:ariaLabel:Points per game",
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:81:label:Points per game",
       "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
       "line": 81,
       "text": "Points per game",
-      "kind": "prop:ariaLabel",
+      "kind": "prop:label",
       "usage": [
         "apps/console/src/platform/engine-config/ScoringFields.tsx:81"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:87:label:Match format",
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:87:ariaLabel:Points per game",
       "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
       "line": 87,
-      "text": "Match format",
-      "kind": "prop:label",
+      "text": "Points per game",
+      "kind": "prop:ariaLabel",
       "usage": [
         "apps/console/src/platform/engine-config/ScoringFields.tsx:87"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:93:ariaLabel:Match format",
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:93:label:Match format",
       "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
       "line": 93,
       "text": "Match format",
-      "kind": "prop:ariaLabel",
+      "kind": "prop:label",
       "usage": [
         "apps/console/src/platform/engine-config/ScoringFields.tsx:93"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:99:label:Deuce (win by 2)",
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:99:ariaLabel:Match format",
       "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
       "line": 99,
-      "text": "Deuce (win by 2)",
-      "kind": "prop:label",
+      "text": "Match format",
+      "kind": "prop:ariaLabel",
       "usage": [
         "apps/console/src/platform/engine-config/ScoringFields.tsx:99"
       ]
     },
     {
-      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:104:ariaLabel:Deuce enabled",
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:105:label:Deuce (win by 2)",
       "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
-      "line": 104,
+      "line": 105,
+      "text": "Deuce (win by 2)",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/platform/engine-config/ScoringFields.tsx:105"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:110:ariaLabel:Deuce enabled",
+      "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
+      "line": 110,
       "text": "Deuce enabled",
       "kind": "prop:ariaLabel",
       "usage": [
-        "apps/console/src/platform/engine-config/ScoringFields.tsx:104"
+        "apps/console/src/platform/engine-config/ScoringFields.tsx:110"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:117:label:Point cap",
+      "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
+      "line": 117,
+      "text": "Point cap",
+      "kind": "prop:label",
+      "usage": [
+        "apps/console/src/platform/engine-config/ScoringFields.tsx:117"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/platform/engine-config/ScoringFields.tsx:125:ariaLabel:Point cap",
+      "file": "apps/console/src/platform/engine-config/ScoringFields.tsx",
+      "line": 125,
+      "text": "Point cap",
+      "kind": "prop:ariaLabel",
+      "usage": [
+        "apps/console/src/platform/engine-config/ScoringFields.tsx:125"
       ]
     },
     {
@@ -10535,13 +10535,13 @@
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/MatchCard.tsx:170:Match source",
+      "key": "entrant:apps/entrant/app/components/MatchCard.tsx:190:Match source",
       "file": "apps/entrant/app/components/MatchCard.tsx",
-      "line": 170,
+      "line": 190,
       "text": "Match source",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/MatchCard.tsx:170"
+        "apps/entrant/app/components/MatchCard.tsx:190"
       ]
     },
     {
@@ -10615,33 +10615,33 @@
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/PlayShell.tsx:101:Tournament information i",
+      "key": "entrant:apps/entrant/app/components/PlayShell.tsx:108:Tournament information i",
       "file": "apps/entrant/app/components/PlayShell.tsx",
-      "line": 101,
+      "line": 108,
       "text": "Tournament information is published by the organizer.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/PlayShell.tsx:101"
+        "apps/entrant/app/components/PlayShell.tsx:108"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonCalendar.tsx:132:aria-label:Season calendar",
+      "key": "entrant:apps/entrant/app/components/SeasonCalendar.tsx:144:aria-label:Season calendar",
       "file": "apps/entrant/app/components/SeasonCalendar.tsx",
-      "line": 132,
+      "line": 144,
       "text": "Season calendar",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/components/SeasonCalendar.tsx:132"
+        "apps/entrant/app/components/SeasonCalendar.tsx:144"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonCalendar.tsx:148:label:Completed",
+      "key": "entrant:apps/entrant/app/components/SeasonCalendar.tsx:172:label:Completed",
       "file": "apps/entrant/app/components/SeasonCalendar.tsx",
-      "line": 148,
+      "line": 172,
       "text": "Completed",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/components/SeasonCalendar.tsx:148"
+        "apps/entrant/app/components/SeasonCalendar.tsx:172"
       ]
     },
     {
@@ -10655,103 +10655,103 @@
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:128:label:Calendar view",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:141:label:Calendar view",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 128,
+      "line": 141,
       "text": "Calendar view",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:128"
+        "apps/entrant/app/components/SeasonControls.tsx:141"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:163:placeholder:Search tournaments",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:199:placeholder:Search tournaments",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 163,
+      "line": 199,
       "text": "Search tournaments",
       "kind": "prop:placeholder",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:163"
+        "apps/entrant/app/components/SeasonControls.tsx:199"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:164:aria-label:Search tournaments, orga",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:200:aria-label:Search tournaments, orga",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 164,
+      "line": 200,
       "text": "Search tournaments, organizers or venues",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:164"
+        "apps/entrant/app/components/SeasonControls.tsx:200"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:168:Search",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:204:Search",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 168,
+      "line": 204,
       "text": "Search",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:168"
+        "apps/entrant/app/components/SeasonControls.tsx:204"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:190:When",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:246:When",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 190,
+      "line": 246,
       "text": "When",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:190"
+        "apps/entrant/app/components/SeasonControls.tsx:246"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:206:From",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:262:From",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 206,
+      "line": 262,
       "text": "From",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:206"
+        "apps/entrant/app/components/SeasonControls.tsx:262"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:215:To",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:271:To",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 215,
+      "line": 271,
       "text": "To",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:215"
+        "apps/entrant/app/components/SeasonControls.tsx:271"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:226:Apply dates",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:282:Apply dates",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 226,
+      "line": 282,
       "text": "Apply dates",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:226"
+        "apps/entrant/app/components/SeasonControls.tsx:282"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:232:Reset",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:288:Reset",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 232,
+      "line": 288,
       "text": "Reset",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:232"
+        "apps/entrant/app/components/SeasonControls.tsx:288"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:262:Clear all",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:318:Clear all",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 262,
+      "line": 318,
       "text": "Clear all",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:262"
+        "apps/entrant/app/components/SeasonControls.tsx:318"
       ]
     },
     {
@@ -10925,534 +10925,534 @@
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:192:Pos",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:198:Pos",
       "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 192,
+      "line": 198,
       "text": "Pos",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/draw.tsx:192"
+        "apps/entrant/app/routes/draw.tsx:198"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:193:Player",
-      "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 193,
-      "text": "Player",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/entrant/app/routes/draw.tsx:193"
-      ]
-    },
-    {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:199:History",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:199:Player",
       "file": "apps/entrant/app/routes/draw.tsx",
       "line": 199,
-      "text": "History",
+      "text": "Player",
       "kind": "jsx-text",
       "usage": [
         "apps/entrant/app/routes/draw.tsx:199"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:281:label:Draw segments",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:205:History",
       "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 281,
+      "line": 205,
+      "text": "History",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/draw.tsx:205"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:287:label:Draw segments",
+      "file": "apps/entrant/app/routes/draw.tsx",
+      "line": 287,
       "text": "Draw segments",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/draw.tsx:281"
+        "apps/entrant/app/routes/draw.tsx:287"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:315:label:Draw view",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:321:label:Draw view",
       "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 315,
+      "line": 321,
       "text": "Draw view",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/draw.tsx:315"
+        "apps/entrant/app/routes/draw.tsx:321"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:350:aria-label:Draw round",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:356:aria-label:Draw round",
       "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 350,
+      "line": 356,
       "text": "Draw round",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/routes/draw.tsx:350"
+        "apps/entrant/app/routes/draw.tsx:356"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:357:← Previous round",
-      "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 357,
-      "text": "← Previous round",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/entrant/app/routes/draw.tsx:357"
-      ]
-    },
-    {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:363:Round",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:363:← Previous round",
       "file": "apps/entrant/app/routes/draw.tsx",
       "line": 363,
-      "text": "Round",
+      "text": "← Previous round",
       "kind": "jsx-text",
       "usage": [
         "apps/entrant/app/routes/draw.tsx:363"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:370:Next round →",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:369:Round",
       "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 370,
+      "line": 369,
+      "text": "Round",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/draw.tsx:369"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:376:Next round →",
+      "file": "apps/entrant/app/routes/draw.tsx",
+      "line": 376,
       "text": "Next round →",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/draw.tsx:370"
+        "apps/entrant/app/routes/draw.tsx:376"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:630:All times in",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:640:All times in",
       "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 630,
+      "line": 640,
       "text": "All times in",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/draw.tsx:630"
+        "apps/entrant/app/routes/draw.tsx:640"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:650:Find a player or pair",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:660:Find a player or pair",
       "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 650,
+      "line": 660,
       "text": "Find a player or pair",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/draw.tsx:650"
+        "apps/entrant/app/routes/draw.tsx:660"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:657:placeholder:Find a player or pair",
-      "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 657,
-      "text": "Find a player or pair",
-      "kind": "prop:placeholder",
-      "usage": [
-        "apps/entrant/app/routes/draw.tsx:657"
-      ]
-    },
-    {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:663:Find",
-      "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 663,
-      "text": "Find",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/entrant/app/routes/draw.tsx:663"
-      ]
-    },
-    {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:667:Clear search",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:667:placeholder:Find a player or pair",
       "file": "apps/entrant/app/routes/draw.tsx",
       "line": 667,
-      "text": "Clear search",
-      "kind": "jsx-text",
+      "text": "Find a player or pair",
+      "kind": "prop:placeholder",
       "usage": [
         "apps/entrant/app/routes/draw.tsx:667"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/draw.tsx:683:found for ‘",
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:673:Find",
       "file": "apps/entrant/app/routes/draw.tsx",
-      "line": 683,
+      "line": 673,
+      "text": "Find",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/draw.tsx:673"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:677:Clear search",
+      "file": "apps/entrant/app/routes/draw.tsx",
+      "line": 677,
+      "text": "Clear search",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/draw.tsx:677"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/draw.tsx:693:found for ‘",
+      "file": "apps/entrant/app/routes/draw.tsx",
+      "line": 693,
       "text": "found for ‘",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/draw.tsx:683"
+        "apps/entrant/app/routes/draw.tsx:693"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:228:optional",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:229:optional",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 228,
+      "line": 229,
       "text": "optional",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:228"
+        "apps/entrant/app/routes/enter.tsx:229"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:233:Participant details",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:234:Participant details",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 233,
+      "line": 234,
       "text": "Participant details",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:233"
+        "apps/entrant/app/routes/enter.tsx:234"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:236:label:Full name",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:237:label:Full name",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 236,
+      "line": 237,
       "text": "Full name",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:236"
+        "apps/entrant/app/routes/enter.tsx:237"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:247:Gender",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:248:Gender",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 247,
+      "line": 248,
       "text": "Gender",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:247"
+        "apps/entrant/app/routes/enter.tsx:248"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:268:label:Club (optional)",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:269:label:Club (optional)",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 268,
+      "line": 269,
       "text": "Club (optional)",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:268"
+        "apps/entrant/app/routes/enter.tsx:269"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:277:label:Birth year",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:278:label:Birth year",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 277,
+      "line": 278,
       "text": "Birth year",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:277"
+        "apps/entrant/app/routes/enter.tsx:278"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:282:hint:This tournament runs age",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:283:hint:This tournament runs age",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 282,
+      "line": 283,
       "text": "This tournament runs age-bracketed events, so the organizer needs a year to place this player.",
       "kind": "prop:hint",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:282"
+        "apps/entrant/app/routes/enter.tsx:283"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:293:Events",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:294:Events",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 293,
+      "line": 294,
       "text": "Events",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:293"
+        "apps/entrant/app/routes/enter.tsx:294"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:342:hint:We'll try to email them ",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:343:hint:We'll try to email them ",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 342,
+      "line": 343,
       "text": "We'll try to email them an invitation. Nothing is entered in their name until they accept, and you can leave this blank and add them later.",
       "kind": "prop:hint",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:342"
+        "apps/entrant/app/routes/enter.tsx:343"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:347:No event is usually open",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:348:No event is usually open",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 347,
+      "line": 348,
       "text": "No event is usually open to this player. Tick “Show every event” below, then update the total.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:347"
+        "apps/entrant/app/routes/enter.tsx:348"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:358:Anything the organizer s",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:359:Anything the organizer s",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 358,
+      "line": 359,
       "text": "Anything the organizer should know (optional)",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:358"
+        "apps/entrant/app/routes/enter.tsx:359"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:366:placeholder:e.g. can't play before 6",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:367:placeholder:e.g. can't play before 6",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 366,
+      "line": 367,
       "text": "e.g. can't play before 6pm Saturday",
       "kind": "prop:placeholder",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:366"
+        "apps/entrant/app/routes/enter.tsx:367"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:436:Per discipline:",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:439:Per discipline:",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 436,
+      "line": 439,
       "text": "Per discipline:",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:436"
+        "apps/entrant/app/routes/enter.tsx:439"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:443:per person.",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:446:per person.",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 443,
+      "line": 446,
       "text": "per person.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:443"
+        "apps/entrant/app/routes/enter.tsx:446"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:453:aria-label:Entry progress",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:456:aria-label:Entry progress",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 453,
+      "line": 456,
       "text": "Entry progress",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:453"
+        "apps/entrant/app/routes/enter.tsx:456"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:489:Before you begin",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:492:Before you begin",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 489,
+      "line": 492,
       "text": "Before you begin",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:489"
+        "apps/entrant/app/routes/enter.tsx:492"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:490:Check eligibility and co",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:493:Check eligibility and co",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 490,
+      "line": 493,
       "text": "Check eligibility and cost",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:490"
+        "apps/entrant/app/routes/enter.tsx:493"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:496:Tournament date",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:499:Tournament date",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 496,
+      "line": 499,
       "text": "Tournament date",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:496"
+        "apps/entrant/app/routes/enter.tsx:499"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:500:Entry deadline",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:503:Entry deadline",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 500,
+      "line": 503,
       "text": "Entry deadline",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:500"
+        "apps/entrant/app/routes/enter.tsx:503"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:504:Fees",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:507:Fees",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 504,
+      "line": 507,
       "text": "Fees",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:504"
+        "apps/entrant/app/routes/enter.tsx:507"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:508:You can review everythin",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:511:You can review everythin",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 508,
+      "line": 511,
       "text": "You can review everything before submitting. Payment, when required, is handled using the organizer’s instructions after submission.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:508"
+        "apps/entrant/app/routes/enter.tsx:511"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:517:You are signed in. Fill ",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:520:You are signed in. Fill ",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 517,
+      "line": 520,
       "text": "You are signed in. Fill in the form below and press “Submit entry”.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:517"
+        "apps/entrant/app/routes/enter.tsx:520"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:537:Sign in",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:540:Sign in",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 537,
+      "line": 540,
       "text": "Sign in",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:537",
-        "apps/entrant/app/routes/enter.tsx:730"
+        "apps/entrant/app/routes/enter.tsx:540",
+        "apps/entrant/app/routes/enter.tsx:733"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:551:create one",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:554:create one",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 551,
+      "line": 554,
       "text": "create one",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:551"
+        "apps/entrant/app/routes/enter.tsx:554"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:555:, and you’ll come straig",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:558:, and you’ll come straig",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 555,
+      "line": 558,
       "text": ", and you’ll come straight back here. Until you are signed in, nothing is recorded.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:555"
+        "apps/entrant/app/routes/enter.tsx:558"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:573:View the tournament page",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:576:View the tournament page",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 573,
+      "line": 576,
       "text": "View the tournament page for schedules and results.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:573"
+        "apps/entrant/app/routes/enter.tsx:576"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:579:View tournament informat",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:582:View tournament informat",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 579,
+      "line": 582,
       "text": "View tournament information",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:579"
+        "apps/entrant/app/routes/enter.tsx:582"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:620:Continue to events",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:623:Continue to events",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 620,
+      "line": 623,
       "text": "Continue to events",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:620"
+        "apps/entrant/app/routes/enter.tsx:623"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:624:Back to participant",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:627:Back to participant",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 624,
+      "line": 627,
       "text": "Back to participant",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:624"
+        "apps/entrant/app/routes/enter.tsx:627"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:630:Back to events",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:633:Back to events",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 630,
+      "line": 633,
       "text": "Back to events",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:630"
+        "apps/entrant/app/routes/enter.tsx:633"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:631:Review entry",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:634:Review entry",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 631,
+      "line": 634,
       "text": "Review entry",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:631"
+        "apps/entrant/app/routes/enter.tsx:634"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:648:Add another player",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:651:Add another player",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 648,
+      "line": 651,
       "text": "Add another player",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:648"
+        "apps/entrant/app/routes/enter.tsx:651"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:661:Show every event, includ",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:664:Show every event, includ",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 661,
+      "line": 664,
       "text": "Show every event, including ones not usually open to a player. A mismatch is accepted, the organizer sees a flag and decides.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:661"
+        "apps/entrant/app/routes/enter.tsx:664"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:669:Before you submit",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:672:Before you submit",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 669,
+      "line": 672,
       "text": "Before you submit",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:669"
+        "apps/entrant/app/routes/enter.tsx:672"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:671:Review your participant ",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:674:Review your participant ",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 671,
+      "line": 674,
       "text": "Review your participant details and selected events before submitting.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:671"
+        "apps/entrant/app/routes/enter.tsx:674"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:675:I have read and accept t",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:678:I have read and accept t",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 675,
+      "line": 678,
       "text": "I have read and accept the regulations, and I understand each player’s name and club will appear on this page’s public entrant list once the organizer publishes it.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:675"
+        "apps/entrant/app/routes/enter.tsx:678"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:717:Sign out",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:720:Sign out",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 717,
+      "line": 720,
       "text": "Sign out",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:717"
+        "apps/entrant/app/routes/enter.tsx:720"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/enter.tsx:720:Signs out this device on",
+      "key": "entrant:apps/entrant/app/routes/enter.tsx:723:Signs out this device on",
       "file": "apps/entrant/app/routes/enter.tsx",
-      "line": 720,
+      "line": 723,
       "text": "Signs out this device only. Entries you have already submitted are unaffected.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/enter.tsx:720"
+        "apps/entrant/app/routes/enter.tsx:723"
       ]
     },
     {
@@ -11936,93 +11936,93 @@
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/receipt.tsx:159:Entry receipt",
+      "key": "entrant:apps/entrant/app/routes/receipt.tsx:166:Entry receipt",
       "file": "apps/entrant/app/routes/receipt.tsx",
-      "line": 159,
+      "line": 166,
       "text": "Entry receipt",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/receipt.tsx:159"
+        "apps/entrant/app/routes/receipt.tsx:166"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/receipt.tsx:162:Receipt details load aft",
+      "key": "entrant:apps/entrant/app/routes/receipt.tsx:169:Receipt details load aft",
       "file": "apps/entrant/app/routes/receipt.tsx",
-      "line": 162,
+      "line": 169,
       "text": "Receipt details load after this page checks your account. Keep the reference below if you need to ask the organizer about it.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/receipt.tsx:162"
+        "apps/entrant/app/routes/receipt.tsx:169"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/receipt.tsx:168:title:Your entry",
+      "key": "entrant:apps/entrant/app/routes/receipt.tsx:175:title:Your entry",
       "file": "apps/entrant/app/routes/receipt.tsx",
-      "line": 168,
+      "line": 175,
       "text": "Your entry",
       "kind": "prop:title",
       "usage": [
-        "apps/entrant/app/routes/receipt.tsx:168"
+        "apps/entrant/app/routes/receipt.tsx:175"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/receipt.tsx:170:Tournament",
+      "key": "entrant:apps/entrant/app/routes/receipt.tsx:177:Tournament",
       "file": "apps/entrant/app/routes/receipt.tsx",
-      "line": 170,
+      "line": 177,
       "text": "Tournament",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/receipt.tsx:170"
+        "apps/entrant/app/routes/receipt.tsx:177"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/receipt.tsx:174:Reference",
+      "key": "entrant:apps/entrant/app/routes/receipt.tsx:181:Reference",
       "file": "apps/entrant/app/routes/receipt.tsx",
-      "line": 174,
+      "line": 181,
       "text": "Reference",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/receipt.tsx:174"
+        "apps/entrant/app/routes/receipt.tsx:181"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/receipt.tsx:176:Copy reference",
+      "key": "entrant:apps/entrant/app/routes/receipt.tsx:183:Copy reference",
       "file": "apps/entrant/app/routes/receipt.tsx",
-      "line": 176,
+      "line": 183,
       "text": "Copy reference",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/receipt.tsx:176"
+        "apps/entrant/app/routes/receipt.tsx:183"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/receipt.tsx:188:title:Loading receipt details",
+      "key": "entrant:apps/entrant/app/routes/receipt.tsx:195:title:Loading receipt details",
       "file": "apps/entrant/app/routes/receipt.tsx",
-      "line": 188,
+      "line": 195,
       "text": "Loading receipt details",
       "kind": "prop:title",
       "usage": [
-        "apps/entrant/app/routes/receipt.tsx:188"
+        "apps/entrant/app/routes/receipt.tsx:195"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/receipt.tsx:189:Checking the signed-in a",
+      "key": "entrant:apps/entrant/app/routes/receipt.tsx:196:Checking the signed-in a",
       "file": "apps/entrant/app/routes/receipt.tsx",
-      "line": 189,
+      "line": 196,
       "text": "Checking the signed-in account for this entry",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/receipt.tsx:189"
+        "apps/entrant/app/routes/receipt.tsx:196"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/receipt.tsx:201:Back to the tournament p",
+      "key": "entrant:apps/entrant/app/routes/receipt.tsx:208:Back to the tournament p",
       "file": "apps/entrant/app/routes/receipt.tsx",
-      "line": 201,
+      "line": 208,
       "text": "Back to the tournament page",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/receipt.tsx:201"
+        "apps/entrant/app/routes/receipt.tsx:208"
       ]
     },
     {
@@ -12267,233 +12267,233 @@
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:287:label:Schedule days",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:288:label:Schedule days",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 287,
+      "line": 288,
       "text": "Schedule days",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:287"
+        "apps/entrant/app/routes/schedule.tsx:288"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:302:aria-label:Schedule days",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:303:aria-label:Schedule days",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 302,
+      "line": 303,
       "text": "Schedule days",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:302"
+        "apps/entrant/app/routes/schedule.tsx:303"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:370:aria-label:Filter schedule",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:371:aria-label:Filter schedule",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 370,
+      "line": 371,
       "text": "Filter schedule",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:370"
+        "apps/entrant/app/routes/schedule.tsx:371"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:377:placeholder:Search a player",
-      "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 377,
-      "text": "Search a player",
-      "kind": "prop:placeholder",
-      "usage": [
-        "apps/entrant/app/routes/schedule.tsx:377"
-      ]
-    },
-    {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:378:aria-label:Player",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:378:placeholder:Search a player",
       "file": "apps/entrant/app/routes/schedule.tsx",
       "line": 378,
-      "text": "Player",
-      "kind": "prop:aria-label",
+      "text": "Search a player",
+      "kind": "prop:placeholder",
       "usage": [
         "apps/entrant/app/routes/schedule.tsx:378"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:382:More filters",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:379:aria-label:Player",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 382,
+      "line": 379,
+      "text": "Player",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/entrant/app/routes/schedule.tsx:379"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:383:More filters",
+      "file": "apps/entrant/app/routes/schedule.tsx",
+      "line": 383,
       "text": "More filters",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:382"
+        "apps/entrant/app/routes/schedule.tsx:383"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:390:aria-label:Event",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:391:aria-label:Event",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 390,
+      "line": 391,
       "text": "Event",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:390"
+        "apps/entrant/app/routes/schedule.tsx:391"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:393:All events",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:394:All events",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 393,
+      "line": 394,
       "text": "All events",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:393"
+        "apps/entrant/app/routes/schedule.tsx:394"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:403:aria-label:Court",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:404:aria-label:Court",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 403,
+      "line": 404,
       "text": "Court",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:403"
+        "apps/entrant/app/routes/schedule.tsx:404"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:406:All courts",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:407:All courts",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 406,
+      "line": 407,
       "text": "All courts",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:406"
+        "apps/entrant/app/routes/schedule.tsx:407"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:414:aria-label:State",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:415:aria-label:State",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 414,
+      "line": 415,
       "text": "State",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:414"
+        "apps/entrant/app/routes/schedule.tsx:415"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:417:All states",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:418:All states",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 417,
+      "line": 418,
       "text": "All states",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:417"
+        "apps/entrant/app/routes/schedule.tsx:418"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:427:Apply",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:428:Apply",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 427,
+      "line": 428,
       "text": "Apply",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:427"
+        "apps/entrant/app/routes/schedule.tsx:428"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:434:Clear filters",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:435:Clear filters",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 434,
+      "line": 435,
       "text": "Clear filters",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:434"
+        "apps/entrant/app/routes/schedule.tsx:435"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:453:label:Schedule organization",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:454:label:Schedule organization",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 453,
+      "line": 454,
       "text": "Schedule organization",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:453"
+        "apps/entrant/app/routes/schedule.tsx:454"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:477:Live now",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:478:Live now",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 477,
+      "line": 478,
       "text": "Live now",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:477"
+        "apps/entrant/app/routes/schedule.tsx:478"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:480:Scores update as the des",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:481:Scores update as the des",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 480,
+      "line": 481,
       "text": "Scores update as the desk records them",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:480"
+        "apps/entrant/app/routes/schedule.tsx:481"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:641:Schedule / Live",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:654:Schedule",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 641,
-      "text": "Schedule / Live",
+      "line": 654,
+      "text": "Schedule",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:641"
+        "apps/entrant/app/routes/schedule.tsx:654"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:644:Find matches by day, tim",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:657:Find matches by day, tim",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 644,
+      "line": 657,
       "text": "Find matches by day, time, or court in tournament time (",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:644"
+        "apps/entrant/app/routes/schedule.tsx:657"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:707:aria-label:Schedule pages",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:720:aria-label:Schedule pages",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 707,
+      "line": 720,
       "text": "Schedule pages",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:707"
+        "apps/entrant/app/routes/schedule.tsx:720"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:715:← Previous",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:728:← Previous",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 715,
+      "line": 728,
       "text": "← Previous",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:715"
+        "apps/entrant/app/routes/schedule.tsx:728"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:722:Page",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:735:Page",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 722,
+      "line": 735,
       "text": "Page",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:722"
+        "apps/entrant/app/routes/schedule.tsx:735"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/schedule.tsx:729:Next →",
+      "key": "entrant:apps/entrant/app/routes/schedule.tsx:742:Next →",
       "file": "apps/entrant/app/routes/schedule.tsx",
-      "line": 729,
+      "line": 742,
       "text": "Next →",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/schedule.tsx:729"
+        "apps/entrant/app/routes/schedule.tsx:742"
       ]
     },
     {
@@ -12647,243 +12647,253 @@
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:184:Overview",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:198:Overview",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 184,
+      "line": 198,
       "text": "Overview",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:184"
+        "apps/entrant/app/routes/tournament.tsx:198"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:188:Tournament information, ",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:202:Tournament information, ",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 188,
+      "line": 202,
       "text": "Tournament information, events, and published results from the organizer.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:188"
+        "apps/entrant/app/routes/tournament.tsx:202"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:190:Events",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:204:Events",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 190,
+      "line": 204,
       "text": "Events",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:190"
+        "apps/entrant/app/routes/tournament.tsx:204"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:192:Entered so far",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:206:Entered so far",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 192,
+      "line": 206,
       "text": "Entered so far",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:192"
+        "apps/entrant/app/routes/tournament.tsx:206"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:194:Tournament time",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:208:Tournament time",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 194,
+      "line": 208,
       "text": "Tournament time",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:194"
+        "apps/entrant/app/routes/tournament.tsx:208"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:205:title:Key dates",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:219:title:Key dates",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 205,
+      "line": 219,
       "text": "Key dates",
       "kind": "prop:title",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:205"
+        "apps/entrant/app/routes/tournament.tsx:219"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:209:Varies by event ·",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:223:Varies by event ·",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 209,
+      "line": 223,
       "text": "Varies by event ·",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:209"
+        "apps/entrant/app/routes/tournament.tsx:223"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:211:see Draws",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:225:see Draws",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 211,
+      "line": 225,
       "text": "see Draws",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:211"
+        "apps/entrant/app/routes/tournament.tsx:225"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:226:title:Venue",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:240:title:Venue",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 226,
+      "line": 240,
       "text": "Venue",
       "kind": "prop:title",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:226"
+        "apps/entrant/app/routes/tournament.tsx:240"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:227:label:Hall",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:241:label:Hall",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 227,
+      "line": 241,
       "text": "Hall",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:227"
+        "apps/entrant/app/routes/tournament.tsx:241"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:228:label:Address",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:242:label:Address",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 228,
+      "line": 242,
       "text": "Address",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:228"
+        "apps/entrant/app/routes/tournament.tsx:242"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:232:title:Fees & payment",
-      "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 232,
-      "text": "Fees & payment",
-      "kind": "prop:title",
-      "usage": [
-        "apps/entrant/app/routes/tournament.tsx:232"
-      ]
-    },
-    {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:233:label:Pricing",
-      "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 233,
-      "text": "Pricing",
-      "kind": "prop:label",
-      "usage": [
-        "apps/entrant/app/routes/tournament.tsx:233"
-      ]
-    },
-    {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:246:Go to entry form",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:246:title:Fees & payment",
       "file": "apps/entrant/app/routes/tournament.tsx",
       "line": 246,
-      "text": "Go to entry form",
-      "kind": "jsx-text",
+      "text": "Fees & payment",
+      "kind": "prop:title",
       "usage": [
         "apps/entrant/app/routes/tournament.tsx:246"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:258:title:Documents",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:247:label:Pricing",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 258,
+      "line": 247,
+      "text": "Pricing",
+      "kind": "prop:label",
+      "usage": [
+        "apps/entrant/app/routes/tournament.tsx:247"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:260:Go to entry form",
+      "file": "apps/entrant/app/routes/tournament.tsx",
+      "line": 260,
+      "text": "Go to entry form",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/tournament.tsx:260"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:272:title:Documents",
+      "file": "apps/entrant/app/routes/tournament.tsx",
+      "line": 272,
       "text": "Documents",
       "kind": "prop:title",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:258"
+        "apps/entrant/app/routes/tournament.tsx:272"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:261:Tournament regulations",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:275:Tournament regulations",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 261,
+      "line": 275,
       "text": "Tournament regulations",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:261"
+        "apps/entrant/app/routes/tournament.tsx:275"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:270:View",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:284:View",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 270,
+      "line": 284,
       "text": "View",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:270"
+        "apps/entrant/app/routes/tournament.tsx:284"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:307:Draws",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:321:Draws",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 307,
+      "line": 321,
       "text": "Draws",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:307"
+        "apps/entrant/app/routes/tournament.tsx:321"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:310:Event",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:324:Event",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 310,
+      "line": 324,
       "text": "Event",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:310"
+        "apps/entrant/app/routes/tournament.tsx:324"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:314:Entered",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:328:Entered",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 314,
+      "line": 328,
       "text": "Entered",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:314"
+        "apps/entrant/app/routes/tournament.tsx:328"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:315:State",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:329:State",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 315,
+      "line": 329,
       "text": "State",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:315"
+        "apps/entrant/app/routes/tournament.tsx:329"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:340:No draws yet. The organi",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:354:No draws yet. The organi",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 340,
+      "line": 354,
       "text": "No draws yet. The organizer will publish the draw when entries and seeding are complete.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:340"
+        "apps/entrant/app/routes/tournament.tsx:354"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:480:Reserves",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:443:Players",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 480,
+      "line": 443,
+      "text": "Players",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/tournament.tsx:443"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:506:Reserves",
+      "file": "apps/entrant/app/routes/tournament.tsx",
+      "line": 506,
       "text": "Reserves",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:480"
+        "apps/entrant/app/routes/tournament.tsx:506"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/tournament.tsx:483:Entries have closed. If ",
+      "key": "entrant:apps/entrant/app/routes/tournament.tsx:509:Entries have closed. If ",
       "file": "apps/entrant/app/routes/tournament.tsx",
-      "line": 483,
+      "line": 509,
       "text": "Entries have closed. If a place opens, the organizer offers it in this order.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/tournament.tsx:483"
+        "apps/entrant/app/routes/tournament.tsx:509"
       ]
     },
     {
@@ -13141,15 +13151,15 @@
       ]
     },
     {
-      "key": "entrant-asset:apps/entrant/public/assets/my-entries.js:621:dom-text:Your entries could not b",
+      "key": "entrant-asset:apps/entrant/public/assets/my-entries.js:650:dom-text:Your entries could not b",
       "file": "apps/entrant/public/assets/my-entries.js",
-      "line": 621,
+      "line": 650,
       "text": "Your entries could not be loaded. Please try again in a moment.",
       "kind": "dom-text",
       "usage": [
-        "apps/entrant/public/assets/my-entries.js:621",
-        "apps/entrant/public/assets/my-entries.js:631",
-        "apps/entrant/public/assets/my-entries.js:638"
+        "apps/entrant/public/assets/my-entries.js:650",
+        "apps/entrant/public/assets/my-entries.js:660",
+        "apps/entrant/public/assets/my-entries.js:667"
       ]
     },
     {
@@ -13224,33 +13234,33 @@
       ]
     },
     {
-      "key": "entrant-asset:apps/entrant/public/assets/receipt.js:351:label:Sign in and return",
+      "key": "entrant-asset:apps/entrant/public/assets/receipt.js:355:label:Sign in and return",
       "file": "apps/entrant/public/assets/receipt.js",
-      "line": 351,
+      "line": 355,
       "text": "Sign in and return",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/public/assets/receipt.js:351"
+        "apps/entrant/public/assets/receipt.js:355"
       ]
     },
     {
-      "key": "entrant-asset:apps/entrant/public/assets/receipt.js:361:label:See my entries",
+      "key": "entrant-asset:apps/entrant/public/assets/receipt.js:365:label:See my entries",
       "file": "apps/entrant/public/assets/receipt.js",
-      "line": 361,
+      "line": 365,
       "text": "See my entries",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/public/assets/receipt.js:361"
+        "apps/entrant/public/assets/receipt.js:365"
       ]
     },
     {
-      "key": "entrant-asset:apps/entrant/public/assets/receipt.js:380:label:Try again",
+      "key": "entrant-asset:apps/entrant/public/assets/receipt.js:384:label:Try again",
       "file": "apps/entrant/public/assets/receipt.js",
-      "line": 380,
+      "line": 384,
       "text": "Try again",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/public/assets/receipt.js:380"
+        "apps/entrant/public/assets/receipt.js:384"
       ]
     },
     {
