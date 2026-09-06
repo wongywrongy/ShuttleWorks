@@ -270,7 +270,7 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
     render(<SharingTab tid="t1" />);
 
     const card = await screen.findByTestId('sharing-publication');
-    fireEvent.click(within(card).getByLabelText(/Results/));
+    fireEvent.click(within(card).getByLabelText(/^Results/));
     fireEvent.click(within(card).getByRole('button', { name: 'Save publication changes' }));
     await waitFor(() =>
       expect(apiClient.patchEntryPagePublication).toHaveBeenCalledWith('t1', {
@@ -343,7 +343,10 @@ describe('publication transaction outcomes', () => {
   it('requires connection and does not queue publication', async () => {
     render(<SharingTab tid="t1" scope="site" />);
     const card = await screen.findByTestId('sharing-publication');
-    fireEvent.click(within(card).getByLabelText(/Results/));
+    // V3-OC20.1 gave the draws row's own detail text the word "Results" too
+    // (it now states scores appear only when Results is on), so the checkbox
+    // needs its exact accessible name rather than a loose substring match.
+    fireEvent.click(within(card).getByLabelText(/^Results/));
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
     fireEvent(window, new Event('offline'));
     expect(screen.getByRole('button', { name: 'Save publication changes' })).toBeDisabled();
