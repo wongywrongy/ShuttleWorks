@@ -124,7 +124,11 @@ function renderMessage(root, title, body, action) {
   const doc = root.ownerDocument;
   const pageTitle = doc.getElementById("receipt-title");
   if (pageTitle) pageTitle.textContent = title;
-  const section = card(doc, title);
+  // The page title is the single primary heading. The settled panel gets a
+  // neutral section label so it cannot duplicate that heading (PE39.1/.2).
+  const intro = doc.getElementById("receipt-intro");
+  if (intro) intro.remove();
+  const section = card(doc, "Account access");
   section.appendChild(el(doc, "p", "mt-2 text-sm text-muted-foreground", body));
   if (action) {
     const row = el(doc, "div", "mt-4 flex flex-wrap gap-2");
@@ -139,6 +143,8 @@ export function renderReceipt(root, receipt) {
   const doc = root.ownerDocument;
   const pageTitle = doc.getElementById("receipt-title");
   if (pageTitle) pageTitle.textContent = "Entry received";
+  const intro = doc.getElementById("receipt-intro");
+  if (intro) intro.remove();
   const summary = card(doc, "Receipt summary");
   const headingRow = el(
     doc,
@@ -183,6 +189,11 @@ export function renderReceipt(root, receipt) {
   if (receipt.venueName) fact("Venue", receipt.venueName);
   if (receipt.orgName) fact("Organizer", receipt.orgName);
   summary.appendChild(facts);
+  const copy = el(doc, "button", "mt-3 text-left text-sm font-medium text-accent underline underline-offset-4", "Copy reference");
+  copy.type = "button";
+  copy.dataset.copyReference = receipt.submissionId;
+  copy.addEventListener("click", () => copyReference(copy, receipt.submissionId));
+  summary.appendChild(copy);
 
   const events = card(doc, "Events");
   const list = el(doc, "ul", "mt-3 divide-y divide-rule-soft");
@@ -300,6 +311,19 @@ export function renderReceipt(root, receipt) {
 
   root.replaceChildren(...nodes);
   root.setAttribute("aria-busy", "false");
+}
+
+async function copyReference(button, value) {
+  try {
+    await navigator.clipboard.writeText(value);
+    button.textContent = "Reference copied";
+  } catch {
+    button.textContent = "Copy unavailable — quote the full reference above";
+  }
+}
+
+for (const button of document.querySelectorAll("[data-copy-reference]")) {
+  button.addEventListener("click", () => copyReference(button, button.dataset.copyReference ?? ""));
 }
 
 export async function loadReceipt(root, fetchImpl = fetch) {

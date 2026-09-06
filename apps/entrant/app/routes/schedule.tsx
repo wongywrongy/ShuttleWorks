@@ -18,7 +18,6 @@ import { chipState, tournamentPhase, visibleTabs } from "../lib/phase";
 import {
   SCHEDULE_STATES,
   scheduleDateLabel,
-  scheduleIsStale,
   scheduleStateLabel,
   type ScheduleDayFacetDTO,
   type ScheduleMatchesDTO,
@@ -179,6 +178,7 @@ function scheduleToMatch(match: ScheduleMatchDTO): MatchCardData {
     decided,
     status: match.status,
     scheduledTime: match.scheduledTime,
+    playedOn: match.scheduledDate,
     court: match.court,
     updatedAt: match.updatedAt,
     showAssignmentPlaceholders: true,
@@ -350,43 +350,51 @@ function Filters({
         aria-label="Player"
         className={FIELD_INPUT}
       />
-      <select
-        name="event"
-        defaultValue={filters.event}
-        aria-label="Event"
-        className={SELECT_CONTROL}
-      >
-        <option value="">All events</option>
-        {events.map((event) => (
-          <option key={event.code} value={event.code}>
-            {event.label}
-          </option>
-        ))}
-      </select>
-      <select
-        name="court"
-        defaultValue={filters.court}
-        aria-label="Court"
-        className={SELECT_CONTROL}
-      >
-        <option value="">All courts</option>
-        {courts.map((court) => (
-          <option key={court} value={court}>{`Court ${court}`}</option>
-        ))}
-      </select>
-      <select
-        name="state"
-        defaultValue={filters.state}
-        aria-label="State"
-        className={SELECT_CONTROL}
-      >
-        <option value="">All states</option>
-        {states.map((state) => (
-          <option key={state} value={state}>
-            {scheduleStateLabel(state)}
-          </option>
-        ))}
-      </select>
+      <details className="group md:contents" open={Boolean(filters.event || filters.court || filters.state) || undefined}>
+        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-sm border border-rule-soft px-3 text-sm font-medium text-foreground marker:hidden md:hidden">
+          More filters
+          <span aria-hidden className="text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="grid gap-2 md:contents">
+          <select
+            name="event"
+            defaultValue={filters.event}
+            aria-label="Event"
+            className={SELECT_CONTROL}
+          >
+            <option value="">All events</option>
+            {events.map((event) => (
+              <option key={event.code} value={event.code}>
+                {event.label}
+              </option>
+            ))}
+          </select>
+          <select
+            name="court"
+            defaultValue={filters.court}
+            aria-label="Court"
+            className={SELECT_CONTROL}
+          >
+            <option value="">All courts</option>
+            {courts.map((court) => (
+              <option key={court} value={court}>{`Court ${court}`}</option>
+            ))}
+          </select>
+          <select
+            name="state"
+            defaultValue={filters.state}
+            aria-label="State"
+            className={SELECT_CONTROL}
+          >
+            <option value="">All states</option>
+            {states.map((state) => (
+              <option key={state} value={state}>
+                {scheduleStateLabel(state)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </details>
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="outline" size="sm">
           Apply
@@ -422,22 +430,6 @@ function OrganizationSwitch({
       ]}
     />
   );
-}
-function isToday(day: string, nowMs: number, timeZone: string): boolean {
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(new Date(nowMs));
-    const values = Object.fromEntries(
-      parts.map((part) => [part.type, part.value]),
-    );
-    return day === `${values.year}-${values.month}-${values.day}`;
-  } catch {
-    return false;
-  }
 }
 function LiveBand({
   slug,
@@ -557,7 +549,6 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
     publication: page.publication,
     events: page.events,
   });
-  const stale = scheduleIsStale(matches.updatedAt, nowMs);
   const tabs = visibleTabs(page.events, page.entrants, page.publication);
   const pages = Math.ceil(matches.total / matches.pageSize);
   const previous =
@@ -565,13 +556,14 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
   const next =
     filters.page < pages ? { ...filters, page: filters.page + 1 } : null;
   const live = matches.items.filter((match) => match.status === "live");
-  const showNow = Boolean(
-    filters.day && isToday(filters.day, nowMs, matches.timeZone) && live.length,
-  );
+  // The API already orders the complete filtered set live-first. Keep the
+  // current queue visible on entry even when no day facet is selected; a
+  // spectator should not have to know the tournament's local date first.
+  const showNow = live.length > 0;
   return (
     <PlayShell>
       <HeroHeader
-        orgName={page.org?.name ?? null}
+        orgName={page.org?.name === 'Local Workspace' ? null : page.org?.name ?? null}
         title={page.tournament.name ?? slug}
         metaLine={[formatDateLong(page.tournament.date), page.venue?.name]
           .filter(Boolean)
@@ -619,11 +611,8 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
             {matches.timeZone}).
           </p>
         </div>
-        {stale ? (
-          <p className="mt-1 text-xs text-muted-foreground">
-            Schedule last updated {formatScheduleUpdated(matches.updatedAt, matches.timeZone)}.
-          </p>
-        ) : null}
+        {/* The hero already carries the freshness timestamp; repeating it here
+            pushes the first live/next row below the mobile viewport. */}
         {!matches.published ? (
           <div className="mt-6">
             <EmptyState
@@ -672,7 +661,10 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
                 {filters.organization === "court" ? (
                   <ByCourt slug={slug} matches={matches.items} />
                 ) : (
-                  <ByTime slug={slug} matches={matches.items} />
+                  <ByTime
+                    slug={slug}
+                    matches={showNow ? matches.items.filter((match) => match.status !== "live") : matches.items}
+                  />
                 )}
                 {previous || next ? (
                   <nav

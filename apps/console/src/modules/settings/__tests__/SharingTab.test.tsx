@@ -151,15 +151,15 @@ describe('SharingTab', () => {
     expect(within(pub).getByLabelText('Public display link')).toBeInTheDocument();
     const inv = screen.getByTestId('sharing-invites');
     expect(within(inv).getByText(/operate this workspace/i)).toBeInTheDocument();
-    expect(within(inv).getByRole('button', { name: 'Create invite' })).toBeInTheDocument();
+    expect(within(inv).getByRole('button', { name: 'Send invitation' })).toBeInTheDocument();
     await waitFor(() => expect(apiClient.getDisplayToken).toHaveBeenCalled());
   });
 
   it('creating an unaddressed invite requires selecting link sharing', async () => {
     render(<SharingTab tid="t1" />);
-    expect(screen.getByRole('button', { name: 'Create invite' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send invitation' })).toBeDisabled();
     fireEvent.click(screen.getByLabelText('Create a link to share'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create invite' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
     await waitFor(() =>
       expect(apiClient.createInvite).toHaveBeenCalledWith('t1', { role: 'operator' }),
     );
@@ -170,7 +170,7 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     const emailInput = screen.getByLabelText('Invite email') as HTMLInputElement;
     fireEvent.change(emailInput, { target: { value: '  coach@club.org  ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create invite' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
     await waitFor(() =>
       expect(apiClient.createInvite).toHaveBeenCalledWith('t1', {
         role: 'operator',

@@ -9,7 +9,7 @@
  * inputs + a save action) so cloud mode can simply unlock them; local-dev
  * limitations are footnotes (muted), never accent-colored warnings.
  */
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
@@ -132,7 +132,12 @@ function ProfilePage() {
         <FieldRow label="Email" type="email" defaultValue={email} disabled={locked} last />
       </Section>
 
-      {locked ? <Note>Profile editing unlocks once you sign in with an account.</Note> : null}
+      {locked ? (
+        <div className="space-y-2">
+          <Note>Profile editing unlocks once you sign in with an account.</Note>
+          <Link to="/login" className="text-sm font-medium text-accent underline underline-offset-2">Sign in to edit your profile</Link>
+        </div>
+      ) : null}
     </PageBody>
   );
 }

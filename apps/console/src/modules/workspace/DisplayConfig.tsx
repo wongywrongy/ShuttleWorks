@@ -23,7 +23,7 @@ const BOARD_SOURCES = [
   { id: 'bracket', label: MODULE_LABELS.bracket },
 ];
 
-export function DisplayConfig({ tid, modules }: { tid: string; modules: WorkspaceModule[] }) {
+export function DisplayConfig({ tid, modules, showLinkControls = true }: { tid: string; modules: WorkspaceModule[]; showLinkControls?: boolean }) {
   const [copied, setCopied] = useState(false);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const moduleById = (id: string) => modules.find((m) => m.id === id);
@@ -71,9 +71,7 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
       await navigator.clipboard.writeText(publicUrl);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard blocked — no-op */
-    }
+    } catch { /* clipboard blocked */ }
   };
 
   return (
@@ -116,63 +114,11 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
             })}
           </Section>
 
-          {/* Copy and Open act on this section's single value, so they stay in
-              the section action rather than becoming two more setting rows. */}
-          <Section
-            title="Public link"
-            action={
-              publicUrl ? (
-                <span className="inline-flex items-center gap-2">
-                  <Button variant="outline" size="xs" onClick={copy}>
-                    {copied ? 'Copied' : 'Copy'}
-                  </Button>
-                  <a
-                    href={publicUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-3 text-sm text-foreground transition-colors duration-fast ease-brand hover:bg-muted/40"
-                  >
-                    <ArrowSquareOut aria-hidden className="h-4 w-4" />
-                    Open
-                  </a>
-                </span>
-              ) : null
-            }
-          >
-            {mintFailed ? (
-              <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
-                No public link yet. Only a workspace owner can create one. Ask an owner to
-                share it from{' '}
-                <Link
-                  to={`/tournaments/${tid}/publish/links`}
-                  className="text-accent hover:underline"
-                >
-                  Links and embeds
-                </Link>
-                .
-              </p>
-            ) : (
-              <FieldRow
-                readOnly
-                label="Public display URL"
-                value={publicUrl ?? 'Creating link…'}
-                hint={
-                  <>
-                    View-only. Anyone with this link can watch, with no sign-in. Rotate it in{' '}
-                    <Link
-                      to={`/tournaments/${tid}/publish/links`}
-                      className="text-accent hover:underline"
-                    >
-                      Links and embeds
-                    </Link>{' '}
-                    to revoke it.
-                  </>
-                }
-                inputClassName="font-mono"
-                last
-              />
-            )}
-          </Section>
+          {showLinkControls ? (
+            <Section title="Public link" action={publicUrl ? <span className="inline-flex items-center gap-2"><Button variant="outline" size="xs" onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button><a href={publicUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-3 text-sm text-foreground"><ArrowSquareOut aria-hidden className="h-4 w-4" />Open</a></span> : null}>
+              {mintFailed ? <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">No public link yet. Only a workspace owner can create one. Ask an owner to share it from <Link to={`/tournaments/${tid}/publish/displays`} className="text-accent hover:underline">Publish displays</Link>.</p> : <FieldRow readOnly label="Public display URL" value={publicUrl ?? 'Creating link…'} hint={<>View-only. Anyone with this link can watch, with no sign-in. Rotate it in <Link to={`/tournaments/${tid}/publish/displays`} className="text-accent hover:underline">Publish displays</Link> to revoke it.</>} inputClassName="font-mono" last />}
+            </Section>
+          ) : null}
 
           {/* The tv* fields only drive MeetDisplayPage; bracket boards do not
               consume them. Keep those controls scoped to Meet while the public

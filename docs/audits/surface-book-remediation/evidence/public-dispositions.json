@@ -1,0 +1,348 @@
+{
+  "schemaVersion": 1,
+  "scope": "public entrant PE01\u2013PE39 findings",
+  "authority": "Intermediate evidence index only; findings.json is the canonical 74-row register.",
+  "capture": "docs/screenshots/ui-review/remediation-2026-09-06/integrated-public-v3.html",
+  "entries": [
+    {
+      "id": "PE01.1",
+      "source_page": 3,
+      "review_page": 211,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "SeasonCalendar.tsx/HeroHeader.tsx",
+      "evidence": "v3 discovery capture; Local Workspace suppressed",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE01.2",
+      "source_page": 3,
+      "review_page": 199,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "discovery.tsx",
+      "evidence": "v3 discovery heading/copy",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE01.3",
+      "source_page": 3,
+      "review_page": 212,
+      "initial_severity": 1,
+      "disposition": "accepted",
+      "files": "PlayShell.tsx/SegmentedNav.tsx",
+      "evidence": "v3 neutral shell and active underline",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE02.1",
+      "source_page": 12,
+      "review_page": 202,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "discovery.tsx",
+      "evidence": "v3 completed capture leads with archive",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE03.1",
+      "source_page": 21,
+      "review_page": 200,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "format.ts/tournament.tsx/schedule.tsx",
+      "evidence": "timezone render tests and v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE03.2",
+      "source_page": 21,
+      "review_page": 203,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "EventRow.tsx/tournament.tsx",
+      "evidence": "explicit registration/draw units; v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE03.3",
+      "source_page": 21,
+      "review_page": 203,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "tournament.tsx",
+      "evidence": "single overview fact sequence; v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE03.4",
+      "source_page": 21,
+      "review_page": 204,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "tournament.tsx",
+      "evidence": "closed fee copy/no entry link; v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE04.1",
+      "source_page": 25,
+      "review_page": 204,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "EventRow.tsx",
+      "evidence": "v3 event rows units/actions",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE04.2",
+      "source_page": 25,
+      "review_page": 200,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "EventRow.tsx",
+      "evidence": "v3 event/round labels",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE04.3",
+      "source_page": 25,
+      "review_page": 205,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "EventRow.tsx",
+      "evidence": "zero-round regression/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE05.1",
+      "source_page": 30,
+      "review_page": 205,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "EntrantsList.tsx/PlayersList.tsx",
+      "evidence": "v3 directory continuation groups",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE05.2",
+      "source_page": 29,
+      "review_page": 201,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "EntrantsList.tsx",
+      "evidence": "v3 humanized legend",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE09.1",
+      "source_page": 69,
+      "review_page": 197,
+      "initial_severity": 3,
+      "disposition": "accepted",
+      "files": "entries_site.py/schedule.tsx",
+      "evidence": "global live-first API test/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE09.2",
+      "source_page": 69,
+      "review_page": 206,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "entries_site.py/MatchCard.tsx",
+      "evidence": "Operations court projection; 11 backend tests",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE09.3",
+      "source_page": 66,
+      "review_page": 206,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "schedule.tsx",
+      "evidence": "live row and mobile controls v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE10.1",
+      "source_page": 72,
+      "review_page": 197,
+      "initial_severity": 3,
+      "disposition": "accepted",
+      "files": "MatchCard.tsx/draw.tsx",
+      "evidence": "auto rows, doubles measurement/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE10.2",
+      "source_page": 74,
+      "review_page": 207,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "draw.tsx",
+      "evidence": "explicit Round guidance/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE10.3",
+      "source_page": 72,
+      "review_page": 212,
+      "initial_severity": 1,
+      "disposition": "accepted",
+      "files": "draw.tsx/SegmentedNav.tsx",
+      "evidence": "content-sized active underline/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE12.1",
+      "source_page": 81,
+      "review_page": 198,
+      "initial_severity": 3,
+      "disposition": "accepted",
+      "files": "draw.tsx/MatchCard.tsx",
+      "evidence": "Zhu path browser JSON and v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE13.1",
+      "source_page": 85,
+      "review_page": 207,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "MatchCard.tsx",
+      "evidence": "date/timezone tests/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE13.2",
+      "source_page": 85,
+      "review_page": 208,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "draw.tsx/MatchCard.tsx",
+      "evidence": "compact list JSON/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE15.1",
+      "source_page": 101,
+      "review_page": 198,
+      "initial_severity": 3,
+      "disposition": "accepted",
+      "files": "regulations.tsx",
+      "evidence": "390/360/200% harness/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE15.2",
+      "source_page": 100,
+      "review_page": 213,
+      "initial_severity": 1,
+      "disposition": "accepted",
+      "files": "regulations.tsx",
+      "evidence": "single-section v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE16.1",
+      "source_page": 103,
+      "review_page": 201,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "enter.tsx",
+      "evidence": "closed/open lifecycle render tests/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE19.1",
+      "source_page": 109,
+      "review_page": 211,
+      "initial_severity": 1,
+      "disposition": "accepted",
+      "files": "login.tsx/signup.tsx",
+      "evidence": "account-entry wording tests/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE22.1",
+      "source_page": 115,
+      "review_page": 199,
+      "initial_severity": 3,
+      "disposition": "accepted",
+      "files": "login.tsx",
+      "evidence": "neutral cookie branch/switch safe next tests",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE23.1",
+      "source_page": 117,
+      "review_page": 208,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "signup.tsx",
+      "evidence": "provider success copy; external provider boundary",
+      "remaining_severity": 1
+    },
+    {
+      "id": "PE24.1",
+      "source_page": 121,
+      "review_page": 209,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "signup.tsx/login.tsx",
+      "evidence": "safe tournament return tests/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE26.1",
+      "source_page": 127,
+      "review_page": 213,
+      "initial_severity": 1,
+      "disposition": "accepted",
+      "files": "verify.tsx/resetPassword.tsx",
+      "evidence": "verified outcome copy; delivery boundary",
+      "remaining_severity": 1
+    },
+    {
+      "id": "PE37.1",
+      "source_page": 149,
+      "review_page": 209,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "partner.tsx",
+      "evidence": "failed invitation heading/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE39.1",
+      "source_page": 153,
+      "review_page": 202,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "receipt.tsx/receipt.js",
+      "evidence": "v3 settled gate one heading/pending removed",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE39.2",
+      "source_page": 153,
+      "review_page": 210,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "receipt.tsx/receipt.js",
+      "evidence": "one gate action/v3",
+      "remaining_severity": 0
+    },
+    {
+      "id": "PE39.3",
+      "source_page": 154,
+      "review_page": 210,
+      "initial_severity": 2,
+      "disposition": "accepted",
+      "files": "receipt.tsx/receipt.js",
+      "evidence": "exact copyable reference/v3",
+      "remaining_severity": 0
+    }
+  ]
+}

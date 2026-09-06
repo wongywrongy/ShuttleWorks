@@ -237,7 +237,9 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
             Anyone with this link can view the read-only venue display: no sign-in required.
           </p>
           <div className="flex items-center gap-2">
+            <label htmlFor="public-display-link" className="text-xs font-medium text-foreground">Public display link</label>
             <input
+              id="public-display-link"
               readOnly
               value={displayLink ?? 'Loading…'}
               aria-label="Public display link"
@@ -310,6 +312,7 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
           <p className="text-muted-foreground">{inviteMode === 'email' ? 'The invitation is emailed to this address. The link grants the selected role to a signed-in person who accepts it.' : 'Anyone who receives this link can sign in and accept the selected role. Share it only with people you intend to give access.'}</p>
         </fieldset>
         <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-foreground">Role</span>
           <Select
             value={role}
             onValueChange={(v) => setRole(v as InviteRole)}
@@ -317,16 +320,11 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
             ariaLabel="Invite role"
             size="sm"
           />
-          {inviteMode === 'email' && <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email address"
-            aria-label="Invite email"
-            className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-          />}
+          {inviteMode === 'email' && <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-foreground">Email
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" aria-label="Invite email" className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40" />
+          </label>}
           <Button size="sm" onClick={create} disabled={busy || !online || (inviteMode === 'email' && !email.trim())}>
-            {busy ? 'Creating…' : 'Create invite'}
+            {busy ? (inviteMode === 'email' ? 'Sending…' : 'Creating…') : inviteMode === 'email' ? 'Send invitation' : 'Create share link'}
           </Button>
         </div>
 

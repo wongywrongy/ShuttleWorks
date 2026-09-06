@@ -486,6 +486,16 @@ describe("the elimination draw page", () => {
     expect(consolation).not.toContain("Ada Lovelace [1]");
     expect(consolation).toContain("?segment=MAIN");
   });
+
+  it('makes a player-path search visibly identifiable and preserves its view context', async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const html = await render('/e/spring-open/draws/MS?view=list&segment=MAIN&player=Ada');
+    expect(html).toContain('Showing matches for');
+    expect(html).toContain('Clear player filter');
+    expect(html).toContain('view=list');
+    expect(html).toMatch(/font-semibold underline decoration-2/);
+    expect(html).toContain('Find a player or pair');
+  });
 });
 
 describe("the round-robin draw page", () => {

@@ -6130,6 +6130,14 @@ export interface components {
             matchId?: string | null;
             /** Source */
             source?: ("meet" | "bracket") | null;
+            /** Identity */
+            identity?: {
+                [key: string]: unknown;
+            } | null;
+            /** Sidea */
+            sideA?: string | null;
+            /** Sideb */
+            sideB?: string | null;
         };
         /**
          * NodeResultDTO

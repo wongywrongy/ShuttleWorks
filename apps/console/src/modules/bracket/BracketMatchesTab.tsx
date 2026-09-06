@@ -30,7 +30,6 @@ import {
   MatchInspector,
   OverflowMenu,
   parseMatchStatusFilter,
-  ScoreLane,
   STATUS_LABEL,
   type DenseDataColumn,
   type BracketMatchStatus,
@@ -187,6 +186,38 @@ export function BracketMatchesTab({
     );
   };
 
+  // Result scores belong to the opponent rows, where their ownership is
+  // immediately legible. Keep the status column for lifecycle state only.
+  const renderScoredSide = (
+    pu: PlayUnitDTO,
+    side: 'A' | 'B',
+  ) => {
+    const result = resultByPu.get(pu.id);
+    const sets = result?.score?.sets ?? [];
+    const ids = side === 'A' ? pu.side_a : pu.side_b;
+    const slot = side === 'A' ? pu.slot_a : pu.slot_b;
+    const winner = result?.winner_side === side;
+    return (
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className={winner ? 'font-semibold text-foreground' : undefined}>
+          {renderSide(ids, slot)}
+        </span>
+        {sets.length > 0 ? (
+          <span
+            data-testid={`bracket-match-row-score-${side.toLowerCase()}-${pu.id}`}
+            className={`shrink-0 tabular-nums ${winner ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+          >
+            {[0, 1, 2].map((index) => (
+              <span key={index} aria-label={sets[index] ? `Game ${index + 1} score` : `Game ${index + 1} not recorded`} className="ml-2 inline-block w-6 text-right">
+                {sets[index] ? (side === 'A' ? sets[index].sideA : sets[index].sideB) : null}
+              </span>
+            ))}
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+
   const statusOf = (puId: string): BracketMatchStatus => {
     if (resultByPu.has(puId)) return 'done';
     const a = assignmentByPu.get(puId);
@@ -284,19 +315,18 @@ export function BracketMatchesTab({
     },
     {
       id: 'sideA', label: BRACKET_MATCH_LIST_COLUMNS[2].label, accessor: ({ pu }) => resolveSide(pu.side_a), className: BRACKET_MATCH_CELL.side,
-      render: (_value, { pu }) => renderSide(pu.side_a, pu.slot_a),
+      render: (_value, { pu }) => renderScoredSide(pu, 'A'),
     },
     {
       id: 'sideB', label: BRACKET_MATCH_LIST_COLUMNS[3].label, accessor: ({ pu }) => resolveSide(pu.side_b), className: BRACKET_MATCH_CELL.side,
-      render: (_value, { pu }) => renderSide(pu.side_b, pu.slot_b),
+      render: (_value, { pu }) => renderScoredSide(pu, 'B'),
     },
     {
       id: 'status', label: BRACKET_MATCH_LIST_COLUMNS[4].label, accessor: ({ pu }) => statusOf(pu.id), align: 'right', className: BRACKET_MATCH_CELL.status,
       render: (_value, { pu }) => {
         const result = resultByPu.get(pu.id);
-        const sets = result?.score?.sets ?? [];
         const reason = result?.reason ?? (result?.walkover ? 'walkover' : null);
-        return <span data-testid={`bracket-match-status-${pu.id}`} className="inline-flex min-w-0 items-center justify-end">{sets.length > 0 || reason ? <ScoreLane sets={sets} reason={reason} /> : <MatchStatus status={statusOf(pu.id)} />}</span>;
+        return <span data-testid={`bracket-match-status-${pu.id}`} className="inline-flex min-w-0 items-center justify-end"><MatchStatus status={statusOf(pu.id)} />{reason ? <span className="ml-1 text-3xs text-muted-foreground">{reason === 'walkover' ? 'W.O.' : reason}</span> : null}</span>;
       },
     },
     {

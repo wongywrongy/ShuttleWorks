@@ -159,8 +159,8 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
           <h1 id="receipt-title" className={`${PAGE_TITLE} motion-enter`}>
             Entry receipt
           </h1>
-          <p className="text-sm text-muted-foreground">
-            We are checking the signed-in account before showing the receipt.
+          <p id="receipt-intro" className="text-sm text-muted-foreground">
+            Receipt details load after this page checks your account.
             Keep the reference below if you need to ask the organizer about it.
           </p>
         </header>
@@ -173,6 +173,7 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
           <p className="break-all">
             <span className="text-muted-foreground">Reference</span>{' '}
             <code className="tabular-nums">{submissionId}</code>
+            <button type="button" data-copy-reference={submissionId} className="ms-2 text-accent underline underline-offset-4">Copy reference</button>
           </p>
         </SectionCard>
 
@@ -190,15 +191,6 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
             </p>
           </SectionCard>
         </section>
-
-        <noscript>
-          <SectionCard title="Sign in to view the full receipt" variant="eyebrow">
-            <p>
-              The reference above is safe to keep. Enable JavaScript to load the
-              account-scoped event, partner, fee, and payment details.
-            </p>
-          </SectionCard>
-        </noscript>
 
         <script type="module" src="/e/assets/receipt.js" />
 

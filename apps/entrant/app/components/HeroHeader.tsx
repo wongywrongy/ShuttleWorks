@@ -44,7 +44,9 @@ export function HeroHeader({
               the full width and the CTA wraps to a left-aligned second row,
               which reads as a stretched phone layout at 1280px. */}
           <div className="grid min-w-0 flex-1 basis-96 gap-1.5">
-            {orgName ? <p className="text-sm text-muted-foreground">{orgName}</p> : null}
+            {/* Migration-created bootstrap workspaces are an internal
+                ownership placeholder, not a tournament organizer identity. */}
+            {orgName && orgName !== 'Local Workspace' ? <p className="text-sm text-muted-foreground">{orgName}</p> : null}
             <h1 id="tournament-title" className="type-display max-w-3xl text-balance text-[1.875rem] leading-tight tracking-[-0.025em] text-foreground">
               {title}
             </h1>

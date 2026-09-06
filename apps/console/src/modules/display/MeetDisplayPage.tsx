@@ -149,16 +149,23 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
   // array on every tick.
   const matchesByCourt = useMemo(() => {
     const active = new Map<number, string>();
+    const conflicts = new Map<number, string[]>();
     const called = new Map<number, string>();
     for (const a of matchesByStatus.started) {
       const courtId = matchStates[a.matchId]?.actualCourtId ?? a.courtId;
-      active.set(courtId, a.matchId);
+      const existing = active.get(courtId);
+      if (existing) {
+        const ids = conflicts.get(courtId) ?? [existing];
+        ids.push(a.matchId);
+        conflicts.set(courtId, ids);
+        active.delete(courtId);
+      } else if (!conflicts.has(courtId)) active.set(courtId, a.matchId);
     }
     for (const a of matchesByStatus.called) {
       const courtId = matchStates[a.matchId]?.actualCourtId ?? a.courtId;
-      if (!active.has(courtId)) called.set(courtId, a.matchId);
+      if (!active.has(courtId) && !conflicts.has(courtId)) called.set(courtId, a.matchId);
     }
-    return { active, called };
+    return { active, called, conflicts };
   }, [matchesByStatus.started, matchesByStatus.called, matchStates]);
 
   // ---- Relative Now/Next/Later lanes (task 8) --------------------------
@@ -217,6 +224,7 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
       match: (typeof matches)[number] | null;
       state: (typeof matchStates)[string] | null;
       status: 'active' | 'called' | 'empty';
+      conflictMatches?: (typeof matches)[number][];
       // The Next/Later lane preview for this court (if any). On an EMPTY
       // court it replaces an inert "Available" placeholder with relative
       // "Next"/"Later" labels; on an occupied one the card shows just the
@@ -239,6 +247,17 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
       };
 
       const activeId = matchesByCourt.active.get(courtId);
+      const conflictIds = matchesByCourt.conflicts.get(courtId);
+      if (conflictIds?.length) {
+        courts.push({
+          courtId,
+          match: null,
+          state: null,
+          status: 'empty',
+          conflictMatches: conflictIds.map((id) => matchMap.get(id)).filter((m): m is (typeof matches)[number] => !!m),
+        });
+        continue;
+      }
       if (activeId) {
         courts.push({
           courtId,

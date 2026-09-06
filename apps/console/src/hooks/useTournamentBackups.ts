@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiClient } from '../api/client';
-import type { BackupEntryDTO, TournamentStateDTO } from '../api/dto';
+import type { BackupEntryDTO, BackupSnapshotDTO, TournamentStateDTO } from '../api/dto';
 import { useTournamentStore } from '../store/tournamentStore';
 import { useTournamentId } from './useTournamentId';
 
@@ -29,6 +29,12 @@ function applyStateToStore(state: TournamentStateDTO): void {
     matches: state.matches ?? [],
     schedule: state.schedule ?? null,
     scheduleIsStale: state.scheduleIsStale ?? false,
+    scheduleVersion: state.scheduleVersion ?? 0,
+    scheduleHistory: state.scheduleHistory ?? [],
+    bracketPlayers: state.bracketPlayers ?? [],
+    bracketRosterMigrated: state.bracketRosterMigrated ?? false,
+    planFinalized: state.planFinalized ?? false,
+    standings: state.standings ?? [],
   });
 }
 
@@ -41,6 +47,7 @@ export interface TournamentBackups {
   refresh: () => Promise<void>;
   createBackup: () => Promise<void>;
   restoreBackup: (filename: string) => Promise<void>;
+  inspectBackup: (filename: string) => Promise<BackupSnapshotDTO>;
   deleteBackup: (filename: string) => Promise<void>;
   /** Browser-native download URL for one snapshot (WSB-3). */
   downloadUrl: (filename: string) => string;
@@ -109,6 +116,8 @@ export function useTournamentBackups(): TournamentBackups {
     [tid, refresh],
   );
 
+  const inspectBackup = useCallback((filename: string) => apiClient.inspectTournamentBackup(tid, filename), [tid]);
+
   const deleteBackup = useCallback(
     async (filename: string) => {
       setBusyAction(filename);
@@ -139,6 +148,7 @@ export function useTournamentBackups(): TournamentBackups {
     refresh,
     createBackup,
     restoreBackup,
+    inspectBackup,
     deleteBackup,
     downloadUrl,
   };

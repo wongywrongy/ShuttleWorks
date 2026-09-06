@@ -30,7 +30,7 @@ import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { DrawCardDTO, DrawsIndexDTO, PlayersDTO } from '../lib/draws.types';
 import { eventCodeLabel } from '../lib/draws.types';
 import type { EntryPageDTO, ReserveRowDTO } from '../lib/entryPage.types';
-import { dateOfIso, formatDateLong, formatMoment } from '../lib/format';
+import { dateOfIso, formatDateLong, formatMomentInZone } from '../lib/format';
 import {
   activeTab,
   chipState,
@@ -141,7 +141,7 @@ export const meta: Route.MetaFunction = ({ data }) => {
   }
   tags.push({ property: 'og:title', content: title });
   tags.push({ property: 'og:type', content: 'website' });
-  if (org?.name) {
+  if (org?.name && org.name !== 'Local Workspace') {
     tags.push({ property: 'og:site_name', content: org.name });
   }
   return tags;
@@ -150,19 +150,6 @@ export const meta: Route.MetaFunction = ({ data }) => {
 function tabHref(slug: string, tab: Tab): string {
   const base = `/e/${encodeURIComponent(slug)}`;
   return tab === 'overview' ? base : `${base}?tab=${tab}`;
-}
-
-function tournamentDateLine(
-  date: string | null,
-  endDate: string | null,
-  timeZone: string | null,
-): string {
-  const start = date ? formatDateLong(date) : '';
-  const end = endDate ? formatDateLong(endDate) : '';
-  const range = start && end && start !== end ? `${start} – ${end}` : start || end;
-  return [range, timeZone ? `Tournament time · ${timeZone}` : '']
-    .filter(Boolean)
-    .join(' · ');
 }
 
 // ---- Overview --------------------------------------------------------------
@@ -189,7 +176,7 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
         ) : <p className="max-w-prose text-pretty text-base leading-7 text-muted-foreground">Tournament information, events, and published results from the organizer.</p>}
         <dl className={`grid grid-cols-2 gap-x-4 gap-y-3 ${LIST_CARD} p-4 text-sm`}>
           <div><dt className="text-xs text-muted-foreground">Events</dt><dd className="mt-0.5 font-semibold tabular-nums">{page.events.length}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">Players entered</dt><dd className="mt-0.5 font-semibold tabular-nums">{page.events.reduce((total, event) => total + event.entryCount, 0)}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">Event registrations</dt><dd className="mt-0.5 font-semibold tabular-nums">{page.events.reduce((total, event) => total + (event.registrationCount ?? event.entryCount), 0)}</dd></div>
           {tournamentView.timeZone ? <div className="col-span-2"><dt className="text-xs text-muted-foreground">Tournament time</dt><dd className="mt-0.5 font-medium">{tournamentView.timeZone}</dd></div> : null}
         </dl>
       </div>
@@ -214,7 +201,7 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
                 ) : moment.label === 'Tournament' ? (
                   formatDateLong(moment.at)
                 ) : (
-                  formatMoment(moment.at!)
+                  formatMomentInZone(moment.at!, tournamentView.timeZone)
                 )}
               </SectionRow>
             ))}
@@ -230,7 +217,9 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
 
         <SectionCard title="Fees & payment" labelledBy="ov-fees">
           <SectionRow label="Pricing">
-            Quoted on the entry form before you submit
+            {entriesOpen
+              ? 'Quoted on the entry form before you submit'
+              : 'Fees are not published for this closed tournament'}
             {/* The link exists only while an event is open — a closed
                 tournament must carry no path into the entry form anywhere
                 on the page (the hero's own rule, held by its tests). */}
@@ -365,12 +354,10 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
             : phase === 'announced'
               ? { label: 'View tournament information', href: `/e/${encodeURIComponent(slug)}` }
               : null;
-  const metaLine = [
-    tournamentDateLine(page.tournament.date, page.tournament.endDate, tournamentView.timeZone),
-    [page.venue?.name, page.venue?.address].filter(Boolean).join(', '),
-  ]
-    .filter((part) => part !== '')
-    .join(' · ');
+  // Date, timezone, and venue are each presented once in the overview cards.
+  // Keeping them out of the hero prevents the same facts being repeated in
+  // two competing reading sequences (PE03.3).
+  const metaLine = '';
   // The by-event anchors died with the by-event grouping (SP-P7 §3.2): the
   // list is alphabetical now, so an event's "N entered" links to the tab.
   const entrantsHref = tabs.includes('players')
@@ -380,7 +367,7 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
   return (
     <PlayShell>
       <HeroHeader
-        orgName={page.org?.name ?? null}
+        orgName={page.org?.name === 'Local Workspace' ? null : page.org?.name ?? null}
         title={page.tournament.name ?? slug}
         metaLine={metaLine}
         chip={chip}
@@ -406,6 +393,7 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
               slug={slug}
               roster={loaderData.players}
               drawsPublished={page.publication.draws}
+              eventLabels={Object.fromEntries(page.events.map((event) => [event.code, event.discipline]))}
             />
             <ReserveList reserves={page.reserves ?? []} slug={page.page.slug} />
           </>

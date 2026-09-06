@@ -39,6 +39,29 @@ export interface LaneItem {
   plannedSlot: number;
 }
 
+/** Index live/called records by court without selecting a winner. A duplicate
+ * current assignment is an Operations conflict and is returned in full so a
+ * projection can explain it honestly. */
+export function currentMatchesByCourt(
+  items: readonly LaneItem[],
+  nowState: ReadonlySet<string>,
+): { current: Map<number, string>; conflicts: Map<number, string[]> } {
+  const byCourt = new Map<number, string[]>();
+  for (const item of items) {
+    if (!nowState.has(item.id)) continue;
+    const ids = byCourt.get(item.court);
+    if (ids) ids.push(item.id);
+    else byCourt.set(item.court, [item.id]);
+  }
+  const current = new Map<number, string>();
+  const conflicts = new Map<number, string[]>();
+  for (const [court, ids] of byCourt) {
+    if (ids.length === 1) current.set(court, ids[0]);
+    else conflicts.set(court, ids);
+  }
+  return { current, conflicts };
+}
+
 /**
  * Per-court Now/Next/Later lane assignment.
  *
@@ -67,11 +90,17 @@ export function assignLanes(
     const sorted = [...list].sort(
       (a, b) => a.plannedSlot - b.plannedSlot || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
-    const liveIndex = sorted.findIndex((entry) => nowState.has(entry.id));
-    let upcoming = sorted;
-    if (liveIndex >= 0) {
+    const liveIndexes = sorted
+      .map((entry, index) => (nowState.has(entry.id) ? index : -1))
+      .filter((index) => index >= 0);
+    // Multiple live records on one court are a source conflict. Do not
+    // promote an arbitrary one to NOW on the public projection; the caller's
+    // conflict index retains the complete set for an honest message.
+    const liveIndex = liveIndexes.length === 1 ? liveIndexes[0] : -1;
+    const conflictingIds = new Set(liveIndexes.map((index) => sorted[index].id));
+    const upcoming = sorted.filter((entry) => !conflictingIds.has(entry.id));
+    if (liveIndexes.length === 1) {
       lanes.set(sorted[liveIndex].id, 'now');
-      upcoming = sorted.filter((_, i) => i !== liveIndex);
     }
     if (upcoming[0]) lanes.set(upcoming[0].id, 'next');
     if (upcoming[1]) lanes.set(upcoming[1].id, 'later');

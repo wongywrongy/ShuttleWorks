@@ -1,0 +1,44 @@
+[
+  {
+    "name": "public-schedule",
+    "controls": 13,
+    "unnamed": [],
+    "firstKeyboardFocus": {
+      "tag": "A",
+      "text": "Skip to content",
+      "outline": "solid"
+    },
+    "overflow": {
+      "viewport": 390,
+      "document": 390
+    }
+  },
+  {
+    "name": "login",
+    "controls": 8,
+    "unnamed": [],
+    "firstKeyboardFocus": {
+      "tag": "A",
+      "text": "Skip to content",
+      "outline": "solid"
+    },
+    "overflow": {
+      "viewport": 390,
+      "document": 390
+    }
+  },
+  {
+    "name": "players",
+    "controls": 265,
+    "unnamed": [],
+    "firstKeyboardFocus": {
+      "tag": "A",
+      "text": "Skip to content",
+      "outline": "solid"
+    },
+    "overflow": {
+      "viewport": 390,
+      "document": 390
+    }
+  }
+]

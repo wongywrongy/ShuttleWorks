@@ -19,6 +19,7 @@ import type {
   ProposedMove,
   ValidationResponseDTO,
   TournamentStateDTO,
+  BackupSnapshotDTO,
   SetupKey,
   TournamentSetupDTO,
   TournamentActivityFeedDTO,
@@ -1200,7 +1201,6 @@ class ApiClient {
     const etag = response.headers?.etag ?? response.headers?.ETag;
     if (etag) {
       setupEtags.set(tid, String(etag));
-      stateEtags.set(tid, String(etag));
     }
     return response.data;
   }
@@ -1225,7 +1225,6 @@ class ApiClient {
       const next = response.headers?.etag ?? response.headers?.ETag;
       if (next) {
         setupEtags.set(tid, String(next));
-        stateEtags.set(tid, String(next));
       }
       return response.data;
     } catch (error) {
@@ -1266,6 +1265,14 @@ class ApiClient {
   ): Promise<TournamentStateDTO> {
     const res = await this.client.post<TournamentStateDTO>(
       `/tournaments/${tid}/state/restore/${encodeURIComponent(filename)}`,
+    );
+    return res.data;
+  }
+
+  /** Read one authenticated snapshot for operator inspection without restoring it. */
+  async inspectTournamentBackup(tid: string, filename: string): Promise<BackupSnapshotDTO> {
+    const res = await this.client.get<BackupSnapshotDTO>(
+      `/tournaments/${tid}/state/backups/${encodeURIComponent(filename)}`,
     );
     return res.data;
   }

@@ -100,6 +100,26 @@ const supportedTimezones = (Intl as typeof Intl & {
   supportedValuesOf?: (key: 'timeZone') => string[];
 }).supportedValuesOf?.('timeZone') ?? [];
 const TIMEZONE_OPTIONS = ['UTC', ...supportedTimezones.filter((zone) => zone !== 'UTC')];
+function timezoneLabel(zone: string): string {
+  if (zone === 'UTC') return 'UTC';
+  return zone.replace(/_/g, ' ').replace(/\//g, ' / ');
+}
+const TIMEZONE_SELECT_OPTIONS = TIMEZONE_OPTIONS.map((zone) => ({
+  value: zone,
+  label: timezoneLabel(zone),
+}));
+
+const REGISTRATION_OPTIONS = [
+  { value: 'none', label: 'Not configured' },
+  { value: 'online', label: 'Online entry' },
+  { value: 'email', label: 'Email or paper entry' },
+  { value: 'invitation', label: 'Invitation only' },
+] as const;
+const CONTACT_ROLE_OPTIONS = [
+  { value: 'tournament-director', label: 'Tournament director' },
+  { value: 'referee', label: 'Referee' },
+  { value: 'venue-operations', label: 'Venue operations' },
+] as const;
 
 function sectionState(setup: TournamentSetupDTO | null, key: SetupKey): SetupSectionStateDTO | null {
   return setup?.sections.find((section) => section.key === key) ?? null;
@@ -179,14 +199,17 @@ function SectionEditor({
   timezone,
   section,
   data,
+  courtOptions,
   onChange,
 }: {
   tid: string;
   timezone?: string;
   section: SetupSectionStateDTO;
   data: SetupSectionData;
+  courtOptions?: readonly { value: string; label: string }[];
   onChange: (field: string, value: unknown) => void;
 }) {
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   switch (section.key) {
     case 'general':
       return (
@@ -194,16 +217,18 @@ function SectionEditor({
           <FieldRow label="Tournament name" value={textOf(data, 'name')} onChange={(e) => onChange('name', e.target.value)} />
           <FieldRow label="Public name" value={textOf(data, 'publicName')} onChange={(e) => onChange('publicName', e.target.value)} />
           <FieldRow label="Organizer" value={textOf(data, 'organizer')} onChange={(e) => onChange('organizer', e.target.value)} />
-          <FieldRow
+          <Row
             label="Timezone"
-            hint="Search by city or region. The IANA identifier is saved for exact time interpretation."
-            value={textOf(data, 'timezone')}
-            list="setup-timezones"
-            onChange={(e) => onChange('timezone', e.target.value)}
+            control={
+              <SelectInput
+                value={textOf(data, 'timezone') || 'UTC'}
+                onChange={(value) => onChange('timezone', value)}
+                options={TIMEZONE_SELECT_OPTIONS}
+                ariaLabel="Tournament timezone"
+                width={240}
+              />
+            }
           />
-          <datalist id="setup-timezones">
-            {TIMEZONE_OPTIONS.map((zone) => <option key={zone} value={zone} />)}
-          </datalist>
           <FieldRow label="Tournament number" value={textOf(data, 'tournamentNumber')} onChange={(e) => onChange('tournamentNumber', e.target.value)} />
           <FieldRow label="Season" value={textOf(data, 'season')} onChange={(e) => onChange('season', e.target.value)} last />
         </div>
@@ -228,7 +253,7 @@ function SectionEditor({
               { field: 'date', label: 'Date', type: 'date' },
               { field: 'startTime', label: 'Starts', type: 'time' },
               { field: 'endTime', label: 'Ends', type: 'time' },
-              { field: 'courtIds', label: 'Courts', type: 'list', placeholder: 'court-1, court-2' },
+              { field: 'courtIds', label: 'Courts', type: 'list', options: courtOptions, placeholder: 'Court 1, Court 2' },
             ]}
             rows={rowsOf(data, 'dailySessions')}
             onChange={(rows) => onChange('dailySessions', rows)}
@@ -331,9 +356,24 @@ function SectionEditor({
       );
       }
     case 'entries':
+      {
+      const registrationValue = textOf(data, 'registrationMethod');
+      const registrationOptions = registrationValue && !REGISTRATION_OPTIONS.some((option) => option.value === registrationValue)
+        ? [...REGISTRATION_OPTIONS, { value: registrationValue, label: `Saved value: ${registrationValue} (review)` }]
+        : REGISTRATION_OPTIONS;
       return (
         <div>
-          <FieldRow label="Registration method" value={textOf(data, 'registrationMethod')} onChange={(e) => onChange('registrationMethod', e.target.value)} />
+          <Row
+            label="Registration method"
+            control={
+              <SelectInput
+                value={textOf(data, 'registrationMethod') || 'none'}
+                onChange={(value) => onChange('registrationMethod', value === 'none' ? null : value)}
+                options={registrationOptions}
+                ariaLabel="Registration method"
+              />
+            }
+          />
           <FieldRow label="Partner rules" value={textOf(data, 'partnerRules')} onChange={(e) => onChange('partnerRules', e.target.value)} last />
           <Row
             label="Payment required"
@@ -350,22 +390,39 @@ function SectionEditor({
           />
         </div>
       );
+      }
     case 'people':
+      {
+      const contactRows = rowsOf(data, 'contacts');
+      const knownRoles = new Set<string>(CONTACT_ROLE_OPTIONS.map((option) => option.value));
+      const contactRoleOptions = [...CONTACT_ROLE_OPTIONS, ...contactRows
+        .map((row) => String(row.role ?? ''))
+        .filter((role) => role && !knownRoles.has(role))
+        .map((role) => ({ value: role, label: `Saved value: ${role} (review)` }))];
       return (
-        <SetupRowsEditor
-          label="Contacts"
-          addLabel="Add contact"
-          columns={[
-            { field: 'role', label: 'Role', placeholder: 'Referee' },
-            { field: 'name', label: 'Name' },
-            { field: 'email', label: 'Email', type: 'email' },
-            { field: 'public', label: 'Public', type: 'checkbox' },
-          ]}
-          rows={rowsOf(data, 'contacts')}
-          onChange={(rows) => onChange('contacts', rows)}
-          newRow={() => ({ role: '', name: '', email: null, public: false })}
-        />
+        <div>
+          <p className="mb-3 max-w-[68ch] text-sm text-muted-foreground">
+            Contacts are stored for operator coordination. The current public
+            site does not display staff details; the Public checkbox preserves
+            publication intent for a future public projection. Email remains a
+            separate operator field and is never selected by this checkbox.
+          </p>
+          <SetupRowsEditor
+            label="Contacts"
+            addLabel="Add contact"
+            columns={[
+              { field: 'role', label: 'Role', type: 'select', options: contactRoleOptions },
+              { field: 'name', label: 'Name' },
+              { field: 'email', label: 'Email', type: 'email' },
+              { field: 'public', label: 'Public', type: 'checkbox' },
+            ]}
+              rows={contactRows}
+            onChange={(rows) => onChange('contacts', rows)}
+            newRow={() => ({ role: '', name: '', email: null, public: false })}
+          />
+        </div>
       );
+      }
     case 'public-info':
       return (
         <div>
@@ -374,6 +431,30 @@ function SectionEditor({
           <FieldRow label="Regulations URL" type="url" value={textOf(data, 'regulationsUrl')} onChange={(e) => onChange('regulationsUrl', e.target.value)} />
           <FieldRow label="Logo URL" type="url" value={textOf(data, 'logoUrl')} onChange={(e) => onChange('logoUrl', e.target.value)} />
           <FieldRow label="Banner URL" type="url" value={textOf(data, 'bannerUrl')} onChange={(e) => onChange('bannerUrl', e.target.value)} last />
+          {(textOf(data, 'logoUrl') || textOf(data, 'bannerUrl')) ? (
+            <div className="grid gap-4 border-t border-border/60 pt-4 sm:grid-cols-2" aria-label="Publication image preview">
+              {(['logoUrl', 'bannerUrl'] as const).map((field) => {
+                const url = textOf(data, field);
+                if (!url) return null;
+                return (
+                  <figure key={field} className="min-w-0">
+                    <figcaption className="mb-2 text-xs font-medium text-foreground">
+                      {field === 'logoUrl' ? 'Logo preview' : 'Banner preview'}
+                    </figcaption>
+                    <div className="overflow-hidden rounded-sm border border-border bg-muted">
+                      {imageErrors[field] ? <div className="flex h-24 items-center justify-center px-3 text-xs text-muted-foreground">Preview unavailable. Check the address before saving.</div> : <img
+                        src={url}
+                        alt={field === 'logoUrl' ? 'Selected tournament logo' : 'Selected tournament banner'}
+                        loading="lazy"
+                        onError={() => setImageErrors((current) => ({ ...current, [field]: true }))}
+                        className={field === 'logoUrl' ? 'mx-auto h-24 max-w-full object-contain' : 'h-24 w-full object-cover'}
+                      />}
+                    </div>
+                  </figure>
+                );
+              })}
+            </div>
+          ) : null}
           <Row
             label="Publication audience"
             readOnly
@@ -413,8 +494,9 @@ function DomainEventsSummary({
           <Row
             key={String(event.id ?? index)}
             label={String(event.name ?? event.code ?? '')}
+            pane
             control={
-              <span className="inline-flex items-center gap-3">
+              <span className="inline-flex whitespace-nowrap items-center gap-3">
                 <span className={TEXT_MUTED_SM}>
                   {kind === 'bracket' ? (FORMAT_OPTIONS.find((option) => option.value === event.format)?.label ?? 'Format not configured') : String(event.code ?? '')}
                   {typeof event.capacity === 'number' && event.capacity > 0 ? ` · Capacity ${event.capacity}` : ''}
@@ -635,31 +717,26 @@ function SetupEditor({ tid }: { tid: string }) {
       <ActionsBar
         title={`Setup · ${SECTION_LABELS[routeKey]}`}
         status={<span role="status">{loading && !setup ? 'Loading…' : dirty ? 'Unsaved changes' : saved ? 'Section saved' : ''}</span>}
-      >
-        {editable ? (
-          <>
-            {dirty ? <Button variant="ghost" size="sm" onClick={() => { dirtyRef.current = false; setDirty(false); setSaved(false); setDraft(selected?.data ?? null); setEditorRevision((value) => value + 1); void load(); }} disabled={saving}>Discard</Button> : null}
-            <Button size="sm" onClick={() => void save()} disabled={!selected || !draft || saving}>
-              {saving ? 'Saving…' : 'Save section'}
-            </Button>
-          </>
-        ) : null}
-      </ActionsBar>
+      />
       <PageBody variant="form">
         <div className="space-y-4">
           {error ? <Notice tone="warning" title="Setup needs attention">{error}</Notice> : null}
           {setup && selected ? (
             <>
-              <div
-                data-testid="setup-strip"
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-border bg-card px-4 py-2"
-              >
-                <SetupStatusLabel status={selected.status} />
-                <span className={TEXT_MUTED_XS}>Overall: {overall}</span>
-                <Link to={setupHref} className="ml-auto text-xs text-accent underline underline-offset-2">
-                  View full checklist
-                </Link>
-              </div>
+              {selected.status !== 'ready' && selected.status !== 'complete' ? (
+                <div
+                  data-testid="setup-strip"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-border bg-card px-4 py-2"
+                >
+                  <SetupStatusLabel status={selected.status} />
+                  {overall !== STATUS_LABELS[selected.status] ? (
+                    <span className={TEXT_MUTED_XS}>Overall: {overall}</span>
+                  ) : null}
+                  <Link to={setupHref} className="ml-auto text-xs text-accent underline underline-offset-2">
+                    View full checklist
+                  </Link>
+                </div>
+              ) : null}
               {selected.issues.length ? (
                 <div className="space-y-2">
                   {selected.issues.map((issue) => (
@@ -671,7 +748,17 @@ function SetupEditor({ tid }: { tid: string }) {
                   ))}
                 </div>
               ) : null}
-              <PropertyPanel title={SECTION_LABELS[selected.key]}>
+              <PropertyPanel
+                title={SECTION_LABELS[selected.key]}
+                action={editable ? (
+                  <span className="flex items-center gap-2">
+                    {dirty ? <Button variant="ghost" size="sm" onClick={() => { dirtyRef.current = false; setDirty(false); setSaved(false); setDraft(selected?.data ?? null); setEditorRevision((value) => value + 1); void load(); }} disabled={saving}>Discard</Button> : null}
+                    <Button size="sm" onClick={() => void save()} disabled={!selected || !draft || !dirty || saving}>
+                      {saving ? 'Saving…' : 'Save section'}
+                    </Button>
+                  </span>
+                ) : undefined}
+              >
                 <div className="space-y-6" ref={editorRef} key={editorRevision}>
                   {selected.authority === 'domain' ? (
                     <DomainSectionSummary tid={tid} section={selected} />
@@ -681,6 +768,12 @@ function SetupEditor({ tid }: { tid: string }) {
                       timezone={textOf((setup?.sections.find((item) => item.key === 'general')?.data ?? {}) as SetupSectionData, 'timezone')}
                       section={selected}
                       data={draft}
+                      courtOptions={rowsOf(sectionState(setup, 'venue')?.data ?? {}, 'courts')
+                        .filter((court) => court.id != null && String(court.id).trim() !== '')
+                        .map((court, index) => ({
+                          value: String(court.id),
+                          label: String(court.name ?? `Court ${index + 1}`),
+                        }))}
                       onChange={(field, value) => { setSaved(false); dirtyRef.current = true; setDirty(true); setDraft((previous) => ({ ...(previous ?? {}), [field]: value })); }}
                     />
                   ) : null}

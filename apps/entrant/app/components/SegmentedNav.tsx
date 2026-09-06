@@ -21,12 +21,11 @@ export interface Segment {
   extra?: ReactNode;
 }
 
-const GROUP = 'inline-flex rounded-sm border border-rule-control';
-const ITEM =
-  'inline-flex h-8 items-center px-3 text-sm first:rounded-s-xs last:rounded-e-xs';
-const DIVIDER = 'border-s border-rule-control';
-export const SEGMENT_ACTIVE = 'bg-accent font-semibold text-accent-ink';
-export const SEGMENT_IDLE = 'text-muted-foreground hover:bg-surface-sunken hover:text-foreground';
+const GROUP = 'inline-flex gap-4 border-b border-rule-soft';
+const ITEM = 'inline-flex min-h-9 items-center px-0.5 text-sm';
+const DIVIDER = '';
+export const SEGMENT_ACTIVE = 'border-b-2 border-accent font-semibold text-accent';
+export const SEGMENT_IDLE = 'text-muted-foreground hover:text-foreground';
 
 export function SegmentedNav({
   label,

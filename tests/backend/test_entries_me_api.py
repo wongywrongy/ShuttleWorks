@@ -65,6 +65,7 @@ def page(client):
                 tournament_id=uuid.UUID(tid),
                 slug="winter-cup",
                 is_open=True,
+                audience="public",
                 fee_schedule={"1": 4000, "2": 5500},
                 venue_name="North Hall",
             )
@@ -204,6 +205,7 @@ def _make_page(client, name, slug):
                 tournament_id=uuid.UUID(tid),
                 slug=slug,
                 is_open=True,
+                audience="public",
                 fee_schedule={"1": 4000},
                 venue_name="North Hall",
             )

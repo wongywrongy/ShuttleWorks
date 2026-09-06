@@ -361,6 +361,16 @@ export function RosterTab() {
           <EmptyState
             title="No schools yet"
             body="A school is a roster of players; their positions are what matches get built from. Add a school from the actions bar to start."
+            action={
+              <button
+                type="button"
+                onClick={() => document.querySelector<HTMLButtonElement>('[data-testid="school-add-button"]')?.click()}
+                disabled={!canEditWorkspace}
+                className={`${INTERACTIVE_BASE} inline-flex h-8 items-center rounded-sm bg-accent px-3 text-xs font-medium text-accent-ink disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                Add school
+              </button>
+            }
           />
         ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -510,7 +520,7 @@ export function RosterTab() {
                   positionOccupants.length < (isDoublesRank(selectedRank) ? 2 : 1)
                     ? positionOccupants.length === 0
                       ? 'No one assigned yet. Click the cell to assign a player.'
-                      : 'Partner not assigned. Use ＋ add partner in the cell.'
+                  : 'Partner not assigned. Use Add partner in the cell.'
                     : null
                 }
                 onClose={closeDrawer}
@@ -620,7 +630,7 @@ function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void })
             data-testid="school-add-button"
             className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:cursor-not-allowed disabled:opacity-50`}
           >
-            ＋ Add school
+            Add school
           </button>
         </div>
       </PickerPopover.Anchor>
@@ -719,7 +729,7 @@ function BulkImportMenu({
             }
             className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50`}
           >
-            ＋ Bulk import
+                  Bulk import
           </button>
         </div>
       </PickerPopover.Anchor>

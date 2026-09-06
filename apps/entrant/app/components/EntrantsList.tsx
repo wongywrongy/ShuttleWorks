@@ -17,6 +17,13 @@
  * because the box does not exist.
  */
 import { eventCodeLabel } from '../lib/draws.types';
+
+function readableEventLabel(label: string): string {
+  return label
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+final$/i, '')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 import type { PersonReferenceDTO } from '../lib/person.types';
 import { personRefModel } from '../../public/assets/person-ref.js';
 import { PersonRef } from './PersonRef';
@@ -42,11 +49,13 @@ export function EntrantsList({
   entrants,
   noun = 'entrant',
   linkEventsToDraws = false,
+  eventLabels = {},
 }: {
   slug: string;
   entrants: DirectoryRow[];
   noun?: 'entrant' | 'player';
   linkEventsToDraws?: boolean;
+  eventLabels?: Record<string, string>;
 }) {
   const sorted = [...entrants].sort((a, b) => searchableName(a).localeCompare(searchableName(b)));
   const groups: { letter: string; rows: DirectoryRow[] }[] = [];
@@ -63,10 +72,17 @@ export function EntrantsList({
         <p className="text-sm text-muted-foreground">
           {`${entrants.length} ${entrants.length === 1 ? noun : `${noun}s`}`}
         </p>
-        <div id="entrants-filter-root" className="w-full sm:w-72" />
+        <div id="entrants-filter-root" data-filter-noun={noun} className="w-full sm:w-72" />
       </div>
+      {Object.keys(eventLabels).length > 0 ? (
+        <p className="text-xs text-muted-foreground" aria-label="Event key">
+          Events: {Object.entries(eventLabels).map(([code, label], index) => (
+            <span key={code}>{index > 0 ? ' · ' : ''}<strong className="font-semibold text-foreground">{eventCodeLabel(code)}</strong> {readableEventLabel(label)}</span>
+          ))}
+        </p>
+      ) : null}
 
-      <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid items-start gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((group) => (
           <section
             key={group.letter}

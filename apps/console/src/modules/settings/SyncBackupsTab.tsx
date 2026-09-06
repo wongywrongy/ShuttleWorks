@@ -7,6 +7,7 @@ import { TEXT_TITLE } from '../../lib/utils'
 import { DialogFooter } from '../../components/DialogFooter';
 import { useAuthorityStatus } from '../../hooks/useAuthorityStatus';
 import { SyncReconciliationPanel } from './SyncReconciliationPanel';
+import type { BackupSnapshotDTO } from '../../api/dto';
 
 /** Human-readable file size: B / KB / MB. */
 function fmtBytes(n: number): string {
@@ -65,6 +66,7 @@ export function SyncBackupsTab() {
     busyAction,
     createBackup,
     restoreBackup,
+    inspectBackup,
     deleteBackup,
     downloadUrl,
   } = useTournamentBackups();
@@ -72,6 +74,10 @@ export function SyncBackupsTab() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [retryKind, setRetryKind] = useState<'create' | 'restore' | 'delete' | null>(null);
+  const [inspectTarget, setInspectTarget] = useState<string | null>(null);
+  const [inspectState, setInspectState] = useState<BackupSnapshotDTO | null>(null);
+  const [inspectLoading, setInspectLoading] = useState(false);
+  const [inspectError, setInspectError] = useState<string | null>(null);
   const restoring = busyAction === restoreTarget;
   const deleting = busyAction === deleteTarget;
 
@@ -148,6 +154,16 @@ export function SyncBackupsTab() {
 
   const target = entries.find((e) => e.filename === restoreTarget);
 
+  const inspect = async (filename: string) => {
+    setInspectTarget(filename);
+    setInspectState(null);
+    setInspectError(null);
+    setInspectLoading(true);
+    try { setInspectState(await inspectBackup(filename)); }
+    catch (err) { setInspectError(err instanceof Error ? err.message : 'Could not inspect backup'); }
+    finally { setInspectLoading(false); }
+  };
+
   return (
     <div className="space-y-4">
       {authority.status ? (
@@ -158,13 +174,10 @@ export function SyncBackupsTab() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-foreground">
-                {authority.status.state === 'active'
-                  ? 'Live from this event node'
-                  : `Event authority: ${authority.status.state}`}
+                {authority.status.state === 'active' ? 'Sync is active' : 'Sync needs attention'}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Epoch {authority.status.authority_epoch} · Node{' '}
-                {authority.status.node_id.slice(0, 8)}
+                Changes made here are saved locally and reconciled with the cloud when connected.
               </div>
             </div>
             <div className="text-right text-xs">
@@ -246,7 +259,7 @@ export function SyncBackupsTab() {
                 {g.label}
               </div>
               <ul className="divide-y divide-border rounded border border-border">
-                {g.items.map((b) => (
+                {g.items.map((b, index) => (
                   <li
                     key={b.filename}
                     data-testid={`backup-${b.filename}`}
@@ -275,6 +288,19 @@ export function SyncBackupsTab() {
                         <span className="text-muted-foreground"> · {fmtBytes(b.sizeBytes)}</span>
                       </div>
                       <div className="mt-1 text-2xs text-muted-foreground">
+                        <span>{index === 0 && g === groups[0] ? 'Latest recovery point' : 'Earlier recovery point'}</span>
+                        <span aria-hidden="true"> · </span>
+                        {(() => {
+                          const position = entries.findIndex((entry) => entry.filename === b.filename);
+                          const adjacent = position >= 0 ? entries[position + 1] : undefined;
+                          const delta = adjacent ? b.sizeBytes - adjacent.sizeBytes : 0;
+                          return adjacent && delta !== 0 ? (
+                            <span>{delta > 0 ? `${fmtBytes(delta)} larger than the next point` : `${fmtBytes(Math.abs(delta))} smaller than the next point`}</span>
+                          ) : (
+                            <span>Full workspace snapshot; download to inspect contents</span>
+                          );
+                        })()}
+                        <span aria-hidden="true"> · </span>
                         <span className="font-mono">{b.filename}</span>
                         <span aria-hidden="true"> · </span>
                         <span data-testid={`backup-eligibility-${b.filename}`}>Eligible to restore</span>
@@ -311,6 +337,12 @@ export function SyncBackupsTab() {
                       <OverflowMenu
                         label={`Backup ${b.filename}`}
                         items={[
+                          {
+                            key: 'inspect',
+                            label: 'Inspect backup',
+                            testId: `backup-inspect-${b.filename}`,
+                            onSelect: () => void inspect(b.filename),
+                          },
                           {
                             key: 'download',
                             label: 'Download',
@@ -395,6 +427,35 @@ export function SyncBackupsTab() {
               >
                 {restoring || restoreAction.pending ? 'Restoring…' : 'Restore workspace'}
               </Button>
+            </DialogFooter>
+          </div>
+        </Modal>
+      )}
+      {inspectTarget && (
+        <Modal onClose={() => setInspectTarget(null)} titleId="inspect-backup-heading">
+          <div className="p-6">
+            <h2 id="inspect-backup-heading" className={TEXT_TITLE}>Inspect recovery point</h2>
+            <p className="mt-1 text-xs text-muted-foreground font-mono">{inspectTarget}</p>
+            {inspectLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading snapshot contents…</p> : inspectError ? <p role="alert" className="mt-4 text-sm text-destructive">{inspectError}</p> : inspectState ? (
+              <>
+              <p className="mt-4 text-xs text-muted-foreground">
+                Counts are split by module because this recovery point includes
+                the Meet state and Bracket session in one workspace snapshot.
+              </p>
+              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">Tournament</dt><dd>{inspectState.config?.tournamentName || 'Unnamed tournament'}</dd>
+                <dt className="text-muted-foreground">Meet roster players</dt><dd>{inspectState.players.length}</dd>
+                <dt className="text-muted-foreground">Meet schools / groups</dt><dd>{inspectState.groups.length}</dd>
+                <dt className="text-muted-foreground">Meet matches</dt><dd>{inspectState.matches.length}</dd>
+                <dt className="text-muted-foreground">Meet scheduled items</dt><dd>{inspectState.schedule?.assignments?.length ?? 0}</dd>
+                <dt className="text-muted-foreground">Bracket entrants</dt><dd>{inspectState.bracketPlayers?.length ?? 0}</dd>
+                <dt className="text-muted-foreground">Bracket scheduled items</dt><dd>{inspectState.bracket_session?.assignments?.length ?? 0}</dd>
+              </dl>
+              </>
+            ) : null}
+            <DialogFooter align="between">
+              <Button variant="ghost" onClick={() => setInspectTarget(null)}>Close</Button>
+              {inspectState ? <Button onClick={() => { setInspectTarget(null); setRestoreTarget(inspectTarget); }}>Review restore</Button> : null}
             </DialogFooter>
           </div>
         </Modal>

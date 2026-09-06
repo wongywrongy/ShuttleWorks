@@ -22,6 +22,7 @@
 // whose divergence count is already zero). A generated alias cannot drift, so
 // these two need no parity entry - see api/__tests__/dtoParity.test.ts.
 import type { components } from './dto.generated';
+import type { MatchIdentity } from '../platform/domain/matchIdentity';
 
 // Tournament Configuration
 export interface TournamentConfig {
@@ -509,6 +510,11 @@ export interface TournamentStateDTO {
   standings?: MeetStandingRowDTO[];
 }
 
+/** Authenticated backup download may include the bracket engine sidecar. */
+export type BackupSnapshotDTO = TournamentStateDTO & {
+  bracket_session?: { assignments?: unknown[] } | null;
+};
+
 // Canonical workflow-first Setup facade. These types intentionally mirror the
 // section-oriented API rather than leaking the legacy state-blob shape into
 // the Setup product. Section data is open because each section has a distinct
@@ -951,6 +957,10 @@ export interface NextMatchDTO {
    *  (ADR 0006). Optional for older payloads. */
   matchId?: string | null;
   source?: 'meet' | 'bracket' | null;
+  /** Decomposed identity coordinates; labels are formatted at the UI seam. */
+  identity?: MatchIdentity | null;
+  sideA?: string | null;
+  sideB?: string | null;
 }
 
 export interface WorkspaceSignalsDTO {

@@ -18,6 +18,7 @@ import {
   type OverflowItem,
 } from '../../components/control-plane';
 import { lifecycleChip } from '../../platform/domain/lifecycle';
+import { HEALTH_WORD } from '../../components/control-plane/HealthDot';
 import { attentionReasons, workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, type HubGroupId } from './hubGrouping';
@@ -130,6 +131,13 @@ export function WorkspaceRow({
   onDelete,
 }: RowProps) {
   const health = workspaceHealth(tournament);
+  const phaseLabel = tournament.signals?.phase === 'live'
+    ? 'Live now'
+    : tournament.signals?.phase === 'complete'
+      ? 'Completed'
+      : tournament.signals?.phase === 'ready'
+        ? 'Ready'
+        : null;
   const action = rowActionFor(tournament, group);
   // Console-mock adoption (2026-08-13): the row states its lifecycle where
   // the operator scans, not just in the inspector. Shared precedence
@@ -187,7 +195,8 @@ export function WorkspaceRow({
         <HealthDot health={health} />
         {/* The dot is `aria-hidden` (it has a title, which AT ignores on a
             span), so the one state worth interrupting a scan for gets words. */}
-        {health === 'attention' ? <span className="sr-only">Needs attention</span> : null}
+        <span className="text-2xs text-muted-foreground">{HEALTH_WORD[health]}</span>
+        {phaseLabel ? <span className="shrink-0 text-2xs font-medium text-foreground">{phaseLabel}</span> : null}
         {/* Wraps, never ellipsises: the name is the row's only identifying
             fact, and the row's `flex-wrap` + the 12rem floor above give it the
             width to wrap at WORD boundaries — wrapping is necessary, not

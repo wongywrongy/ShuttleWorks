@@ -95,7 +95,7 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
           <h1 className={PAGE_TITLE}>
-            Confirm your email
+            {verified ? 'Email confirmed' : 'Confirm your email'}
           </h1>
           <p className="text-sm text-muted-foreground">
             Organizers accept entries from confirmed addresses. This is a

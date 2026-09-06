@@ -1,0 +1,9 @@
+{
+  "classification": "controlled callback UI only; not production provider verification",
+  "statusText": "Human check complete.",
+  "helpHidden": true,
+  "createAccountVisible": true,
+  "accountPosts": 0,
+  "callbackTokenSubmitted": false,
+  "productionTurnstileVerified": false
+}

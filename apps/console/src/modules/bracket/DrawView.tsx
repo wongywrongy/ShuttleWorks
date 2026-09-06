@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, StatusBar } from "@scheduler/design-system";
+import { Card } from "@scheduler/design-system";
 import { useBracketApi } from "../../api/bracketClient";
 import { useTournamentId } from "../../hooks/useTournamentId";
 import { useTournamentStore } from "../../store/tournamentStore";
@@ -18,7 +18,6 @@ import { INTERACTIVE_BASE } from "../../lib/utils";
 import {
   REASON_BADGE,
   WinnerDot,
-  statusTallyItems,
 } from "../../components/control-plane";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { PanZoomCanvas } from "./PanZoomCanvas";
@@ -310,11 +309,7 @@ function BracketView({
         <div className="hidden h-full min-h-0 lg:block">
           <PanZoomCanvas
             roundLabels={roundLabels}
-            overlayTrailing={
-              <StatusBar
-                items={statusTallyItems(drawProgress(data, event.id))}
-              />
-            }
+            overlayTrailing={<DrawTally progress={drawProgress(data, event.id)} />}
           >
             {/* Bracket canvas: one-sided (default) reads left-to-right with the
               Final as the rightmost column; mirrored fans two wings out from
@@ -368,6 +363,7 @@ function BracketView({
                           <BracketCell
                             pu={idMap[puId]}
                             identityLabel={identityLabelById.get(puId) ?? puId}
+                            feederLabels={identityLabelById}
                             nameById={nameById}
                             result={resultByPu[puId]}
                             assignment={assignmentByPu[puId]}
@@ -403,6 +399,16 @@ function BracketView({
         </div>
       </div>
     </div>
+  );
+}
+
+function DrawTally({ progress }: { progress: Record<string, number> }) {
+  return (
+    <span className="flex items-center gap-2 text-2xs sw-num text-muted-foreground">
+      {([['done', progress.done], ['live', progress.live], ['ready', progress.ready], ['pending', progress.pending]] as const).map(([label, count]) => (
+        <span key={label}>{label} {count}</span>
+      ))}
+    </span>
   );
 }
 
@@ -1289,6 +1295,7 @@ function SegmentedBracketView({
                               <BracketCell
                                 pu={pu}
                                 identityLabel={identityLabelById.get(m.puId) ?? m.puId}
+                                feederLabels={identityLabelById}
                                 nameById={nameById}
                                 result={resultByPu[m.puId]}
                                 assignment={assignmentByPu[m.puId]}
@@ -1318,6 +1325,7 @@ function SegmentedBracketView({
 function BracketCell({
   pu,
   identityLabel,
+  feederLabels,
   nameById,
   result,
   assignment,
@@ -1332,6 +1340,7 @@ function BracketCell({
   pu: PlayUnitDTO;
   /** F-UNI-22: source-aware identity formatted at the draw adapter seam. */
   identityLabel: string;
+  feederLabels: Map<string, string>;
   nameById: Record<string, string>;
   result: ResultDTO | undefined;
   assignment: AssignmentDTO | undefined;
@@ -1347,8 +1356,8 @@ function BracketCell({
   onResult: (w: "A" | "B", sets?: BracketSetScore[]) => void | Promise<void>;
 }) {
   const winner = result?.winner_side;
-  const aName = labelFor(pu.side_a, pu.slot_a, nameById);
-  const bName = labelFor(pu.side_b, pu.slot_b, nameById);
+  const aName = labelFor(pu.side_a, pu.slot_a, nameById, feederLabels);
+  const bName = labelFor(pu.side_b, pu.slot_b, nameById, feederLabels);
   // Stacked members for RESOLVED pair sides (owner ruling, P4 review): the
   // card gives each player their own line, so the " / " join is noise there.
   // A doubles side is ONE participant whose NAME carries the join — split it
@@ -1506,9 +1515,9 @@ function Side({
               // least operational thing in the console, and it was the loudest
               // element in the app — a wall of solid green on a surface nobody
               // watches during a live day.
-              "bg-status-live-bg border border-status-live-border border-l-[3px] border-l-status-live text-foreground font-semibold"
+              "bg-bg-elev border border-border border-l-[3px] border-l-status-live text-foreground font-semibold"
             : loser
-              ? "bg-muted text-muted-foreground"
+              ? "bg-bg-elev border border-border text-muted-foreground"
               : bye
                 ? "bg-muted text-muted-foreground italic"
                 : seeding
@@ -1569,6 +1578,7 @@ function labelFor(
     feeder_take?: "loser" | null;
   },
   nameById: Record<string, string>,
+  feederLabels?: Map<string, string>,
 ): string {
   if (side && side.length > 0) {
     return side.map((id) => nameById[id] ?? id).join(" / ");
@@ -1576,7 +1586,8 @@ function labelFor(
   if (slot.participant_id === "__BYE__" || slot.participant_id === null) {
     if (slot.feeder_play_unit_id) {
       const take = slot.feeder_take === "loser" ? "Loser" : "Winner";
-      return `${take} of ${slot.feeder_play_unit_id}`;
+      const readableRef = feederLabels?.get(slot.feeder_play_unit_id) ?? slot.feeder_play_unit_id;
+      return `${take} of ${readableRef}`;
     }
     return "Bye";
   }
@@ -1660,6 +1671,7 @@ function RoundRobinView({
                   key={puId}
                   pu={pu}
                   identityLabel={identityLabelById.get(puId) ?? puId}
+                  feederLabels={identityLabelById}
                   nameById={nameById}
                   result={result}
                   assignment={assignment}
@@ -1846,6 +1858,7 @@ function SwissView({
                     key={puId}
                     pu={pu}
                     identityLabel={identityLabelById.get(puId) ?? puId}
+                    feederLabels={identityLabelById}
                     nameById={nameById}
                     result={resultByPu[puId]}
                     assignment={assignment}

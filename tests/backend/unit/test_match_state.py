@@ -27,9 +27,23 @@ from operations.match_state import (
     VALID_TRANSITIONS,
     all_valid_transitions_for,
     assert_valid_transition,
+    assert_court_available,
     is_locked,
     locked_status_values,
 )
+
+
+def test_court_availability_rejects_second_playing_match_but_allows_called(repo, tid):
+    from db.models import Match
+
+    repo.session.add(Match(tournament_id=tid, id="playing", court_id=1, status="playing"))
+    repo.session.add(Match(tournament_id=tid, id="target", court_id=1, status="called"))
+    repo.session.commit()
+
+    # A called match can wait behind the current one.
+    assert_court_available(repo, tid, "target", MatchStatus.CALLED)
+    with pytest.raises(_ce(), match="already has a playing match"):
+        assert_court_available(repo, tid, "target", MatchStatus.PLAYING)
 
 
 def _ce():

@@ -428,7 +428,7 @@ def entry_page(cloud_client):
             t = Tournament(name=name, kind="meet", data={})
             session.add(t)
             session.flush()
-            session.add(EntryPage(tournament_id=t.id, slug=f"club-{label}", is_open=True))
+            session.add(EntryPage(tournament_id=t.id, slug=f"club-{label}", is_open=True, audience="public"))
             ev = EntryEvent(
                 tournament_id=t.id,
                 code="MS",

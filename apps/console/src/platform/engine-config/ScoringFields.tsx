@@ -20,7 +20,7 @@ export interface ScoringValue {
 
 const SCORE_TYPE_OPTIONS = [
   { value: 'simple' as const, label: 'Simple' },
-  { value: 'badminton' as const, label: 'Sets' },
+  { value: 'badminton' as const, label: 'Badminton games' },
 ];
 
 const MATCH_FORMAT_OPTIONS = [
@@ -72,13 +72,13 @@ export function ScoringFields({
         aria-disabled={isSimple}
       >
         <Row
-          label="Points per set"
+          label="Points per game"
           control={
             <Seg
               value={value.pointsPerSet}
               onChange={(v) => onChange({ pointsPerSet: v })}
               options={POINTS_PER_SET_OPTIONS}
-              ariaLabel="Points per set"
+              ariaLabel="Points per game"
               disabled={isSimple}
             />
           }

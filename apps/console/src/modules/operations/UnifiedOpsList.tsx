@@ -124,13 +124,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
   }, [visible]);
 
   const row = (b: OpsBlock, showLocation: boolean, showStatusMarker: boolean) => {
-    const dot = b.done
-      ? 'bg-status-done'
-      : b.started
-        ? 'bg-status-live'
-        : b.court != null
-          ? 'bg-status-called'
-          : 'bg-muted-foreground';
+    const statusLabel = b.done ? 'Finished' : b.started ? 'Live' : b.court != null ? 'Called' : 'Waiting';
     const isSelected = selectedKey === b.key;
     return (
       <li
@@ -141,7 +135,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
         // Courts omits `onSelect` for a read-only overview — a row with nothing
         // to activate must not be focusable (audit G1).
         {...(onSelect ? selectableRowProps(() => onSelect(b.key), isSelected) : {})}
-        // `flex-wrap`: same fix as the Run queue rows — at 390px the dot,
+        // `flex-wrap`: status, code and court columns wrap before names,
         // code and court columns plus the action buttons left the sides
         // column ~72px, so `break-words` broke names MID-WORD ("Damo/n
         // Ferraro"). Columns wrap to a second line; sides keeps a 10rem floor.
@@ -151,10 +145,11 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
       >
         {showStatusMarker ? (
           <span
-            aria-hidden
             data-testid="ops-status-marker"
-            className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`}
-          />
+            className="flex-shrink-0 text-2xs font-semibold uppercase tracking-[0.06em] text-muted-foreground"
+          >
+            {statusLabel}
+          </span>
         ) : null}
         {/* Same match-code grammar as the Run queue rows. */}
         <span className="w-20 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">{formatMatchIdentity(b.identity, b.id)}</span>
@@ -183,12 +178,9 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
   const section = (title: string, items: OpsBlock[]) => {
     if (items.length === 0) return null;
     const showLocation = items.some((candidate) => candidate.court != null);
-    const statusMarkers = new Set(
-      items.map((candidate) =>
-        candidate.done ? 'done' : candidate.started ? 'started' : candidate.court != null ? 'called' : 'waiting',
-      ),
-    );
-    const showStatusMarker = statusMarkers.size > 1;
+    // State must remain readable when color is removed, even when a section
+    // happens to contain only one state (for example an all-called Up next).
+    const showStatusMarker = true;
     return (
       <>
         <li className={`border-y border-border bg-muted/40 px-4 py-1 ${EYEBROW_CLASS} text-muted-foreground`}>

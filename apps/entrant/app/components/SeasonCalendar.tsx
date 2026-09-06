@@ -53,7 +53,8 @@ function CalendarRow({ row }: { row: SeasonRow }) {
   // for assistive tech — and only when there is one to spell (an empty
   // `sr-only` element is an announcement of nothing).
   const dateText = formatDateLong(row.date);
-  const meta = [row.venueName, row.organizer].filter((part) => part !== null && part !== '');
+  const meta = [row.venueName, row.organizer === 'Local Workspace' ? null : row.organizer]
+    .filter((part) => part !== null && part !== '');
   return (
     <li className="relative flex items-center gap-4 border-t border-rule-soft px-4 py-3 transition-colors duration-fast ease-brand hover:bg-surface-sunken">
       <DateBadge date={row.date} />

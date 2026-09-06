@@ -6,6 +6,7 @@
  * banner strip into the actions bar as a secondary popover affordance.
  */
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Download, MagnifyingGlass } from '@phosphor-icons/react';
 import { v4 as uuid } from 'uuid';
 import { useTournamentStore } from '../../../store/tournamentStore';
@@ -23,6 +24,7 @@ import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
 
 export function MatchesTab() {
   const tid = useTournamentId();
+  const navigate = useNavigate();
   // The Status column (Pending/Ready/Live/Done) reads matchStateStore, but
   // nothing else mounted on this surface hydrates it — an operator who opens
   // Matches directly (without ever visiting Schedule/Operations/Display)
@@ -122,7 +124,7 @@ export function MatchesTab() {
           title={canAddRow ? 'Add a custom match by hand' : 'Need at least 2 players'}
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-2.5 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
         >
-          ＋ Add match
+          Add match
         </button>
         <button
           type="button"
@@ -150,17 +152,23 @@ export function MatchesTab() {
               // "Operations → Courts" — a destination that has never existed
               // in this nav. Operations has exactly two: Plan and Live day.
               // One why-line, then the one action below.
-              body="Matches come from the position grid on Roster. Build them with Regenerate from roster in the bar above, then lay them out in Operations → Plan."
+              body="Matches come from the position grid on Roster. Use Regenerate from roster above to build them, then lay them out in Operations → Plan."
               action={
                 <button
                   type="button"
-                  onClick={addEmptyRow}
-                  disabled={!canAddRow}
+                  onClick={() => {
+                    if (players.length < 2) {
+                      navigate(`/tournaments/${encodeURIComponent(tid)}/participants/people`);
+                    } else {
+                      addEmptyRow();
+                    }
+                  }}
+                  disabled={players.length >= 2 ? !canAddRow : !canEditWorkspace}
                   data-testid="empty-add-match"
-                  title={canAddRow ? 'Add match row' : 'Need at least 2 players'}
+                  title={players.length < 2 ? 'Add players in Roster before generating matches' : canAddRow ? 'Add match row' : 'Need at least 2 players'}
                   className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm border border-dashed border-border bg-card px-3 text-xs text-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50`}
                 >
-                  ＋ Add match by hand
+                  {players.length < 2 ? 'Add players in Roster' : 'Add match by hand'}
                 </button>
               }
             />

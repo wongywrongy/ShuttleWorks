@@ -306,9 +306,10 @@ export function PlanToolbar({
               !canEdit
                 ? READ_ONLY_MESSAGE
                 : planFinalized
-                  ? 'Press to un-ready the plan'
-                  : undefined
+                ? 'Press to un-ready the plan'
+                : 'Mark the full generated schedule ready for live operations'
             }
+            aria-label={planFinalized ? 'Plan ready. Press to un-ready the plan' : 'Mark the full schedule ready for live operations'}
             data-testid="ops-plan-finalize-toggle"
           >
             {planFinalized ? 'Plan ready ✓' : 'Mark plan ready'}

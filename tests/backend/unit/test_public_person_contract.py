@@ -30,7 +30,7 @@ EXPECTED = {
     PersonReferenceDTO: {"identity", "resolution", "label"},
     EntrantRowDTO: {"person", "club", "eventCodes"},
     ReserveRowDTO: {"eventCode", "position", "person", "club"},
-    DrawCardDTO: {"drawKey", "eventCode", "discipline", "kind", "size", "hasConsolation", "matchCoverage", "recordScope", "topologyScope", "roundCount", "champions", "finalists", "remainingMatchCount", "historical", "sourceUrl"},
+    DrawCardDTO: {"drawKey", "eventCode", "discipline", "kind", "size", "hasConsolation", "matchCoverage", "recordScope", "topologyScope", "roundCount", "champions", "finalists", "drawParticipantCount", "remainingMatchCount", "historical", "sourceUrl"},
     DrawPlayerDTO: {"playerKey", "person", "club", "eventCodes"},
     TeamDTO: {"participantKey", "persons", "club", "seed"},
     HonorDTO: {"persons", "club"},

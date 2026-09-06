@@ -57,6 +57,9 @@ export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonEle
   selected?: boolean;
   /** Per-surface colour encoding. Defaults to `discipline` (Plan). */
   tone?: MatchChipTone;
+  /** Show the internal Meet/Bracket source marker. Plan identity already
+   * carries the event/reference, so it suppresses this routine badge. */
+  showSource?: boolean;
   /** Event-type key for `getEventColor` — only used by the `discipline` tone. */
   colorKey?: string;
   /** Optional team labels for the second line (only shown when `showSides`). */
@@ -75,7 +78,7 @@ export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonEle
 }
 
 export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function MatchChip(
-  { label, source, state, late = false, selected = false, tone = 'discipline', colorKey, sideA, sideB, showSides = false, onSelect, className, children, ...rest },
+  { label, source, state, late = false, selected = false, tone = 'discipline', colorKey, sideA, sideB, showSides = false, showSource = true, onSelect, className, children, ...rest },
   ref,
 ) {
   const fill = selected
@@ -123,13 +126,14 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
       {...rest}
     >
       <span className="flex items-center gap-1 leading-tight">
-        {/* Source initial square (M=meet, B=bracket) */}
-        <span
-          aria-hidden
-          className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-xs text-3xs font-semibold sw-num ${squareCls}`}
-        >
-          {SOURCE_INITIAL[source]}
-        </span>
+        {showSource ? (
+          <span
+            aria-hidden
+            className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-xs text-3xs font-semibold sw-num ${squareCls}`}
+          >
+            {SOURCE_INITIAL[source]}
+          </span>
+        ) : null}
         <span className={`min-w-0 break-words text-2xs font-semibold sw-num${doneLabel ? ' text-muted-foreground' : ''}`}>{label}</span>
         {doneLabel ? (
           <span aria-hidden className="text-3xs text-muted-foreground">

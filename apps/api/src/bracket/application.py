@@ -615,6 +615,38 @@ class BracketMatchActionService:
                         status_code=409,
                         detail="Cannot start a bracket match that already has a result",
                     )
+                # A bracket assignment is also an Operations projection. Keep
+                # the write invariant here so a direct bracket command cannot
+                # create two current matches on one court for the display.
+                assignment_court_id = assignment.court_id
+                if assignment_court_id is not None:
+                    # Meet-backed rows may share this physical court. Check
+                    # the materialized Operations projection as well as the
+                    # bracket session before accepting a direct bracket start.
+                    for materialized in repo.matches.list_for_tournament(tournament_id):
+                        if (
+                            materialized.court_id == assignment_court_id
+                            and materialized.status == "playing"
+                            and materialized.id != play_unit_id
+                        ):
+                            raise HTTPException(
+                                status_code=409,
+                                detail=(
+                                    f"Court {assignment_court_id} already has a playing match "
+                                    f"({materialized.id}); finish it before starting this match"
+                                ),
+                            )
+                    for other_id, other in state.state.assignments.items():
+                        if other_id == play_unit_id or other.court_id != assignment_court_id:
+                            continue
+                        if other.actual_start_slot is not None and other.actual_end_slot is None:
+                            raise HTTPException(
+                                status_code=409,
+                                detail=(
+                                    f"Court {assignment_court_id} already has a playing match "
+                                    f"({other_id}); finish it before starting this match"
+                                ),
+                            )
                 assignment.actual_start_slot = slot if slot is not None else assignment.slot_id
                 assignment.actual_end_slot = None
             elif action == "finish":

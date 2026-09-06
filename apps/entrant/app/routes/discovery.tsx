@@ -123,15 +123,17 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
     <PlayShell>
       {/* Absence is the page not rendering the band — never an empty band
           with a placeholder in it (§2.1). */}
-      {nowStrip === null ? null : (
+      {nowStrip === null || filters.view === 'completed' ? null : (
         <NowStrip row={nowStrip.row} moreCount={nowStrip.moreCount} />
       )}
       <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-10">
         <h1 className="type-display text-[1.75rem] tracking-[-0.02em] text-foreground">
-          Tournaments
+          {filters.view === 'completed' ? 'Completed tournaments' : 'Tournaments'}
         </h1>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          {`${BRAND.sportName} tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`}
+          {filters.view === 'completed'
+            ? 'Browse completed badminton tournaments and their published results.'
+            : `Explore ${BRAND.sportName} tournaments, schedules, and published results through ${BRAND.productName}.`}
         </p>
 
         <div className="mt-6 grid gap-4">

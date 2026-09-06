@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { apply, matches } from '../public/assets/entrants-filter.js';
+import { apply, filterNoun, matches } from '../public/assets/entrants-filter.js';
 
 describe('matches', () => {
   it('is a case-blind substring over name and club, empty query keeps all', () => {
@@ -21,6 +21,12 @@ describe('matches', () => {
 });
 
 describe('apply', () => {
+  it('preserves the player noun for the accessible filter count', () => {
+    const root = document.createElement('div');
+    root.setAttribute('data-filter-noun', 'player');
+    expect(filterNoun(root)).toBe('player');
+    expect(filterNoun(document.createElement('div'))).toBe('entrant');
+  });
   function fixture() {
     document.body.innerHTML = `
       <section data-letter-group>
@@ -30,6 +36,8 @@ describe('apply', () => {
         <li data-entrant data-name="tessa ngo" data-club="northside sc"></li>
         <li data-entrant data-name="tom barker" data-club="riverside bc"></li>
       </section>
+      <div id="entrants-filter-root" data-filter-noun="player"></div>
+      <p data-search-count></p>
       <p data-no-matches hidden></p>
     `;
     return document;
@@ -48,6 +56,7 @@ describe('apply', () => {
     const doc = fixture();
     expect(apply(doc, 'northside')).toBe(1);
     expect(apply(doc, '')).toBe(3);
+    expect(doc.querySelector('[data-search-count]')?.textContent).toBe('3 players');
     const rows = [...doc.querySelectorAll('[data-entrant]')] as HTMLElement[];
     expect(rows.every((row) => !row.hidden)).toBe(true);
   });

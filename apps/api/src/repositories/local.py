@@ -1012,6 +1012,50 @@ class _LocalBracketRepo:
             grouped.setdefault(row.bracket_event_id, []).append(row)
         return grouped
 
+    def list_match_identity_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, dict]]:
+        """Batch the persisted coordinates needed by workspace summaries."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketMatch, BracketEvent.discipline, BracketEvent.format)
+            .join(
+                BracketEvent,
+                (BracketEvent.tournament_id == BracketMatch.tournament_id)
+                & (BracketEvent.id == BracketMatch.bracket_event_id),
+            )
+            .where(BracketMatch.tournament_id.in_(tournament_ids))
+        ).all()
+        grouped: dict[uuid.UUID, dict[str, dict]] = {}
+        for row, discipline, event_format in rows:
+            grouped.setdefault(row.tournament_id, {})[row.id] = {
+                "id": row.id,
+                "event_id": row.bracket_event_id,
+                "event_code": discipline,
+                "format": event_format,
+                "round_index": row.round_index,
+                "match_index": row.match_index,
+                "segment": (row.meta or {}).get("segment"),
+                "side_a": row.side_a,
+                "side_b": row.side_b,
+            }
+        return grouped
+
+    def list_participant_names_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, str]]:
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketParticipant.tournament_id, BracketParticipant.id, BracketParticipant.name)
+            .where(BracketParticipant.tournament_id.in_(tournament_ids))
+        ).all()
+        grouped: dict[uuid.UUID, dict[str, str]] = {}
+        for tournament_id, participant_id, name in rows:
+            grouped.setdefault(tournament_id, {})[str(participant_id)] = name
+        return grouped
+
     def bulk_create_matches(
         self,
         tournament_id: uuid.UUID,
@@ -2421,8 +2465,46 @@ class LocalRepository:
             conflict_error=ce_cls,
         )
         if error is not None:
-            self.session.commit()
+            self.commit_pending()
             raise error
+
+        # Enforce the single-current-match court invariant at the canonical
+        # command boundary. Presentation layers may explain a conflict, but
+        # they must never hide one or choose a current record for the caller.
+        if target_status == MatchStatus.PLAYING:
+            court_id = match.court_id
+            if court_id is not None:
+                conflict = next(
+                    (
+                        row for row in self.matches.list_for_tournament(tournament_id)
+                        if row.id != match_id
+                        and row.status == MatchStatus.PLAYING.value
+                        and row.court_id == court_id
+                    ),
+                    None,
+                )
+                if conflict is not None:
+                    reason = (
+                        f"Court {court_id} already has a playing match "
+                        f"({conflict.id}); finish or move it before starting this match"
+                    )
+                    self._stamp_rejection(
+                        command_row,
+                        command_id=command_id,
+                        tournament_id=tournament_id,
+                        match_id=match_id,
+                        action=action,
+                        payload=payload,
+                        submitted_by=submitted_by,
+                        reason=reason,
+                    )
+                    self.commit_pending()
+                    raise ce_cls(
+                        match_id=match_id,
+                        message=reason,
+                        current_status=MatchStatus.PLAYING.value,
+                        attempted_status=MatchStatus.PLAYING.value,
+                    )
 
         error = self._validate_concrete_match_sides(
             match,
@@ -2436,7 +2518,7 @@ class LocalRepository:
             conflict_error=ce_cls,
         )
         if error is not None:
-            self.session.commit()
+            self.commit_pending()
             raise error
 
         error = self._validate_assign_court(
@@ -2451,7 +2533,7 @@ class LocalRepository:
             conflict_error=ce_cls,
         )
         if error is not None:
-            self.session.commit()
+            self.commit_pending()
             raise error
 
         error = self._validate_command_transition(
@@ -2467,7 +2549,7 @@ class LocalRepository:
             conflict_error=ce_cls,
         )
         if error is not None:
-            self.session.commit()
+            self.commit_pending()
             raise error
 
         self._apply_command_mutation(match, action, payload, target_status)
@@ -2499,7 +2581,7 @@ class LocalRepository:
             resulting_version=match.version,
         )
 
-        self.session.commit()
+        self.commit_pending()
         self.session.refresh(match)
         self.session.refresh(command_row)
         return ProcessedCommand(

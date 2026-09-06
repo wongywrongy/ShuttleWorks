@@ -120,7 +120,7 @@ export async function loader({ params }: { params: { slug?: string } }) {
   const payload: RegulationsLoaderData = {
     slug: page.page.slug,
     tournamentName: page.tournament.name,
-    organizerName: page.org?.name ?? null,
+    organizerName: page.org?.name === 'Local Workspace' ? null : page.org?.name ?? null,
     venueName: page.venue?.name ?? null,
     venueAddress: page.venue?.address ?? null,
     tournamentDate: page.tournament.date ?? null,
@@ -201,13 +201,13 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
             {tournamentDate ? (
               <div>
                 <dt className="text-xs text-muted-foreground">Tournament date</dt>
-                <dd className="mt-1 font-medium text-foreground">{tournamentDate}</dd>
+                <dd className="mt-1 break-words font-medium text-foreground [overflow-wrap:anywhere]">{tournamentDate}</dd>
               </div>
             ) : null}
             {venueName || venueAddress ? (
               <div>
                 <dt className="text-xs text-muted-foreground">Venue</dt>
-                <dd className="mt-1 font-medium text-foreground">
+                <dd className="mt-1 break-words font-medium text-foreground [overflow-wrap:anywhere]">
                   {venueName}
                   {venueAddress ? <span className="block font-normal text-muted-foreground">{venueAddress}</span> : null}
                 </dd>
@@ -216,15 +216,15 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
             {organizerName ? (
               <div>
                 <dt className="text-xs text-muted-foreground">Organizer</dt>
-                <dd className="mt-1 font-medium text-foreground">{organizerName}</dd>
+                <dd className="mt-1 break-words font-medium text-foreground [overflow-wrap:anywhere]">{organizerName}</dd>
               </div>
             ) : null}
           </dl>
         </header>
 
         <div className="mt-8 grid gap-8 md:grid-cols-[14rem_minmax(0,1fr)] md:items-start">
-          <aside className="md:sticky md:top-4" aria-label="Document navigation">
-            <nav className="rounded-lg border border-rule-soft bg-surface-raised p-4">
+          <aside className="md:sticky md:top-4" aria-label={sections.length > 1 ? 'Document navigation' : undefined}>
+            {sections.length > 1 ? <nav className="rounded-lg border border-rule-soft bg-surface-raised p-4">
               <h2 className="font-display text-sm font-bold tracking-tight text-foreground">On this page</h2>
               <ol className="mt-3 grid gap-2 text-sm">
                 {sections.map((section) => (
@@ -235,7 +235,7 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
                   </li>
                 ))}
               </ol>
-            </nav>
+            </nav> : null}
             <div className="mt-4 grid gap-2 text-sm">
               <a href={`/e/${encodeURIComponent(slug)}`} className="text-accent underline-offset-4 hover:underline">Tournament overview</a>
               <a href={`/e/${encodeURIComponent(slug)}?tab=draws`} className="text-accent underline-offset-4 hover:underline">View events</a>
@@ -250,7 +250,7 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
                 <section key={section.id} id={section.id} className="scroll-mt-6">
                   <h3 className="font-display text-xl font-bold tracking-tight text-foreground">{section.title}</h3>
                   {section.body ? (
-                    <p className="mt-3 whitespace-pre-line text-base leading-8 text-foreground">{section.body}</p>
+                    <p className="mt-3 whitespace-pre-line break-words text-base leading-8 text-foreground [overflow-wrap:anywhere]">{section.body}</p>
                   ) : null}
                 </section>
               ))}

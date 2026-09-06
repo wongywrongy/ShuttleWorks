@@ -159,3 +159,36 @@ def build_locked_assignments(
             )
         )
     return out
+
+
+def assert_court_available(
+    repo: "LocalRepository",
+    tournament_id: uuid.UUID,
+    match_id: str,
+    next_status: _StatusLike,
+) -> None:
+    """Reject a second actively playing match on one physical court.
+
+    ``called`` is intentionally excluded: a called match can be waiting while
+    the current match finishes. Once a second match is actually started, the
+    write is rejected at the Operations boundary and no public projection can
+    observe two current records produced by this path.
+    """
+    if _coerce(next_status) is not MatchStatus.PLAYING:
+        return
+    target = repo.matches.get(tournament_id, match_id)
+    if target is None or target.court_id is None:
+        return
+    for row in repo.matches.list_for_tournament(tournament_id):
+        if row.id == match_id or row.status != MatchStatus.PLAYING.value:
+            continue
+        if row.court_id == target.court_id:
+            raise _conflict_error_class()(
+                match_id=match_id,
+                message=(
+                    f"Court {target.court_id} already has a playing match "
+                    f"({row.id}); finish or move it before starting this match"
+                ),
+                current_status=MatchStatus.PLAYING.value,
+                attempted_status=MatchStatus.PLAYING.value,
+            )

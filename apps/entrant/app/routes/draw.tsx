@@ -366,11 +366,15 @@ function MatchList({
   teams,
   eventCode,
   slug,
+  highlightPersonId,
+  highlightPersonName,
 }: {
   rounds: DrawDetailDTO["segments"][number]["rounds"];
   teams: Map<string, TeamDTO>;
   eventCode: string;
   slug: string;
+  highlightPersonId?: string | null;
+  highlightPersonName?: string | null;
 }) {
   if (rounds.length === 0)
     return (
@@ -392,6 +396,9 @@ function MatchList({
                 key={node.nodeKey}
                 slug={slug}
                 match={nodeToMatch(node, teams, eventCode, round.label)}
+                highlightPersonId={highlightPersonId}
+                highlightPersonName={highlightPersonName}
+                compactList
               />
             ))}
           </div>
@@ -457,6 +464,12 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
           : false;
       })?.identity?.id ?? null
     : null;
+  const selectedPerson = selectedPersonId
+    ? draw.teams.flatMap((team) => team.persons).find((person) => person.identity?.id === selectedPersonId)
+    : null;
+  const selectedPersonLabel = selectedPerson
+    ? personRefModel({ slug, identity: selectedPerson.identity, state: selectedPerson.resolution }).text
+    : playerQuery;
   const roundRobin = isRoundRobin(draw.kind);
   const segment =
     draw.segments.find((candidate) => candidate.id === activeSegment) ??
@@ -551,6 +564,12 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
               ) : null}
             </form>
           ) : null}
+          {playerQuery ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-s-2 border-action-primary bg-surface-sunken px-3 py-2 text-sm" role="status">
+              <span>Showing matches for <strong>{selectedPersonLabel}</strong>.</span>
+              <span className="text-muted-foreground">{pathRounds.reduce((count, round) => count + round.matches.length, 0)} match{pathRounds.reduce((count, round) => count + round.matches.length, 0) === 1 ? '' : 'es'} in this draw</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-6 grid gap-6">
@@ -595,10 +614,12 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
               {segment ? (
                 view === "list" ? (
                   <MatchList
-                    rounds={playerQuery ? pathRounds : segment.rounds}
-                    teams={teams}
-                    eventCode={draw.eventCode}
-                    slug={slug}
+                rounds={playerQuery ? pathRounds : segment.rounds}
+                teams={teams}
+                eventCode={draw.eventCode}
+                slug={slug}
+                highlightPersonId={selectedPersonId}
+                highlightPersonName={selectedPersonLabel}
                   />
                 ) : view === "round" ? (
                   <>
@@ -625,6 +646,8 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                         teams={teams}
                         eventCode={draw.eventCode}
                         slug={slug}
+                        highlightPersonId={selectedPersonId}
+                        highlightPersonName={selectedPersonLabel}
                       />
                     ) : null}
                   </>
@@ -634,6 +657,16 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                     aria-label={`${eventDisciplineLabel(draw.discipline)} bracket`}
                     className="min-w-0 border-y border-rule-soft bg-surface-raised"
                   >
+                    <p className="flex flex-wrap items-center gap-2 px-4 pb-1 pt-3 text-xs text-muted-foreground md:hidden">
+                      Wide bracket: scroll within this panel, or use{' '}
+                      <a
+                        href={`/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(draw.drawKey)}?segment=${encodeURIComponent(activeSegment)}&view=round&round=${roundIndex}${playerQuery ? `&player=${encodeURIComponent(playerQuery)}` : ''}`}
+                        className="font-semibold text-accent underline-offset-4 hover:underline"
+                      >
+                        Round view
+                      </a>{' '}
+                      to move through each round.
+                    </p>
                     <div className="overflow-x-auto px-4 pb-2 pt-2 md:px-6">
                       <div
                         className="flex w-max min-w-full items-stretch"
@@ -653,7 +686,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                                     key={node.nodeKey}
                                     data-node-key={node.nodeKey}
                                     data-person-ids={nodePersonIds(node, teams).join(' ')}
-                                    className="bracket-slot flex min-h-[50px] flex-1 items-center"
+                                    className="bracket-slot flex min-h-[46px] flex-1 items-center"
                                   >
                                     <MatchCard
                                       variant="bracket-node"
@@ -664,6 +697,8 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                                         draw.eventCode,
                                         round.label,
                                       )}
+                                      highlightPersonId={selectedPersonId}
+                                      highlightPersonName={selectedPersonLabel}
                                     />
                                   </div>
                                 ))}

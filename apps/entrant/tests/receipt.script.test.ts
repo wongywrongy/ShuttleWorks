@@ -106,7 +106,7 @@ describe("receipt DOM", () => {
     expect(root.textContent).toContain("Payment required · 55.00");
     expect(
       [...root.querySelectorAll("button")].map((node) => node.textContent),
-    ).toEqual(["Print receipt", "Download receipt"]);
+    ).toEqual(["Copy reference", "Print receipt", "Download receipt"]);
   });
 
   it("turns 401 into a context-preserving sign-in action", async () => {
@@ -115,7 +115,8 @@ describe("receipt DOM", () => {
     await loadReceipt(root, fetchImpl);
 
     const link = root.querySelector("a");
-    expect(root.textContent).toContain("Sign in to view the full receipt");
+    expect(root.textContent).toContain("The reference is safe");
+    expect(root.textContent).toContain("Account access");
     expect(link?.getAttribute("href")).toContain("/e/login?next=");
     expect(decodeURIComponent(link?.getAttribute("href") ?? "")).toContain(
       "/e/spring-open/receipt/44444444-4444-4444-8444-444444444444",

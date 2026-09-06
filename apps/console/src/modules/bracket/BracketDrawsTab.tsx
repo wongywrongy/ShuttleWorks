@@ -99,13 +99,13 @@ const DRAW_COLUMNS: BandedListColumn[] = [
   // be the crush victim again.
   { label: "Code", className: "w-28 shrink-0" },
   { label: "Format", className: "min-w-[11rem] flex-1", priority: 3 },
-  { label: "Size", className: "w-12 shrink-0 text-right", priority: 2 },
-  { label: "Entered", className: "w-16 shrink-0 text-right" },
+  { label: "Size", className: "w-28 shrink-0 text-right", priority: 2 },
+  { label: "Entered", className: "w-32 shrink-0 text-right" },
   { label: "Progress", className: "w-20 shrink-0" },
   { label: "Status", className: "w-20 shrink-0 text-right" },
   // `ml-auto` keeps the action cluster on the right edge in the narrow case
   // where Format has yielded and no column is growing.
-  { label: "", className: "ml-auto w-40 shrink-0" },
+  { label: "", className: "ml-auto w-36 shrink-0" },
 ];
 
 /** Content floor for the draws dock, derived from DRAW_COLUMNS. The old
@@ -334,7 +334,7 @@ export function BracketDrawsTab() {
           data-testid="bracket-new-draw"
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
         >
-          ＋ New draw
+          New draw
         </button>
       </ActionsBar>
 
@@ -351,7 +351,7 @@ export function BracketDrawsTab() {
                   onClick={() => setCreating(true)}
                   className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
                 >
-                  ＋ New draw
+                  New draw
                 </button>
               }
             />
@@ -403,7 +403,7 @@ export function BracketDrawsTab() {
                     role="cell"
                     className={`${colClass(DRAW_COLUMNS[2])} whitespace-nowrap text-xs text-muted-foreground sw-num`}
                   >
-                    {row.targetSize}
+                    {row.targetSize} {isDoublesCode(row.ev.discipline) ? 'pairs' : 'players'}
                   </span>
                   <span
                     role="cell"
@@ -413,7 +413,7 @@ export function BracketDrawsTab() {
                         : "text-muted-foreground"
                     }`}
                   >
-                    {row.partCount}/{row.targetSize}
+                    {row.partCount}/{row.targetSize} {isDoublesCode(row.ev.discipline) ? 'pairs' : 'players'}
                   </span>
                   <span
                     role="cell"
@@ -586,7 +586,7 @@ function DrawProgressCell({ counts }: { counts: DrawCounts }) {
       className="text-xs text-foreground sw-num"
       data-testid="draw-progress"
     >
-      {counts.done}/{total}
+      {counts.done}/{total} matches played
     </span>
   );
 }

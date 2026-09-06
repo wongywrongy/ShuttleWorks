@@ -22,7 +22,7 @@ export function healthColorClass(h: WorkspaceHealth): string {
  * so it had to stop leaking and start explaining.
  */
 export const HEALTH_WORD: Record<WorkspaceHealth, string> = {
-  good: 'Running normally',
+  good: 'No issues reported',
   attention: 'Needs attention',
   draft: 'Not started yet',
   archived: 'Archived',
@@ -30,7 +30,7 @@ export const HEALTH_WORD: Record<WorkspaceHealth, string> = {
 
 /** The legend line for a list of dots — one row, stated once, near the dots
  *  it explains. Ordered worst-first, matching how the Hub facets read. */
-export const HEALTH_LEGEND = 'Dot: amber needs attention · green running · grey not started or archived';
+export const HEALTH_LEGEND = 'Dot: amber needs attention · green no issues reported · grey not started or archived';
 
 export function HealthDot({ health, title }: { health: WorkspaceHealth; title?: string }) {
   return (

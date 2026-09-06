@@ -17,7 +17,7 @@
  * migration — tournament data has been server-side since pre-Step-1.
  */
 import { useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import type { TournamentStateDTO } from '../api/dto';
 import { useTournamentStore } from '../store/tournamentStore';
@@ -29,6 +29,12 @@ const DEBOUNCE_MS = 500;
 // Module-level timer so `forceSaveNow()` can flush from anywhere.
 let moduleTimer: number | null = null;
 let flushPromise: Promise<void> | null = null;
+let inFlightFingerprint: string | null = null;
+// Multiple AppShell instances can overlap briefly during route/kind
+// transitions. Ignore the synchronous store mutation caused by an
+// authoritative state GET so an older subscriber cannot mistake hydration
+// for an operator edit and emit a same-payload PUT.
+let hydrationInProgress = false;
 // Set to true by the subscribe handler when state changes WHILE a PUT is
 // in flight.  The in-flight finally-block checks this and re-arms the
 // debounce so the dirty changes get a follow-up save.  Reset to false at
@@ -39,6 +45,20 @@ let pendingFollowup = false;
 // so the SERVER clears the committed schedule(s) — including the bracket's,
 // which lives in a server-managed blob the client cannot null out itself.
 let clearScheduleNext = false;
+const acknowledgedFingerprints = new Map<string, string>();
+
+export function shouldScheduleFollowup(
+  fingerprint: string,
+  acknowledged: string | undefined,
+  inFlight: string | null,
+  hasInFlight: boolean,
+): boolean {
+  // While a PUT is active, compare against the exact payload on the wire.
+  // This preserves an A→B→A edit as a follow-up while ignoring hydration
+  // reference replacement that serializes to the same in-flight document.
+  return hasInFlight ? fingerprint !== inFlight : fingerprint !== acknowledged;
+}
+
 
 /** One-shot: the next flushed PUT sanctions a scheduling-field edit. */
 export function requestClearScheduleOnNextSave(): void {
@@ -142,7 +162,8 @@ async function handleRejectedSave(tid: string, err: unknown): Promise<void> {
  * flag is set, guaranteeing that any state changes made during the
  * in-flight PUT are not silently dropped.
  */
-export async function forceSaveNow(): Promise<void> {
+export async function forceSaveNow(options?: { cleanup?: boolean }): Promise<void> {
+  const hadPendingTimer = moduleTimer !== null;
   if (moduleTimer !== null) {
     window.clearTimeout(moduleTimer);
     moduleTimer = null;
@@ -150,11 +171,23 @@ export async function forceSaveNow(): Promise<void> {
   if (flushPromise) {
     // A PUT is already in flight.  Signal that a follow-up is needed so
     // the in-flight finally-block re-arms the debounce when it lands.
+    if (options?.cleanup && inFlightFingerprint === JSON.stringify(serializeTournamentState(useTournamentStore.getState()))) {
+      return flushPromise;
+    }
     pendingFollowup = true;
     return flushPromise;
   }
   const tid = useUiStore.getState().activeTournamentId;
   if (!tid) return;
+  // AppShell cleanup flushes the funnel during route transitions. A clean
+  // hydrated document has nothing to flush; skipping here prevents that
+  // lifecycle cleanup from emitting a phantom PUT after navigation. Keep
+  // explicit/manual flushes effective when a timer, intent, dirty document,
+  // or unknown acknowledgement says there is real work to persist.
+  if (options?.cleanup && !hadPendingTimer && !clearScheduleNext) {
+    const acknowledged = acknowledgedFingerprints.get(tid);
+    if (acknowledged !== undefined && acknowledged === JSON.stringify(serializeTournamentState(useTournamentStore.getState()))) return;
+  }
   // A viewer may not write (audit A2). This is the single funnel for every
   // blob write — roster, matches, config, schedule — so refusing here means a
   // viewer's edit never reaches the wire, instead of 403-ing and leaving the
@@ -169,6 +202,7 @@ export async function forceSaveNow(): Promise<void> {
     const ui = useUiStore.getState();
     ui.setPersistStatus('saving');
     const payload = serializeTournamentState(useTournamentStore.getState());
+    inFlightFingerprint = JSON.stringify(payload);
     try {
       // Only the sanctioned path passes options — an ordinary save keeps the
       // plain two-argument call it has always made.
@@ -178,6 +212,7 @@ export async function forceSaveNow(): Promise<void> {
         await apiClient.putTournamentState(tid, payload);
       }
       useUiStore.getState().setLastSavedAt(new Date().toISOString());
+      acknowledgedFingerprints.set(tid, JSON.stringify(payload));
       useUiStore.getState().setLastSaveError(null);
       useUiStore.getState().setPersistStatus('idle');
     } catch (err) {
@@ -219,6 +254,7 @@ export async function forceSaveNow(): Promise<void> {
           try {
             await apiClient.putTournamentState(tid, payload, { clearSchedule: true });
             useUiStore.getState().setLastSavedAt(new Date().toISOString());
+            acknowledgedFingerprints.set(tid, JSON.stringify(payload));
             useUiStore.getState().setLastSaveError(null);
             useUiStore.getState().setPersistStatus('idle');
             return;
@@ -246,6 +282,7 @@ export async function forceSaveNow(): Promise<void> {
       throw err;
     } finally {
       flushPromise = null;
+      inFlightFingerprint = null;
       // If state changed during the in-flight PUT, re-arm the debounce
       // so the dirty changes are not silently dropped.
       if (pendingFollowup) {
@@ -271,8 +308,10 @@ export function _resetSaveStateForTests(): void {
     moduleTimer = null;
   }
   flushPromise = null;
+  inFlightFingerprint = null;
   pendingFollowup = false;
   clearScheduleNext = false;
+  acknowledgedFingerprints.clear();
 }
 
 export function serializeTournamentState(
@@ -307,33 +346,38 @@ export function serializeTournamentState(
 function hydrate(s: TournamentStateDTO): void {
   // Direct setState (not the action setters) so we don't accidentally flip
   // scheduleIsStale=true during hydration.
-  useTournamentStore.setState({
-    config: s.config ?? null,
-    groups: s.groups ?? [],
-    players: s.players ?? [],
-    matches: s.matches ?? [],
-    schedule: s.schedule ?? null,
-    // Task 9: server-computed Meet pool standings (Task 2). Read-only —
-    // deliberately NOT part of `snapshot()` below or the subscribe
-    // change-comparator: it's server-derived, never client-writable, so
-    // including it there would round-trip a phantom PUT on every hydrate.
-    standings: s.standings ?? [],
-    scheduleIsStale: s.scheduleIsStale ?? false,
-    // Schema v2 fields — server is the authority, default to clean
-    // values when the file pre-dates the v2 migration.
-    scheduleVersion: s.scheduleVersion ?? 0,
-    scheduleHistory: s.scheduleHistory ?? [],
-    // If the server has a committed schedule, the lock should be on
-    // — otherwise the next config edit silently invalidates it
-    // without prompting the unlock modal.
-    isScheduleLocked: s.schedule != null,
-    // Bracket roster fields — empty for meet-kind; populated by bracket
-    // roster hydration from ``bracket_participants`` on first load.
-    bracketPlayers: s.bracketPlayers ?? [],
-    bracketRosterMigrated: s.bracketRosterMigrated ?? false,
-    // SP-G1: plan-finalized read (setter + snapshot wired in Task 17).
-    planFinalized: s.planFinalized ?? false,
-  });
+  hydrationInProgress = true;
+  try {
+    useTournamentStore.setState({
+      config: s.config ?? null,
+      groups: s.groups ?? [],
+      players: s.players ?? [],
+      matches: s.matches ?? [],
+      schedule: s.schedule ?? null,
+      // Task 9: server-computed Meet pool standings (Task 2). Read-only —
+      // deliberately NOT part of `snapshot()` below or the subscribe
+      // change-comparator: it's server-derived, never client-writable, so
+      // including it there would round-trip a phantom PUT on every hydrate.
+      standings: s.standings ?? [],
+      scheduleIsStale: s.scheduleIsStale ?? false,
+      // Schema v2 fields — server is the authority, default to clean
+      // values when the file pre-dates the v2 migration.
+      scheduleVersion: s.scheduleVersion ?? 0,
+      scheduleHistory: s.scheduleHistory ?? [],
+      // If the server has a committed schedule, the lock should be on
+      // — otherwise the next config edit silently invalidates it
+      // without prompting the unlock modal.
+      isScheduleLocked: s.schedule != null,
+      // Bracket roster fields — empty for meet-kind; populated by bracket
+      // roster hydration from ``bracket_participants`` on first load.
+      bracketPlayers: s.bracketPlayers ?? [],
+      bracketRosterMigrated: s.bracketRosterMigrated ?? false,
+      // SP-G1: plan-finalized read (setter + snapshot wired in Task 17).
+      planFinalized: s.planFinalized ?? false,
+    });
+  } finally {
+    hydrationInProgress = false;
+  }
 }
 
 function resetToDefaults(): void {
@@ -370,6 +414,7 @@ if (typeof window !== 'undefined') {
 
 export function useTournamentState(): void {
   const params = useParams<{ id?: string }>();
+  const location = useLocation();
   const tid = params.id ?? null;
   const hydrationDoneRef = useRef(false);
 
@@ -385,11 +430,13 @@ export function useTournamentState(): void {
         if (cancelled) return;
         if (remote) {
           hydrate(remote);
+          acknowledgedFingerprints.set(tid, JSON.stringify(serializeTournamentState(useTournamentStore.getState())));
         } else {
           // No state yet for this tournament — reset Zustand to defaults
           // so leftover state from a previously-viewed tournament doesn't
           // leak in.
           resetToDefaults();
+          acknowledgedFingerprints.set(tid, JSON.stringify(serializeTournamentState(useTournamentStore.getState())));
         }
       } catch (err) {
         console.error('[useTournamentState] hydrate failed:', err);
@@ -400,16 +447,16 @@ export function useTournamentState(): void {
     return () => {
       cancelled = true;
       // Flush any pending debounced PUT before the tournament changes.
-      void forceSaveNow().catch(() => {});
+      void forceSaveNow({ cleanup: true }).catch(() => {});
       useUiStore.getState().setActiveTournamentId(null);
     };
   }, [tid]);
 
   // ---- debounced PUT on any persisted-field change --------------------
   useEffect(() => {
-    if (!tid) return;
+    if (!tid || location.pathname.includes(`/tournaments/${tid}/setup`)) return;
     const unsub = useTournamentStore.subscribe((state, prev) => {
-      if (!hydrationDoneRef.current) return;
+      if (!hydrationDoneRef.current || hydrationInProgress) return;
       const changed =
         state.config !== prev.config ||
         state.groups !== prev.groups ||
@@ -424,13 +471,29 @@ export function useTournamentState(): void {
         // includes planFinalized) round-trips even if changed via other paths.
         state.planFinalized !== prev.planFinalized;
       if (!changed) return;
+      // Hydration/reconciliation may replace references without changing the
+      // persisted document. Avoid a phantom PUT on initial load, but only
+      // after comparing the document itself. This check must precede the
+      // in-flight branch: navigation hydration commonly replaces arrays while
+      // the preceding save is still resolving, and those reference changes
+      // must not arm an identical follow-up PUT.
+      const fingerprint = JSON.stringify(serializeTournamentState(state));
+      const acknowledged = acknowledgedFingerprints.get(tid);
+      // Returning to the acknowledged document while a different payload is
+      // in flight is a real A→B→A edit: the server is about to land B while
+      // the local store is back at A. Keep the follow-up armed in that case.
+      // Hydration-only reference replacement during an in-flight save has the
+      // same fingerprint as both the acknowledgement and the in-flight body,
+      // so it remains a no-op.
+      if (!shouldScheduleFollowup(fingerprint, acknowledged, inFlightFingerprint, flushPromise !== null)) return;
 
-      // Mark dirty immediately so the unsaved-changes UI can react before
-      // the debounced flush fires.
+      // Mark dirty only after the persisted document differs from the
+      // acknowledged/in-flight payload. Hydration-only reference changes
+      // must not leave a false unsaved indicator.
       const ui = useUiStore.getState();
       if (ui.persistStatus !== 'saving') ui.setPersistStatus('dirty');
 
-      // If a PUT is already in flight, record that state changed so the
+      // If a PUT is already in flight, record a real document change so the
       // in-flight finally-block knows to re-save after it lands.
       if (flushPromise !== null) {
         pendingFollowup = true;
@@ -448,5 +511,5 @@ export function useTournamentState(): void {
     return () => {
       unsub();
     };
-  }, [tid]);
+  }, [tid, location.pathname]);
 }

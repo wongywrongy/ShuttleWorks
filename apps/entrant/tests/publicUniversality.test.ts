@@ -116,10 +116,11 @@ describe('SP-P9 bracket invariants', () => {
     const card = read(resolve(APP, 'components/MatchCard.tsx'));
     const draw = read(resolve(APP, 'routes/draw.tsx'));
     const css = read(resolve(APP, 'app.css'));
-    expect(card).toContain('h-[44px]');
-    expect(card).toContain('grid-rows-2');
-    expect(card).toContain('truncate');
-    expect(card).toContain('Opponent beaten: ');
+    expect(card).toContain('min-h-[44px]');
+    expect(card).toContain('grid-rows-[auto_auto]');
+    expect(card).toContain('break-words');
+    expect(card).not.toContain('truncate');
+    expect(card).not.toContain('Opponent beaten: ');
     expect(css).toContain('.bracket-link-slot::before');
     expect(css).toContain('.bracket-link-slot::after');
     expect(css).toContain('height: 50%');

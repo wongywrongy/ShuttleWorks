@@ -306,7 +306,7 @@ export function MatchesSpreadsheet({
   if (matches.length === 0) {
     return (
       <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-        No matches yet. Add one manually or use auto-generate above.
+        No matches yet. Use Regenerate from roster above to build the supported lineup, or add a custom match from the actions bar.
       </div>
     );
   }

@@ -46,7 +46,7 @@ describe('PublishProduct', () => {
     expect(screen.getByTestId('sharing-site')).toBeInTheDocument();
     expect(screen.queryByTestId('publish-draws-results')).toBeNull();
   });
-  it('redirects sharing links to Displays with its link controls', () => {
+  it('redirects sharing links to Displays with one canonical link owner', () => {
     renderAt('/tournaments/t1/publish/links');
     expect(screen.getByTestId('display-config')).toBeInTheDocument();
     expect(screen.getByTestId('sharing-links')).toBeInTheDocument();

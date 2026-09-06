@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import re
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -39,6 +40,10 @@ class RowCounts:
     # nextUp filter; results recorded from the draw board never touch the
     # assignment's match-action clock fields.
     bracket_resolved_ids: set = field(default_factory=set)
+    # Persisted bracket match coordinates keyed by play-unit id. Populated by
+    # the grouped repository read used by the workspace list endpoint.
+    bracket_units: dict = field(default_factory=dict)
+    bracket_participant_names: dict = field(default_factory=dict)
     # True when a generated Swiss event still has rounds to append — blocks
     # the raw result/match count comparison from reading an inter-round lull
     # as "complete" (see ``swiss_pending_by_tournament``).
@@ -117,6 +122,13 @@ class NextMatchDTO(BaseModel):
     #: records are non-merged (ADR 0006), so an id alone cannot address a row.
     matchId: Optional[str] = None
     source: Optional[Literal["meet", "bracket"]] = None
+    #: Decomposed coordinates consumed by the console's sole identity
+    #: formatter. Keeping this separate from ``matchId`` means rescheduling
+    #: never changes the operator-facing reference.
+    identity: Optional[dict] = None
+    #: Resolved side names, when the source has participant records.
+    sideA: Optional[str] = None
+    sideB: Optional[str] = None
 
 
 class EntriesMetricsDTO(BaseModel):
@@ -255,6 +267,67 @@ def _first(d: dict, *keys):
     return None
 
 
+def _meet_identity(match: dict) -> Optional[dict]:
+    rank = _first(match, "eventRank", "event_rank")
+    if not rank:
+        return None
+    match_rank = str(rank).strip()
+    # Meet's stored rank is the legacy event-code + 1-based position seam;
+    # only decompose that authored value, never a machine match id.
+    match_parts = re.match(r"^([A-Za-z]+)([1-9]\d*)$", match_rank)
+    if match_parts:
+        return {
+            "source": "meet",
+            "event_code": match_parts.group(1),
+            "phase": None,
+            "position": int(match_parts.group(2)),
+            "sequence": None,
+        }
+    return {
+        "source": "meet",
+        "event_code": match_rank,
+        "phase": None,
+        "position": None,
+        "sequence": None,
+    }
+
+
+def _bracket_identity(play_unit: dict, max_round: int, event_format: str = "se") -> dict:
+    round_index = int(_first(play_unit, "round_index", "roundIndex") or 0)
+    match_index = int(_first(play_unit, "match_index", "matchIndex") or 0)
+    segment = _first(play_unit, "segment")
+    stage = (
+        f"R{round_index + 1}"
+        if event_format == "rr"
+        else (
+            "F" if max_round - round_index <= 0 else
+            "SF" if max_round - round_index == 1 else
+            "QF" if max_round - round_index == 2 else
+            f"R{2 ** (max_round - round_index + 1)}"
+        )
+    )
+    main_segment = {"de": "W", "monrad": "M", "compass": "E"}.get(event_format)
+    return {
+        "source": "bracket",
+        "event_code": str(_first(play_unit, "event_id", "eventId") or ""),
+        "phase": {
+            "kind": "round_robin" if event_format == "rr" else "elimination",
+            "round_index": round_index,
+            "stage": stage,
+            "segment": segment,
+            "main_segment": main_segment,
+        },
+        "sequence": match_index + 1,
+    }
+
+
+def _side_names(ids, names: dict) -> Optional[str]:
+    if not ids:
+        return None
+    resolved = [names.get(str(pid), str(pid)) for pid in ids]
+    return " / ".join(resolved)
+
+
 def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
     """``(MatchMetricsDTO, [NextMatchDTO])`` from the loaded meet ``data`` blob
     (ScheduleAssignment: matchId/slotId/courtId; MatchDTO: eventRank/matchNumber;
@@ -329,6 +402,7 @@ def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
         if not code:
             num = m.get("matchNumber") or m.get("match_number")
             code = f"M{num}" if num is not None else str(mid or "")[:6]
+        identity = _meet_identity(m)
         next_up.append(NextMatchDTO(
             code=code,
             timeLabel=_slot_time_label(day_start, interval, slot_of(a)),
@@ -336,6 +410,15 @@ def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
             status="scheduled",
             matchId=str(mid) if mid is not None else None,
             source="meet",
+            identity=identity,
+            sideA=_side_names(m.get("sideA") or m.get("side_a"), {
+                str(p.get("id")): p.get("name", str(p.get("id")))
+                for p in (data.get("players") or []) if isinstance(p, dict)
+            }),
+            sideB=_side_names(m.get("sideB") or m.get("side_b"), {
+                str(p.get("id")): p.get("name", str(p.get("id")))
+                for p in (data.get("players") or []) if isinstance(p, dict)
+            }),
         ))
     return metrics, next_up
 
@@ -347,6 +430,42 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
     ``bracket_matches`` count; the rest is blob-derived. No DB access."""
     session = data.get("bracket_session") or {}
     assignments = session.get("assignments") or []
+    serialized_units = session.get("play_units") or data.get("play_units") or []
+    if not serialized_units:
+        serialized_units = list(counts.bracket_units.values())
+    units_by_id = {
+        str(unit.get("id")): unit for unit in serialized_units if isinstance(unit, dict)
+    }
+    # Some persisted session versions put the coordinates on the assignment
+    # itself. They are still explicit persisted coordinates; accept them as a
+    # compatibility seam without interpreting the opaque id.
+    for assignment in assignments:
+        if not isinstance(assignment, dict):
+            continue
+        raw_id = str(assignment.get("play_unit_id") or "")
+        if raw_id and raw_id not in units_by_id and (
+            "round_index" in assignment or "match_index" in assignment
+        ):
+            units_by_id[raw_id] = assignment
+    max_round_by_group: dict[tuple[str, str], int] = {}
+    for unit in units_by_id.values():
+        event_id = str(_first(unit, "event_id", "eventId") or "")
+        segment = str(_first(unit, "segment") or "")
+        round_index = int(_first(unit, "round_index", "roundIndex") or 0)
+        max_round_by_group[(event_id, segment)] = max(
+            round_index, max_round_by_group.get((event_id, segment), -1)
+        )
+    participants = session.get("participants") or data.get("bracketPlayers") or []
+    participant_names = {
+        str(p.get("id")): p.get("name", str(p.get("id")))
+        for p in participants if isinstance(p, dict)
+    }
+    participant_names.update(counts.bracket_participant_names)
+    event_formats = {
+        str(e.get("id")): str(e.get("format") or "se")
+        for e in (session.get("events") or data.get("bracket_events") or [])
+        if isinstance(e, dict)
+    }
     interval = session.get("interval_minutes") or 30
 
     day_start = None
@@ -407,8 +526,23 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
     )
     next_up: List[NextMatchDTO] = []
     for a in ordered[:3]:
+        raw_id = str(a.get("play_unit_id") or "")
+        unit = units_by_id.get(raw_id)
+        identity = None
+        side_a = side_b = None
+        if unit is not None:
+            event_id = str(_first(unit, "event_id", "eventId") or "")
+            segment = str(_first(unit, "segment") or "")
+            identity = _bracket_identity(
+                unit, max_round_by_group.get((event_id, segment), 0),
+                str(unit.get("format") or event_formats.get(event_id, "se")),
+            )
+            identity["event_code"] = str(unit.get("event_code") or event_id)
+            side_a = _side_names(unit.get("side_a") or unit.get("sideA"), participant_names)
+            side_b = _side_names(unit.get("side_b") or unit.get("sideB"), participant_names)
+        code = raw_id
         next_up.append(NextMatchDTO(
-            code=str(a.get("play_unit_id") or ""),
+            code=code,
             timeLabel=_slot_time_label(day_start, interval, slot_of(a)),
             courtLabel=_court_label(a.get("court_id")),
             status=(
@@ -416,8 +550,11 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
                 if a.get("actual_start_slot") is not None
                 else "scheduled"
             ),
-            matchId=str(a.get("play_unit_id") or "") or None,
+            matchId=raw_id or None,
             source="bracket",
+            identity=identity,
+            sideA=side_a,
+            sideB=side_b,
         ))
     return metrics, next_up
 

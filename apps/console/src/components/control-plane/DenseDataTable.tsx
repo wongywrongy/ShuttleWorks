@@ -98,7 +98,7 @@ function strictCellClass<T>(
 ): string {
   return [
     "h-7 min-h-7 max-h-7 overflow-hidden whitespace-nowrap text-ellipsis px-2 py-0 align-middle text-xs",
-    elastic ? "min-w-0" : "w-max shrink-0",
+    elastic ? "min-w-0" : (column.strictWidth ?? "w-max") + " shrink-0",
     column.align === "right"
       ? "text-right sw-num"
       : column.align === "center"

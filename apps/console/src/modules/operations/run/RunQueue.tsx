@@ -4,8 +4,9 @@
  * Renders the queue in the exact order passed by the surface (do NOT re-sort).
  * Position is meaningful: each row shows `#{i+1}`.
  *
- * Design language mirrors the Run board: a compact M/B source square, an
- * UPPERCASE tabular match code, then the sides. Selection matches the board.
+ * Design language mirrors the Run board: an UPPERCASE tabular match code,
+ * then the sides. Selection matches the board; the row data-source attribute
+ * keeps the engine identity available to tooling without a repeated badge.
  */
 import type { CSSProperties } from 'react';
 import type { RunMatch } from '../runtime/runModel';
@@ -15,21 +16,7 @@ import { EYEBROW_CLASS } from '../../../lib/utils';
 import { STATE_WORD } from '../../../lib/stateWords';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
-import { MODULE_LABELS } from '../../../platform/product-shell/types';
 import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
-
-// ── source label + square tint (M=meet azure, B=bracket violet) ───────────
-// One vocabulary for the engine, everywhere on this surface: the square shows
-// the INITIAL of the same word the row's tooltip and the inspector's
-// `SourceChip` spell out. The inspector used to say "BRKT" beside a "B".
-const SOURCE_LABEL: Record<'meet' | 'bracket', string> = {
-  meet: MODULE_LABELS.meet,
-  bracket: MODULE_LABELS.bracket,
-};
-const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
-  meet: 'bg-module-meet/15 text-module-meet',
-  bracket: 'bg-module-bracket/15 text-module-bracket',
-};
 
 // Why an ineligible row can't be sent, in the terms of its own engine —
 // `RunMatch.eligible` means "both sides known" for meet and "every feeder
@@ -102,15 +89,6 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
             {/* Position */}
             <span className="w-6 flex-shrink-0 text-right text-2xs sw-num text-ink-faint">
               #{i + 1}
-            </span>
-
-            {/* Source initial square */}
-            <span
-              aria-hidden
-              title={SOURCE_LABEL[match.source]}
-              className={`inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-xs text-[9px] font-semibold sw-num ${SOURCE_SQUARE[match.source]}`}
-            >
-              {SOURCE_LABEL[match.source][0]}
             </span>
 
             {/* Match code — tabular */}

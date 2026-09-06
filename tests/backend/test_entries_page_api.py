@@ -78,6 +78,7 @@ def page(client):
                 tournament_id=uuid.UUID(tid),
                 slug="spring-open",
                 is_open=True,
+                audience="public",
                 intro_text="All welcome.",
                 regulations_text="Play fair. Bring your own shuttles.",
                 waiver_required=True,

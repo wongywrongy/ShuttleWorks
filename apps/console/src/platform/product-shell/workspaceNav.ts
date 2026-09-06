@@ -325,9 +325,7 @@ export function buildWorkflowNavigation(
           item("setup/venue", "setup", "Venue"),
           item("setup/events", "setup", "Events"),
           item("setup/rules", "setup", "Rules"),
-          ...(enabled.has("entries")
-            ? [item("setup/entries", "setup", "Entry rules")]
-            : []),
+          item("setup/entries", "setup", "Entry rules"),
           item("setup/people", "setup", "Staff"),
           item("setup/public-info", "setup", "Public info"),
         ],

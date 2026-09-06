@@ -19,54 +19,61 @@ export function BracketLiveView({
 
   if (rows.length === 0) {
     return (
-      <div
-        data-testid="bracket-live-empty"
-        className="flex h-full flex-col items-center justify-center gap-2 p-12 text-center"
-      >
+      <div data-testid="bracket-live-empty" className="flex h-full flex-col items-center justify-center gap-2 p-12 text-center">
         <p className="text-2xl font-semibold text-foreground">No matches on court</p>
-        <p className="text-base text-muted-foreground">
-          Scheduled bracket matches appear here once they&rsquo;re assigned to a court.
-        </p>
+        <p className="text-base text-muted-foreground">Scheduled bracket matches appear here once they&rsquo;re assigned to a court.</p>
       </div>
     );
   }
 
   return (
     <div className="grid auto-rows-min grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
-      {rows.map((m) => (
-        <div
-          key={m.puId}
+      {Array.from(new Set(rows.map((row) => row.court))).map((court) => {
+        const courtRows = rows.filter((row) => row.court === court);
+        const current = courtRows.find((row) => row.status === 'on-court');
+        const conflict = courtRows.filter((row) => row.status === 'conflict');
+        const next = courtRows.find((row) => row.status === 'next' && row.sideA !== '–' && row.sideB !== '–');
+        return <div
+          key={court}
           className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5"
         >
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Court {m.court}
+              Court {court}
             </span>
             {/* "Next" is the calm state, so it stays a plain muted chip —
                 the warning tint belonged to a "Called" that was never a
                 fact about the data (see bracketDisplayData#liveMatches). */}
-            <span
-              className={[
-                'rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
-                m.status === 'on-court'
-                  ? 'bg-action-selected-bg text-action-selected-foreground'
-                  : 'border border-border text-muted-foreground',
-              ].join(' ')}
-            >
-              {m.status === 'on-court' ? 'On court' : 'Next'}
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {conflict.length > 1 ? 'Conflict' : current ? 'On court' : next ? 'Next' : 'Court free'}
             </span>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <span className={`${sideSize} break-words font-bold leading-tight text-foreground`}>
-              {m.sideA}
-            </span>
-            <span className="text-base font-medium text-muted-foreground">vs</span>
-            <span className={`${sideSize} break-words font-bold leading-tight text-foreground`}>
-              {m.sideB}
-            </span>
-          </div>
-        </div>
-      ))}
+          {conflict.length > 1 ? (
+            <div className="space-y-2 text-sm">
+              <p className="font-semibold text-status-warning">Current match unavailable on display.</p>
+              <p className="text-muted-foreground">The tournament desk is resolving a court assignment.</p>
+            </div>
+          ) : current || next ? (
+            <div className="flex flex-col gap-1.5">
+              {current ? <MatchNames row={current} size={sideSize} /> : null}
+              {current && next ? <div className="my-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next</div> : null}
+              {next ? <MatchNames row={next} size={isFullscreen ? 'text-2xl' : 'text-xl'} /> : null}
+              {current && !next ? <div className="my-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next · No next match assigned</div> : null}
+            </div>
+          ) : <p className="text-base text-muted-foreground">No next match assigned.</p>}
+        </div>;
+      })}
     </div>
   );
+}
+
+function MatchNames({ row, size }: { row: { sideA: string; sideB: string }; size: string }) {
+  const lines = (value: string) => value.split(' / ').map((name) => (
+    <span key={name} className="block break-words">{name}</span>
+  ));
+  return <>
+    <span className={`${size} font-bold leading-tight text-foreground`}>{lines(row.sideA)}</span>
+    <span className="text-base font-medium text-muted-foreground">vs</span>
+    <span className={`${size} font-bold leading-tight text-foreground`}>{lines(row.sideB)}</span>
+  </>;
 }

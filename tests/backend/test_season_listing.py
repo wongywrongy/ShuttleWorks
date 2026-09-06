@@ -48,6 +48,7 @@ def season(client):
         t.tournament_date = tournament_date
         session.add(EntryPage(
             tournament_id=uuid.UUID(tid), slug=slug, is_open=is_open,
+            audience="public",
             venue_name=f"{slug} hall", draws_published=draws,
             results_published=results,
         ))
@@ -134,6 +135,7 @@ def test_two_live_tournaments_pick_one_and_count_the_rest(client, season):
         t.tournament_date = season["today"]
         session.add(EntryPage(
             tournament_id=uuid.UUID(tid), slug="also-live", is_open=True,
+            audience="public",
             draws_published=True,
         ))
         session.commit()
@@ -163,7 +165,11 @@ def test_rows_order_dated_ascending_then_slug(client, season):
 
 
 def test_the_public_cache_header_is_set(client, season):
-    assert client.get("/e/api/pages").headers["Cache-Control"] == "public, max-age=30"
+    # Audience is revocable (a page can go private again), so intermediaries
+    # must revalidate on every read rather than serve a stale public answer
+    # from cache: no max-age, but still cacheable-by-name as a public
+    # response (register rationale, PU03 family).
+    assert client.get("/e/api/pages").headers["Cache-Control"] == "public, no-cache"
 
 
 def test_no_entrant_or_pricing_data_leaks(client, season):

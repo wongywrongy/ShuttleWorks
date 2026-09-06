@@ -29,6 +29,7 @@ def _fixture(monkeypatch):
     session.commit()
     assignment = SimpleNamespace(
         slot_id=4,
+        court_id=None,
         duration_slots=2,
         actual_start_slot=None,
         actual_end_slot=None,
@@ -120,6 +121,25 @@ def test_match_action_rolls_projection_back_when_operation_append_fails(
 
     session.expire_all()
     assert session.get(Tournament, tournament_id).data == {"version": 2}
+    assert session.scalar(select(EventOperation)) is None
+    assert session.scalar(select(SyncOutbox)) is None
+
+
+def test_direct_bracket_start_rejects_playing_assignment_on_same_court(monkeypatch) -> None:
+    session, tournament_id, assignment = _fixture(monkeypatch)
+    assignment.court_id = 1
+    occupied = SimpleNamespace(
+        slot_id=5, court_id=1, duration_slots=2,
+        actual_start_slot=5, actual_end_slot=None,
+    )
+    import bracket.brackets as routes
+    bracket_state = SimpleNamespace(
+        state=SimpleNamespace(assignments={"m1": assignment, "m2": occupied}, results={})
+    )
+    monkeypatch.setattr(routes, "_hydrate_session", lambda *_args: bracket_state)
+    with pytest.raises(Exception) as exc:
+        _apply(session, tournament_id, action="start", operation_id=uuid.uuid4())
+    assert getattr(exc.value, "status_code", None) == 409
     assert session.scalar(select(EventOperation)) is None
     assert session.scalar(select(SyncOutbox)) is None
 

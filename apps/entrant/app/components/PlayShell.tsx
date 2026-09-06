@@ -60,19 +60,18 @@ export function PlayShell({
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-20 focus:rounded focus:bg-surface-raised focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-md">
         Skip to content
       </a>
-      {/* Console banner (2026-08-13): the public tier leads with the solid
-          accent bar and the skewed white wordmark chip from the mock. Text on
-          the bar is full white (AA against the accent, verified by the token
-          contrast gate's text-on-accent pair). */}
-      <header className="bg-accent">
+      {/* The public shell keeps the slanted mark as its signature. Accent is
+          reserved for actions and the active location so tournament content
+          remains the visual focus (PE01.3). */}
+      <header className="border-b border-rule-soft bg-surface-raised">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:py-2.5">
-          <a href={DISCOVERY_HREF} className="inline-flex min-h-8 items-center gap-3" aria-label={`${BRAND.publicProductName} home`}>
+          <a href={DISCOVERY_HREF} className="inline-flex min-h-8 min-w-0 max-w-full flex-wrap items-center gap-3" aria-label={`${BRAND.publicProductName} home`}>
             <span className="inline-block -skew-x-12 bg-card px-3 py-1.5 shadow-md">
               <span className="inline-block skew-x-12 type-display text-[15px] tracking-[-0.02em] text-accent">
                 {BRAND.productName}
               </span>
             </span>
-            <span className="text-xs font-bold uppercase tracking-[0.06em] text-accent-ink">
+            <span className="break-words text-xs font-bold uppercase tracking-[0.06em] text-foreground">
               Tournaments
             </span>
           </a>
@@ -83,7 +82,7 @@ export function PlayShell({
               no padding of its own. */}
           <a
             href={signedIn ? '/e/me/entries' : '/e/login'}
-            className="ml-auto inline-flex min-h-8 items-center rounded px-2 text-sm font-semibold text-accent-ink underline-offset-4 hover:bg-accent-ink/10 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
+            className="ml-auto inline-flex min-h-8 items-center rounded px-2 text-sm font-semibold text-foreground underline-offset-4 hover:bg-surface-sunken hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             {signedIn ? 'My entries' : signInLabel}
           </a>

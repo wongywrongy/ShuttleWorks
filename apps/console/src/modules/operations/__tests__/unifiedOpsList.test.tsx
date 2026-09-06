@@ -73,7 +73,7 @@ describe('UnifiedOpsList', () => {
         ]}
       />,
     );
-    expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(0);
+    expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(2);
     unmount();
 
     render(

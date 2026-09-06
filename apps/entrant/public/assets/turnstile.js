@@ -10,6 +10,7 @@
 
 const container = document.getElementById('turnstile-widget');
 const status = document.getElementById('turnstile-status');
+const help = document.getElementById('turnstile-help');
 
 if (container && status) {
   let widgetId = null;
@@ -19,6 +20,7 @@ if (container && status) {
 
   const setStatus = (message, tone = 'muted') => {
     status.textContent = message;
+    if (help) help.hidden = tone === 'success';
     status.className =
       tone === 'error'
         ? 'text-sm text-status-attention'

@@ -61,7 +61,16 @@ export function toRunMatches(
   });
 }
 
-export interface CourtLane { court: number; now?: RunMatch; next?: RunMatch; later?: RunMatch; depth: number; }
+export interface CourtLane {
+  court: number;
+  now?: RunMatch;
+  next?: RunMatch;
+  later?: RunMatch;
+  /** More than one live/called match claims this court. Operations must
+   * resolve this explicitly; callers must not silently pick one. */
+  conflict?: RunMatch[];
+  depth: number;
+}
 
 /**
  * Lane precedence: what is HAPPENING on a court outranks what was merely
@@ -72,10 +81,9 @@ export interface CourtLane { court: number; now?: RunMatch; next?: RunMatch; lat
  * browser pass, Nashville QF1 on C4).
  *
  * Two live matches on one court is not a legal floor state (a court plays
- * one match at a time), so this ranks rather than errors: playing beats
- * called, and the earlier planned slot breaks any remaining tie. That keeps
- * the derivation total and deterministic — the desk still gets full controls
- * on the more-live of the two, and clearing it promotes the other.
+ * one match at a time), so it is retained as an explicit conflict rather than
+ * ranked into a silently selected current match. A single live match still
+ * outranks scheduled work; the earlier planned slot breaks remaining ties.
  */
 const LANE_RANK: Record<RunStatus, number> = { playing: 0, called: 1, scheduled: 2, done: 3 };
 
@@ -104,7 +112,17 @@ export function deriveCourtLanes(
       .sort((a, b) => LANE_RANK[a.status] - LANE_RANK[b.status]
         || (a.plannedSlot ?? Infinity) - (b.plannedSlot ?? Infinity)
         || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-    const nowRaw = lane[0];
+    // A called match is a queued call and may legitimately coexist with the
+    // match currently playing on that court. Only duplicate playing records,
+    // or multiple called records when no match is playing, are conflicts.
+    const playing = lane.filter((m) => m.status === 'playing');
+    const called = lane.filter((m) => m.status === 'called');
+    const live = playing.length > 1 ? playing : playing.length === 0 && called.length > 1 ? called : [];
+    // A court cannot have two current matches. Preserve every conflicting
+    // record for the operator and leave `now` empty so no consequential
+    // action is accidentally applied to an arbitrary winner.
+    const conflict = live.length > 1 ? live : undefined;
+    const nowRaw = conflict ? undefined : lane[0];
     let now: RunMatch | undefined;
     if (nowRaw) {
       const timeliness: Timeliness = running
@@ -116,7 +134,15 @@ export function deriveCourtLanes(
         : 'ontime';
       now = { ...nowRaw, timeliness, late: timeliness !== 'ontime' };
     }
-    return { court, now, next: lane[1], later: lane[2], depth: lane.length };
+    const remaining = conflict ? lane.filter((m) => !live.includes(m)) : lane.slice(1);
+    return {
+      court,
+      now,
+      next: remaining[0],
+      later: remaining[1],
+      conflict,
+      depth: lane.length,
+    };
   });
 }
 
@@ -258,7 +284,9 @@ export function deriveSummary(
     // the Overview, so the same workspace was 0 free here and 4 free there.
     // One definition now, and it is the server's — which is also what a caller
     // looking for somewhere to send players means by the word.
-    courtsFree: lanes.filter((l) => l.now?.status !== 'playing').length,
+    // A conflict is occupied but unresolved, never a free court available
+    // for another assignment.
+    courtsFree: lanes.filter((l) => !l.conflict && l.now?.status !== 'playing').length,
     // Late now MIRRORS the live board exactly (Task 2 `buildLiveChips`): every
     // court-assigned scheduled/called chip past its planned slot, NOT the old
     // Now-only/running-gated lane rule. The time axis shows lateness directly,

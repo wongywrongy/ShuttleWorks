@@ -61,7 +61,7 @@ from repositories import LocalRepository, get_repository
 
 router = APIRouter(prefix="/e/api/page/{slug}", tags=["entries-site"])
 
-# Short public max-age (§5): these answers are identical for every reader
+# Public, but no max-age (§5): these answers are identical for every reader
 # (no viewer block, no cookies read), and the SSR tier re-fetches per
 # document anyway — the header exists for intermediaries, not correctness.
 # Audience and publication are revocable. Intermediaries may store the
@@ -2057,6 +2057,44 @@ def _meet_matches(
 # ---- schedule / live projection ------------------------------------------
 
 
+def _merge_live_bracket_courts(courts: Dict[str, int], assignments) -> None:
+    """Add only currently running, Operations-owned bracket court claims.
+
+    The persisted bracket plan contains future placements too; those are not
+    an authoritative live court until Operations starts the assignment. A
+    materialized Match court remains authoritative. If two current claims
+    occupy one physical court, suppress the court for both matches so the
+    public projection cannot choose a winner or hide either match.
+    """
+    claims: Dict[int, set[str]] = {}
+    unit_courts: Dict[str, set[int]] = {}
+    fallback: Dict[str, int] = {}
+    for assignment in assignments:
+        unit_id = assignment.play_unit_id
+        court_id = assignment.court_id
+        if (
+            not unit_id
+            or court_id is None
+            or assignment.actual_start_slot is None
+            or assignment.actual_end_slot is not None
+            or assignment.finished
+        ):
+            continue
+        effective = courts.get(unit_id, court_id)
+        claims.setdefault(effective, set()).add(unit_id)
+        unit_courts.setdefault(unit_id, set()).add(effective)
+        if unit_id not in courts:
+            fallback[unit_id] = court_id
+
+    conflicts = {unit_id for units in claims.values() if len(units) > 1 for unit_id in units}
+    conflicts.update(unit_id for unit_id, assigned in unit_courts.items() if len(assigned) > 1)
+    for unit_id, court_id in fallback.items():
+        if unit_id not in conflicts:
+            courts[unit_id] = court_id
+    for unit_id in conflicts:
+        courts.pop(unit_id, None)
+
+
 def _schedule_runtime_snapshot(
     repo: LocalRepository,
     tournament: Tournament,
@@ -2092,6 +2130,7 @@ def _schedule_runtime_snapshot(
         state_rows = repo.match_states.list_for_tournament(tournament.id)
         states = {row.match_id: row for row in state_rows}
         if bracket_payload is not None:
+            _merge_live_bracket_courts(courts, bracket_payload.assignments)
             bracket_revisions = [
                 (
                     row.id,
@@ -2121,6 +2160,7 @@ def _schedule_runtime_snapshot(
                             row.actual_end_slot,
                             row.started,
                             row.finished,
+                            row.court_id,
                         ],
                         separators=(",", ":"),
                     ),
@@ -2509,7 +2549,27 @@ def schedule_matches(
         matches = [m for m in matches if m.court == court]
     if state:
         matches = [m for m in matches if m.status == state]
-    matches.sort(key=lambda m: (m.scheduledDate is None, m.scheduledDate or "", m.scheduledTime is None, m.scheduledTime or "", m.matchKey))
+    # Public readers need the live queue immediately, even when the event's
+    # bracket contains many future-round placeholders.  Apply this ordering
+    # to the complete filtered result set before slicing a page: a live match
+    # beyond page one must still be the first thing a spectator sees. Within
+    # each state group retain deterministic tournament chronology and the
+    # stable match key as a final tie-breaker.
+    def schedule_order(item: ScheduleMatchDTO) -> tuple[int, bool, str, bool, str, str]:
+        state_rank = (
+            0 if item.status == "live" else
+            2 if item.status in {"completed", "walkover", "retired", "cancelled"} else 1
+        )
+        return (
+            state_rank,
+            item.scheduledDate is None,
+            item.scheduledDate or "",
+            item.scheduledTime is None,
+            item.scheduledTime or "",
+            item.matchKey,
+        )
+
+    matches.sort(key=schedule_order)
 
     day_counts: Dict[str, int] = {}
     for item in facets_source:

@@ -25,7 +25,7 @@ const REASON_COPY: Record<NonNullable<ModuleUnavailablePanelProps['reason']>, st
   'not-enabled': 'Enable this module to add it to the tournament workflow.',
   dependency: 'Complete the required setup before using this module.',
   permission: 'Your role does not include access to this module.',
-  unavailable: 'This module is not available for this tournament type.',
+  unavailable: 'This workspace type does not include this module. Open Administration · Modules to see the enabled workflow and continue there.',
 };
 
 /** Shown in place of the module pane when the active module isn't enterable

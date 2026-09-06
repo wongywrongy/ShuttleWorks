@@ -47,7 +47,7 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
             conditions in their head to read a list that will tell them
             anyway. Kept: what a module IS, which no row says. */}
         <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
-          Each module is a product system inside this workspace.
+          Choose what this workspace can run, then finish its setup in the linked surface.
         </p>
       </div>
       <ul className="divide-y divide-border rounded border border-border">

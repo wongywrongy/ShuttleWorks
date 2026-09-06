@@ -41,7 +41,7 @@ export function GeneralSettingsTab({
           section rather than the page (ACC-1). This is also where every other
           primary action on every other surface lives. */}
       <div className="flex items-center justify-between gap-4 pb-4">
-        <h2 className="text-page font-semibold tracking-tight text-foreground">
+        <h2 className="text-base font-semibold tracking-tight text-foreground">
           Workspace settings
         </h2>
       </div>

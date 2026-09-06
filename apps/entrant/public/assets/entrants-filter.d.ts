@@ -5,4 +5,5 @@ export function matches(
   name: string | null | undefined,
   club: string | null | undefined,
 ): boolean;
+export function filterNoun(root: Element | null | undefined): 'player' | 'entrant';
 export function apply(scope: ParentNode, query: string): number;

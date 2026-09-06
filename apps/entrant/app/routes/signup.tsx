@@ -82,6 +82,8 @@ export interface SignupLoaderData {
    * on this very response. Node's own — there is no projection to read one
    * from here, and there is no session to derive one from. */
   formCsrf: string;
+  /** Validated same-tier continuation, used when signup came from a receipt. */
+  next: string;
 }
 
 /**
@@ -94,7 +96,7 @@ export interface SignupLoaderData {
  * reviewable act rather than a quiet one. `mintFormCsrf` is pinned the same
  * way, for the same reason.
  */
-export async function loader() {
+export async function loader({ request }: { request: Request }) {
   // The sitekey is fetched rather than duplicated into a node env var: its
   // pair, the secret, is validated only in the backend, and a sitekey that
   // drifts from its secret fails the challenge for every honest entrant while
@@ -104,9 +106,11 @@ export async function loader() {
   const config = await apiGet<EntrantConfig>('/e/api/config');
 
   const csrf = mintFormCsrf();
+  const url = new URL(request.url);
   const payload: SignupLoaderData = {
     turnstileSiteKey: config.turnstileSiteKey,
     formCsrf: csrf.token,
+    next: safeNext(url.searchParams.get('next'), ACCOUNT_READY_PAGE),
   };
   return data(payload, csrf.responseInit);
 }
@@ -183,9 +187,9 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
   const entryPath = entryPathFor(contextParams.slug);
   const invitationPath = invitationPathFor(contextParams.token);
   const next =
-    invitationPath || (entryPath === '' ? ACCOUNT_READY_PAGE : `${entryPath}/created`);
+    invitationPath || (entryPath === '' ? loaderData.next : `${entryPath}/created`);
   const signInDestination =
-    invitationPath || (entryPath ? `${entryPath}/signed-in` : '');
+    invitationPath || (entryPath ? `${entryPath}/signed-in` : loaderData.next === ACCOUNT_READY_PAGE ? '' : loaderData.next);
   const signInHref = signInDestination
     ? `/e/login?next=${signInDestination}`
     : '/e/login';
@@ -198,12 +202,12 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
           <h1 className={PAGE_TITLE}>
-            Create an entrant account
+            {entryPath ? 'Create your account to enter this tournament' : 'Create an entrant account'}
           </h1>
           <p className="text-sm text-muted-foreground">
-            One account enters you into any tournament on this site. The
-            organizer sees your name and contact details on the entries they
-            receive.
+            Use one account to manage your tournament entries. Creating an
+            account does not submit an entry. The organizer sees your name and
+            contact details on entries they receive.
           </p>
         </header>
 
@@ -333,7 +337,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               >
                 Loading the human check
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p id="turnstile-help" className="text-xs text-muted-foreground">
                 The human check needs JavaScript. With scripting turned off, the
                 form still fills in and submits, but the check cannot run. Ask
                 the organizer to set your account up instead.

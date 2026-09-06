@@ -479,6 +479,7 @@ function BlockView({
       ref={setNodeRef}
       label={identityLabel}
       source={block.source}
+      showSource={false}
       state={fromEngineStatus(block.status)}
       selected={selected}
       tone="state"

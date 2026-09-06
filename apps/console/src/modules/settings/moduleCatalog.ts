@@ -25,23 +25,23 @@ export const MODULE_CATALOG: Record<CatalogModuleId, ModuleMeta> = {
   meet: {
     id: 'meet',
     name: MODULE_LABELS.meet,
-    capability: 'Engine · roster, CP-SAT scheduling, and live match control.',
+    capability: 'Manage the roster, build a court schedule, and run live matches.',
   },
   bracket: {
     id: 'bracket',
     name: MODULE_LABELS.bracket,
-    capability: 'Engine · events, seeding, draw generation, advancement, and results.',
+    capability: 'Create events and draws, seed players, and record results.',
   },
   display: {
     id: 'display',
     name: MODULE_LABELS.display,
-    capability: 'Output · projects live matches, the draw, or results, read-only.',
+    capability: 'Show live matches, draws, or results on a read-only venue board.',
     dependency: 'Needs Meet or Bracket enabled.',
   },
   entries: {
     id: 'entries',
     name: MODULE_LABELS.entries,
-    capability: 'Intake · public sign-up page, entry review, and commit to the roster.',
+    capability: 'Collect public entries, review them, and add accepted players to the roster.',
     // Mirrors the server rule (MODULE_REQUIRES_CLOUD, ruling D2): a public
     // entry page is meaningless without real operator accounts, so the row is
     // seeded — and this catalog entry only ever rendered — in cloud mode.

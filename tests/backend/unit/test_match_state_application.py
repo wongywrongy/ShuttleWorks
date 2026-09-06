@@ -28,11 +28,13 @@ from db.models import (
     Match,
     MatchState,
     MatchStatus,
+    Command,
     SyncOutbox,
     Tournament,
 )
 from operations.match_state_application import MatchStateApplication
 from repositories import LocalRepository
+from core.exceptions import ConflictError
 
 
 def _session() -> Session:
@@ -66,6 +68,40 @@ def _signer_file(tmp_path):
         )
     )
     return path
+
+
+def test_repository_start_rejects_occupied_court_and_allows_after_finish() -> None:
+    session = _session()
+    tournament_id = _tournament(session)
+    session.add_all([
+        Match(tournament_id=tournament_id, id="m1", court_id=1,
+              status=MatchStatus.PLAYING.value, version=1),
+        Match(tournament_id=tournament_id, id="m2", court_id=1,
+              status=MatchStatus.CALLED.value, version=1),
+    ])
+    session.commit()
+    repo = LocalRepository(session)
+    blocked_id = uuid.uuid4()
+    with pytest.raises(ConflictError, match="already has a playing match"):
+        repo.process_command(
+            tournament_id=tournament_id, command_id=blocked_id, match_id="m2",
+            action="start_match", target_status=MatchStatus.PLAYING,
+            payload={}, seen_version=1, submitted_by=uuid.uuid4(),
+        )
+    rejected = session.get(Command, blocked_id)
+    assert rejected is not None and rejected.rejected_at is not None
+
+    repo.process_command(
+        tournament_id=tournament_id, command_id=uuid.uuid4(), match_id="m1",
+        action="finish_match", target_status=MatchStatus.FINISHED,
+        payload={}, seen_version=1, submitted_by=uuid.uuid4(),
+    )
+    applied = repo.process_command(
+        tournament_id=tournament_id, command_id=uuid.uuid4(), match_id="m2",
+        action="start_match", target_status=MatchStatus.PLAYING,
+        payload={}, seen_version=1, submitted_by=uuid.uuid4(),
+    )
+    assert applied.match.status == MatchStatus.PLAYING.value
 
 
 def _patch_append(monkeypatch, replacement) -> None:

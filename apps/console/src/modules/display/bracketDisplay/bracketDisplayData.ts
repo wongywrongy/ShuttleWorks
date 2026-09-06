@@ -8,7 +8,6 @@ import type {
   PlayUnitDTO,
   Participant,
 } from '../../../api/bracketDto';
-import { assignLanes } from '../publicDisplay/courtLanes';
 
 /** Resolve a play-unit side to a participant display name. Prefers the
  *  direct slot participant id, falls back to the resolved member ids
@@ -38,7 +37,8 @@ export interface LiveRow {
   court: number;
   sideA: string;
   sideB: string;
-  status: 'on-court' | 'next';
+  status: 'on-court' | 'next' | 'conflict' | 'empty';
+  matchRef?: string;
 }
 
 /** What a spectator can see happening: the bracket matches on court right
@@ -58,29 +58,35 @@ export interface LiveRow {
 export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
   const puById = new Map(data.play_units.map((u) => [u.id, u]));
   const open = data.assignments.filter((a) => !a.finished);
-  const started = new Set(open.filter((a) => a.started).map((a) => a.play_unit_id));
-  const lanes = assignLanes(
-    open.map((a) => ({ id: a.play_unit_id, court: a.court_id, plannedSlot: a.slot_id })),
-    started,
-  );
-  return open
-    .map((a): LiveRow | null => {
-      const pu = puById.get(a.play_unit_id);
-      const lane = lanes.get(a.play_unit_id);
-      if (!pu || (lane !== 'now' && lane !== 'next')) return null;
-      return {
+  const byCourt = new Map<number, typeof open>();
+  for (const assignment of open) {
+    const list = byCourt.get(assignment.court_id) ?? [];
+    list.push(assignment);
+    byCourt.set(assignment.court_id, list);
+  }
+  const rows: LiveRow[] = [];
+  for (const court of [...byCourt.keys()].sort((a, b) => a - b)) {
+    const assignments = (byCourt.get(court) ?? []).sort((a, b) => a.slot_id - b.slot_id || a.play_unit_id.localeCompare(b.play_unit_id));
+    const playing = assignments.filter((a) => a.started);
+    const visible = playing.length > 1
+      ? playing.map((assignment) => ({ assignment, status: 'conflict' as const }))
+      : playing.length === 1
+        ? [{ assignment: playing[0], status: 'on-court' as const }, ...(assignments.filter((a) => !a.started).slice(0, 1).map((assignment) => ({ assignment, status: 'next' as const })))]
+        : assignments.slice(0, 1).map((assignment) => ({ assignment, status: 'next' as const }));
+    for (const { assignment, status } of visible) {
+      const pu = puById.get(assignment.play_unit_id);
+      if (!pu) continue;
+      rows.push({
         puId: pu.id,
-        court: a.court_id,
+        court: assignment.court_id,
         sideA: sideLabel(pu, 'a', data.participants),
         sideB: sideLabel(pu, 'b', data.participants),
-        // The lane decides INCLUSION; `started` decides the label. Two
-        // started matches on one court is a data anomaly, but labelling the
-        // second one "Next" would be a claim about a match already playing.
-        status: a.started ? 'on-court' : 'next',
-      };
-    })
-    .filter((r): r is LiveRow => r !== null)
-    .sort((x, y) => x.court - y.court || (x.status === y.status ? 0 : x.status === 'on-court' ? -1 : 1));
+        status,
+        matchRef: assignment.play_unit_id,
+      });
+    }
+  }
+  return rows;
 }
 
 /** "Final" / "Semifinal" / "Quarterfinal" / "Round N" for a round position.

@@ -139,5 +139,7 @@ export function PublishProduct({ tid, modules = [] }: { tid: string; modules?: W
 
 function PublishPaneContent({ pane, tid, modules }: { pane: PublishPane; tid: string; modules: WorkspaceModule[] }) {
   if (pane === 'site') return <SharingTab tid={tid} scope="site" />;
-  return <div className="space-y-6"><DisplayConfig tid={tid} modules={modules} /><SharingTab tid={tid} scope="links" /></div>;
+  // SharingTab owns the capability URL and its rotate/revoke confirmation.
+  // DisplayConfig supplies layout controls and a preview only.
+  return <div className="space-y-6"><DisplayConfig tid={tid} modules={modules} showLinkControls={false} /><SharingTab tid={tid} scope="links" /></div>;
 }

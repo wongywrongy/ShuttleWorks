@@ -142,6 +142,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
       <PlayShell>
         <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
           <div className={FORM_CARD}>
+            <h1 className={PAGE_TITLE}>Invitation unavailable</h1>
             <Notice tone="warning">
               {failureReason === 'unverified'
                 ? 'Confirm your email address before accepting this invitation.'
@@ -162,7 +163,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
     // One message for every dead invite — see the module note.
     return (
       <MessagePage
-        heading="That invitation is no longer available"
+        heading="Invitation unavailable"
         body="Invitations expire, and each one can be accepted once. Ask whoever invited you to send a new one."
       />
     );

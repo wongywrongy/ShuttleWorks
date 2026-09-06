@@ -10,10 +10,15 @@
  * debounce timer if the flag is set.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { createElement, type ReactNode } from 'react';
 import {
   forceSaveNow,
   serializeTournamentState,
+  shouldScheduleFollowup,
   _resetSaveStateForTests,
+  useTournamentState,
 } from '../../hooks/useTournamentState';
 import { useUiStore } from '../../store/uiStore';
 import { useTournamentStore } from '../../store/tournamentStore';
@@ -57,6 +62,50 @@ beforeEach(() => {
       freezeHorizonSlots: 0,
       tournamentName: 'Initial Name',
     },
+  });
+});
+
+describe('useTournamentState mounted route persistence boundary', () => {
+  const remote = {
+    version: 2,
+    config: { ...useTournamentStore.getState().config },
+    groups: [], players: [], matches: [], schedule: null,
+    scheduleIsStale: false, bracketPlayers: [], bracketRosterMigrated: false,
+    planFinalized: false,
+  } as never;
+  const wrapper = (path: string) => ({ children }: { children: ReactNode }) => createElement(
+    MemoryRouter, { initialEntries: [path] }, createElement(
+      Routes, null, createElement(Route, { path: '/tournaments/:id/*', element: createElement('div', null, children) }),
+    ),
+  );
+
+  it('does not whole-state PUT on Setup while an early operational edit still persists', async () => {
+    vi.spyOn(clientModule.apiClient, 'getTournamentState').mockResolvedValue(remote);
+    const put = vi.spyOn(clientModule.apiClient, 'putTournamentState').mockResolvedValue(undefined as never);
+    const setup = renderHook(() => useTournamentState(), { wrapper: wrapper('/tournaments/test-tournament-1/setup/general') });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    act(() => useTournamentStore.setState({ config: { ...useTournamentStore.getState().config!, tournamentName: 'Setup edit' } }));
+    vi.advanceTimersByTime(600);
+    expect(put).not.toHaveBeenCalled();
+    setup.unmount();
+
+    const operations = renderHook(() => useTournamentState(), { wrapper: wrapper('/tournaments/test-tournament-1/operations/plan') });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    act(() => useTournamentStore.setState({ config: { ...useTournamentStore.getState().config!, tournamentName: 'Early operational edit' } }));
+    vi.advanceTimersByTime(600);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(put).toHaveBeenCalled();
+    operations.unmount();
+  });
+
+  it('does not flush a clean hydrated document during route cleanup', async () => {
+    vi.spyOn(clientModule.apiClient, 'getTournamentState').mockResolvedValue(remote);
+    const put = vi.spyOn(clientModule.apiClient, 'putTournamentState').mockResolvedValue(undefined as never);
+    const mounted = renderHook(() => useTournamentState(), { wrapper: wrapper('/tournaments/test-tournament-1/overview') });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    mounted.unmount();
+    await act(async () => { await Promise.resolve(); });
+    expect(put).not.toHaveBeenCalled();
   });
 });
 
@@ -174,6 +223,47 @@ describe('forceSaveNow — 409 re-sync kills the poisoned-blob cascade (audit A3
 
     expect(getSpy).not.toHaveBeenCalled();
     expect(useUiStore.getState().persistStatus).toBe('error');
+  });
+
+  it('keeps a revert as a real follow-up when A→B→A crosses an in-flight PUT', async () => {
+    const put1 = makePut();
+    const put2 = makePut();
+    const putSpy = vi.spyOn(clientModule.apiClient, 'putTournamentState')
+      .mockReturnValueOnce(put1.promise as unknown as ReturnType<typeof clientModule.apiClient.putTournamentState>)
+      .mockReturnValueOnce(put2.promise as unknown as ReturnType<typeof clientModule.apiClient.putTournamentState>);
+    const remote = {
+      version: 2, config: { ...useTournamentStore.getState().config }, groups: [], players: [],
+      matches: [], schedule: null, scheduleIsStale: false, bracketPlayers: [],
+      bracketRosterMigrated: false, planFinalized: false,
+    } as never;
+    vi.spyOn(clientModule.apiClient, 'getTournamentState').mockResolvedValue(remote);
+    const mountedWrapper = ({ children }: { children: ReactNode }) => createElement(
+      MemoryRouter, { initialEntries: ['/tournaments/test-tournament-1/overview'] }, createElement(
+        Routes, null, createElement(Route, { path: '/tournaments/:id/*', element: createElement('div', null, children) }),
+      ),
+    );
+    const mounted = renderHook(() => useTournamentState(), { wrapper: mountedWrapper });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    act(() => useTournamentStore.setState({ config: { ...useTournamentStore.getState().config!, tournamentName: 'B' } }));
+    vi.advanceTimersByTime(600);
+    expect(putSpy).toHaveBeenCalledTimes(1);
+    act(() => useTournamentStore.setState({ config: { ...useTournamentStore.getState().config!, tournamentName: 'Initial Name' } }));
+    vi.advanceTimersByTime(600);
+    expect(putSpy).toHaveBeenCalledTimes(1);
+    put1.resolve();
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    vi.advanceTimersByTime(600);
+    await Promise.resolve();
+    expect(putSpy).toHaveBeenCalledTimes(2);
+    expect((putSpy.mock.calls[1][1] as never as { config: { tournamentName: string } }).config.tournamentName).toBe('Initial Name');
+    put2.resolve();
+    mounted.unmount();
+  });
+
+  it('does not schedule for hydration-only replacement but does for A→B→A', () => {
+    expect(shouldScheduleFollowup('B', 'A', 'B', true)).toBe(false);
+    expect(shouldScheduleFollowup('A', 'A', 'B', true)).toBe(true);
   });
 });
 

@@ -55,6 +55,7 @@ def _world(client, *, closes_at):
                 tournament_id=uuid.UUID(tid),
                 slug="queue-open",
                 is_open=True,
+                audience="public",
                 entrants_published=True,
             )
         )

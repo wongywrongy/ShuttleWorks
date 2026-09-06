@@ -53,3 +53,19 @@ export function formatMoment(wire: string): string {
   const moment = parseMoment(wire);
   return moment === null ? wire : formatUtcInstant(moment);
 }
+
+/** Format the server's UTC moment in the tournament's declared timezone. */
+export function formatMomentInZone(wire: string, timeZone: string): string {
+  const moment = parseMoment(wire);
+  if (moment === null) return wire;
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone, timeZoneName: 'short',
+    }).formatToParts(moment);
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('day')} ${value('month')} ${value('year')}, ${value('hour')}:${value('minute')} ${value('timeZoneName')}`;
+  } catch {
+    return formatMoment(wire);
+  }
+}

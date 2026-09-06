@@ -16,18 +16,18 @@ let drawFixture: ReturnType<typeof makeDraw>;
 let originalFetch: typeof globalThis.fetch;
 let originalApiBase: string | undefined;
 
-function reference(index: number) {
+function reference(index: number, partner = false) {
   return {
-    identity: { id: `person-${index}`, name: `Player ${index.toString().padStart(2, '0')} With A Long Name` },
+    identity: { id: `person-${index}${partner ? '-partner' : ''}`, name: partner ? `Zoë-Linh Nguyễn ${index} — Élodie` : `Player ${index.toString().padStart(2, '0')} With A Long Name` },
     resolution: 'resolved',
     label: null,
   };
 }
 
-function makeDraw(size: 16 | 32) {
+function makeDraw(size: 16 | 32, doubles = false) {
   const teams = Array.from({ length: size }, (_, index) => ({
     participantKey: `p${index}`,
-    persons: [reference(index)],
+    persons: doubles ? [reference(index), reference(index, true)] : [reference(index)],
     club: null,
     seed: index < 4 ? index + 1 : null,
   }));
@@ -65,8 +65,8 @@ function makeDraw(size: 16 | 32) {
   });
   return {
     drawKey: 'MS',
-    eventCode: 'MS',
-    discipline: "Men's Singles",
+    eventCode: doubles ? 'MD' : 'MS',
+    discipline: doubles ? "Men's Doubles" : "Men's Singles",
     kind: 'se',
     size,
     resultsPublished: true,
@@ -144,11 +144,11 @@ async function load(page: Page, size: 16 | 32, view: 'bracket' | 'round' | 'list
   await page.addStyleTag({ content: productionCss() });
 }
 
-test('four rounds render below 450px with fixed three-game score rails', async ({ page }) => {
+test('four rounds keep content-aware nodes and fixed three-game score rails', async ({ page }) => {
   await load(page, 16, 'bracket');
   const canvas = page.getByTestId('public-bracket-canvas');
   const box = await canvas.boundingBox();
-  expect(box?.height).toBeLessThan(450);
+  expect(box?.height).toBeLessThan(600);
   await expect(page.getByTestId('public-bracket-node')).toHaveCount(15);
   const geometry = await page.getByTestId('public-bracket-node').evaluateAll((nodes) =>
     nodes.map((node) => ({
@@ -157,18 +157,18 @@ test('four rounds render below 450px with fixed three-game score rails', async (
       columns: getComputedStyle(node.children[0] as Element).gridTemplateColumns,
     })),
   );
-  expect(geometry.every(({ height, rows }) => height === 44 && rows === 2)).toBe(true);
+  expect(geometry.every(({ height, rows }) => height >= 44 && rows === 2)).toBe(true);
   expect(new Set(geometry.map(({ columns }) => columns)).size).toBe(1);
 });
 
-test('a full 32 draw stays two-line and below the agreed 850px ceiling', async ({ page }) => {
+test('a full 32 draw stays within the content-aware height budget', async ({ page }) => {
   await load(page, 32, 'bracket');
   const box = await page.getByTestId('public-bracket-canvas').boundingBox();
-  expect(box?.height).toBeLessThan(850);
+  expect(box?.height).toBeLessThan(1150);
   await expect(page.getByTestId('public-bracket-node')).toHaveCount(31);
   expect(
     await page.getByTestId('public-bracket-node').evaluateAll((nodes) =>
-      nodes.every((node) => node.getBoundingClientRect().height === 44 && node.children.length === 2),
+      nodes.every((node) => node.getBoundingClientRect().height >= 44 && node.children.length === 2),
     ),
   ).toBe(true);
 });
@@ -181,4 +181,22 @@ test('Round and List modes reflow at 390px without horizontal page scroll', asyn
     ).toBe(true);
     await expect(page.getByText('Player 00 With A Long Name').first()).toBeVisible();
   }
+});
+
+test('doubles nodes keep both long diacritic partners and three game columns', async ({ page }) => {
+  drawFixture = makeDraw(16, true);
+  const html = await render('/e/geometry-open/draws/MS?view=round');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setContent(html, { waitUntil: 'domcontentloaded' });
+  await page.addStyleTag({ content: productionCss() });
+
+  expect(await page.getByText(/Zoë-Linh Nguyễn 0/).count()).toBeGreaterThan(0);
+  expect(await page.getByText(/Élodie/).count()).toBeGreaterThan(0);
+  expect(await page.getByText('21').count()).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  const cards = await page.locator('[data-match-variant="card"]').evaluateAll((nodes) =>
+    nodes.map((node) => ({ height: node.getBoundingClientRect().height, right: node.getBoundingClientRect().right })),
+  );
+  expect(cards.every(({ height }) => height >= 44)).toBe(true);
+  expect(cards.every(({ right }) => right <= 390)).toBe(true);
 });

@@ -77,7 +77,10 @@ describe('the hero band', () => {
     expect(html).toMatch(/<h1[^>]*>Spring Open<\/h1>/);
     expect(html).toContain('Kingsway BC');
     expect(html).toContain('Saturday 12 September 2026');
-    expect(html).toContain('Kingsway Centre, 4 Kingsway');
+    // Overview presents venue name and address as labelled facts rather than
+    // repeating a combined hero metadata string (PE03.3).
+    expect(html).toContain('Kingsway Centre');
+    expect(html).toContain('4 Kingsway');
     expect(html).toContain('Entries open');
   });
 

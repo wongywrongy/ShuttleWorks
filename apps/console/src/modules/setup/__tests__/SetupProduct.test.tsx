@@ -71,11 +71,20 @@ describe('SetupProduct', () => {
     expect(screen.queryByText(/Field: tournamentStart/)).not.toBeInTheDocument();
   });
 
+  it('does not repeat a healthy section status beside the editor', async () => {
+    renderSetup('/tournaments/t1/setup/general');
+    await waitFor(() => expect(screen.getByLabelText('Tournament name')).toBeInTheDocument());
+    expect(screen.queryByTestId('setup-strip')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save section' })).toBeDisabled();
+  });
+
   it('patches only the selected section (RDY-4 impact wording present)', async () => {
     const user = userEvent.setup();
     renderSetup('/tournaments/t1/setup/dates');
     await waitFor(() => expect(screen.getByLabelText('Tournament starts')).toBeInTheDocument());
     expect(screen.getByText(/Saving this updates: scheduling\./)).toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Tournament starts'));
+    await user.type(screen.getByLabelText('Tournament starts'), '2026-09-01T10:00');
     await user.click(screen.getByRole('button', { name: 'Save section' }));
     await waitFor(() => expect(patchTournamentSetup).toHaveBeenCalledWith('t1', 'dates', expect.any(Object)));
   });
@@ -106,20 +115,60 @@ describe('SetupProduct', () => {
     expect(screen.getByLabelText('Available for row 1')).toBeInTheDocument();
   });
 
+  it('round-trips labelled session courts through their opaque IDs', async () => {
+    const user = userEvent.setup();
+    const fixture = setupFixture();
+    fixture.sections = fixture.sections.map((section) => {
+      if (section.key === 'venue') {
+        return { ...section, data: { courts: [
+          { id: 'venue-west-main', name: 'Main court', available: true },
+          { id: 'court-with_opaque_name', name: 'Court 2', available: true },
+        ] } };
+      }
+      if (section.key === 'dates') {
+        return { ...section, data: { ...section.data, dailySessions: [
+          { id: 'session-1', name: 'Day 1', date: '2026-09-01', startTime: '09:00', endTime: '18:00', courtIds: ['venue-west-main', 'court-with_opaque_name'] },
+          { id: 'session-2', name: 'Day 2', date: '2026-09-02', startTime: '09:00', endTime: '18:00', courtIds: ['legacy-court-id'] },
+        ] } };
+      }
+      return section;
+    });
+    getTournamentSetup.mockResolvedValueOnce(fixture);
+    patchTournamentSetup.mockResolvedValueOnce(fixture);
+    renderSetup('/tournaments/t1/setup/dates');
+    const firstCourts = await screen.findByLabelText('Courts for row 1');
+    expect(firstCourts).toHaveValue('Main court, Court 2');
+    expect(screen.getByLabelText('Courts for row 2')).toHaveValue('legacy-court-id');
+    await user.clear(firstCourts);
+    await user.type(firstCourts, 'Main court, Court 2');
+    await user.click(screen.getByRole('button', { name: 'Save section' }));
+    await waitFor(() => expect(patchTournamentSetup).toHaveBeenCalledWith(
+      't1',
+      'dates',
+      expect.objectContaining({
+        dailySessions: expect.arrayContaining([
+          expect.objectContaining({ courtIds: ['venue-west-main', 'court-with_opaque_name'] }),
+          expect.objectContaining({ courtIds: ['legacy-court-id'] }),
+        ]),
+      }),
+    ));
+  });
+
   it('does not send publication audience when saving public information', async () => {
     const user = userEvent.setup();
     renderSetup('/tournaments/t1/setup/public-info');
     await waitFor(() => expect(screen.getByLabelText('Description')).toBeInTheDocument());
+    await user.type(screen.getByLabelText('Description'), ' updated');
     await user.click(screen.getByRole('button', { name: 'Save section' }));
     await waitFor(() => expect(patchTournamentSetup).toHaveBeenCalled());
     expect(patchTournamentSetup.mock.calls[0][2]).not.toHaveProperty('visibility');
-    expect(patchTournamentSetup.mock.calls[0][2]).toMatchObject({ publicSlug: 'spring-finals', description: 'Welcome' });
+    expect(patchTournamentSetup.mock.calls[0][2]).toMatchObject({ publicSlug: 'spring-finals', description: 'Welcome updated' });
   });
 
   it('rules render segmented controls, and no Refresh button exists (INP-2/INP-3)', async () => {
     renderSetup('/tournaments/t1/setup/rules');
     await waitFor(() => expect(screen.getByRole('radiogroup', { name: 'Score type' })).toBeInTheDocument());
-    expect(screen.getByRole('radiogroup', { name: 'Points per set' })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Points per game' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Match format' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Deuce enabled' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();

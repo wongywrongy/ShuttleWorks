@@ -60,7 +60,7 @@ function bandFor(now: RunMatch | undefined): {
   if (now.timeliness === 'late')
     return { cls: 'bg-status-late-solid text-status-late-ink', word: STATE_WORD.late };
   if (now.status === 'playing')
-    return { cls: 'bg-status-live-solid text-status-live-ink', word: STATE_WORD.live };
+    return { cls: 'bg-surface-band text-foreground', word: STATE_WORD.live };
   if (now.status === 'called')
     return { cls: 'bg-status-called-solid text-status-called-ink', word: STATE_WORD.called };
   if (now.timeliness === 'due')
@@ -152,6 +152,7 @@ export function RunCourtGrid({
     >
       {lanes.map((lane) => {
         const now = lane.now;
+        const conflict = lane.conflict;
         const identityLabel = now ? formatMatchIdentity(now.identity, now.id) : '';
         const band = bandFor(now);
         const figure = bandFigure(now);
@@ -171,6 +172,39 @@ export function RunCourtGrid({
             </span>
           </div>
         );
+
+        if (conflict && conflict.length > 1) {
+          return (
+            <div
+              key={lane.court}
+              data-testid={`run-court-conflict-${lane.court}`}
+              className="flex flex-col overflow-hidden rounded border border-status-overdue-solid bg-status-overdue-bg/20"
+            >
+              <div className="flex items-center justify-between gap-2 bg-status-overdue-solid px-2.5 py-1.5 text-2xs font-extrabold uppercase tracking-[0.06em] text-status-overdue-ink">
+                <span>Court {lane.court}</span>
+                <span>Conflict</span>
+              </div>
+              <div className="space-y-2 px-2.5 py-3">
+                <p className="text-xs font-semibold text-foreground">
+                  Two matches are marked current. Resolve this in Operations.
+                </p>
+                <div className="space-y-1">
+                  {conflict.map((match) => (
+                    <button
+                      key={match.key}
+                      type="button"
+                      data-testid={`run-conflict-match-${match.key}`}
+                      onClick={() => onSelect(match.key)}
+                      className="block w-full rounded border border-border bg-card px-2 py-1 text-left text-xs font-semibold text-foreground hover:border-accent"
+                    >
+                      {formatMatchIdentity(match.identity, match.id)} · {match.sideA} vs {match.sideB}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         if (!now) {
           return (
@@ -221,7 +255,12 @@ export function RunCourtGrid({
             {head}
             <div className="flex flex-col gap-[5px] px-2.5 py-[7px]">
               <SideRow name={now.sideA} />
-              <SideRow name={now.sideB} />
+              <div className="border-t border-rule-soft pt-1.5">
+                <span className="mb-0.5 block text-3xs font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                  VS
+                </span>
+                <SideRow name={now.sideB} />
+              </div>
             </div>
             <div className="mt-auto flex items-center justify-between gap-2 border-t border-rule-soft px-2.5 py-[5px] text-3xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
               <span className="min-w-0 break-words sw-num">{identityLabel}</span>

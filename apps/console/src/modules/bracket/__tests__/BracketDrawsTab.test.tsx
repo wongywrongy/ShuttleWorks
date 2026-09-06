@@ -150,7 +150,7 @@ describe("BracketDrawsTab — draw rows", () => {
     renderDraws();
     const row = screen.getByTestId("bracket-draw-row-MS");
     expect(within(row).getByText("Single elimination")).toBeInTheDocument();
-    expect(within(row).getByText("3/8")).toBeInTheDocument();
+    expect(within(row).getByText(/3\/8/)).toBeInTheDocument();
   });
 
   it("renders exactly one line for a singleton draw", () => {
@@ -188,14 +188,14 @@ describe("BracketDrawsTab — draw rows", () => {
     mockBracketData = makeBracketData({ participantCount: 3, bracketSize: 8 });
     renderDraws();
     const row = screen.getByTestId("bracket-draw-row-MS");
-    expect(within(row).getByText("3/8")).toHaveClass("text-status-warning");
+    expect(within(row).getByText(/3\/8/)).toHaveClass("text-status-warning");
   });
 
   it("renders the entered count muted once the draw is full", () => {
     mockBracketData = makeBracketData({ participantCount: 4, bracketSize: 4 });
     renderDraws();
     const row = screen.getByTestId("bracket-draw-row-MS");
-    expect(within(row).getByText("4/4")).not.toHaveClass("text-status-warning");
+    expect(within(row).getByText(/4\/4/)).not.toHaveClass("text-status-warning");
   });
 
   it("shows an empty state with a New draw action when there are no draws", () => {

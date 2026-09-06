@@ -9,12 +9,24 @@ import sqlalchemy as sa
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 from _helpers import purge_backend_modules
 
 
 BACKEND = Path(__file__).resolve().parents[3] / "apps" / "api"
-REVISION = "b3c4d5e6f7a8"
+
+
+def _head_revision() -> str:
+    """The chain's actual head, read from the scripts themselves so this
+    file cannot go stale the way a hardcoded revision id did (a later
+    migration — e.g. ``aa1b2c3d4e5f_entry_page_audience`` — silently made
+    the old constant wrong)."""
+    config = Config()
+    config.set_main_option("script_location", str(BACKEND / "src" / "alembic"))
+    return ScriptDirectory.from_config(config).get_current_head()
+
+
 TABLES = {
     "tournament_authority_epochs",
     "event_operations",
@@ -67,7 +79,7 @@ def test_upgrade_and_downgrade_sync_schema(tmp_path, monkeypatch) -> None:
         for column in inspector.get_columns("sync_quarantine")
     }
     with engine.connect() as connection:
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == REVISION
+        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == _head_revision()
     engine.dispose()
 
     command.downgrade(config, "ab1c6e2b8d4f")
@@ -106,7 +118,7 @@ def test_postgres_upgrade_reaches_sync_head_and_builds_concurrency_guards(
     inspector = sa.inspect(engine)
     assert TABLES <= set(inspector.get_table_names())
     with engine.connect() as connection:
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == REVISION
+        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == _head_revision()
         indexes = {
             row["name"]
             for row in inspector.get_indexes("tournament_authority_epochs")

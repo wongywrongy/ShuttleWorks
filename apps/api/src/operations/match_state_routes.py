@@ -65,7 +65,7 @@ from core.schemas import MAX_SLOT_INDEX
 from core.time_utils import now_iso
 from db.models import MatchState, MatchStatus
 from repositories import LocalRepository, get_repository
-from operations.match_state import assert_valid_transition
+from operations.match_state import assert_court_available, assert_valid_transition
 from operations.match_state_application import MatchStateApplication
 
 
@@ -389,6 +389,7 @@ def update_match_state(
     # carve-out lives at the route boundary, not in the service.
     if target != current:
         assert_valid_transition(match_id, current, target)
+    assert_court_available(repo, tid, match_id, target)
 
     try:
         row, canonical = MatchStateApplication(repo).update(

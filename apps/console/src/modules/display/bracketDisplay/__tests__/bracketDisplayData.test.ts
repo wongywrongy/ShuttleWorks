@@ -100,4 +100,13 @@ describe('bracketDisplayData', () => {
   it('never labels an unstarted match "called" — the bracket has no called state', () => {
     expect(liveMatches(draw()).some((r) => r.status === ('called' as string))).toBe(false);
   });
+
+  it('keeps duplicate current assignments as conflicts on the same court', () => {
+    const value = draw();
+    value.assignments = value.assignments.map((assignment) =>
+      assignment.play_unit_id === 'u2' ? { ...assignment, started: true } : assignment,
+    );
+    const rows = liveMatches(value);
+    expect(rows.filter((row) => row.court === 1).map((row) => row.status)).toEqual(['conflict', 'conflict']);
+  });
 });

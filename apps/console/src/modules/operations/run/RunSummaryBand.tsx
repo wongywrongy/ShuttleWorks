@@ -75,7 +75,7 @@ export function RunSummaryBand({ summary, scope }: Props) {
       />
       <StatItem
         testId="run-band-playing"
-        label="playing"
+        label="playing matches"
         value={String(playing)}
         tone={playing > 0 ? 'text-status-live' : 'text-muted-foreground'}
         topBar={playing > 0 ? 'border-t-status-live/55' : 'border-t-transparent'}

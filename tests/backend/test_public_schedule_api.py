@@ -13,6 +13,7 @@ from fastapi import Response
 from sqlalchemy import event as sqlalchemy_event
 from starlette.requests import Request
 from starlette.responses import Response as StarletteResponse
+from types import SimpleNamespace
 
 from tests.backend._helpers import isolate_test_database
 
@@ -232,6 +233,34 @@ def test_published_schedule_filters_paginates_and_exposes_only_allowlisted_field
         session.close()
 
 
+def test_schedule_orders_live_before_upcoming_and_completed_before_pagination(tmp_path, monkeypatch):
+    """The first public page must answer 'what is happening now?' globally."""
+    session, repo = _seed(tmp_path, monkeypatch, published=True)
+    try:
+        from db.models import MatchState
+
+        # Keep one chronologically later match live, one upcoming, and one
+        # completed. The public order is state-first, then date/time, so the
+        # live match remains page one even when it would otherwise be beyond
+        # the first page of the schedule.
+        live = session.query(MatchState).filter(MatchState.match_id == "m-live").one()
+        live.status = "playing"
+        upcoming = session.query(MatchState).filter(MatchState.match_id == "m-retired").one()
+        upcoming.status = "scheduled"
+        done = session.query(MatchState).filter(MatchState.match_id == "m-done").one()
+        done.status = "finished"
+        session.commit()
+
+        first, _ = _call(repo, page_size=1)
+        second, _ = _call(repo, page=2, page_size=1)
+        third, _ = _call(repo, page=3, page_size=1)
+        assert first.items[0].matchKey == "meet:m-live"
+        assert second.items[0].matchKey == "meet:m-retired"
+        assert third.items[0].matchKey == "meet:m-done"
+    finally:
+        session.close()
+
+
 def test_matches_route_is_explicitly_public_by_design():
     from tests.backend.test_auth_surface import PUBLIC_BY_DESIGN
 
@@ -388,3 +417,44 @@ def test_schedule_query_count_is_bounded_as_matches_scale(tmp_path, monkeypatch)
         assert expanded <= 9
     finally:
         session.close()
+
+
+def _bracket_assignment(unit, court, *, started=None, ended=None, finished=False):
+    return SimpleNamespace(
+        play_unit_id=unit,
+        court_id=court,
+        actual_start_slot=started,
+        actual_end_slot=ended,
+        finished=finished,
+    )
+
+
+def test_bracket_court_projection_uses_started_assignment_only():
+    from entries.entries_site import _merge_live_bracket_courts
+
+    courts = {}
+    _merge_live_bracket_courts(courts, [
+        _bracket_assignment("future", 2),
+        _bracket_assignment("live", 1, started=3),
+        _bracket_assignment("done", 3, started=1, ended=2),
+    ])
+    assert courts == {"live": 1}
+
+
+def test_bracket_current_court_conflict_is_withheld_for_both_matches():
+    from entries.entries_site import _merge_live_bracket_courts
+
+    courts = {}
+    _merge_live_bracket_courts(courts, [
+        _bracket_assignment("first", 1, started=3),
+        _bracket_assignment("second", 1, started=4),
+    ])
+    assert courts == {}
+
+
+def test_bracket_materialized_operations_court_wins_for_current_assignment():
+    from entries.entries_site import _merge_live_bracket_courts
+
+    courts = {"live": 4}
+    _merge_live_bracket_courts(courts, [_bracket_assignment("live", 1, started=3)])
+    assert courts == {"live": 4}

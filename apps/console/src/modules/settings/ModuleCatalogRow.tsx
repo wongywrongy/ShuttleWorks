@@ -108,10 +108,10 @@ export function ModuleCatalogRow({
           className={TEXT_MUTED_2XS}
         >
           {ownsData
-            ? "Data impact: owns operational data; it is preserved and must be reviewed before any disable action."
+            ? "Owns operational data; existing matches or draws are preserved. Review them before disabling."
             : module.id === "display"
-              ? "Data impact: read-only output; it does not own match data."
-              : "Data impact: no operational records yet."}
+              ? "Display settings do not own match data."
+              : "No operational records are stored yet."}
         </p>
         <p
           data-testid={`module-completion-${module.id}`}
@@ -119,11 +119,11 @@ export function ModuleCatalogRow({
         >
           {module.status === "enabled"
             ? ownsData
-              ? "Configuration: active with data"
-              : "Configuration: enabled; finish setup"
+              ? "Active with data; finish setup"
+              : "Enabled; finish setup"
             : module.status === "disabled"
-              ? "Configuration: off; data preserved"
-              : "Configuration: available to enable"}
+              ? "Off; existing data preserved"
+              : "Available to enable"}
         </p>
       </div>
       <div className="shrink-0">

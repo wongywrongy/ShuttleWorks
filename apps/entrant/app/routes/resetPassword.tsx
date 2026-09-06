@@ -94,12 +94,16 @@ export default function ResetPasswordPage({ loaderData }: Route.ComponentProps) 
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
           <h1 className={PAGE_TITLE}>
-            {view === 'set' || view === 'password-failed'
+            {view === 'done'
+              ? 'Password updated'
+              : view === 'set' || view === 'password-failed'
               ? 'Choose a new password'
               : 'Reset your password'}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {view === 'set' || view === 'password-failed'
+            {view === 'done'
+              ? 'Your password has been changed. You can now sign in with the new password.'
+              : view === 'set' || view === 'password-failed'
               ? 'This signs you out everywhere else, on every device.'
               : 'We will email you a link that lets you set a new one.'}
           </p>

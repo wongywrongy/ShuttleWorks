@@ -8,6 +8,7 @@ vi.mock('../../../hooks/useTournamentBackups', () => ({ useTournamentBackups: vi
 const createBackup = vi.fn();
 const restoreBackup = vi.fn();
 const deleteBackup = vi.fn();
+const inspectBackup = vi.fn();
 
 function setHook(over: Partial<ReturnType<typeof useTournamentBackups>> = {}) {
   vi.mocked(useTournamentBackups).mockReturnValue({
@@ -19,6 +20,7 @@ function setHook(over: Partial<ReturnType<typeof useTournamentBackups>> = {}) {
     createBackup,
     restoreBackup,
     deleteBackup,
+    inspectBackup,
     downloadUrl: (f: string) => `/api/tournaments/t1/state/backups/${f}`,
     ...over,
   });
@@ -51,6 +53,37 @@ describe('SyncBackupsTab', () => {
     );
     expect(restoreBackup).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /restore workspace/i })).toBeInTheDocument();
+  });
+
+  it('inspects same-time candidates before offering a separate restore confirmation', async () => {
+    setHook({
+      entries: [
+        { filename: 'new.json', sizeBytes: 2048, modifiedAt: '2026-06-01T00:00:00Z' },
+        { filename: 'old.json', sizeBytes: 1024, modifiedAt: '2026-06-01T00:00:00Z' },
+      ],
+    });
+    inspectBackup.mockResolvedValue({
+      version: 1,
+      config: { tournamentName: 'Finals' },
+      groups: [{ id: 'g1', name: 'School A' }],
+      players: [{ id: 'p1', name: 'Ada' }],
+      matches: [{ id: 'm1', sideA: [], sideB: [], durationSlots: 1 }],
+      schedule: { assignments: [], unscheduledMatches: [], softViolations: [], objectiveScore: null, infeasibleReasons: [], status: 'unknown' },
+      bracketPlayers: [{ id: 'bp1', name: 'Bracket entrant' }],
+      bracket_session: { assignments: [{ play_unit_id: 'u1' }, { play_unit_id: 'u2' }] },
+      scheduleIsStale: false,
+    });
+    render(<SyncBackupsTab />);
+    fireEvent.click(within(screen.getByTestId('backup-new.json')).getByRole('button', { name: 'Backup new.json' }));
+    fireEvent.click(await screen.findByTestId('backup-inspect-new.json'));
+    expect(await screen.findByText('Finals')).toBeInTheDocument();
+    expect(screen.getByText('Meet roster players')).toBeInTheDocument();
+    expect(screen.getByText('Bracket entrants')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(restoreBackup).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Review restore' }));
+    expect(screen.getByRole('button', { name: /restore workspace/i })).toBeInTheDocument();
+    expect(restoreBackup).not.toHaveBeenCalled();
   });
 
   it('restores a backup after confirm (delegates to the hook → store rehydrate)', async () => {
@@ -107,6 +140,17 @@ describe('SyncBackupsTab — WSB-2/3/4', () => {
     expect(within(screen.getByTestId('backup-a.json')).getByText('a.json')).toBeInTheDocument();
     expect(screen.getByTestId('backup-eligibility-a.json')).toHaveTextContent(/eligible to restore/i);
     expect(within(screen.getByTestId('backup-a.json')).getByText(/2026/)).toBeInTheDocument();
+  });
+
+  it('distinguishes recovery points by snapshot size change before restore', () => {
+    setHook({
+      entries: [
+        { filename: 'new.json', sizeBytes: 2048, modifiedAt: '2026-06-01T02:00:00Z', origin: 'auto' },
+        { filename: 'old.json', sizeBytes: 1024, modifiedAt: '2026-06-01T01:00:00Z', origin: 'auto' },
+      ],
+    });
+    render(<SyncBackupsTab />);
+    expect(screen.getByText(/1.0 KB larger than the next point/i)).toBeInTheDocument();
   });
 
   it('explains the pre-restore recovery point before confirmation', () => {

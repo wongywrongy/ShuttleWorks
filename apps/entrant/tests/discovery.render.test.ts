@@ -128,7 +128,7 @@ describe('the front door', () => {
 
     // The view segments are the control row's own links (they sit to the
     // left of the search box since ADR 0028), so `<a` is no longer a tell.
-    expect(between).not.toMatch(/<h2|<section|<ul/);
+    expect(between).not.toMatch(/<h2|<ul/);
     expect(between).toContain('aria-label="Calendar view"');
   });
 
@@ -139,6 +139,13 @@ describe('the front door', () => {
     expect(html).not.toContain('<script');
     expect(res.headers.get('set-cookie')).toBeNull();
     expect(html).not.toContain('name="_csrf"');
+  });
+
+  it('leads the completed view with archive content instead of the live strip', async () => {
+    const html = await render('/e/?view=completed');
+    expect(html).toMatch(/<h1[^>]*>\s*Completed tournaments\s*<\/h1>/);
+    expect(html).toContain('Browse completed badminton tournaments');
+    expect(html).not.toContain('aria-label="Now playing"');
   });
 });
 

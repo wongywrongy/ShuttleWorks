@@ -406,9 +406,9 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
             <h1 className={PAGE_TITLE}>
-              Enter this tournament
+              {openEvents.length > 0 ? 'Enter this tournament' : 'Entries are closed'}
             </h1>
-            <StatusChip state={chip} />
+            {openEvents.length > 0 ? <StatusChip state={chip} /> : null}
           </div>
           {cap !== null || feeTiers.length > 0 ? (
             <p className="mt-2 max-w-prose text-sm text-muted-foreground">
@@ -555,7 +555,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
 
         {openEvents.length === 0 ? (
           <section className="mt-6 grid justify-items-start gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5" data-entry-closed>
-            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">Entries are not available right now</h2>
+            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">No event is taking entries right now</h2>
             <p className="max-w-prose text-sm text-muted-foreground">
               No event is taking entries right now. Your tournament information is still available, and the organizer may publish a new entry window or timetable there.
             </p>

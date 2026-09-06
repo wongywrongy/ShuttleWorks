@@ -56,6 +56,7 @@ export interface DenseDataColumn<T> {
   /** Initial visibility when no saved view has been applied. */
   defaultHidden?: boolean;
   className?: string;
+  strictWidth?: string;
   align?: 'left' | 'center' | 'right';
 }
 

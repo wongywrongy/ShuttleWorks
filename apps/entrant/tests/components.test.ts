@@ -600,19 +600,18 @@ describe('SegmentedNav', () => {
     { label: 'Taking entries', href: '/e/?view=open', count: 2 },
   ];
 
-  it('is a bordered group of links; the active one is a link too, marked aria-current', () => {
+  it('uses plain links with an underlined active location', () => {
     const html = renderToStaticMarkup(h(SegmentedNav, { label: 'Calendar view', segments, currentAttr: 'true' }));
     expect(html).toContain('aria-label="Calendar view"');
     expect(html.match(/<a /g)).toHaveLength(2);
     expect(html).toMatch(/<a href="\/e\/" aria-current="true"/);
-    expect(classTokens(html, 'bg-accent')).toContain('text-accent-ink');
+    expect(classTokens(html, 'border-accent')).toContain('font-semibold');
     expect(html).toContain('>2</span>');
   });
 
-  it('rounds its ends per item — the tier bans overflow-hidden and nowrap', () => {
+  it('does not add a decorative frame or inert width', () => {
     const html = renderToStaticMarkup(h(SegmentedNav, { label: 'x', segments }));
-    expect(html).toContain('first:rounded-s-xs');
-    expect(html).toContain('last:rounded-e-xs');
+    expect(html).toContain('border-b');
     expect(html).not.toContain('overflow-hidden');
     expect(html).not.toContain('whitespace-nowrap');
     expect(html).not.toContain('rounded-full');
@@ -647,7 +646,7 @@ describe('EventRow', () => {
         entrantsHref: null,
       }),
     );
-    expect(html).toContain('Mens Doubles Final');
+    expect(html).toContain('Mens Doubles');
     expect(html).not.toContain('mens_doubles_final');
   });
 
@@ -708,6 +707,18 @@ describe('EventRow', () => {
     expect(html).toContain('4 rounds');
     expect(html).toContain('with consolation');
     expect(html).toContain('Draw published');
+  });
+
+  it('explains a published draw that has no rounds yet', () => {
+    const card = {
+      drawKey: 'MS', eventCode: 'MS', discipline: "Men's Singles", kind: 'se' as const, size: 0,
+      hasConsolation: false, matchCoverage: { imported: 0, expected: null, missing: null },
+      recordScope: 'full_draw', topologyScope: 'full_draw', historical: false, sourceUrl: null,
+      roundCount: 0, champions: [], finalists: [], remainingMatchCount: null,
+    };
+    const html = renderToStaticMarkup(h(EventRow, { event: event({ isOpen: false }), entrantsHref: null, draw: card, drawHref: '/e/s/draws/MS', slug: 's' }));
+    expect(html).toContain('Draw published · rounds to be scheduled');
+    expect(html).not.toContain('0 rounds');
   });
 
   it('offers no link when the entrants tab is hidden or nobody entered', () => {
@@ -954,6 +965,15 @@ describe('MatchCard', () => {
     expect(html).toContain('<footer');
     expect(html).toContain('Match source');
     expect(html).not.toContain('<span aria-hidden="true"> · </span>');
+  });
+
+  it('uses neutral copy when public court information is unavailable', () => {
+    const html = renderToStaticMarkup(h(MatchCard, {
+      match: { ...match, showAssignmentPlaceholders: true },
+      slug: 'spring-open',
+    }));
+    expect(html).toContain('Court information unavailable');
+    expect(html).not.toContain('Court not assigned');
   });
 });
 

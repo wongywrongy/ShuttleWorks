@@ -22,7 +22,7 @@ describe("ModuleCatalogRow", () => {
         />
       </ul>,
     );
-    expect(screen.getByText(/roster, CP-SAT scheduling/i)).toBeInTheDocument();
+    expect(screen.getByText(/roster, build a court schedule/i)).toBeInTheDocument();
     expect(screen.getByTestId("module-impact-meet")).toHaveTextContent(
       /owns operational data/i,
     );

@@ -165,7 +165,7 @@ describe('the account pages are reachable by link', () => {
   it('login offers a link to signup, and it is node-owned', async () => {
     const html = await render();
 
-    expect(hrefs(html)).toContain('/e/signup');
+    expect(hrefs(html).some((href) => href === '/e/signup' || href.startsWith('/e/signup?next='))).toBe(true);
   });
 
   it('the entry page offers both, so a visitor without an account has a path', async () => {
@@ -335,7 +335,7 @@ describe('next is a same-origin entrant path or it is discarded', () => {
     // nothing, and the form still renders for whoever typed the URL.
     const html = await render(DEFAULT_NEXT);
 
-    expect(html).toContain('You are signed in on this device');
+    expect(html).toContain('Sign in to continue');
     expect(html).toContain('action="/e/account/login"');
     // Non-vacuity in the other direction: the plain page must not say it.
     expect(await render('/e/login')).not.toContain('You are signed in on this device');
@@ -346,9 +346,73 @@ describe('next is a same-origin entrant path or it is discarded', () => {
       await fetchPath('/e/login/signed-in', 'development', 'sw_play_session=session-value')
     ).text();
 
-    expect(html).toContain('You are signed in on this device');
-    expect(html).toContain('Continue to My entries');
+    expect(html).toContain('Continue with your account');
+    expect(html).toContain('Open My entries');
     expect(html).not.toContain('action="/e/account/login"');
+  });
+
+  it('does not lead an already signed-in visitor with another credential form', async () => {
+    const html = await (
+      await fetchPath('/e/login', 'development', 'sw_play_session=session-value')
+    ).text();
+
+    expect(html).toMatch(/<h1[^>]*>Continue with your account<\/h1>/);
+    expect(html).toContain('Open My entries');
+    expect(html).not.toContain('action="/e/account/login"');
+  });
+
+  it('keeps a tournament entry continuation on the signed-in branch', async () => {
+    const html = await (
+      await fetchPath(
+        '/e/login?next=/e/spring-open/enter',
+        'development',
+        'sw_play_session=session-value',
+      )
+    ).text();
+
+    expect(html).toContain('href="/e/spring-open/enter"');
+    expect(html).toContain('Continue to this entry');
+    expect(html).not.toMatch(/<a[^>]*href="\/e\/me\/entries"[^>]*>Continue/);
+  });
+
+  it('preserves the validated tournament context when creating an account', async () => {
+    const html = await render('/e/login?next=/e/spring-open/enter');
+    expect(html).toContain('href="/e/signup/spring-open"');
+  });
+
+  it('preserves a receipt continuation when creating an account', async () => {
+    const html = await render(
+      '/e/login?next=/e/spring-open/receipt/abc-123',
+    );
+    expect(html).toContain(
+      'href="/e/signup?next=%2Fe%2Fspring-open%2Freceipt%2Fabc-123"',
+    );
+  });
+
+  it('rejects an external continuation and falls back to My entries', async () => {
+    const html = await (
+      await fetchPath(
+        '/e/login?next=https%3A%2F%2Fevil.example%2Fsteal',
+        'development',
+        'sw_play_session=session-value',
+      )
+    ).text();
+    expect(html).toContain('href="/e/me/entries"');
+    expect(html).not.toContain('evil.example');
+  });
+
+  it('lets a session-bearing visitor switch accounts without losing the task', async () => {
+    const html = await (
+      await fetchPath(
+        '/e/login?switch=1&next=/e/spring-open/enter/signed-in',
+        'development',
+        'sw_play_session=session-value',
+      )
+    ).text();
+
+    expect(html).toMatch(/<h1[^>]*>Sign in to a different account<\/h1>/);
+    expect(html).toContain('action="/e/account/login"');
+    expect(html).toContain('name="next" value="/e/spring-open/enter/signed-in"');
   });
 
   // 2026-08-12 browser pass: the shared header (`PlayShell`) is static and

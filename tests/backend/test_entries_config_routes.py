@@ -155,6 +155,11 @@ def test_the_page_reaches_the_public_slug_route(client, workspace):
     live at its public address, with no SQL client involved anywhere."""
     tid = workspace
     _put_page(client, tid, regulationsText="Play fair.")
+    client.patch(
+        f"/tournaments/{tid}/entry-page/publication",
+        json={"audience": "public"},
+        headers=CSRF,
+    )
 
     # Read at the seam that still exists: Phase 6 retired the HTML page, so
     # the public address is served by the RR7 tier and the thing this route
@@ -348,6 +353,11 @@ def test_a_page_configured_here_prices_and_renders_publicly(client, workspace):
         feeSchedule={"1": 4000, "2": 5500},
         paymentInstructions="Cash at check-in.",
         venueName="Riverside Sports Hall",
+    )
+    client.patch(
+        f"/tournaments/{workspace}/entry-page/publication",
+        json={"audience": "public"},
+        headers=CSRF,
     )
 
     payload = client.get("/e/api/page/spring-open").json()

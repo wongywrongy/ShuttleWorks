@@ -388,18 +388,22 @@ describe('signup is not an account-enumeration oracle', () => {
     }
   });
 
-  it('takes no argument through which an address could reach the loader', async () => {
-    // `mintFormCsrf.length === 0` is pinned for the same reason in
-    // `formCsrf.server.test.ts`: a function with no parameters is
-    // structurally incapable of reading its caller's input. This loader
-    // renders a fixed form and fetches one public projection; it has no
-    // business being handed the request at all, and a zero-arity signature is
-    // the cheapest possible proof that it is not.
+  it('accepts only a validated continuation, never an address', async () => {
+    // The request is read only for `next`; account identity is never accepted.
     const route = (await vite.ssrLoadModule('/app/routes/signup.tsx')) as {
       loader: (...args: unknown[]) => unknown;
     };
 
-    expect(route.loader.length).toBe(0);
+    expect(route.loader.length).toBe(1);
+  });
+
+  it('preserves a receipt continuation and rejects an external one', async () => {
+    const receipt = await render('/e/signup?next=%2Fe%2Fspring-open%2Freceipt%2Fabc-123');
+    expect(receipt).toContain('name="next" value="/e/spring-open/receipt/abc-123"');
+    expect(receipt).toContain('href="/e/login?next=/e/spring-open/receipt/abc-123"');
+    const unsafe = await render('/e/signup?next=https%3A%2F%2Fevil.example');
+    expect(unsafe).toContain('name="next" value="/e/login/created"');
+    expect(unsafe).not.toContain('evil.example');
   });
 });
 

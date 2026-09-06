@@ -275,7 +275,7 @@ export function HubPage() {
           </div>
         </div>
         <Button size="sm" className="shrink-0" onClick={() => navigate('/new')}>
-          <span aria-hidden>＋</span> New workspace
+          New workspace
         </Button>
       </header>
 
@@ -405,7 +405,7 @@ export function HubPage() {
                   data-testid="hub-quiet-create"
                   className="mx-4 my-3 flex h-9 items-center gap-1.5 rounded-sm border border-dashed border-border px-3 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:border-accent hover:text-foreground"
                 >
-                  ＋ Create a workspace
+                  Create a workspace
                 </button>
               ) : null}
             </div>

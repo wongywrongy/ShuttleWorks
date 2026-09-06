@@ -58,7 +58,7 @@ const ROSTER_COLUMNS: BandedTableColumn[] = [
   // Player is the one elastic identity column.
   { label: 'Player', className: `${NAME_COL_MIN} flex-1` },
   { label: 'Events', className: 'w-40 shrink-0' },
-  { label: 'Issues', className: 'w-28 shrink-0' },
+  { label: 'Issues', className: 'w-20 shrink-0' },
   { label: '', className: 'w-8 shrink-0' },
 ];
 
@@ -183,7 +183,7 @@ function BracketRosterTabCore({
         );
       },
     },
-    { id: 'issue', label: 'Issues', accessor: (row) => row.issue, className: 'w-28', mobile: true, render: (value) => value ? <span className="font-medium text-status-warning">{String(value)}</span> : null },
+    { id: 'issue', label: 'Issues', accessor: (row) => row.issue, className: 'w-20', strictWidth: 'w-20', mobile: true, render: (value) => value ? <span className="font-medium text-status-warning">{String(value)}</span> : null },
   ], [badgesById]);
   const eventOptions = useMemo(() => [...new Set(rosterRows.flatMap((row) => row.eventLabel.split(' · ').filter(Boolean)))].sort(), [rosterRows]);
   const filteredRows = useMemo(() => {
@@ -269,7 +269,7 @@ function BracketRosterTabCore({
           onClick={() => setAdding(true)}
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS}`}
         >
-          ＋ Add player
+          Add player
         </button>
       </ActionsBar>
 

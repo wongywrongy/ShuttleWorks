@@ -47,8 +47,8 @@ const MODULE_IDS: (keyof CustomState)[] = ['meet', 'bracket', 'display'];
 /** What each module actually does, in the director's terms — the one thing
  *  the preset cards did carry that a bare module name does not. */
 const MODULE_HINT: Record<keyof CustomState, string> = {
-  meet: 'Roster and a solved schedule',
-  bracket: 'Draws, seeding, and advancement',
+  meet: 'Roster and a court schedule',
+  bracket: 'Draws, seeding, and progression',
   display: 'A public board for the venue',
 };
 

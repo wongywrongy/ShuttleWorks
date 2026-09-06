@@ -41,8 +41,9 @@ function displayEventCode(code: string): string {
 
 function displayEventName(name: string, code: string): string {
   const source = name.trim() || code;
-  if (!source.includes('_')) return source;
-  return source
+  const normalized = source.replace(/(?:\s+|_)final$/i, '').trim();
+  if (!normalized.includes('_')) return normalized;
+  return normalized
     .split('_')
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
@@ -71,7 +72,9 @@ export function EventRow({
         kindLabel(draw.kind),
         eligibility,
         entryCountLabel(draw.eventCode, draw.size),
-        `${draw.roundCount} ${draw.roundCount === 1 ? 'round' : 'rounds'}`,
+        draw.roundCount === 0
+          ? 'Draw published · rounds to be scheduled'
+          : `${draw.roundCount} ${draw.roundCount === 1 ? 'round' : 'rounds'}`,
         draw.hasConsolation ? 'with consolation' : null,
       ]
     : [publicFields.format, eligibility];

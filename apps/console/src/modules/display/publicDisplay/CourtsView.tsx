@@ -34,6 +34,7 @@ interface CourtRow {
   match: MatchDTO | null;
   state: MatchStateDTO | null;
   status: CourtStatus;
+  conflictMatches?: MatchDTO[];
   /** When status === 'empty': the Next-lane assignment on this court (if
    *  any). `nextStartTime` is a de-emphasized PLANNED clock — never the
    *  primary label (that's the relative "Next" lane itself). */
@@ -91,7 +92,7 @@ export function CourtsView(props: CourtsViewProps) {
 function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: CourtsViewProps) {
   return (
     <div className="flex w-full flex-col divide-y divide-border rounded-sm border border-border bg-card/40">
-      {courts.map(({ courtId, match, state, status, nextMatch, nextStartTime, laterMatch, laterStartTime }) => {
+      {courts.map(({ courtId, match, state, status, conflictMatches, nextMatch, nextStartTime, laterMatch, laterStartTime }) => {
         const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
         const aggregate = state?.score ? `${state.score.sideA}–${state.score.sideB}` : null;
         const sideA = match ? formatPlayers(match.sideA, playerNames) : '';
@@ -125,6 +126,11 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
             <span className="min-w-0 break-words">
               {isClosed ? (
                 <span className="uppercase tracking-wider text-muted-foreground">Court closed</span>
+              ) : conflictMatches?.length ? (
+                <span className="text-status-warning">
+                  <span className="font-semibold">Current match unavailable.</span>{' '}
+                  <span className="text-muted-foreground">The tournament desk is resolving this court assignment.</span>
+                </span>
               ) : match ? (
                 <>
                   <span className="font-medium">{sideA}</span>
@@ -153,7 +159,7 @@ function CourtsListMode({ courts, config, now, tvShowScores, playerNames }: Cour
                   )}
                 </span>
               ) : (
-                <span className="text-muted-foreground">Available</span>
+                <span className="text-muted-foreground">No next match assigned.</span>
               )}
             </span>
             <span className="tabular-nums text-right font-semibold">
@@ -239,7 +245,7 @@ function CourtCard({
   isFullscreen,
   playerNames,
 }: CourtCardProps) {
-  const { courtId, match, state, status, nextMatch, nextStartTime, laterMatch, laterStartTime } = row;
+  const { courtId, match, state, status, conflictMatches, nextMatch, nextStartTime, laterMatch, laterStartTime } = row;
   const elapsed = status === 'active' ? formatElapsed(state?.actualStartTime) : null;
   const code = match ? getMatchCode(match) : null;
   const sets = tvShowScores && status === 'active' ? state?.sets ?? [] : [];
@@ -259,6 +265,8 @@ function CourtCard({
         }
       : status === 'called'
         ? { cls: 'bg-status-called-solid text-status-called-ink', word: STATE_WORD.called }
+      : conflictMatches?.length
+        ? { cls: 'bg-status-warning/20 text-status-warning', word: 'Conflict' }
         : { cls: 'bg-muted text-muted-foreground', word: STATE_WORD.free };
 
   return (
@@ -291,6 +299,14 @@ function CourtCard({
           <span className={`${playerSize} uppercase tracking-wider text-muted-foreground`}>
             Court closed
           </span>
+        ) : conflictMatches?.length ? (
+          <div className="space-y-2 text-sm text-foreground">
+            <p className="font-semibold">Two current matches claim this court.</p>
+            <p className="text-muted-foreground">Ask the tournament desk to resolve the assignment.</p>
+            <p className="sw-num text-xs text-muted-foreground">
+              {conflictMatches.map((item, index) => `${index ? ' · ' : ''}${getMatchCode(item)}`)}
+            </p>
+          </div>
         ) : match ? (
           <>
             <SideScoreRow

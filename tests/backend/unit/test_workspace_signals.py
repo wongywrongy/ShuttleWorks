@@ -175,6 +175,28 @@ def test_bracket_match_metrics_and_next_up_from_session_blob():
     assert sig.nextUp[1].timeLabel == "09:30"   # slot1 → +30m
 
 
+def test_bracket_next_up_uses_persisted_coordinates_and_names():
+    units = [
+        {"id": "tenant-a-MS-R0-deadbeef", "event_id": "MS", "round_index": 0,
+         "match_index": 0, "side_a": ["p1"], "side_b": ["p2"]},
+        {"id": "tenant-a-MS-R1-cafebabe", "event_id": "MS", "round_index": 1,
+         "match_index": 0},
+    ]
+    base = {"bracket_session": {"play_units": units, "assignments": [
+        {"play_unit_id": units[0]["id"], "slot_id": 8, "court_id": 1},
+    ]}, "bracketPlayers": [{"id": "p1", "name": "Alex Kim"},
+                           {"id": "p2", "name": "Robin Singh"}]}
+    first = build_signals(_row(kind="bracket", data=base), _bracket_mods(), RowCounts(bracket_matches=2))
+    moved = {**base, "bracket_session": {**base["bracket_session"], "assignments": [
+        {"play_unit_id": units[0]["id"], "slot_id": 1, "court_id": 2},
+    ]}}
+    second = build_signals(_row(kind="bracket", data=moved), _bracket_mods(), RowCounts(bracket_matches=2))
+    assert first.nextUp[0].identity == second.nextUp[0].identity
+    assert first.nextUp[0].identity["phase"]["stage"] == "SF"
+    assert first.nextUp[0].sideA == "Alex Kim"
+    assert first.nextUp[0].sideB == "Robin Singh"
+
+
 def test_bracket_live_assignments_report_court_population_and_status():
     """The bracket action clock is enough to describe the live floor.
 

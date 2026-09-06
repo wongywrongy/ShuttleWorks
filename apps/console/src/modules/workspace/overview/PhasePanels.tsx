@@ -185,7 +185,7 @@ function LivePanel({ summary }: PanelProps) {
             className="mt-2 text-xs text-muted-foreground"
           >
             <span className="font-medium text-status-live">
-              {m.playing} on court
+              {m.playing} playing matches
             </span>
             {m.courtsFree != null
               ? ` · ${m.courtsFree} court${m.courtsFree === 1 ? '' : 's'} free`
