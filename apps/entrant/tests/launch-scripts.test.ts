@@ -235,6 +235,7 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   expect(e2eTestFiles()).toEqual([
     '10-entrant-r11-evidence.spec.ts',
     '11-public-bracket-geometry.spec.ts',
+    'console-a11y.spec.ts',
     'console-browser-contracts.spec.ts',
   ]);
   expect(interaction).toMatch(/E2E_TAIPEI_TID/);
@@ -262,6 +263,7 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
 test('waits for the entrant origin only for entrant evidence', () => {
   expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:entrant-evidence' })).toBe(true);
   expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:console-contracts' })).toBe(false);
+  expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:console-a11y' })).toBe(false);
   expect(requiresEntrantOrigin({ E2E_REQUIRE_PLAY: '1' })).toBe(true);
   expect(
     requiresEntrantOrigin({
