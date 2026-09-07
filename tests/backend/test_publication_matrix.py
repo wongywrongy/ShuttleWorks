@@ -340,6 +340,11 @@ def test_private_audience_answers_the_uniform_404_everywhere(client, matrix_work
     for path in (
         f"/e/api/page/{slug}/draws",
         f"/e/api/page/{slug}/players",
+        # The person page is a cross-tournament LINK TARGET since profile
+        # v1 (public-visual-fixes P2): another workspace's profile history
+        # can name this slug, so its private 404 is asserted here beside the
+        # rest rather than left to the caller.
+        f"/e/api/page/{slug}/players/{matrix_workspace['ada']}",
         f"/e/api/page/{slug}/matches",
         f"/e/api/page/{slug}",
     ):

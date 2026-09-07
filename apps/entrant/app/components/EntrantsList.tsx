@@ -15,11 +15,27 @@
  * page-scoped script (`/e/assets/entrants-filter.js`) mounts an input into
  * `#entrants-filter-root` — without JS there is no dead search box,
  * because the box does not exist.
+ *
+ * **The toolbar (public-visual-fixes P2).** Count, search box and A–Z index
+ * are ONE sticky element, not three things that scroll apart: on a 252-name
+ * page the index used to leave the viewport in the first flick, which is
+ * exactly when it starts being wanted. It sticks at `top-0` because nothing
+ * above it on this tier is sticky — the shell header and the tournament
+ * frame both scroll away — and `TOOLBAR_OFFSET` is the ONE place that
+ * decision is written down, shared with the letter sections' `scroll-mt` so
+ * a letter jump can never land underneath the bar it was clicked in.
+ *
+ * The searchable text is NORMALISED (`searchKey`) rather than merely
+ * lowercased, and by the same function the browser script uses, so "Kjaer"
+ * finds `Kjær` and "Arin" finds `Arın`. A directory whose search only
+ * matches people who typed their own diacritics is a directory that hides
+ * people.
  */
 import { eventCodeLabel } from '../lib/draws.types';
 import { eventLabel } from '../lib/eventLabels';
 import type { PersonReferenceDTO } from '../lib/person.types';
 import { personRefModel } from '../../public/assets/person-ref.js';
+import { searchKey } from '../../public/assets/entrants-filter.js';
 import { PersonRef } from './PersonRef';
 
 interface DirectoryRow {
@@ -28,6 +44,15 @@ interface DirectoryRow {
   club?: string | null;
   eventCodes: string[];
 }
+
+/**
+ * The sticky toolbar's own offset and the clearance every jump target needs
+ * below it, stated once. `top-0` is a claim about what else is sticky on
+ * this tier (nothing); if a sticky site header ever lands above this list,
+ * this constant is the single place both halves move together.
+ */
+const TOOLBAR_OFFSET = 'top-0';
+const JUMP_CLEARANCE = 'scroll-mt-28';
 
 function searchableName(row: DirectoryRow): string {
   return personRefModel({ slug: '', identity: row.person.identity, state: row.person.resolution, label: row.person.label }).text;
@@ -43,6 +68,10 @@ function letterOf(row: DirectoryRow): string {
  * word instead of a bare hash. */
 function anchorId(letter: string): string {
   return letter === '#' ? 'dir-other' : `dir-${letter}`;
+}
+
+function letterJumpLabel(letter: string): string {
+  return letter === '#' ? 'Jump to names starting with a number or symbol' : `Jump to ${letter}`;
 }
 
 export function EntrantsList({
@@ -67,33 +96,47 @@ export function EntrantsList({
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* V3-PE05.2: ONE count, updated in place by the filter script
-            (`data-search-count`) — no second count appearing once the
-            script boots beside the search input. */}
-        <p data-search-count aria-live="polite" className="text-sm text-muted-foreground">
-          {`${entrants.length} ${entrants.length === 1 ? noun : `${noun}s`}`}
-        </p>
-        <div id="entrants-filter-root" data-filter-noun={noun} className="w-full sm:w-72" />
-      </div>
+      {/* ONE toolbar: the count, the search mount and the A–Z index travel
+          together down the page. `-mx-4 px-4` lets the opaque band reach the
+          gutters of the `max-w-6xl` main so rows do not show through its
+          edges as they scroll under it. */}
+      <div
+        data-directory-toolbar
+        className={`sticky ${TOOLBAR_OFFSET} z-20 -mx-4 grid gap-2 border-b border-rule-soft bg-surface-base px-4 pb-2 pt-3`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* V3-PE05.2: ONE count, updated in place by the filter script
+              (`data-search-count`) — no second count appearing once the
+              script boots beside the search input. */}
+          <p data-search-count aria-live="polite" className="text-sm text-muted-foreground">
+            {`${entrants.length} ${entrants.length === 1 ? noun : `${noun}s`}`}
+          </p>
+          <div id="entrants-filter-root" data-filter-noun={noun} className="w-full sm:w-72" />
+        </div>
 
-      {/* V3-PE05.1: a compact A–Z jump control tied to the letter sections
-          already below — plain anchors, so it works with no JS and on
-          mobile without a JS-only sticky index. Only letters that actually
-          have a section get a link (never a dead jump to an empty letter). */}
-      {groups.length > 1 ? (
-        <nav aria-label="Jump to letter" className="flex flex-wrap gap-1">
-          {groups.map((group) => (
-            <a
-              key={group.letter}
-              href={`#${anchorId(group.letter)}`}
-              className="rounded-xs px-1.5 py-1 text-xs font-semibold uppercase text-muted-foreground hover:bg-surface-sunken hover:text-foreground"
-            >
-              {group.letter}
-            </a>
-          ))}
-        </nav>
-      ) : null}
+        {/* V3-PE05.1: a compact A–Z jump control tied to the letter sections
+            already below — plain anchors, so it works with no JS and on
+            mobile without a JS-only sticky index. Only letters that actually
+            have a section get a link (never a dead jump to an empty letter).
+            The links keep a real focus ring and an unabbreviated accessible
+            name, because a one-glyph link is otherwise unreadable to anyone
+            arriving on it by keyboard. */}
+        {groups.length > 1 ? (
+          <nav aria-label="Jump to letter" className="flex flex-wrap gap-1">
+            {groups.map((group) => (
+              <a
+                key={group.letter}
+                href={`#${anchorId(group.letter)}`}
+                aria-label={letterJumpLabel(group.letter)}
+                data-letter-jump={anchorId(group.letter)}
+                className="rounded-xs px-1.5 py-1 text-xs font-semibold uppercase text-muted-foreground hover:bg-surface-sunken hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                {group.letter}
+              </a>
+            ))}
+          </nav>
+        ) : null}
+      </div>
 
       <div className="grid items-start gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((group) => (
@@ -101,7 +144,12 @@ export function EntrantsList({
             key={group.letter}
             id={anchorId(group.letter)}
             data-letter-group
-            className="min-w-0 scroll-mt-4"
+            /* `tabIndex={-1}` is what makes the jump a KEYBOARD jump: without
+               it the fragment moves the viewport but leaves focus behind, so
+               the next Tab returns to the toolbar instead of continuing into
+               the letter the reader just chose. */
+            tabIndex={-1}
+            className={`min-w-0 ${JUMP_CLEARANCE} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
           >
             <h3 className="border-b border-rule-soft pb-1 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
               {group.letter}
@@ -111,8 +159,8 @@ export function EntrantsList({
                 <li
                   key={row.playerKey}
                   data-entrant
-                  data-name={searchableName(row).toLocaleLowerCase()}
-                  data-club={(row.club ?? '').toLowerCase()}
+                  data-name={searchKey(searchableName(row))}
+                  data-club={searchKey(row.club ?? '')}
                   className="rounded-md border border-transparent px-2 py-1 text-sm transition-colors hover:border-rule-soft hover:bg-surface-sunken"
                 >
                   <PersonRef
@@ -135,8 +183,18 @@ export function EntrantsList({
                       )) : row.eventCodes.map(eventCodeLabel).join(' · ')}
                     </span>
                   ) : null}
+                  {/* The club is the row's second searchable field, so it is
+                      also the row's explanation when a query matched it and
+                      not the name. `apply()` marks that case by promoting
+                      this line out of the muted register (`data-club-match`)
+                      — otherwise a search for a club returns a screen of
+                      names with no visible reason why any of them is there.
+                      The SSR class list is the resting state; the script
+                      swaps it and puts it back. */}
                   {row.club ? (
-                    <p className="text-xs text-muted-foreground">{row.club}</p>
+                    <p data-club-context className="text-xs text-muted-foreground">
+                      {row.club}
+                    </p>
                   ) : null}
                 </li>
               ))}

@@ -908,7 +908,7 @@ def test_an_unknown_person_and_a_garbage_key_answer_identically(client, bracket_
 
 def test_the_player_page_header_events_and_upcoming_matches(client, bracket_page):
     body = client.get(f"/e/api/page/{bracket_page['slug']}/players/{bracket_page['ada']}").json()
-    assert set(body) == {"person", "club", "events", "matches"}
+    assert set(body) == {"person", "club", "events", "matches", "history"}
     assert set(body["person"]) == {"identity", "resolution", "label"}
     assert body["person"]["identity"]["name"] == "Ada Chen"
     assert body["club"] == "Riverside BC"
@@ -1175,3 +1175,310 @@ def test_mixed_visibility_hides_the_opted_out_event_everywhere(client):
         "resolution": "dead",
         "label": "Player not published",
     }
+
+
+# ---- profile v1: identity + tournament history (public-visual-fixes P2) ---
+
+
+def _seed_person_for(tid, account_id, full_name, club=None, state="confirmed", event_code="MS", list_opt_out=False):
+    """``_seed_person`` pinned to a GIVEN entrant account.
+
+    The account is the canonical identity a public history is joined on, so
+    a test about history has to be able to say which account it means — and,
+    just as importantly, to give one account two DIFFERENT people (the club
+    manager shape, which is why the account alone is not a person key)."""
+    from db.models import Entry, EntryEvent, EntryPlayer, Submission
+    from db.session import SessionLocal
+    from sqlalchemy import select
+
+    session = SessionLocal()
+    try:
+        event = session.scalars(
+            select(EntryEvent).where(
+                EntryEvent.tournament_id == uuid.UUID(tid),
+                EntryEvent.code == event_code,
+            )
+        ).first()
+        if event is None:
+            event = EntryEvent(
+                tournament_id=uuid.UUID(tid),
+                code=event_code,
+                discipline="Men's Singles",
+                entry_type="singles",
+            )
+            session.add(event)
+            session.flush()
+        submission = Submission(tournament_id=uuid.UUID(tid), account_id=account_id)
+        player = EntryPlayer(
+            tournament_id=uuid.UUID(tid),
+            account_id=account_id,
+            full_name=full_name,
+            gender="X",
+            club=club,
+        )
+        session.add_all([submission, player])
+        session.flush()
+        session.add(
+            Entry(
+                tournament_id=uuid.UUID(tid),
+                entry_event_id=event.id,
+                submission_id=submission.id,
+                entry_player_id=player.id,
+                state=state,
+                list_opt_out=list_opt_out,
+            )
+        )
+        session.commit()
+        return str(player.id)
+    finally:
+        session.close()
+
+
+def _an_account(email=None):
+    from db.models import EntrantAccount
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        account = EntrantAccount(
+            email=email or f"hist-{uuid.uuid4().hex[:8]}@example.com", password_hash="x"
+        )
+        session.add(account)
+        session.commit()
+        return account.id
+    finally:
+        session.close()
+
+
+def _set_dates(tid, start, end=None):
+    from db.models import Tournament
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        row = session.get(Tournament, uuid.UUID(tid))
+        row.tournament_date = start
+        row.tournament_end_date = end
+        session.commit()
+    finally:
+        session.close()
+
+
+def test_history_always_carries_the_current_tournament_marked_current(client, bracket_page):
+    body = client.get(
+        f"/e/api/page/{bracket_page['slug']}/players/{bracket_page['ada']}"
+    ).json()
+    (row,) = body["history"]
+    assert row["current"] is True
+    assert row["slug"] == bracket_page["slug"]
+    # The row is a link TARGET: this workspace's own key for this person.
+    assert row["playerKey"] == bracket_page["ada"]
+    assert row["eventCodes"] == ["MS"]
+    assert row["drawsPublished"] is True
+    # A person with no linked history still reads as a history of one.
+    assert len(body["history"]) == 1
+
+
+def test_history_links_the_same_human_across_workspaces_by_verified_account(client):
+    account = _an_account()
+    first = _make_workspace(
+        client, name="Spring Open", slug="spring-open", entrants_published=True
+    )
+    second = _make_workspace(
+        client, name="Winter Classic", slug="winter-classic", entrants_published=True
+    )
+    _set_dates(first, "2026-09-19", "2026-09-20")
+    _set_dates(second, "2026-01-10")
+    here = _seed_person_for(first, account, "Ada Chen", "Riverside BC")
+    there = _seed_person_for(second, account, "Ada Chen", "Riverside BC", event_code="XD")
+    # The SAME account, a DIFFERENT human — a club manager entering two
+    # players. Account alone would merge them into one profile.
+    other = _seed_person_for(second, account, "Bo Lee", "Riverside BC")
+
+    body = client.get(f"/e/api/page/spring-open/players/{here}").json()
+    assert [row["slug"] for row in body["history"]] == ["spring-open", "winter-classic"]
+    linked = body["history"][1]
+    assert linked["playerKey"] == there
+    assert linked["playerKey"] != other
+    assert linked["current"] is False
+    assert linked["tournamentName"] == "Winter Classic"
+    assert linked["date"] == "2026-01-10"
+    assert linked["eventCodes"] == ["XD"]
+    # Newest first: the current September workspace precedes the January one.
+    assert body["history"][0]["date"] == "2026-09-19"
+    assert body["history"][0]["endDate"] == "2026-09-20"
+
+    # ...and the other person's own profile is their own history, not Ada's.
+    theirs = client.get(f"/e/api/page/winter-classic/players/{other}").json()
+    assert [row["slug"] for row in theirs["history"]] == ["winter-classic"]
+
+
+@pytest.mark.parametrize(
+    ("flags", "why"),
+    [
+        ({"entrants_published": False}, "the other list is unpublished"),
+        ({"audience": "private"}, "the other page is private"),
+        ({"audience": "unlisted"}, "the other page is deliberately undiscoverable"),
+        ({"is_open": False}, "the other page is closed"),
+    ],
+)
+def test_history_omits_a_workspace_that_has_not_published_its_own_list(client, flags, why):
+    account = _an_account()
+    first = _make_workspace(
+        client, name="Spring Open", slug="spring-open", entrants_published=True
+    )
+    second = _make_workspace(
+        client, name="Winter Classic", slug="winter-classic", entrants_published=True
+    )
+    here = _seed_person_for(first, account, "Ada Chen")
+    _seed_person_for(second, account, "Ada Chen")
+    _set_flags(second, **flags)
+
+    body = client.get(f"/e/api/page/spring-open/players/{here}").json()
+    assert [row["slug"] for row in body["history"]] == ["spring-open"], why
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "why"),
+    [
+        ({"state": "pending"}, "an unconfirmed entry is not public anywhere"),
+        ({"list_opt_out": True}, "an opted-out entry is not published"),
+    ],
+)
+def test_history_omits_a_workspace_the_person_is_not_public_in(client, kwargs, why):
+    account = _an_account()
+    first = _make_workspace(
+        client, name="Spring Open", slug="spring-open", entrants_published=True
+    )
+    second = _make_workspace(
+        client, name="Winter Classic", slug="winter-classic", entrants_published=True
+    )
+    here = _seed_person_for(first, account, "Ada Chen")
+    _seed_person_for(second, account, "Ada Chen", **kwargs)
+
+    body = client.get(f"/e/api/page/spring-open/players/{here}").json()
+    assert [row["slug"] for row in body["history"]] == ["spring-open"], why
+
+
+def test_history_is_never_a_name_match_across_accounts(client):
+    """Two strangers who share a name are two people, in history no less
+    than on the page-of-one (R-P7c). Only the verified account joins them."""
+    first = _make_workspace(
+        client, name="Spring Open", slug="spring-open", entrants_published=True
+    )
+    second = _make_workspace(
+        client, name="Winter Classic", slug="winter-classic", entrants_published=True
+    )
+    here = _seed_person_for(first, _an_account(), "Ada Chen")
+    _seed_person_for(second, _an_account(), "Ada Chen")
+
+    body = client.get(f"/e/api/page/spring-open/players/{here}").json()
+    assert [row["slug"] for row in body["history"]] == ["spring-open"]
+
+
+def test_history_matches_a_name_across_case_spacing_and_accents(client):
+    """The same human's name is stored twice by two desks; a leading space
+    or a folded accent must not fork one person into two profiles."""
+    account = _an_account()
+    first = _make_workspace(
+        client, name="Spring Open", slug="spring-open", entrants_published=True
+    )
+    second = _make_workspace(
+        client, name="Winter Classic", slug="winter-classic", entrants_published=True
+    )
+    here = _seed_person_for(first, account, "Rasmus Kjær")
+    there = _seed_person_for(second, account, "  rasmus  kjær ")
+
+    body = client.get(f"/e/api/page/spring-open/players/{here}").json()
+    assert [row["playerKey"] for row in body["history"]] == [here, there]
+
+
+# ---- linkability of every eligible name (C-PE-19) -------------------------
+
+
+def test_a_namespaced_bracket_event_still_links_its_entry_backed_people(client):
+    """The draw's event id and the entry desk's event code are the SAME
+    event spelled two ways (``T027-MS`` vs ``MS``). Resolving people against
+    only one spelling turned every eligible name in a namespaced import into
+    "Player not published" — a name that cannot be clicked."""
+    tid = _make_workspace(
+        client, slug="namespaced", draws_published=True, entrants_published=True
+    )
+    ada = _seed_person(tid, "Ada Chen", "Riverside BC")
+    body = {
+        "courts": 2,
+        "total_slots": 64,
+        "rest_between_rounds": 1,
+        "interval_minutes": 30,
+        "time_limit_seconds": 1.0,
+        "start_time": "2026-09-12T09:00:00",
+        "events": [
+            {
+                "id": "T027-MS",
+                "discipline": "Men's Singles",
+                "format": "se",
+                "participants": [
+                    {"id": f"entry-{ada}", "name": "Ada Chen", "seed": 1},
+                    {"id": "P2", "name": "Bo Lee"},
+                ],
+                "duration_slots": 1,
+            }
+        ],
+    }
+    assert client.post(f"/tournaments/{tid}/bracket", json=body, headers=CSRF).status_code == 200
+
+    # The draw is addressed by the event's own id; the PEOPLE inside it are
+    # the claim under test.
+    detail = client.get("/e/api/page/namespaced/draws/T027-MS").json()
+    people = [person for team in detail["teams"] for person in team["persons"]]
+    ada_ref = next(p for p in people if (p["identity"] or {}).get("name") == "Ada Chen")
+    assert ada_ref["resolution"] == "resolved"
+    # The id is what makes the name a link; without it the row renders as
+    # plain text and the profile is unreachable from the draw.
+    assert ada_ref["identity"]["id"] == ada
+    assert client.get(f"/e/api/page/namespaced/players/{ada}").status_code == 200
+
+
+def test_the_directory_reads_club_from_the_same_gate_as_the_name(client):
+    """Club is the second field the public search matches on, so it comes
+    from the ONE gated person directory the name comes from — not from a
+    second, wider list read beside it. The invariant this pins is the one a
+    reader can see: a row that says "Player not published" carries no club,
+    and a published row keeps its own (the C4 ruling)."""
+    tid = _make_workspace(
+        client, slug="club-gate", entrants_published=True, draws_published=True
+    )
+    ada = _seed_person(tid, "Ada Chen", "Riverside BC")
+    withheld = _seed_person(tid, "Quiet Kid", "Secret SC", state="pending")
+    # Both are in the published draw, so both reach the directory — one as a
+    # person, one as an unpublished reference.
+    _set_bracket_players(
+        tid,
+        [
+            {"id": f"entry-{ada}", "name": "Ada Chen"},
+            {"id": f"entry-{withheld}", "name": "Quiet Kid"},
+        ],
+    )
+    _se4_bracket(
+        client,
+        tid,
+        [
+            {"id": f"entry-{ada}", "name": "Ada Chen", "seed": 1},
+            {"id": f"entry-{withheld}", "name": "Quiet Kid", "seed": 2},
+            {"id": "P3", "name": "Cass Doe"},
+            {"id": "P4", "name": "Dev Roy"},
+        ],
+    )
+
+    response = client.get("/e/api/page/club-gate/players")
+    body = response.json()
+    by_key = {row["playerKey"]: row for row in body["players"]}
+    # The unconfirmed person is not in the directory at all, and neither is
+    # anything about them — the club included.
+    assert f"entry-{withheld}" not in by_key
+    assert "Secret SC" not in response.text
+    assert "Quiet Kid" not in response.text
+
+    published = by_key[f"entry-{ada}"]
+    assert published["person"]["resolution"] == "resolved"
+    assert published["club"] == "Riverside BC"

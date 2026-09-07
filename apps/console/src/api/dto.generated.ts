@@ -6739,6 +6739,45 @@ export interface components {
             drawPath?: components["schemas"]["PlayerDrawPathDTO"][];
         };
         /**
+         * PlayerHistoryEntryDTO
+         * @description One workspace in a person's public tournament history (profile v1).
+         *
+         *     A history row is a LINK TARGET, not a summary: ``slug`` + ``playerKey``
+         *     address that workspace's own person page, and ``eventCodes`` address its
+         *     published draws. Every value here is copied from the other workspace's
+         *     OWN public projection gates, so a row can never say more about a
+         *     tournament than that tournament says about itself.
+         */
+        PlayerHistoryEntryDTO: {
+            /** Slug */
+            slug: string;
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Enddate */
+            endDate?: string | null;
+            /** Playerkey */
+            playerKey: string;
+            /**
+             * Current
+             * @default false
+             */
+            current: boolean;
+            /** Eventcodes */
+            eventCodes?: string[];
+            /**
+             * Drawspublished
+             * @default false
+             */
+            drawsPublished: boolean;
+            /**
+             * Resultspublished
+             * @default false
+             */
+            resultsPublished: boolean;
+        };
+        /**
          * PlayerImpact
          * @description Aggregate of how a single player's day changes.
          */
@@ -6813,6 +6852,8 @@ export interface components {
             events: components["schemas"]["PlayerEventDTO"][];
             /** Matches */
             matches: components["schemas"]["PlayerMatchDTO"][];
+            /** History */
+            history?: components["schemas"]["PlayerHistoryEntryDTO"][];
         };
         /** PlayersDTO */
         PlayersDTO: {

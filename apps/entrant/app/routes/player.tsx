@@ -11,6 +11,17 @@
  * **"Coming up" renders above "Played" — a deliberate product decision;
  * do not flip it** (§3.3, binding). Match-card scores and winner marks arrive
  * pre-gated by the published tournament projection.
+ *
+ * Profile v1 (public-visual-fixes P2) = **identity + tournament history**.
+ * The history section is a list of the SAME human's other public
+ * tournaments, joined server-side on the verified entrant account that owns
+ * the row (`_person_history`) — this file never matches people by name and
+ * never mints a person key. Each row's link is built by `personHref`, the
+ * one shared link-target resolver the whole tier routes people through, so
+ * a cross-tournament profile URL and an in-page name link are the same
+ * decision made once. The current tournament stays in the list, marked
+ * `aria-current`, so a person with no linked history still reads as a
+ * history of one rather than an empty section.
  */
 import { isRouteErrorResponse, useRouteError } from 'react-router';
 
@@ -26,7 +37,7 @@ import { formatDateLong } from '../lib/format';
 import type { PlayerPageDTO } from '../lib/player.types';
 import { SECTION_TITLE } from '../lib/ui';
 import { sectionHref, sectionLabel } from '../lib/tournamentFrame';
-import { personRefModel } from '../../public/assets/person-ref.js';
+import { personHref, personRefModel } from '../../public/assets/person-ref.js';
 import type { Route } from './+types/player';
 
 export interface PlayerLoaderData {
@@ -100,6 +111,9 @@ export default function Player({ loaderData }: Route.ComponentProps) {
     state: player.person.resolution,
     label: player.person.label ?? 'Player',
   }).text;
+  // Absent on a payload minted before profile v1 — an older API answers a
+  // page with no history section rather than an empty one.
+  const history = player.history ?? [];
 
   return (
     <PlayShell>
@@ -198,6 +212,46 @@ export default function Player({ loaderData }: Route.ComponentProps) {
                 <MatchCard key={index} match={match} slug={slug} />
               ))}
             </div>
+          </section>
+        ) : null}
+
+        {history.length > 0 ? (
+          <section className="mt-8 border-t border-rule-soft pt-6">
+            <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
+              Tournament history
+            </h2>
+            <ul className="mt-3 divide-y divide-rule-soft border-t border-rule-soft text-sm">
+              {history.map((row) => {
+                const href = personHref(row.slug, { id: row.playerKey, name: playerName });
+                return (
+                  <li key={`${row.slug}-${row.playerKey}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5">
+                    <span className="min-w-0">
+                      {/* The current tournament is the page the reader is
+                          already on: it is named, marked, and deliberately
+                          not a link back to itself (the same rule the
+                          breadcrumb trail's last segment follows). */}
+                      {row.current || href === null ? (
+                        <span className="font-medium text-foreground" aria-current={row.current ? 'page' : undefined}>
+                          {row.tournamentName ?? row.slug}
+                        </span>
+                      ) : (
+                        <a href={href} className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                          {row.tournamentName ?? row.slug}
+                        </a>
+                      )}
+                      {row.date ? (
+                        <span className="block text-xs text-muted-foreground">{formatDateLong(row.date)}</span>
+                      ) : null}
+                    </span>
+                    {row.eventCodes.length > 0 ? (
+                      <span className="text-xs text-muted-foreground" aria-label={row.eventCodes.map(eventCodeLabel).join(' · ')}>
+                        {row.eventCodes.map(eventCodeLabel).join(' · ')}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
           </section>
         ) : null}
 

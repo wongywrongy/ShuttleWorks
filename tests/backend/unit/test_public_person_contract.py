@@ -13,6 +13,7 @@ from entries.entries_site import (
     PersonReferenceDTO,
     PlayerDrawPathDTO,
     PlayerEventDTO,
+    PlayerHistoryEntryDTO,
     PlayerMatchDTO,
     PlayerMatchSideDTO,
     PlayerPageDTO,
@@ -38,7 +39,8 @@ EXPECTED = {
     PlayerEventDTO: {"code", "discipline", "partner", "seed", "drawPath"},
     PlayerMatchSideDTO: {"persons", "placeholder", "winner", "seed", "unresolved"},  # v3 pkg 29: the discriminated Side.unresolved (contract §2.1)
     PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt", "scoresPublished"},  # v3 pkg 29
-    PlayerPageDTO: {"person", "club", "events", "matches"},
+    PlayerHistoryEntryDTO: {"slug", "tournamentName", "date", "endDate", "playerKey", "current", "eventCodes", "drawsPublished", "resultsPublished"},  # public-visual-fixes P2 (profile v1)
+    PlayerPageDTO: {"person", "club", "events", "matches", "history"},  # public-visual-fixes P2
     ScheduleDayFacetDTO: {"day", "count"},
     ScheduleSideDTO: {"participantKey", "persons", "placeholder", "unresolved"},  # v3 pkg 29
     ScheduleMatchDTO: {"matchKey", "source", "eventCode", "discipline", "roundLabel", "status", "scheduledDate", "scheduledTime", "court", "sides", "score", "walkover", "updatedAt"},

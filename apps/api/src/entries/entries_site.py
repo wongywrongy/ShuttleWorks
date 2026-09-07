@@ -299,12 +299,27 @@ def _person_ref(
     identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
     label: Optional[str] = None,
     event_code: Optional[str] = None,
+    event_alias: Optional[str] = None,
 ) -> PersonReferenceDTO:
+    """Project one person reference, applying the per-event visibility gate.
+
+    ``event_code`` and ``event_alias`` are the SAME event named two ways: a
+    bracket event's raw id (``T029-MS``) and its public code (``MS``). An
+    entry-backed person's ``visible_events`` may hold either spelling —
+    ``entry_events.code`` on one side, ``bracket_event_id`` on the other —
+    so a caller that passes only the raw id silently turns every eligible
+    name in a namespaced draw into "Player not published", i.e. into an
+    unlinkable name. ``_event_public_for_person`` and ``_event_public_club``
+    already took both; this is the same rule, applied to the person.
+    """
     if isinstance(identities, PublicPersonDirectory):
         visible = roster_key is not None and roster_key in identities.identities
         if visible and event_code is not None:
             event_events = identities.visible_events.get(roster_key, frozenset())
-            visible = not event_events or event_code in event_events
+            visible = not event_events or (
+                event_code in event_events
+                or (event_alias is not None and event_alias in event_events)
+            )
         if visible:
             return PersonReferenceDTO(identity=identities.identities[roster_key], resolution="resolved")
         if roster_key is not None and (
@@ -331,6 +346,7 @@ def _participant_people(
     roster_names: Dict[str, str],
     identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
     event_code: Optional[str] = None,
+    event_alias: Optional[str] = None,
 ) -> List[PersonReferenceDTO]:
     """Resolve participant people without inventing or leaking identities.
 
@@ -349,7 +365,9 @@ def _participant_people(
             if isinstance(identities, PublicPersonDirectory):
                 visible_identity = member in identities.identities and (
                     event_code is None
-                    or _event_public_for_person(identities, member, event_code)
+                    or _event_public_for_person(
+                        identities, member, event_code, event_alias
+                    )
                 )
                 privacy_protected = privacy_protected or (
                     member in identities.hidden
@@ -373,12 +391,21 @@ def _participant_people(
                 name=roster_names.get(member),
                 identities=identities,
                 event_code=event_code,
+                event_alias=event_alias,
             )
             for member in person_keys
         ]
     name = roster_names.get(participant.id) or getattr(participant, "name", None)
     roster_key = person_keys[0]
-    return [_person_ref(roster_key, name=name, identities=identities, event_code=event_code)]
+    return [
+        _person_ref(
+            roster_key,
+            name=name,
+            identities=identities,
+            event_code=event_code,
+            event_alias=event_alias,
+        )
+    ]
 
 
 def _event_public_for_person(
@@ -723,11 +750,42 @@ class PlayerMatchDTO(BaseModel):
     scoresPublished: bool = True
 
 
+class PlayerHistoryEntryDTO(BaseModel):
+    """One workspace in a person's public tournament history (profile v1).
+
+    A history row is a LINK TARGET, not a summary: ``slug`` + ``playerKey``
+    address that workspace's own person page, and ``eventCodes`` address its
+    published draws. Every value here is copied from the other workspace's
+    OWN public projection gates, so a row can never say more about a
+    tournament than that tournament says about itself.
+    """
+
+    slug: str
+    tournamentName: Optional[str] = None
+    date: Optional[str] = None
+    endDate: Optional[str] = None
+    # ``entry_players.id`` in THAT workspace — a different row for the same
+    # human, which is exactly what a tournament-scoped person key is.
+    playerKey: str
+    # True for the workspace whose page is being rendered. The current row is
+    # kept in the list (so a person with no linked history still reads as a
+    # history of one) and is never a link back to itself.
+    current: bool = False
+    eventCodes: List[str] = Field(default_factory=list)
+    drawsPublished: bool = False
+    resultsPublished: bool = False
+
+
 class PlayerPageDTO(BaseModel):
     person: PersonReferenceDTO
     club: Optional[str] = None
     events: List[PlayerEventDTO]
     matches: List[PlayerMatchDTO]
+    # Profile v1 (public-visual-fixes P2): identity + tournament history.
+    # Cross-tournament rows are joined on VERIFIED CANONICAL IDENTITY — the
+    # entrant account that owns the ``entry_players`` row — never on a name
+    # match across the estate. See ``_person_history``.
+    history: List[PlayerHistoryEntryDTO] = Field(default_factory=list)
 
 
 class ScheduleSideDTO(BaseModel):
@@ -1049,7 +1107,9 @@ def _teams(
     out = []
     event_alias = _event_public_code(event)
     for participant in event.participants:
-        people = _participant_people(participant, roster_names, identities, event_code)
+        people = _participant_people(
+            participant, roster_names, identities, event_code, event_alias
+        )
         person_keys = _participant_person_keys(participant)
         club = _event_public_club(
             person_keys[0],
@@ -1543,7 +1603,16 @@ def players_index(
                 or roster_names.get(player_id),
                 identities=identities,
             ),
-            club=(entrants_by_roster_id.get(player_id) or {}).get("club"),
+            # ONE authority for both public fields on this row. The club is
+            # the second field the public search box matches on, so it is
+            # published under exactly the gate the NAME is published under —
+            # ``_public_identities``, which keeps only confirmed,
+            # non-opted-out, non-erased people, per visible event. Reading
+            # it instead off ``_entrants`` (a separate, wider desk query
+            # that exists to COUNT the field) made the same row's two public
+            # values answer to two different gates, which is the shape a
+            # disclosure defect arrives in even when today's two gates agree.
+            club=identities.clubs.get(player_id),
             eventCodes=sorted(event_codes),
         )
         for player_id, event_codes in events_by_player.items()
@@ -1701,6 +1770,151 @@ def _event_final_unit(event, units):
 
 
 # ---- the player page (§3.3) ----------------------------------------------
+
+
+def _canonical_person_key(account_id, full_name: Optional[str]) -> Optional[str]:
+    """The one canonical identity a public profile may be joined on.
+
+    An ``entry_players`` row is tournament-scoped by design, so a person's
+    history has to be assembled from several rows. The join is the ENTRANT
+    ACCOUNT — a verified credential someone actually holds — narrowed by the
+    stored name, because one account legitimately owns several different
+    people (a parent's two children, a club manager's eight players; the
+    canonical fixture has both shapes deliberately). Account alone would
+    merge a club's whole roster into one profile; a name alone would merge
+    two strangers who share one. Neither half is sufficient and the pair is
+    never derived from anything a reader typed.
+
+    Returns ``None`` when there is nothing verified to join on, which
+    collapses the history to the current tournament rather than guessing.
+    """
+    if account_id is None or not isinstance(full_name, str):
+        return None
+    name = _alphabetic_name_key(" ".join(full_name.split()))
+    if not name:
+        return None
+    return f"{account_id}:{name}"
+
+
+def _person_history(
+    repo: LocalRepository,
+    person: EntryPlayer,
+    tournament: Tournament,
+) -> List[PlayerHistoryEntryDTO]:
+    """This person's public tournament history, newest first.
+
+    **Published and permitted only.** Every other workspace has to clear its
+    own public gates before it appears here — an open, non-private entry page
+    with ``entrants_published`` on, a confirmed entry that did not opt out of
+    the list, and a person row that has not been erased. Anything else is
+    absent, not summarised: a row saying "played somewhere private" would
+    leak the same fact the gate exists to withhold. Other workspaces must
+    additionally be ``audience == "public"``; an *unlisted* page is reachable
+    by its URL but is deliberately not discoverable, and a public profile
+    linking to it would publish it.
+
+    The current workspace is always included (it is the page being read) and
+    marked ``current``, so a person with no linked history still gets a
+    complete, honest section rather than an empty one.
+    """
+    canonical = _canonical_person_key(person.account_id, person.full_name)
+    if canonical is None:
+        # No verified identity to join on. A person with no stored name is
+        # not in the public directory either, so this is unreachable in
+        # practice; it stays explicit rather than becoming a guess.
+        return []
+    rows = repo.execute_query(
+        _all_rows,
+        select(
+            EntryPlayer.tournament_id,
+            EntryPlayer.id,
+            EntryPlayer.full_name,
+            EntryEvent.code,
+            EntryPage.slug,
+            EntryPage.audience,
+            EntryPage.draws_published,
+            EntryPage.results_published,
+            Tournament.name,
+            Tournament.tournament_date,
+            Tournament.tournament_end_date,
+        )
+        .select_from(EntryPlayer)
+        .join(
+            Entry,
+            (Entry.tournament_id == EntryPlayer.tournament_id)
+            & (Entry.entry_player_id == EntryPlayer.id),
+        )
+        .outerjoin(
+            EntryEvent,
+            (EntryEvent.tournament_id == Entry.tournament_id)
+            & (EntryEvent.id == Entry.entry_event_id),
+        )
+        .join(EntryPage, EntryPage.tournament_id == EntryPlayer.tournament_id)
+        .join(Tournament, Tournament.id == EntryPlayer.tournament_id)
+        .where(
+            EntryPlayer.account_id == person.account_id,
+            EntryPlayer.erased_at.is_(None),
+            Entry.state == "confirmed",
+            Entry.list_opt_out.is_(False),
+            EntryPage.is_open.is_(True),
+            EntryPage.entrants_published.is_(True),
+        ),
+    )
+
+    by_tournament: Dict[str, PlayerHistoryEntryDTO] = {}
+    codes: Dict[str, set[str]] = {}
+    for (
+        tournament_id,
+        player_id,
+        full_name,
+        event_code,
+        slug,
+        audience,
+        draws_published,
+        results_published,
+        name,
+        start_date,
+        end_date,
+    ) in rows:
+        if _canonical_person_key(person.account_id, full_name) != canonical:
+            continue
+        current = tournament_id == tournament.id
+        if not current and audience != "public":
+            continue
+        if not isinstance(slug, str) or not slug:
+            continue
+        key = str(tournament_id)
+        row = by_tournament.get(key)
+        if row is None:
+            row = PlayerHistoryEntryDTO(
+                slug=slug,
+                tournamentName=name,
+                date=start_date,
+                endDate=end_date,
+                playerKey=str(player_id),
+                current=current,
+                eventCodes=[],
+                drawsPublished=bool(draws_published),
+                resultsPublished=bool(results_published),
+            )
+            by_tournament[key] = row
+            codes[key] = set()
+        if isinstance(event_code, str) and event_code:
+            codes[key].add(event_code)
+    for key, row in by_tournament.items():
+        row.eventCodes = sorted(codes[key])
+    # Newest first, undated last, then a stable tiebreaker so two
+    # same-day tournaments never swap between reads. Two passes rather than
+    # an inverted sort key: the date descends while the name ascends.
+    ordered = sorted(
+        by_tournament.values(),
+        key=lambda row: (row.tournamentName or "", row.slug),
+    )
+    # ``reverse=True`` keeps equal keys in their existing (name) order, so
+    # the date descends while the tiebreaker still ascends. An empty date
+    # sorts last, which is where an undated workspace belongs.
+    ordered.sort(key=lambda row: row.date or "", reverse=True)
+    return ordered
 
 
 @router.get("/players/{person_key}", response_model=PlayerPageDTO)
@@ -2069,6 +2283,7 @@ def player_page(
             for code, discipline, partner in player_events
         ],
         matches=matches,
+        history=_person_history(repo, person, tournament),
     )
 
 

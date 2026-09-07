@@ -956,6 +956,53 @@ describe('EntrantsList (SP-P7 §3.2 — alphabetical, letter-grouped)', () => {
     expect(html).toContain('3 entrants');
   });
 
+  it('composes the count, the search mount and the A-Z index into ONE sticky toolbar (P2)', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    const toolbar = html.match(/<div[^>]*data-directory-toolbar[\s\S]*?<\/nav><\/div>/)?.[0] ?? '';
+    expect(toolbar).not.toBe('');
+    // All three live inside it, so they cannot scroll apart on a long page.
+    expect(toolbar).toContain('data-search-count');
+    expect(toolbar).toContain('id="entrants-filter-root"');
+    expect(toolbar).toContain('aria-label="Jump to letter"');
+    // Sticky, with the offset stated (nothing else on this tier is sticky).
+    expect(toolbar).toMatch(/class="[^"]*\bsticky\b[^"]*\btop-0\b/);
+  });
+
+  it('makes every letter jump a keyboard jump that clears the sticky toolbar', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    const section = html.match(/<section[^>]*id="dir-P"[^>]*>/)?.[0] ?? '';
+    expect(section).not.toBe('');
+    // Focus follows the fragment only if the target can hold focus.
+    expect(section).toContain('tabindex="-1"');
+    // ...and lands below the bar it was clicked in, not underneath it.
+    expect(section).toContain('scroll-mt-28');
+    // The index link names its destination for anyone who arrives on it by
+    // keyboard — a bare "P" is not a destination.
+    expect(html).toContain('aria-label="Jump to P"');
+    expect(html).toContain('data-letter-jump="dir-P"');
+  });
+
+  it('writes accent-folded search text, so a plain-ASCII query still finds the person', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, {
+        slug: 'spring-open',
+        entrants: [
+          {
+            playerKey: 'entry-dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+            person: { identity: { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', name: 'Rasmus Kjær' }, resolution: 'resolved' as const, label: null },
+            club: 'Nørrebro BK',
+            eventCodes: ['MD'],
+          },
+        ],
+      }),
+    );
+    // The DISPLAYED name keeps its diacritics; only the search key is folded.
+    expect(html).toContain('Rasmus Kjær');
+    expect(html).toContain('Nørrebro BK');
+    expect(html).toContain('data-name="rasmus kjaer"');
+    expect(html).toContain('data-club="norrebro bk"');
+  });
+
   it('renders no A-Z index for a single-letter roster (nothing useful to jump between)', () => {
     const html = renderToStaticMarkup(
       h(EntrantsList, { slug: 'spring-open', entrants: [entrants[0]] }),
