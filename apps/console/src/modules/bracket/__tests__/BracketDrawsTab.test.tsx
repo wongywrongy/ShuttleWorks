@@ -145,24 +145,36 @@ beforeEach(() => {
 });
 
 describe("BracketDrawsTab — action column header (V3-OC15.1)", () => {
-  it("names the trailing action column 'Action', separate from Status", () => {
+  it("names the trailing action column 'Action', and has no Status column", () => {
     renderDraws();
     expect(
       screen.getByRole("columnheader", { name: "Action" }),
     ).toBeInTheDocument();
-    // Status stays its own column and never carries a verb like "Open draw".
-    const statusHeader = screen.getByRole("columnheader", { name: "Status" });
-    expect(statusHeader).toBeInTheDocument();
+    // P3: Status folded into Progress — "Draft" said exactly what
+    // "Not generated" says, in a second cell.
+    expect(
+      screen.queryByRole("columnheader", { name: "Status" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Format" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Size" }),
+    ).not.toBeInTheDocument();
   });
 });
 
 describe("BracketDrawsTab — draw rows", () => {
-  it("renders a row per draw with format, size, and entered meta", () => {
+  it("names the event in full, with its code muted, and one entered fraction", () => {
     mockBracketData = makeBracketData({ participantCount: 3, bracketSize: 8 });
     renderDraws();
     const row = screen.getByTestId("bracket-draw-row-MS");
-    expect(within(row).getByText("Single elimination")).toBeInTheDocument();
+    expect(within(row).getByText("Men's Singles")).toBeInTheDocument();
+    expect(within(row).getByText("MS")).toBeInTheDocument();
     expect(within(row).getByText(/3\/8/)).toBeInTheDocument();
+    // Format is suppressed while every draw agrees about it — a column of
+    // one repeated string is not information.
+    expect(row).not.toHaveTextContent("Single elimination");
   });
 
   it("renders exactly one line for a singleton draw", () => {
@@ -308,10 +320,12 @@ describe("BracketDrawsTab — draw rows", () => {
     expect(progress.querySelector('[role="progressbar"]')).toBeNull();
   });
 
-  it("shows a placeholder instead of the strip while the draw has no matches", () => {
+  it("reads 'Not generated' in Progress while the draw has no matches", () => {
     renderDraws();
     const row = screen.getByTestId("bracket-draw-row-MS");
-    expect(within(row).queryByTestId("draw-progress")).not.toBeInTheDocument();
+    expect(within(row).getByTestId("draw-progress")).toHaveTextContent(
+      "Not generated",
+    );
   });
 
   it("gives the plain progress fraction a compact fixed column", () => {
@@ -332,7 +346,7 @@ describe("BracketDrawsTab — draw rows", () => {
     const cell = within(row)
       .getByTestId("draw-progress")
       .closest('[role="cell"]');
-    expect(cell?.className).toContain("w-20");
+    expect(cell?.className).toContain("w-44");
     expect(cell?.className).not.toContain("flex-1");
     // Clipping a tally is the same crime as ellipsising a name.
     expect(cell?.className).not.toContain("overflow-hidden");
@@ -340,7 +354,7 @@ describe("BracketDrawsTab — draw rows", () => {
     // drift on a future priority change.
     expect(
       screen.getByRole("columnheader", { name: "Progress" }).className,
-    ).toContain("w-20");
+    ).toContain("w-44");
   });
 
   it("keeps every draw cell on one line and removes readiness from Format", () => {
@@ -352,9 +366,15 @@ describe("BracketDrawsTab — draw rows", () => {
     });
     renderDraws();
     const row = screen.getByTestId("bracket-draw-row-MS");
-    for (const cell of within(row).getAllByRole("cell")) {
+    // Every cell but the elastic Event cell stays on one line; Event
+    // truncates its name rather than wrapping the row to two.
+    for (const cell of within(row).getAllByRole("cell").slice(1)) {
       expect(cell).toHaveClass("whitespace-nowrap");
-      expect(cell.querySelector(".block")).toBeNull();
+      // No STACKED TEXT. The progress bar's fill is a `block` too, but it is
+      // aria-hidden decoration carrying no characters.
+      expect(
+        [...cell.querySelectorAll(".block")].filter((el) => el.textContent),
+      ).toEqual([]);
     }
     expect(row).not.toHaveTextContent(/Participants|Validation|Publication/);
     expect(within(row).queryByTestId(/draw-readiness-/)).toBeNull();
@@ -362,16 +382,19 @@ describe("BracketDrawsTab — draw rows", () => {
 });
 
 describe("BracketDrawsTab — status + generate", () => {
-  it("renders the Draft pill for draft status", () => {
+  it("says 'Not generated' in Progress for a draft draw — no Status pill", () => {
     mockBracketData = makeBracketData({ status: "draft" });
     renderDraws();
-    expect(screen.getByText(/Draft/i)).toBeInTheDocument();
+    expect(screen.getByTestId("draw-progress")).toHaveTextContent(
+      "Not generated",
+    );
+    expect(screen.queryByText(/^Draft$/)).not.toBeInTheDocument();
   });
 
-  it("renders the Generated pill for generated status", () => {
+  it("says nothing extra for a generated draw — its fraction is the state", () => {
     mockBracketData = makeBracketData({ status: "generated" });
     renderDraws();
-    expect(screen.getByText(/Generated/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Generated$/)).not.toBeInTheDocument();
   });
 
   it("disables Generate when participant count != size", () => {
@@ -900,7 +923,7 @@ describe("BracketDrawsTab — open draw", () => {
     renderDraws();
     fireEvent.click(screen.getByTestId("bracket-open-draw-MS"));
     expect(mockNavigate).toHaveBeenCalledWith(
-      expect.stringContaining("/competition/draw?event=MS"),
+      expect.stringContaining("/bracket/draw?event=MS"),
     );
     // The footer action must not also bubble into the card-level click.
     expect(mockNavigate).toHaveBeenCalledTimes(1);

@@ -29,7 +29,8 @@ describe("the Draws row cannot drift from its column spec", () => {
     // Each `role="cell"` opens a body cell; its className must reference the
     // spec rather than restating a width that the spec can move out from under.
     const cells = SRC.split('role="cell"').slice(1);
-    expect(cells.length).toBeGreaterThanOrEqual(7);
+    // Four columns since P3: Event · Entered · Progress · Action.
+    expect(cells.length).toBeGreaterThanOrEqual(4);
     const offenders = cells
       .map((chunk, i) => [i, chunk.slice(0, 220)] as const)
       .filter(([, chunk]) => !chunk.includes("colClass(DRAW_COLUMNS["))
@@ -85,8 +86,11 @@ describe("the Draws row fits its width budget", () => {
     ...specBlock.matchAll(/className:\s*["']([^"']+)["']/g),
   ].map((m) => m[1]);
 
-  it("declares seven columns", () => {
-    expect(classNames).toHaveLength(7);
+  it("declares four columns — Event, Entered, Progress, Action", () => {
+    // P3 simplified the index to the four questions an operator asks of it;
+    // Format folded into Event (and only when the draws disagree), Size
+    // folded into Entered, and Status folded into Progress.
+    expect(classNames).toHaveLength(4);
   });
 
   it("every column, at its declared floor, fits the content box", () => {

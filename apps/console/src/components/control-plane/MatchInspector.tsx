@@ -11,6 +11,7 @@ import type { MatchIdentity } from '../../platform/domain/matchIdentity';
 import { formatMatchIdentity } from '../../platform/domain/matchIdentity';
 import { DetailPanel } from './DetailPanel';
 import { ActiveChoice } from '../ActiveChoice';
+import { formatGamePairs } from './MatchCard';
 
 export type MatchInspectorFacet = 'summary' | 'assignment' | 'result';
 
@@ -170,7 +171,7 @@ export function MatchInspector({
             {result?.summary ? <p className="text-sm text-foreground">{result.summary}</p> : null}
             {result?.sets && result.sets.length > 0 ? (
               <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
-                {result.sets.map((set) => `${set.sideA}–${set.sideB}`).join(', ')}
+                {formatGamePairs([...result.sets])}
               </p>
             ) : null}
             {!result?.summary && (!result?.sets || result.sets.length === 0) ? (

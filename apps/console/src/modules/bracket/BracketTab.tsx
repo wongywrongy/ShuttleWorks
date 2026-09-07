@@ -36,6 +36,7 @@ import { EngineConfigForm } from "../../platform/engine-config/EngineConfigForm"
 import { LockRibbon } from "../../components/status/LockRibbon";
 import { requestClearScheduleOnNextSave } from "../../hooks/useTournamentState";
 import { useBracketScheduleLock } from "./useBracketScheduleLock";
+import { BracketDrawDefaults } from './BracketDrawDefaults';
 import { BracketStructureSection } from "./BracketStructureSection";
 import { BracketRosterTab } from "./BracketRosterTab";
 import { BracketDrawsTab } from "./BracketDrawsTab";
@@ -73,7 +74,7 @@ function BracketTabBody() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const goToDraws = () =>
-    navigate(`/tournaments/${params.id}/competition/draws`);
+    navigate(`/tournaments/${params.id}/bracket/draws`);
   const [eventId, setEventId] = useState<string>("");
   // SE draw-canvas layout. Session-only (plain state, no persistence);
   // lives here — beside ``eventId`` — because the toggle renders in
@@ -187,7 +188,7 @@ function BracketTabBody() {
     return new Promise<boolean>((resolve) => {
       setUnlockModalState({
         open: true,
-        actionDescription: "save engine settings (clears the bracket schedule)",
+        actionDescription: "save these settings (clears the bracket schedule)",
         resolve: (confirmed: boolean) => {
           if (confirmed) requestClearScheduleOnNextSave();
           setUnlockModalState(null);
@@ -267,7 +268,7 @@ function BracketTabBody() {
                   locked
                   action={
                     <Link
-                      to={`/tournaments/${params.id}/competition/draws`}
+                      to={`/tournaments/${params.id}/bracket/draws`}
                       className="ml-1 font-medium text-accent hover:underline"
                     >
                       View draws →
@@ -292,16 +293,22 @@ function BracketTabBody() {
                 readOnly={bracketScheduleLocked}
                 leadingSections={<BracketStructureSection />}
               />
+              {/* Draw format and draw size moved here from Setup: they are
+                  structural properties of a draw. Deliberately OUTSIDE
+                  `EngineConfigForm`'s <form> — it owns its own Save against
+                  the setup document, and a nested control's validity must
+                  never block the engine form's submit. */}
+              <BracketDrawDefaults />
             </LockedFieldset>
           </ConfigSurface>
         )}
         {view === "roster" && <BracketRosterTab />}
         {/* The standalone Events surface was folded into Draws — creating a
             draw now opens a layer on the Draws tab instead of a separate
-            page. Old ``bracket-events`` links redirect here. */}
+            page. Canonical navigation sends users directly to Draws. */}
         {view === "events" && (
           <Navigate
-            to={`/tournaments/${params.id}/competition/draws`}
+            to={`/tournaments/${params.id}/bracket/draws`}
             replace
           />
         )}

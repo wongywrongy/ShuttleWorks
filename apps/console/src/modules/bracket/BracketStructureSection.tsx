@@ -77,7 +77,7 @@ export function BracketStructureSection() {
         label="Draws"
         control={
           <Link
-            to={`/tournaments/${tid}/competition/draws`}
+            to={`/tournaments/${tid}/bracket/draws`}
             data-testid="bracket-open-draws"
             className={`${INTERACTIVE_BASE} ${NAV_LINK_CLASSES}`}
           >

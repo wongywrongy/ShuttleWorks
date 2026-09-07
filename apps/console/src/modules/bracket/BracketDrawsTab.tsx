@@ -42,7 +42,7 @@ import {
   MAX_EVENT_CODE_LENGTH,
   validateEventCode,
 } from "../../platform/engine-config/MeetEventsSection";
-import { EYEBROW_CLASS, INTERACTIVE_BASE } from "../../lib/utils";
+import { EYEBROW_CLASS, INTERACTIVE_BASE, UTILITY_BUTTON } from "../../lib/utils";
 import type { PickedSingle, PickedPair } from "./ParticipantPicker";
 import { DrawDetailPanel } from "./DrawDetailPanel";
 import {
@@ -77,37 +77,34 @@ interface DrawRow {
   roundComplete: boolean;
 }
 
-/** Column set for the draws table. The trailing unlabeled column hosts one
- *  contextual primary plus an overflow menu. */
-// Fixed cells are `shrink-0` so a docked detail pane can never crush them
-// into overlapping their neighbors. Every value stays on one line at the
-// target viewport: the row is a compact index, while detail belongs in the
-// selected draw's inspector. Progress is one fraction, never a second bar.
+/** Column set for the draws table: **Event · Entered · Progress · Open**
+ *  (P3 of operator-visual-fixes). Four columns, each answering a question the
+ *  operator actually asks of a draws index:
+ *
+ *    Event     which draw is this? — the full event name, with the draw code
+ *              muted beside it, and the FORMAT only when the draws disagree
+ *              about it (printing "Single elimination" on every row of a
+ *              single-elimination tournament is a column of one repeated
+ *              string).
+ *    Entered   is it ready to generate? — one `entered/target` fraction. The
+ *              old `Size` column restated the same target in its own cell.
+ *    Progress  how far has it got? — a thin bar plus `done/total`, or the
+ *              words "Not generated" where there is nothing to progress. It
+ *              absorbs the former `Status` column entirely: "Draft" said
+ *              exactly what "Not generated" says, in a second cell, and
+ *              "Generated" said nothing the fraction did not.
+ *    (action)  Generate / Open draw plus the overflow.
+ */
 const DRAW_COLUMNS: BandedListColumn[] = [
-  // THE ROW'S WIDTH BUDGET. At 1280 the content box is ~950px, and these seven
-  // columns have to live inside it. Sized from what each actually holds, after
-  // two failures worth recording:
-  //
-  //   w-16 (64px) for Code wrapped "md-classic" into "md-" / "classic".
-  //   NAME_COL_MIN (160px) fixed that and overran the budget by 34px, which
-  //   `flex-1 min-w-0` Format absorbed by collapsing to ZERO: its header ink
-  //   painted over SIZE, and "Single elimination" broke to one character per
-  //   line, making every row 273px tall.
-  //
-  // So Code is sized for a draw id (~14 chars) rather than for a person's
-  // name, and Format carries a real floor instead of `min-w-0` so it can never
-  // be the crush victim again.
-  { label: "Code", className: "w-28 shrink-0" },
-  { label: "Format", className: "min-w-[11rem] flex-1", priority: 3 },
-  { label: "Size", className: "w-28 shrink-0 text-right", priority: 2 },
+  // Event is the elastic column now — a full discipline name plus a muted
+  // code needs room to breathe, and it is the one cell whose content is
+  // operator data of unbounded length. The three fixed cells are `shrink-0`
+  // so a docked detail pane can never crush them into their neighbours.
+  { label: "Event", className: "min-w-[13rem] flex-1" },
   { label: "Entered", className: "w-32 shrink-0 text-right" },
-  { label: "Progress", className: "w-20 shrink-0" },
-  { label: "Status", className: "w-20 shrink-0 text-right" },
-  // `ml-auto` keeps the action cluster on the right edge in the narrow case
-  // where Format has yielded and no column is growing. Named "Action"
-  // (V3-OC15.1) — an unlabeled trailing column had no accessible name, and
-  // "Status" must stay reserved for actual states (Draft/Generated), never
-  // an action verb like "Open draw".
+  { label: "Progress", className: "w-44 shrink-0" },
+  // `ml-auto` keeps the action cluster on the right edge. Named "Action"
+  // (V3-OC15.1) — an unlabeled trailing column had no accessible name.
   { label: "Action", className: "ml-auto w-36 shrink-0 text-right" },
 ];
 
@@ -159,6 +156,14 @@ export function BracketDrawsTab() {
   const countsByEvent = useMemo(
     () => (data ? drawCountsByEvent(data) : new Map<string, DrawCounts>()),
     [data],
+  );
+
+  // Format is shown ONLY when the draws disagree about it: on a tournament
+  // where every draw is a single elimination, a Format column is one string
+  // repeated down the page.
+  const formatVaries = useMemo(
+    () => new Set(events.map((ev) => ev.format)).size > 1,
+    [events],
   );
 
   // Row models — one pass over events so every cell (and later the panel)
@@ -335,7 +340,7 @@ export function BracketDrawsTab() {
           type="button"
           onClick={() => setCreating(true)}
           data-testid="bracket-new-draw"
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
+          className={UTILITY_BUTTON}
         >
           New draw
         </button>
@@ -372,71 +377,61 @@ export function BracketDrawsTab() {
               // falls back to its full text content — which would swallow
               // "Generate"/"Re-generate" from the nested action buttons and
               // make getByRole('button', { name: /Generate/i }) ambiguous.
-              rowAttrs={(row) => ({ "aria-label": `Draw ${row.ev.id}` })}
+              rowAttrs={(row) => ({ "aria-label": `${disciplineLabel(row.ev.discipline)} draw ${row.ev.id}` })}
               renderRow={(row) => (
                 <>
-                  {/* Body ink, not accent. The code is an identifier, and in
-                      accent it read as the row's link — so each row offered
-                      two link-shaped things and only the trailing "Open draw"
-                      actually navigated (DRW-2). Accent stays for controls
-                      that go somewhere. */}
+                  {/* The full event name leads, with the draw CODE muted
+                      beside it — the code is an identifier, not the label,
+                      and in accent it used to read as the row's link, so each
+                      row offered two link-shaped things and only the trailing
+                      "Open draw" navigated (DRW-2). */}
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[0])} whitespace-nowrap text-2sm font-semibold text-foreground sw-num`}
+                    className={`${colClass(DRAW_COLUMNS[0])} flex min-w-0 items-baseline gap-1.5 text-2sm text-foreground`}
                   >
-                    {row.ev.id}
-                  </span>
-                  {/* Cell visibility derives from the column spec (colClass)
-                      so header and body can never drift on a priority
-                      change. */}
-                  <span
-                    role="cell"
-                    className={`${colClass(DRAW_COLUMNS[1])} whitespace-nowrap text-xs text-muted-foreground`}
-                  >
-                    <span>{formatLabel(row.ev.format)}</span>
-                    {row.isSwiss &&
-                    row.swissRounds !== undefined &&
-                    row.generated ? (
-                      <span className="ml-1.5 sw-num">
-                        Round {row.ev.rounds.length} of {row.swissRounds}
+                    {/* No CSS ellipsis (truncation contract): the cell has a
+                        13rem floor and grows; an unusually long discipline
+                        label wraps at a word boundary rather than hiding
+                        characters. */}
+                    <span className="min-w-0 font-medium">
+                      {disciplineLabel(row.ev.discipline)}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground sw-num">
+                      {row.ev.id}
+                    </span>
+                    {formatVaries ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {formatLabel(row.ev.format)}
                       </span>
                     ) : null}
                   </span>
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[2])} whitespace-nowrap text-xs text-muted-foreground sw-num`}
-                  >
-                    {row.targetSize} {isDoublesCode(row.ev.discipline) ? 'pairs' : 'players'}
-                  </span>
-                  <span
-                    role="cell"
-                    className={`${colClass(DRAW_COLUMNS[3])} whitespace-nowrap text-right text-xs sw-num ${
+                    className={`${colClass(DRAW_COLUMNS[1])} whitespace-nowrap text-right text-xs sw-num ${
                       row.partCount < row.targetSize
                         ? "text-status-warning"
                         : "text-muted-foreground"
                     }`}
                   >
-                    {row.partCount}/{row.targetSize} {isDoublesCode(row.ev.discipline) ? 'pairs' : 'players'}
+                    {row.partCount}/{row.targetSize}{" "}
+                    {isDoublesCode(row.ev.discipline) ? "pairs" : "players"}
                   </span>
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[4])} whitespace-nowrap`}
+                    className={`${colClass(DRAW_COLUMNS[2])} whitespace-nowrap`}
                   >
-                    {row.counts ? (
-                      <DrawProgressCell counts={row.counts} />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">–</span>
-                    )}
+                    <DrawProgressCell
+                      counts={row.counts}
+                      swissRound={
+                        row.isSwiss && row.generated && row.swissRounds !== undefined
+                          ? { current: row.ev.rounds.length, of: row.swissRounds }
+                          : null
+                      }
+                    />
                   </span>
                   <span
                     role="cell"
-                    className={`${colClass(DRAW_COLUMNS[5])} flex whitespace-nowrap justify-end`}
-                  >
-                    <DrawStatusCell status={row.status} />
-                  </span>
-                  <span
-                    role="cell"
-                    className={`${colClass(DRAW_COLUMNS[6])} flex items-center justify-end gap-1 whitespace-nowrap`}
+                    className={`${colClass(DRAW_COLUMNS[3])} flex items-center justify-end gap-1 whitespace-nowrap`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <ActionCell
@@ -579,45 +574,59 @@ function drawCountsByEvent(
   return byEvent;
 }
 
-/** F-UNI-33: one progress value, rendered once. */
-function DrawProgressCell({ counts }: { counts: DrawCounts }) {
-  const total = counts.done + counts.live + counts.ready + counts.pending;
-  if (total === 0)
-    return <span className="text-xs text-muted-foreground">–</span>;
+/**
+ * Progress: a thin bar plus the `done/total` count (P3). It absorbs the old
+ * `Status` column — a draw with no play-units reads **"Not generated"**,
+ * which is what "Draft" meant, said in the cell the reader is already looking
+ * at for progress. A generated draw's own fraction says the rest, so
+ * "Generated" needs no cell of its own.
+ *
+ * The bar is decoration over the number, never instead of it:
+ * `aria-hidden`, with the count as the accessible text.
+ */
+function DrawProgressCell({
+  counts,
+  swissRound,
+}: {
+  counts?: DrawCounts;
+  /** Swiss draws advance a round at a time — the round position is genuine
+   *  progress information, so it rides here rather than in a Format cell. */
+  swissRound?: { current: number; of: number } | null;
+}) {
+  const total = counts
+    ? counts.done + counts.live + counts.ready + counts.pending
+    : 0;
+  if (!counts || total === 0)
+    return (
+      <span className="text-xs text-muted-foreground" data-testid="draw-progress">
+        Not generated
+      </span>
+    );
+  const pct = Math.round((counts.done / total) * 100);
   return (
     <span
-      className="text-xs text-foreground sw-num"
+      className="flex items-center gap-2 text-xs text-foreground sw-num"
       data-testid="draw-progress"
     >
-      {counts.done}/{total} matches played
+      <span
+        aria-hidden
+        className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-muted"
+      >
+        <span
+          className="block h-full rounded-full bg-accent"
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+      <span>
+        {counts.done}/{total}
+      </span>
+      {swissRound ? (
+        <span className="text-muted-foreground">
+          Round {swissRound.current} of {swissRound.of}
+        </span>
+      ) : null}
     </span>
   );
-}
-
-/**
- * DRW-N2 per the X6 ladder: Draft and Generated are pre-live default
- * states → text, two weights. STARTED is silent — the Progress fraction
- * already carries advancement — and so is the derived Completed: an n/n
- * fraction already says the work is complete (X6-D logic). The
- * column stays because the state set is genuinely distinct (Phase 0
- * verified draft | generated | started + derived completion).
- */
-function DrawStatusCell({ status }: { status: BracketEventStatus }) {
-  if (status === "draft") {
-    return (
-      <span className="text-xs uppercase tracking-[0.06em] text-muted-foreground">
-        ○ Draft
-      </span>
-    );
-  }
-  if (status === "generated") {
-    return (
-      <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
-        Generated
-      </span>
-    );
-  }
-  return null;
 }
 
 function ActionCell({
@@ -1034,7 +1043,7 @@ function NewDrawModal({
       <div className="max-h-[70vh] space-y-4 overflow-y-auto px-4 py-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className={FIELD_LABEL_CLASS}>Event ID</span>
+            <span className={FIELD_LABEL_CLASS}>Event code</span>
             <input
               type="text"
               value={id}

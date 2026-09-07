@@ -19,9 +19,9 @@ import { useBracket } from '../../hooks/useBracket';
 import { useAction } from '../../hooks/useAction';
 import { Row, Section } from '../../platform/engine-config/SettingsControls';
 import { DialogFooter } from '../../components/DialogFooter';
+import { UTILITY_BUTTON } from '../../lib/utils';
 
-const LINK_CLASSES =
-  'inline-flex items-center rounded-sm border border-border bg-card px-3 py-1 text-xs font-medium text-card-foreground hover:bg-muted/40';
+const LINK_CLASSES = UTILITY_BUTTON;
 
 export function BracketDataSection() {
   const tid = useTournamentId();

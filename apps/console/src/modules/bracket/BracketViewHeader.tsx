@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import type { TournamentDTO } from "../../api/bracketDto";
 import { Select } from "@scheduler/design-system";
 import { useTournamentId } from "../../hooks/useTournamentId";
-import { INTERACTIVE_BASE } from "../../lib/utils";
+import { UTILITY_BUTTON } from "../../lib/utils";
 import { ActionsBar } from "../../components/control-plane";
 import { Seg, type SegOption } from "../../platform/engine-config/SettingsControls";
 import { formatLabel, disciplineLabel } from "./bracketLabels";
@@ -54,8 +54,8 @@ export function BracketViewHeader({
               surface (no sidebar entry of its own), so it carries an
               explicit way back rather than stranding the operator. */}
           <Link
-            to={`/tournaments/${tid}/competition/draws`}
-            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2 text-xs text-card-foreground hover:bg-muted/40`}
+            to={`/tournaments/${tid}/bracket/draws`}
+            className={UTILITY_BUTTON}
           >
             ← Draws
           </Link>

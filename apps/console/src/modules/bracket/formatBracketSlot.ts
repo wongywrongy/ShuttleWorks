@@ -19,15 +19,18 @@ const HHMM_RE = /^(\d{1,2}):(\d{2})$/;
 export function formatBracketSlot(
   slotId: number,
   ctx: BracketSlotContext,
-): string {
+): string | null {
   const { start_time, interval_minutes } = ctx;
-  if (!start_time) return `Slot ${slotId}`;
+  // No usable start time → no time to name. The slot index is storage, never
+  // operator copy (§3.1), so callers omit the fact rather than relabel the
+  // raw index (V3-OC16.1, extended to every caller by P6).
+  if (!start_time) return null;
   const m = HHMM_RE.exec(start_time.trim());
-  if (!m) return `Slot ${slotId}`;
+  if (!m) return null;
   const startHours = parseInt(m[1], 10);
   const startMinutes = parseInt(m[2], 10);
   if (!Number.isFinite(startHours) || !Number.isFinite(startMinutes)) {
-    return `Slot ${slotId}`;
+    return null;
   }
   const totalMinutes = startHours * 60 + startMinutes + slotId * interval_minutes;
   const hh = Math.floor(totalMinutes / 60) % 24;

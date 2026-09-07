@@ -29,17 +29,17 @@ import {
   MEET_MATCH_CELL,
   MEET_MATCH_LIST_COLUMNS,
   MEET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
-  MatchStatus,
   STATUS_LABEL,
   parseMatchStatusFilter,
   ScoreLane,
-  setsWinner,
+  recordedWinner,
   type BandedTableGroup,
   type MatchListStatus,
   type MatchInspectorModel,
   type SetPair,
 } from '../../../components/control-plane';
 import { formatPersonName } from '../../../platform/domain/sides';
+import { STATE_WORD } from '../../../lib/stateWords';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { usePlayerMap } from '../../../store/selectors';
 import type { MatchDTO, PlayerDTO } from '../../../api/dto';
@@ -62,6 +62,17 @@ import { DenseDataPagination } from '../../../components/control-plane/DenseData
 /** Stable empty-array reference so MatchRow's useMemo deps don't churn
  *  when a match has no disruptions. */
 const EMPTY_ISSUES: MatchIssue[] = [];
+
+/** The side's people as one phrase, for the score lane's per-game accessible
+ *  text ("Game 2, Ana Silva and Ben Ito 21, …" — match-card §3.4/§3.2, which
+ *  joins WITHIN a side with "and"). Display-only. */
+function sideNames(ids: string[], players: PlayerDTO[]): string {
+  const named = ids
+    .map((id) => players.find((p) => p.id === id)?.name)
+    .filter(Boolean) as string[];
+  if (named.length === 0) return 'To be decided';
+  return named.map(formatPersonName).join(' and ');
+}
 
 export function MatchesSpreadsheet({
   pendingFocusId,
@@ -238,11 +249,9 @@ export function MatchesSpreadsheet({
       sideB: sideLabel(selectedMatch.sideB ?? []),
       assignment: {
         court: state?.actualCourtId ?? assignment?.courtId ?? null,
-        planned: assignment
-          ? config
-            ? slotToTime(assignment.slotId, config)
-            : `Slot ${assignment.slotId}`
-          : null,
+        // No configured clock → no planned time. A raw slot index is
+        // storage, never operator copy (§3.1).
+        planned: assignment && config ? slotToTime(assignment.slotId, config) : null,
         actualStart: state?.actualStartTime
           ? formatIsoClock(state.actualStartTime)
           : null,
@@ -253,7 +262,15 @@ export function MatchesSpreadsheet({
       result: resultSets.length > 0 ? { sets: resultSets } : null,
     };
 
-    return { model, status, eventCode: identity.event_code, resultSets };
+    return {
+      model,
+      status,
+      eventCode: identity.event_code,
+      resultSets,
+      // §3.5: the recorded aggregate (games won per side) IS the meet's
+      // outcome; the per-game `sets` are never counted to find a winner.
+      winner: recordedWinner(state?.score),
+    };
   }, [
     selectedMatch,
     statusById,
@@ -342,7 +359,8 @@ export function MatchesSpreadsheet({
         match: selectedMatch,
         status: selectedContext.status,
         eventCode: selectedContext.eventCode,
-        resultSets: selectedContext.resultSets,
+        winner: selectedContext.winner,
+        issues: selectedMatch ? (disruptions.byMatch.get(selectedMatch.id) ?? EMPTY_ISSUES) : EMPTY_ISSUES,
         players,
         groups,
         rankCounts: config?.rankCounts,
@@ -495,30 +513,50 @@ const MatchRow = memo(function MatchRow({
   // come from the global `useDisruptions` feed (consumed by the parent),
   // so the per-row Warning icon and the TabBar badge always agree.
   const severity = maxSeverity(issues);
-  const laneSets =
-    status !== 'done' ? null : sets?.length ? sets : score ? [score] : null;
-  const scored = laneSets != null;
-  const winner = scored ? setsWinner(laneSets) : null;
+  // The lane shows every recorded game, including the one in progress: a
+  // live running score belongs in the same lane, in the same weight
+  // (match-card §3.4). Only a DONE row falls back to the aggregate when no
+  // per-game detail was captured.
+  const laneSets = sets?.length
+    ? sets
+    : status === 'done' && score
+      ? [score]
+      : null;
+  // §2.7 rule 4 / §3.5: from the RECORDED aggregate, never from counting
+  // games — and never on an unfinished match.
+  const winner = status === 'done' ? recordedWinner(score) : null;
 
   return (
     <>
+      {/* THE LEADING MARK (P3). One gutter, one mark, ranked: a data issue
+          outranks a lifecycle cue, because it is the only one an operator has
+          to act on. Nothing renders for the routine states — a mark on every
+          row is decoration. The issue's TEXT is not here (the cell never fit
+          it); it is in the inspector, which the row click opens. */}
       <span
         role="cell"
         className={`flex ${MEET_MATCH_CELL.warnGutter} shrink-0 items-center justify-center`}
-        title={
-          issues.length > 0
-            ? issues.map((i) => `• ${i.message}`).join('\n')
-            : undefined
-        }
       >
         {issues.length > 0 ? (
           <Warning
-            aria-label={`${issues.length} issue${issues.length === 1 ? '' : 's'} on this match`}
+            aria-label={`${issues.length} issue${issues.length === 1 ? '' : 's'} on this match; open the match for detail`}
             weight="fill"
             className={[
               'h-3.5 w-3.5',
               severity === 'error' ? 'text-destructive' : 'text-status-warning',
             ].join(' ')}
+          />
+        ) : status === 'live' ? (
+          <span
+            aria-label={STATE_WORD.onCourt}
+            data-testid={`match-mark-live-${match.id}`}
+            className="inline-block h-2 w-2 rounded-full bg-status-live"
+          />
+        ) : status === 'pending' ? (
+          <span
+            aria-label={STATUS_LABEL.pending}
+            data-testid={`match-mark-pending-${match.id}`}
+            className="inline-block h-2 w-2 rounded-full border border-border"
           />
         ) : null}
       </span>
@@ -538,26 +576,28 @@ const MatchRow = memo(function MatchRow({
         players={players}
         winner={winner === 'A'}
       />
+      {/* The centred paired lane, BETWEEN the opponents (match-card §3.4).
+          It collapses to an empty cell when nothing is recorded — the column
+          keeps its width so lanes align down the list, but emits no ink. */}
+      <span
+        role="cell"
+        className={`${MEET_MATCH_CELL.score} flex items-center justify-center`}
+      >
+        {laneSets ? (
+          <ScoreLane
+            sets={laneSets}
+            sideALabel={sideNames(match.sideA ?? [], players)}
+            sideBLabel={sideNames(match.sideB ?? [], players)}
+            data-testid={`match-score-${match.id}`}
+          />
+        ) : null}
+      </span>
       <PlayerCellSummary
         side="Side B"
         ids={match.sideB ?? []}
         players={players}
         winner={winner === 'B'}
       />
-      <span
-        role="cell"
-        data-testid={`match-status-${match.id}`}
-        className={`${MEET_MATCH_CELL.status} flex items-center justify-end`}
-      >
-        {/* X6-D (supersedes X3): a finished row's score IS its status — no
-            DONE label beside it. Text states and lanes share this slot and
-            both right-align, so the column still scans as one column. */}
-        {laneSets ? (
-          <ScoreLane sets={laneSets} data-testid={`match-score-${match.id}`} />
-        ) : (
-          <MatchStatus status={status} />
-        )}
-      </span>
       {/* Two-click arm: deleting a match used to take one hover-revealed click,
           with no confirm and no undo (audit F1). */}
       <span role="cell" className="contents">
@@ -613,7 +653,7 @@ function PlayerCellSummary({
     <span
       role="cell"
       data-testid={`player-cell-${side.replace(/\s+/g, '-').toLowerCase()}`}
-      className={`${MEET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed`}
+      className={`${MEET_MATCH_CELL.side} flex min-w-0 flex-col justify-center text-2sm leading-snug`}
     >
       {named.length === 0 ? (
         // match-card contract §2.1/§2.4: an unresolved side never renders
@@ -621,23 +661,25 @@ function PlayerCellSummary({
         // "To be decided" (same word `sides.ts`'s `undetermined` kind uses).
         <span className="text-xs italic text-muted-foreground">To be decided</span>
       ) : (
-        named.map((p, i) => (
-          <span key={p.id} className="inline-flex items-baseline">
+        // ONE PARTNER PER LINE (match-card §3.1, P3). The ` / ` join is gone:
+        // a slash-joined pair reads as one name at scan speed, and it was the
+        // one thing that made a doubles row's two sides fail to line up with
+        // each other. Two lines per doubles side, one for singles, and the
+        // row grows to hold them — `break-words` and no fixed height, so a
+        // long name wraps instead of clipping at 200% text zoom.
+        named.map((p) => (
+          <span
+            key={p.id}
+            className={`block break-words ${winner ? 'font-semibold text-foreground' : 'text-foreground'}`}
+          >
             {/* BWF presentation ("NAKAMURA Kei") — display-only; the stored
-                name, search and exports stay as typed. Pairs join with the
-                slash the mock (and every draw sheet) uses.
+                name, search and exports stay as typed.
 
                 The winning side is marked by WEIGHT, not by the green dot
                 that used to float before its first name: at scan speed a
                 green dot reads as live/present, which is the one thing a
-                finished match is not (MAT-3). The outcome itself lives in
-                the result cell now. */}
-            <span className={winner ? 'font-semibold text-foreground' : 'text-foreground'}>
-              {p.name ? formatPersonName(p.name) : '–'}
-            </span>
-            {i < named.length - 1 ? (
-              <span className="px-1 text-muted-foreground">/</span>
-            ) : null}
+                finished match is not (MAT-3). */}
+            {p.name ? formatPersonName(p.name) : '–'}
           </span>
         ))
       )}

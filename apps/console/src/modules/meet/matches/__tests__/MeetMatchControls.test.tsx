@@ -7,7 +7,7 @@
  */
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { MatchInspector, type MatchInspectorModel, type MatchListStatus, type SetPair } from '../../../../components/control-plane';
+import { MatchInspector, recordedWinner, type MatchInspectorModel, type MatchListStatus, type SetPair } from '../../../../components/control-plane';
 import type {
   MatchDTO,
   MatchStateDTO,
@@ -88,6 +88,10 @@ function renderSurface(
         : state?.score
           ? [state.score]
           : [];
+  // The recorded aggregate is the authority (match-card §3.5); these
+  // fixtures record per-game sets only, so a match with no aggregate has no
+  // winner to mark.
+  const winner = recordedWinner(state?.score ?? null);
   const identity = meetMatchIdentityFromStored({
     event_rank: match.eventRank,
     sequence: match.matchNumber,
@@ -108,7 +112,7 @@ function renderSurface(
       match={match}
       status={status}
       eventCode={identity.event_code}
-      resultSets={resultSets}
+      winner={winner}
       players={store.players}
       groups={store.groups}
       rankCounts={store.config?.rankCounts}

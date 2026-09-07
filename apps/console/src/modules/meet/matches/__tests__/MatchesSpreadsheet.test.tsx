@@ -156,7 +156,7 @@ describe('<MatchesSpreadsheet />', () => {
     expect(within(row).getAllByRole('button')).toHaveLength(1);
   });
 
-  it('renders doubles sides as slash-joined BWF names, with no school', () => {
+  it('stacks doubles partners one per line, with no school', () => {
     renderSheet();
     const row = screen.getByTestId('match-row-m5');
     // Console direction (2026-08-13): rows read "SURNAME Given".
@@ -172,9 +172,14 @@ describe('<MatchesSpreadsheet />', () => {
     // click away in the detail pane instead — asserted below.
     expect(within(row).queryByText('Alpha High')).toBeNull();
     expect(within(row).queryByText('Beta Prep')).toBeNull();
-    // Slash separator between pair members, one per doubles side (the
-    // draw-sheet convention the Console mock uses).
-    expect(within(row).getAllByText('/')).toHaveLength(2);
+    // P3 / match-card §3.1: ONE PARTNER PER LINE, two lines per doubles
+    // side. The ` / ` join is gone — a slash-joined pair reads as one name at
+    // scan speed, and it was what stopped a doubles row's two sides lining up
+    // with each other.
+    expect(within(row).queryByText('/')).toBeNull();
+    const sideA = within(row).getByTestId('player-cell-side-a');
+    expect([...sideA.querySelectorAll('span.block')].map((n) => n.textContent))
+      .toEqual(['Aiko', 'Ben']);
   });
 
   it('keeps the school reachable on the player card in the detail pane', () => {

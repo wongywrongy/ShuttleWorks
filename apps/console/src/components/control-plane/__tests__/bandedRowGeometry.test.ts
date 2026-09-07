@@ -322,11 +322,14 @@ describe('the dock floor is derived from the column set', () => {
   it('never leaves the list below the tier its own columns query', () => {
     // Defect D11's class: the 560 default sat under the 672 `@2xl` tier, so
     // selecting a match deleted `#` and `Status` with nothing to say so.
+    // Since P3 the match lists declare NO priority tier at all — nothing in
+    // the row is optional — so their own tier is the base 1, and the column
+    // SUM is what binds the floor.
     for (const cols of [MEET_MATCH_LIST_COLUMNS, BRACKET_MATCH_LIST_COLUMNS]) {
       expect(dockMinContentWidth(cols)).toBeGreaterThanOrEqual(
         highestTier(cols),
       );
-      expect(highestTier(cols)).toBe(672);
+      expect(highestTier(cols)).toBe(0);
     }
   });
 
@@ -344,14 +347,12 @@ describe('the dock floor is derived from the column set', () => {
   });
 
   it('re-derives per list when the event column changes width', () => {
-    // Meet (no ordinal column since G6): 16 + 48 + 160 + 160 + 176 + 32 =
-    // 592 columns, + 5 × 12 gap = 652, + 40 inset = 692 — the Status column
-    // grew from 112 to 176 to hold a chip AND the score lane (X3), which
-    // pushed this sum past the 672 tier, so the SUM now binds on both lists.
-    expect(dockMinContentWidth(MEET_MATCH_LIST_COLUMNS)).toBe(692);
-    // Bracket: the same sum with a 112px event column = 656, + 60 + 40 =
-    // 756, further above the tier. One shared floor could not be both.
-    expect(dockMinContentWidth(BRACKET_MATCH_LIST_COLUMNS)).toBe(756);
+    // Meet (P3 anatomy): 20 mark + 48 event + 160 + 160 sides + 160 score
+    // + 32 action = 580 columns, + 5 × 12 gap = 640, + 40 inset = 680.
+    expect(dockMinContentWidth(MEET_MATCH_LIST_COLUMNS)).toBe(680);
+    // Bracket: the same sum with a 112px event column = 644, + 60 + 40 =
+    // 744. One shared floor could not be both.
+    expect(dockMinContentWidth(BRACKET_MATCH_LIST_COLUMNS)).toBe(744);
   });
 
   it('reads `min-w-[10rem]` arbitrary values as well as ladder steps', () => {

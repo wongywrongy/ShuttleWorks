@@ -1,9 +1,9 @@
 /**
  * The column geometry shared by Meet Matches and Bracket Matches. Anatomy:
- * warning-icon gutter (Meet) / spacer (Bracket) · per-group `#` · event code
- * · two flex-[3] sides · Status · trailing action gutter (Meet: delete
- * button, Bracket: contingency menu). One spec so the two surfaces cannot
- * drift; the parity test pins usage.
+ * leading-mark gutter · event code · Side A · the centred paired SCORE lane ·
+ * Side B · trailing action gutter (Meet: delete button, Bracket: contingency
+ * menu). One spec so the two surfaces cannot drift; the parity test pins
+ * usage.
  *
  * ONE column is parameterised: the event code. Its width is the only thing
  * the two lists genuinely disagree about, because they write different
@@ -32,10 +32,10 @@
  * visibility) row cells must consume instead of re-declaring raw width
  * classes; the parity test pins this too.
  *
- * Priorities: `#` and `Status` collapse first when the surface narrows
- * (docked detail pane open, small window) — the sides and event code are
- * what operators actually read. Requires the surface's scroll wrapper to
- * be `@container/table`.
+ * Nothing collapses by priority any more: with `Status` and `Issues` gone the
+ * row holds only what an operator actually reads — who is playing, what the
+ * score is, and one exceptional mark. Requires the surface's scroll wrapper
+ * to be `@container/table` for the shared banded-row container queries.
  */
 import type { BandedListColumn } from './BandedList';
 import { NAME_COL_MIN, colClass } from './BandedList';
@@ -63,20 +63,32 @@ export const BRACKET_EVENT_COL = 'w-28';
 // No ordinal `#` column (SP-CONSOLE-REFINE G6): the row's identity is its
 // event code / play-unit label; a per-group counter carried no information.
 //
-// Status holds a chip AND, on done rows, the score lane beside it: up to three
-// `w-9` set pairs ("21-15 21-17 21-19") right-aligned so sets line up
-// vertically down the list. It was `w-28`, sized for the lane ALONE, because
-// the score used to REPLACE the chip — which meant the column said a state on
-// some rows and a number on others, and a scanning eye could not tell a
-// finished match from an unfinished one without reading the cell (X3). Fitting
-// both costs 64px, taken from the two flex sides, which have their own
-// `NAME_COL_MIN` floor.
+// The trailing `Status` and `Issues` TEXT columns are GONE (P3 of
+// operator-visual-fixes; match-card contract §6.2). Two reasons, both
+// structural rather than cosmetic:
+//
+//   * `Status` painted a word on every row — DONE/READY/PENDING is the
+//     surrounding group's fact far more often than the row's, so the column
+//     spent 176px restating what the filter strip already said. What is
+//     genuinely exceptional (a live match, an unscheduled one, a data issue)
+//     is now ONE leading mark in the gutter, where a scanning eye finds it
+//     without reading; the issue's DETAIL — which no 176px cell ever fitted —
+//     lives in the row's inspector.
+//   * `Score` moved BETWEEN the two sides. A per-side score column made the
+//     reader align Side A's "21" with Side B's "15" across a name column to
+//     read one game. The lane holds the pair itself, centred, first number =
+//     first-listed side, so a game is one glance and the sides frame it.
+//
+// The lane is `w-40` (160px): three pairs of two-digit numbers with their
+// separators ("18–21, 21–15, 21–13") measure ~140px at `text-2sm` tabular,
+// and a walkover badge leads the lane on a contingency row. It has no
+// priority tier — the score is not what collapses when the dock opens.
 const matchListColumns = (eventColWidth: string): BandedListColumn[] => [
-  { label: '', className: 'w-4 shrink-0' },
+  { label: '', className: 'w-5 shrink-0' },
   { label: 'Event', className: `${eventColWidth} shrink-0` },
   { label: 'Side A', className: `${NAME_COL_MIN} flex-[3]` },
+  { label: 'Score', className: 'w-40 shrink-0 text-center' },
   { label: 'Side B', className: `${NAME_COL_MIN} flex-[3]` },
-  { label: 'Status', className: 'w-44 shrink-0 text-right', priority: 2 },
   { label: '', className: 'w-8 shrink-0' },
 ];
 
@@ -96,10 +108,13 @@ export const BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH = dockMinContentWidth(
 
 const matchCell = (columns: BandedListColumn[]) =>
   ({
+    /** Leading mark: a data issue, or an exceptional LIVE / not-yet-scheduled
+     *  cue. Never a routine state word. */
     warnGutter: colClass(columns[0]),
     event: colClass(columns[1]),
     side: colClass(columns[2]),
-    status: colClass(columns[4]),
+    /** The centred paired-game lane, between Side A and Side B. */
+    score: colClass(columns[3]),
     actionGutter: colClass(columns[5]),
   }) as const;
 
