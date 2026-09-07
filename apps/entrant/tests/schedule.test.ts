@@ -47,6 +47,9 @@ const MATCHES = {
       ],
       score: [[21, 19]],
       walkover: false,
+      winnerSide: null,
+      reference: "MS SF1",
+      shortReference: "SF1",
       updatedAt: "2026-09-12T10:35:00+00:00",
     },
   ],
@@ -155,6 +158,68 @@ describe("Schedule / Live", () => {
     expect(html).not.toMatch(/GMT[+-]\d|KST/);
     expect(html).toContain("10:30");
     expect(html).toContain("/players/ada");
+  });
+
+  // ---- public-visual-fixes P3 -----------------------------------------
+
+  it("names the match with the SHARED reference on one compact line", () => {
+    // §6.1: a whole-day schedule is a MIXED-event view, so the event code
+    // stays — the same string the operator's match list shows. The old bare
+    // "Match n" is gone from the tier entirely.
+    return render().then((html) => {
+      expect(html).toContain("MS SF1 · 10:30 · Court 1");
+      expect(html).not.toMatch(/>Match \d/);
+    });
+  });
+
+  it("makes no promise to update scores it cannot update", async () => {
+    // The tier ships no client framework and no polling; the document is
+    // what the server rendered. The freshness line below the list is the
+    // honest version of the same idea.
+    const html = await render();
+    expect(html).not.toContain("Scores update");
+    expect(html).toContain("Updated ");
+  });
+
+  it("never calls a courtless live record \"On court\"", async () => {
+    const html = await render("/e/spring-open/schedule", {
+      ...MATCHES,
+      items: [{ ...MATCHES.items[0], court: null }],
+      facets: { ...MATCHES.facets, courts: [] },
+    });
+    // §4.2: an absent court is an absent claim. The band still says the
+    // group is live; the CARD makes no assertion it cannot support. (The
+    // state filter's own <option> still spells the state — that is a
+    // control naming a filter value, not a claim about this match.)
+    expect(html).toContain("Live now");
+    expect(html).not.toMatch(/text-status-live">On court/);
+    expect(html).not.toContain("Court null");
+    // Positive control: with a court approved, the card says both.
+    const withCourt = await render();
+    expect(withCourt).toMatch(/text-status-live">On court/);
+    expect(withCourt).toContain("Court 1");
+  });
+
+  it("takes the winner from the authoritative outcome, never from the ledger", async () => {
+    // §5.1 rule 3: a retirement's ledger routinely favours the side that
+    // did NOT win. Counting games — what this adapter used to do — gets it
+    // exactly backwards, and the wire now carries the real answer.
+    const retired = {
+      ...MATCHES,
+      items: [
+        {
+          ...MATCHES.items[0],
+          status: "retired",
+          score: [[21, 15], [3, 11]],
+          winnerSide: "A",
+        },
+      ],
+      facets: { ...MATCHES.facets, states: ["retired"] },
+    };
+    const html = await render("/e/spring-open/schedule", retired);
+    expect(html).toMatch(/Winner: <\/span>[\s\S]{0,400}Ada Lovelace/);
+    // The exceptional outcome reads as one small leading cue.
+    expect(html).toContain("Retired");
   });
 
   it("sends URL-backed filters to the public matches projection", async () => {

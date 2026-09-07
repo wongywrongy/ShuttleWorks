@@ -33,8 +33,8 @@ import { TournamentFrame } from '../components/TournamentFrame';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { eventCodeLabel } from '../lib/draws.types';
-import { formatDateLong } from '../lib/format';
-import type { PlayerPageDTO } from '../lib/player.types';
+import { formatCalendarDay, formatDateLong } from '../lib/format';
+import type { PlayerMatchDTO, PlayerPageDTO } from '../lib/player.types';
 import { SECTION_TITLE } from '../lib/ui';
 import { sectionHref, sectionLabel } from '../lib/tournamentFrame';
 import { personHref, personRefModel } from '../../public/assets/person-ref.js';
@@ -100,11 +100,31 @@ export const meta: Route.MetaFunction = ({ data }) => {
   ];
 };
 
+/**
+ * D12 (public-visual-fixes P3): the wire's `playedOn` is a bare calendar
+ * date, and a raw `2026-07-29` in card prose is exactly the ISO leak the
+ * contract forbids. `draw.tsx` already humanised it through the entrant time
+ * authority; this route handed the DTO to `MatchCard` untouched, so the same
+ * match read two ways on two pages. One authority, both routes.
+ */
+function playerMatchCard(match: PlayerMatchDTO) {
+  return match.playedOn
+    ? { ...match, playedOn: formatCalendarDay(match.playedOn) }
+    : match;
+}
+
 export default function Player({ loaderData }: Route.ComponentProps) {
   const { slug, tournamentDate, page, player, nowMs } = loaderData;
   const coming = player.matches.filter((match) => !match.decided);
   const played = player.matches.filter((match) => match.decided);
-  const liveMatch = player.matches.find((match) => match.status === 'live');
+  // §4.2 (P3): "On court now" is a claim about a COURT. A live record with
+  // no approved court cannot support it — the strip is omitted rather than
+  // rendered with the court silently missing from its own sentence.
+  const liveMatch = player.matches.find(
+    (match) =>
+      match.status === 'live' &&
+      (match.courtLabel !== null && match.courtLabel !== undefined ? true : match.court !== null),
+  );
   const playerName = personRefModel({
     slug,
     identity: player.person.identity,
@@ -196,7 +216,7 @@ export default function Player({ loaderData }: Route.ComponentProps) {
             ) : null}
             <div className="mt-3 grid gap-3">
               {coming.map((match, index) => (
-                <MatchCard key={index} match={match} slug={slug} />
+                <MatchCard key={index} match={playerMatchCard(match)} slug={slug} />
               ))}
             </div>
           </section>
@@ -209,7 +229,7 @@ export default function Player({ loaderData }: Route.ComponentProps) {
             </h2>
             <div className="mt-3 grid gap-3">
               {played.map((match, index) => (
-                <MatchCard key={index} match={match} slug={slug} />
+                <MatchCard key={index} match={playerMatchCard(match)} slug={slug} />
               ))}
             </div>
           </section>

@@ -118,6 +118,8 @@ const SE_DRAW = {
             {
               nodeKey: "sf1",
               position: 1,
+              reference: "MS SF1",
+              shortReference: "SF1",
               sides: [
                 {
                   participantKey: "p1",
@@ -151,6 +153,8 @@ const SE_DRAW = {
             {
               nodeKey: "sf2",
               position: 2,
+              reference: "MS SF2",
+              shortReference: "SF2",
               sides: [
                 {
                   participantKey: "p3",
@@ -179,6 +183,8 @@ const SE_DRAW = {
             {
               nodeKey: "f1",
               position: 1,
+              reference: "MS F",
+              shortReference: "F",
               sides: [
                 {
                   participantKey: "p1",
@@ -189,10 +195,15 @@ const SE_DRAW = {
                 },
                 {
                   participantKey: null,
-                  placeholder: "Winner of SF 2",
+                  // The wire's legacy prose twin still says "Winner of …";
+                  // the renderer reads the DISCRIMINANT (contract §2.1) and,
+                  // since public-visual-fixes P3, renders the public tier's
+                  // empty slot + muted feeder line from it.
+                  placeholder: "Winner of SF2",
                   bye: false,
                   feederNodeKey: "sf2",
                   feederTake: "winner",
+                  unresolved: { kind: "winner_of", reference: "SF2" },
                 },
               ],
               result: null,
@@ -240,6 +251,8 @@ const RR_DRAW = {
             {
               nodeKey: "r1m1",
               position: 1,
+              reference: "WS R1·1",
+              shortReference: "R1·1",
               sides: [
                 {
                   participantKey: "a",
@@ -457,7 +470,10 @@ describe("the elimination draw page", () => {
     expect(html).toMatch(/Ada Lovelace[\s\S]*\[.*1.*\]/);
     expect(html).toMatch(/Katherine Johnson[\s\S]*\[.*2.*\]/);
     expect(html).toContain("Bye");
-    expect(html).toContain("Winner of SF 2");
+    // public-visual-fixes P3: an unresolved side is an empty slot with a
+    // muted feeder line naming the SHARED reference — never "Winner of".
+    expect(html).toContain("from SF2");
+    expect(html).not.toContain("Winner of");
     expect(html).toContain("21");
     // D12: the raw ISO date is never in prose — humanized instead.
     expect(html).not.toContain("2026-08-01");
@@ -476,9 +492,11 @@ describe("the elimination draw page", () => {
     expect(html).not.toContain("/e/assets/bracket-connectors.js");
     // 2 Round-block cards (the default round, Semifinals) + 3 Bracket nodes.
     expect((html.match(/<article/g) ?? []).length).toBe(5);
-    // V3-PE10.1: every bracket node carries a visible human match number.
-    expect(html).toContain("Match 1");
-    expect(html).toContain("Match 2");
+    // V3-PE10.1 / §6.1 (P3): every bracket node carries the SHARED match
+    // reference — the same string the operator's match list shows — and no
+    // surface renumbers locally as "Match n".
+    expect(html).not.toContain("Match 1");
+    expect(html).not.toContain("Match 2");
 
     const bracketOnly = await render("/e/spring-open/draws/MS?view=bracket");
     expect(bracketOnly).not.toContain('<div class="md:hidden">');
@@ -491,6 +509,41 @@ describe("the elimination draw page", () => {
     const list = await render("/e/spring-open/draws/MS?view=list");
     expect(list).toContain("Saturday, August 1");
     expect(list).toContain("10:30 · Court 1");
+  });
+
+  // ---- public-visual-fixes P3 -----------------------------------------
+
+  it("uses the event-code-dropped reference in this single-event view", async () => {
+    // §6.1: a draw page has ONE event, so the compact line reads
+    // `SF1 · … · 10:30 · Court 1` — the same match the operator's list calls
+    // `MS SF1`, minus the code the page already states in its own subtitle.
+    stubApi({ "/draws/MS": SE_DRAW });
+    const list = await render("/e/spring-open/draws/MS?view=list");
+    expect(list).toContain("SF1 · Saturday, August 1 · 10:30 · Court 1");
+    expect(list).not.toContain("MS SF1");
+    // ...and the node carries the same string.
+    const bracket = await render("/e/spring-open/draws/MS?view=bracket");
+    expect(bracket).toContain(">SF1<");
+    expect(bracket).toContain(">F<");
+  });
+
+  it("renders the paired score once, right-aligned on the node trailing edge", async () => {
+    // §4.3/§5.1 rule 6: one lane, first-listed-side order, no per-game
+    // emphasis and no per-side score column inside a 288px node.
+    stubApi({ "/draws/MS": SE_DRAW });
+    const bracket = await render("/e/spring-open/draws/MS?view=bracket");
+    expect(bracket).toContain("21–15, 21–12");
+    expect(bracket).not.toMatch(/place-items-center/);
+  });
+
+  it("leaves an unreached slot empty with a muted feeder line", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const bracket = await render("/e/spring-open/draws/MS?view=bracket");
+    expect(bracket).toContain("data-feeder-slot");
+    expect(bracket).toContain("from SF2");
+    expect(bracket).not.toContain("Winner of");
+    // Never a machine identifier in visible prose (§4.3).
+    expect(bracket).not.toMatch(/>sf2</);
   });
 
   it("offers the Draw / Consolation link-pills and honors ?segment=", async () => {

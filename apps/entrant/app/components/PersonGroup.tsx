@@ -1,5 +1,12 @@
 import type { PersonReferenceDTO } from '../lib/person.types';
-import { PENDING_MEMBER_LABEL, sideFallbackLabel, unresolvedLabel, type UnresolvedSideDTO } from '../lib/side';
+import {
+  PENDING_MEMBER_LABEL,
+  feederLabel,
+  isFeederSide,
+  sideFallbackLabel,
+  unresolvedLabel,
+  type UnresolvedSideDTO,
+} from '../lib/side';
 import { PersonRef } from './PersonRef';
 
 /**
@@ -18,6 +25,23 @@ import { PersonRef } from './PersonRef';
  * half-formed pair reading as an ordinary singles side. The line is a DEAD
  * reference, in the same block flow and ink as a name — never a blank row,
  * never an invented person.
+ *
+ * **public-visual-fixes P3.** A side fed by an unplayed match is an EMPTY
+ * PARTICIPANT SLOT carrying one muted feeder line (`from QF2`), not a
+ * name-shaped "Winner of QF2" (state-and-formatting §6.2, match-card §4.3).
+ * The slot keeps a resolved name's own line height and block flow, so
+ * nothing jumps as results land, and the muted register is what separates
+ * "nobody yet" from a real person — which is exactly the distinction the old
+ * treatment lost. `bye` and `withheld` stay in the NAME register on purpose:
+ * both are settled facts about this slot, not an absence waiting to be
+ * filled, and the reader must be able to tell all three apart.
+ *
+ * `seed` stays an option here for the callers that have no row of their own
+ * to hang it on (the round-robin standings table). `MatchCard` passes none:
+ * since P3 a match side renders its seed in the row's own trailing cell, so
+ * the seed sits beside the side it belongs to rather than under its last
+ * partner's name (match-card §4.2, "Seeds render beside the side they
+ * belong to"; §4.3, right-aligned in a node).
  */
 export function PersonGroup({
   slug,
@@ -38,9 +62,19 @@ export function PersonGroup({
 }) {
   const pending = unresolved?.kind === 'pending_member';
   if (!persons.length) {
-    // Contract §6.2: the generic unresolved fallback is "To be decided" —
-    // never "TBD". The discriminant wins over the caller's placeholder
-    // string wherever the wire carries one.
+    // §6.2 (P3): an unplayed predecessor is an empty slot plus a muted
+    // feeder line — no "Winner of", no node key, no slot index. Every other
+    // unresolved kind keeps the name register ("Bye", "Player not
+    // published", "To be decided" — never "TBD").
+    if (isFeederSide({ persons, placeholder: label, unresolved })) {
+      return (
+        <span className={className} data-feeder-slot="">
+          <span className="block text-muted-foreground">
+            {feederLabel(unresolved?.reference)}
+          </span>
+        </span>
+      );
+    }
     return <PersonRef slug={slug} identity={null} state="dead" label={unresolvedLabel(unresolved) ?? sideFallbackLabel({ persons, placeholder: label })} className={className} />;
   }
   return (

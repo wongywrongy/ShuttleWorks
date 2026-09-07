@@ -155,9 +155,6 @@ function isCompleted(match: ScheduleMatchDTO): boolean {
     match.status === "retired"
   );
 }
-function gamesWon(score: number[][], side: 0 | 1): number {
-  return score.filter((game) => (game[side] ?? 0) > (game[side === 0 ? 1 : 0] ?? 0)).length;
-}
 /**
  * One anatomy: a schedule row dressed as the public MatchCard (ADR 0028).
  * Every name flows through the card's PersonGroup / PersonRef seam; this
@@ -168,14 +165,14 @@ function scheduleToMatch(
   options: { showDate: boolean } = { showDate: true },
 ): MatchCardData {
   const decided = isCompleted(match);
+  // Contract §3.5/§5.1 rule 3 (public-visual-fixes P3): the winner comes
+  // from the AUTHORITATIVE outcome the wire now publishes. This adapter used
+  // to count games won and call the higher total the winner — which is
+  // precisely the inference retirement and walkover break: a retired match's
+  // ledger usually favours the side that did not win it, and a walkover has
+  // no games at all.
   const winnerIndex =
-    decided && match.score?.length
-      ? gamesWon(match.score, 0) > gamesWon(match.score, 1)
-        ? 0
-        : gamesWon(match.score, 1) > gamesWon(match.score, 0)
-          ? 1
-          : null
-      : null;
+    match.winnerSide === 'A' ? 0 : match.winnerSide === 'B' ? 1 : null;
   const sides = [0, 1].map((index) => {
     const side = match.sides[index];
     return {
@@ -189,6 +186,12 @@ function scheduleToMatch(
   return {
     eventCode: match.eventCode,
     roundLabel: match.roundLabel,
+    // §6.1: a whole-day schedule is a MIXED-EVENT view, so it keeps the
+    // event code — `MS R16·2 · 10:00 · Court 3`. Same authority, same
+    // string as the operator's list and the bracket node; only the event
+    // code's presence differs, and it differs because the context does.
+    reference: match.reference ?? null,
+    shortReference: match.shortReference ?? null,
     sides,
     score: match.score,
     decided,
@@ -483,9 +486,13 @@ function LiveBand({
       >
         Live now
       </h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Scores update as the desk records them
-      </p>
+      {/* public-visual-fixes P3: the "Scores update as the desk records
+          them" line is deleted. This tier ships no client framework and no
+          polling — the document is what the server rendered — so the line
+          promised an update the page cannot make, and a spectator watching a
+          stale card wait for a score it will never receive is worse served
+          than one who knows to reload. The freshness line below the list
+          states what IS true: when this document was built. */}
       {/* v3-consolidated work package 26b: `min-w-0`. Same implicit-grid-
           track mechanism fixed on Discovery and Overview in this package
           (see `SeasonCalendar.tsx`'s comment): below `md:` this is a
@@ -600,6 +607,15 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
   const next =
     filters.page < pages ? { ...filters, page: filters.page + 1 } : null;
   const live = matches.items.filter((match) => match.status === "live");
+  // §4.2 (P3): the repeated per-card date is deleted wherever the list is
+  // already scoped to one day — the day navigation or the single date the
+  // whole set shares already says it, and repeating it on every card is the
+  // furniture the critique named. It RETURNS the moment the list actually
+  // spans days, which is the case a day-scoped rule would silently break.
+  const visibleDays = new Set(
+    matches.items.map((match) => match.scheduledDate).filter(Boolean),
+  );
+  const showDate = !filters.day && visibleDays.size > 1;
   // The API already orders the complete filtered set live-first. Keep the
   // current queue visible on entry even when no day facet is selected; a
   // spectator should not have to know the tournament's local date first.
@@ -648,7 +664,7 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
               />
             </div>
             {showNow ? (
-              <LiveBand slug={slug} matches={live} showDate={!filters.day} />
+              <LiveBand slug={slug} matches={live} showDate={showDate} />
             ) : null}
             {matches.items.length === 0 ? (
               <EmptyState
@@ -672,12 +688,12 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
                     : ""}
                 </p>
                 {filters.organization === "court" ? (
-                  <ByCourt slug={slug} matches={matches.items} showDate={!filters.day} />
+                  <ByCourt slug={slug} matches={matches.items} showDate={showDate} />
                 ) : (
                   <ByTime
                     slug={slug}
                     matches={showNow ? matches.items.filter((match) => match.status !== "live") : matches.items}
-                    showDate={!filters.day}
+                    showDate={showDate}
                   />
                 )}
                 {previous || next ? (

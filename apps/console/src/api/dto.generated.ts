@@ -6076,6 +6076,10 @@ export interface components {
             nodeKey: string;
             /** Position */
             position: number;
+            /** Reference */
+            reference?: string | null;
+            /** Shortreference */
+            shortReference?: string | null;
             /** Sides */
             sides: components["schemas"]["SideDTO"][];
             result?: components["schemas"]["NodeResultDTO"] | null;
@@ -6816,6 +6820,10 @@ export interface components {
             localTime?: string | null;
             /** Courtlabel */
             courtLabel?: string | null;
+            /** Reference */
+            reference?: string | null;
+            /** Shortreference */
+            shortReference?: string | null;
             /** Status */
             status?: string | null;
             /** Durationminutes */
@@ -7398,8 +7406,14 @@ export interface components {
              * @default false
              */
             walkover: boolean;
+            /** Winnerside */
+            winnerSide?: ("A" | "B") | null;
             /** Updatedat */
             updatedAt?: string | null;
+            /** Reference */
+            reference?: string | null;
+            /** Shortreference */
+            shortReference?: string | null;
         };
         /** ScheduleMatchesDTO */
         ScheduleMatchesDTO: {

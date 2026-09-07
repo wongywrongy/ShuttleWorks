@@ -184,11 +184,15 @@ function nodeToMatch(
     sourceUrl: node.sourceUrl,
     sourceRef: node.sourceRef,
     scoresPublished,
-    // Contract §3.6/§4.3, V3-PE10.1: the node's own 1-based position within
-    // its round, already on the wire (`MatchNodeDTO.position`) — rendered as
-    // a small visible reference so "Winner of {reference}" resolves to a
-    // labelled source node without counting rows.
-    matchNumber: node.position,
+    // Contract §3.6/§4.3/§6.1 (public-visual-fixes P3): the SHARED human
+    // match reference, spelled once server-side and shown verbatim — the
+    // same string the operator's match list carries for this match. This
+    // page has ONE event, so it takes the event-code-dropped spelling
+    // (`R32·11`), which is what makes the compact line read
+    // `R16·2 · 10:00 · Court 3`. The old `Match {position}` label is gone:
+    // it renumbered per surface and could not be used to talk to the desk.
+    reference: node.shortReference ?? null,
+    shortReference: node.shortReference ?? null,
   };
 }
 

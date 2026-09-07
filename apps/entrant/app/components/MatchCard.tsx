@@ -3,14 +3,37 @@
  * views (ADR 0028): a header band naming event · round with the state word
  * on the right, two side rows, one score cell per PLAYED game (contract
  * §3.4 — the ledger never pads to a configured game count), and a footer of
- * time · court · duration. Winners read by weight and by the `sr-only` word
- * "Winner"; there is no visible tick column.
+ * reference · time · court · duration. Winners read by weight and by the
+ * `sr-only` word "Winner"; there is no visible tick column.
  *
  * Contract §3.3 / V3-PE09.4: a routine live card carries no saturated fill.
  * The header stays the same plain treatment whether or not the match is on
  * court; only the state word's ink and the bracket-node's thin border
  * accent say "this one is live" — never a solid band repeating the same
  * fact a third time.
+ *
+ * **public-visual-fixes P3 — four changes, all of them about naming one
+ * match once:**
+ *
+ * 1. The card and the node carry the SHARED match reference (`MS R32·11` /
+ *    `R32·11`), the identical string the operator's match list shows,
+ *    spelled server-side by `shared/match_reference.py` off the coordinates
+ *    the console formats from. The bare `Match {position}` label is deleted:
+ *    it was a per-surface renumbering that could not be used to talk to the
+ *    desk. A caller picks WHICH spelling by what it puts in `reference` —
+ *    the short form inside a single draw, the full one in a mixed-event
+ *    schedule (§6.1).
+ * 2. The compact line is `reference · time · court`, so a card names the
+ *    match, when it plays and where in one place. A court is shown WHENEVER
+ *    the wire carries one, in every grouping mode; a courtless record is
+ *    never called "On court" (§4.2) — an absent court is an absent claim,
+ *    not a quieter card.
+ * 3. No game score carries emphasis, complete or in progress (§5.1 rule 6,
+ *    §3.4): the winner is carried by the winning side's NAME and by the
+ *    authoritative outcome behind `side.winner`, never by counting games.
+ * 4. An exceptional outcome (walkover, retirement, cancellation) reads as a
+ *    small LEADING cue rather than a second trailing status word, and the
+ *    routine words the surrounding context already states are dropped.
  */
 import type { PersonReferenceDTO } from '../lib/person.types';
 import type { PlayerMatchDTO, PlayerMatchSideDTO } from '../lib/player.types';
@@ -27,20 +50,37 @@ export type MatchCardData = PlayerMatchDTO & {
   courtLabel?: string | null;
   sourceUrl?: string | null;
   sourceRef?: string | null;
-  /**
-   * The node's 1-based position within its round (contract §3.6/§4.3,
-   * V3-PE10.1) — already on the wire as `MatchNodeDTO.position`. Rendered
-   * as a small visible reference so a "Winner of {reference}" placeholder
-   * elsewhere in the tree resolves to a labelled source node without
-   * counting rows.
-   */
-  matchNumber?: number | null;
 };
 
 export type MatchCardVariant = 'card' | 'canvas' | 'bracket-node';
 
+/**
+ * The match states that deserve a cue at all (contract §3.3, §4.2). Anything
+ * else is furniture: "Scheduled" repeats the time already on the card,
+ * "Completed" repeats the score, and a card in a "Live now" band has already
+ * been told it is live by the band.
+ */
+function isExceptionalState(status: MatchCardData['status']): boolean {
+  return (
+    status === 'walkover' ||
+    status === 'retired' ||
+    status === 'cancelled' ||
+    status === 'delayed'
+  );
+}
+
 function references(side: PlayerMatchSideDTO): PersonReferenceDTO[] {
   return side.persons;
+}
+
+/**
+ * The paired game sequence, `21–16, 22–20` — first number always the
+ * first-listed side (§5.1 rule 6). Used where the surface has one lane
+ * rather than a column per side: the bracket node's trailing edge.
+ */
+export function pairedScoreLine(score: number[][] | null | undefined): string | null {
+  if (!score?.length) return null;
+  return score.map((game) => `${game[0] ?? ''}–${game[1] ?? ''}`).join(', ');
 }
 
 function SidePeople({ side, slug, compact = false, highlightPersonId, highlightPersonName }: { side: PlayerMatchSideDTO; slug?: string; compact?: boolean; highlightPersonId?: string | null; highlightPersonName?: string | null }) {
@@ -51,37 +91,51 @@ function SidePeople({ side, slug, compact = false, highlightPersonId, highlightP
     state={side.winner ? 'winner' : 'resolved'}
     label={side.placeholder}
     unresolved={side.unresolved}
-    seed={side.seed}
     className={`${compact ? 'block min-w-0 whitespace-normal break-words leading-tight' : 'block min-w-0'} ${highlighted ? 'font-semibold underline decoration-2 underline-offset-2' : ''}`}
   />;
 }
 
-function Side({ side, score, index, slug, compact = false, live = false, first = false, highlightPersonId, highlightPersonName }: { side: PlayerMatchSideDTO; score: number[][] | null; index: 0 | 1; slug?: string; compact?: boolean; live?: boolean; first?: boolean; highlightPersonId?: string | null; highlightPersonName?: string | null }) {
+function Side({ side, score, index, slug, compact = false, live = false, first = false, showGames = true, highlightPersonId, highlightPersonName }: { side: PlayerMatchSideDTO; score: number[][] | null; index: 0 | 1; slug?: string; compact?: boolean; live?: boolean; first?: boolean; showGames?: boolean; highlightPersonId?: string | null; highlightPersonName?: string | null }) {
   // Contract §3.4: never padded to the configured game count — the ledger
   // has exactly as many columns as there are recorded games, in every
   // renderer, and NO columns (an absent container, not an empty one) when
   // there are none.
-  const gameColumns = score?.length ?? 0;
-  const columns = gameColumns
-    ? `minmax(0,1fr) repeat(${gameColumns}, ${compact ? '1.8rem' : '2.5rem'})`
-    : 'minmax(0,1fr)';
+  const gameColumns = showGames ? (score?.length ?? 0) : 0;
+  const seed = side.seed ?? null;
+  // §4.2/§4.3: the seed sits in the row's own trailing cell, beside the side
+  // it belongs to, rather than on a line of its own under the last partner.
+  const columns = [
+    'minmax(0,1fr)',
+    seed !== null ? 'auto' : '',
+    gameColumns ? `repeat(${gameColumns}, ${compact ? '1.8rem' : '2.5rem'})` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const won = side.winner && !live;
   return (
     <div
-      className={`grid min-w-0 items-stretch ${compact ? 'min-h-[22px] text-xs' : 'min-h-10 text-sm'} ${first ? '' : 'border-t border-rule-soft'}`}
+      className={`grid min-w-0 items-stretch ${compact ? 'min-h-[22px] text-sm' : 'min-h-10 text-sm'} ${first ? '' : 'border-t border-rule-soft'}`}
       style={{ gridTemplateColumns: columns }}
     >
-      <div className={`flex min-w-0 items-center ${compact ? 'px-2' : 'px-4 py-2'} ${won ? 'font-[650] text-foreground' : 'text-foreground'}`}>
+      <div className={`flex min-w-0 items-center ${compact ? 'px-2 py-0.5' : 'px-4 py-2'} ${won ? 'font-[650] text-foreground' : 'text-foreground'}`}>
         {won ? (
           <span className="sr-only">{compact ? 'Winner advancing: ' : 'Winner: '}</span>
         ) : null}
         <SidePeople side={side} slug={slug} compact={compact} highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
       </div>
+      {seed !== null ? (
+        <span className={`flex items-center justify-end tabular-nums text-muted-foreground ${compact ? 'pe-2 text-xs' : 'pe-2 text-xs'}`}>
+          [{seed}]
+        </span>
+      ) : null}
       {gameColumns
         ? Array.from({ length: gameColumns }, (_, set) => (
             <span
               key={set}
-              className={`grid place-items-center border-s border-rule-soft tabular-nums ${compact ? '' : 'font-semibold'} ${side.winner ? 'text-foreground' : 'text-muted-foreground'}`}
+              // §3.4/§5.1 rule 6: no game score is ever emphasised — not for
+              // a completed game, not for the winning side. `game.winner`
+              // drives no ink anywhere on this tier.
+              className="grid place-items-center border-s border-rule-soft tabular-nums text-foreground"
             >
               {score?.[set]?.[index] ?? ''}
             </span>
@@ -92,18 +146,24 @@ function Side({ side, score, index, slug, compact = false, live = false, first =
 }
 
 export function MatchCard({ match, variant = 'card', slug, highlightPersonId, highlightPersonName, compactList = false }: { match: MatchCardData; variant?: MatchCardVariant; slug?: string; highlightPersonId?: string | null; highlightPersonName?: string | null; compactList?: boolean }) {
+  const live = match.status === 'live' || Boolean((match as MatchCardData & { live?: boolean }).live);
+  // §4.2 (P3): the approved court is published whenever the wire carries
+  // one — including in "By time" mode, where omitting it was not quieter,
+  // it was wrong. A court that is absent, withheld or disputed renders
+  // nothing at all rather than a placeholder line (§3.2).
+  const court = match.courtLabel ?? (match.court !== null && match.court !== undefined ? `Court ${match.court}` : null);
   // Contract §3.2: a missing value is OMITTED, never a placeholder apology.
   // A missing time reads as the one honest schedule-state word instead of
   // a blank line; a missing court line disappears entirely.
   const footer = [
+    match.reference ?? null,
     match.playedOn ?? null,
     match.localTime ??
       match.scheduledTime ??
       schedulePublicStateLabel(schedulePublicState(match)),
-    match.courtLabel ?? (match.court !== null ? `Court ${match.court}` : null),
+    court,
     match.durationMinutes ? `${match.durationMinutes} min` : null,
   ].filter(Boolean);
-  const live = match.status === 'live' || Boolean((match as MatchCardData & { live?: boolean }).live);
   const title = match.roundLabel ? `${eventCodeLabel(match.eventCode)} · ${roundLabel(match.roundLabel) ?? match.roundLabel}` : eventCodeLabel(match.eventCode);
   // Contract §6.1 D14: the one accessible inline phrase — built from the
   // structured sides via the shared authority, never from
@@ -128,23 +188,42 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
     !match.sourceRef.startsWith('demo-generated:'),
   );
 
-  // Contract §2.1: a match on court says "On court"; "Live now" is a section word only.
-  const stateWord = stateLabel;
-  const matchNumber = match.matchNumber ?? null;
-  const matchNumberLabel = matchNumber !== null ? `Match ${matchNumber}` : null;
+  // Contract §2.1: a match on court says "On court"; "Live now" is a section
+  // word only. §4.2 (P3): a match with NO approved court is never described
+  // as being on one — the honest answer to "which court?" is silence, and a
+  // claim built on the missing value would be worse than no claim.
+  // ...and "Scheduled" is not a chip at all (§4.2 "must never show: a
+  // 'Scheduled' chip over a card with no approved time"). The schedule
+  // domain's own answer — the approved time, or "Time to be confirmed" — is
+  // already on the compact line and is the more precise of the two; a chip
+  // beside it repeats one fact in two vocabularies (§3.3).
+  const stateWord =
+    match.status === 'scheduled' || (live && court === null) ? null : stateLabel;
+  // §4.2 (P3): a small LEADING cue for the states a reader must not miss,
+  // instead of a trailing word on every card repeating what the time, the
+  // score or the section heading already said.
+  const cue = isExceptionalState(match.status) ? stateLabel : null;
+  const reference = match.reference ?? null;
 
   if (variant === 'bracket-node') {
+    // §4.3: seeds and the paired score render RIGHT-ALIGNED against the
+    // node's trailing edge — one lane, first-listed-side order, no
+    // per-game emphasis — rather than a column per side per game, which a
+    // 288px node cannot hold beside two doubles pairs.
+    const paired = pairedScoreLine(match.score);
+    const header = [cue, reference].filter(Boolean).join(' ');
     return (
       <article data-testid="public-bracket-node" data-match-variant="bracket-node" className={`grid min-h-[58px] w-72 grid-rows-[auto_auto_auto] rounded-sm border border-rule-soft bg-surface-raised ${live ? 'border-s-2 border-s-status-live' : ''}`} aria-label={[title, competitors, scoreLabel, stateWord].filter(Boolean).join(' · ')}>
-        {matchNumberLabel ? (
-          <p className="border-b border-rule-soft px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground">
-            {matchNumberLabel}
+        {header || paired ? (
+          <p className="flex items-baseline justify-between gap-2 border-b border-rule-soft px-2 py-0.5 text-xs text-muted-foreground">
+            <span className="font-semibold uppercase tracking-[0.04em]">{header}</span>
+            {paired ? <span className="tabular-nums">{paired}</span> : null}
           </p>
         ) : (
           <p aria-hidden className="h-0" />
         )}
-        <Side side={match.sides[0]} score={match.score} index={0} slug={slug} compact live={live} first highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
-        <Side side={match.sides[1]} score={match.score} index={1} slug={slug} compact live={live} highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
+        <Side side={match.sides[0]} score={match.score} index={0} slug={slug} compact live={live} first showGames={false} highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
+        <Side side={match.sides[1]} score={match.score} index={1} slug={slug} compact live={live} showGames={false} highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
       </article>
     );
   }
@@ -165,10 +244,10 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
     // contribute to ITS track sizing.
     <article data-match-variant={variant} className={`min-w-0 ${card ? LIST_CARD : 'border border-rule-soft bg-surface-raised'}`}>
       {compactList ? (
-        stateWord || matchNumberLabel ? (
+        cue || reference || stateWord ? (
           <div className="flex items-center justify-between gap-2 border-b border-rule-soft px-3 py-1 text-xs font-semibold text-muted-foreground">
-            <span>{matchNumberLabel}</span>
-            <span className={live ? 'text-status-live' : ''}>{stateWord}</span>
+            <span>{[cue, reference].filter(Boolean).join(' ')}</span>
+            <span className={live ? 'text-status-live' : ''}>{cue ? null : stateWord}</span>
           </div>
         ) : null
       ) : (
@@ -176,10 +255,10 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
           className={`flex items-center justify-between gap-3 border-b border-rule-soft px-4 py-2 text-muted-foreground ${card ? 'rounded-t-lg' : ''}`}
         >
           <p className="flex min-w-0 items-baseline gap-2 text-xs font-bold uppercase tracking-[0.06em]">
+            {cue ? <span className="font-semibold normal-case tracking-normal text-foreground">{cue}</span> : null}
             <span>{title}</span>
-            {matchNumberLabel ? <span className="font-medium normal-case tracking-normal text-muted-foreground">{matchNumberLabel}</span> : null}
           </p>
-          {stateWord ? <span className={`text-xs font-semibold ${live ? 'text-status-live' : ''}`}>{stateWord}</span> : null}
+          {!cue && stateWord ? <span className={`text-xs font-semibold ${live ? 'text-status-live' : ''}`}>{stateWord}</span> : null}
         </header>
       )}
       <Side side={match.sides[0]} score={match.score} index={0} slug={slug} live={live} first highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />

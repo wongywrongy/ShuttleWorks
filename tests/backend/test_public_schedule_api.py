@@ -42,7 +42,14 @@ ITEM_KEYS = {
     "sides",
     "score",
     "walkover",
+    # public-visual-fixes P3: the AUTHORITATIVE outcome, so no renderer
+    # counts games to decide a winner (state-and-formatting §5.1 rule 3).
+    "winnerSide",
     "updatedAt",
+    # public-visual-fixes P3: the SHARED human match reference (§6.1) — the
+    # same string the operator's match list shows. No person data.
+    "reference",
+    "shortReference",
 }
 # v3 pkg 29: ``unresolved`` is the discriminated reason a side is not a
 # resolved name (match-card contract §2.1). It carries no person data of its

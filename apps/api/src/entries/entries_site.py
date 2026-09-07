@@ -65,6 +65,7 @@ from shared.schedule_slots import (
     slot_day_offset,
     slot_time_from_start,
 )
+from shared.match_reference import bracket_identity, format_match_identity, meet_identity
 from shared.sides import is_pair_discipline
 
 router = APIRouter(prefix="/e/api/page/{slug}", tags=["entries-site"])
@@ -628,6 +629,16 @@ class NodeResultDTO(BaseModel):
 class MatchNodeDTO(BaseModel):
     nodeKey: str
     position: int  # 1-based within its round
+    # The SHARED human match reference (state-and-formatting §6.1, "One
+    # reference, both tiers") — the identical string the operator's match
+    # list shows for this match, spelled by ``shared/match_reference.py``
+    # from the coordinates the console formats from. ``shortReference``
+    # drops the event code for a view whose event is already unambiguous
+    # (a single draw: "R16·2 · 10:00 · Court 3"). Both are ``None`` when the
+    # coordinates cannot name a match; a renderer then shows nothing rather
+    # than falling back to a row number.
+    reference: Optional[str] = None
+    shortReference: Optional[str] = None
     sides: List[SideDTO]
     result: Optional[NodeResultDTO] = None
     # Venue-local naive strings; None until scheduled.
@@ -735,6 +746,16 @@ class PlayerMatchDTO(BaseModel):
     playedOn: Optional[str] = None
     localTime: Optional[str] = None
     courtLabel: Optional[str] = None
+    # The SHARED human match reference (state-and-formatting §6.1, "One
+    # reference, both tiers") — the identical string the operator's match
+    # list shows for this match, spelled by ``shared/match_reference.py``
+    # from the coordinates the console formats from. ``shortReference``
+    # drops the event code for a view whose event is already unambiguous
+    # (a single draw: "R16·2 · 10:00 · Court 3"). Both are ``None`` when the
+    # coordinates cannot name a match; a renderer then shows nothing rather
+    # than falling back to a row number.
+    reference: Optional[str] = None
+    shortReference: Optional[str] = None
     # ``None`` means the persisted status is unrecognised (contract §2.2);
     # never coerced to "scheduled" (D7).
     status: Optional[str] = None
@@ -817,7 +838,22 @@ class ScheduleMatchDTO(BaseModel):
     sides: List[ScheduleSideDTO] = Field(default_factory=list)
     score: Optional[List[List[int]]] = None
     walkover: bool = False
+    # The AUTHORITATIVE outcome (contract §3.5/§5.1 rule 3): which side won,
+    # from the recorded result — never inferred from the ledger downstream.
+    # The entrant schedule used to count games won and call the higher total
+    # the winner, which retirement and walkover contradict outright.
+    winnerSide: Optional[Literal["A", "B"]] = None
     updatedAt: Optional[str] = None
+    # The SHARED human match reference (state-and-formatting §6.1, "One
+    # reference, both tiers") — the identical string the operator's match
+    # list shows for this match, spelled by ``shared/match_reference.py``
+    # from the coordinates the console formats from. ``shortReference``
+    # drops the event code for a view whose event is already unambiguous
+    # (a single draw: "R16·2 · 10:00 · Court 3"). Both are ``None`` when the
+    # coordinates cannot name a match; a renderer then shows nothing rather
+    # than falling back to a row number.
+    reference: Optional[str] = None
+    shortReference: Optional[str] = None
 
 
 class ScheduleDayFacetDTO(BaseModel):
@@ -916,16 +952,61 @@ def _event_segments(event) -> List:
     return [_Main()]
 
 
-def _unit_locator(event, knockout: bool) -> Dict[str, Tuple[str, str, int]]:
-    """unit id → (segment label, short round label, 1-based position) — what
-    a "Winner of QF 3" placeholder is made of."""
-    out: Dict[str, Tuple[str, str, int]] = {}
+@dataclass(frozen=True)
+class _UnitRef:
+    """One play unit's public coordinates, resolved once per event.
+
+    ``reference``/``short_reference`` are the SHARED human match reference
+    (state-and-formatting §6.1) — the identical string the operator's match
+    list shows for this match, spelled by ``shared/match_reference.py`` off
+    the same coordinates the console formats from. They are the only match
+    label this tier publishes: ``Match {position}`` is deleted, and the
+    per-surface ``"SF 1"`` speller that used to live in ``_feeder_reference``
+    is gone with it.
+    """
+
+    segment_label: str
+    short_round: str
+    position: int
+    reference: Optional[str]
+    short_reference: Optional[str]
+
+
+def _unit_locator(event, knockout: bool) -> Dict[str, _UnitRef]:
+    """unit id → its public coordinates, including the shared reference.
+
+    The ``segment`` coordinate handed to the identity authority is the
+    segment's **id** (``W``/``L``/``GF``/``P5_8``), not its label: that is
+    the value ``bracketLabels.ts`` formats from (``play_unit.segment``), and
+    a label would spell a different string for the same match. A
+    single-segment draw has no segment at all — ``_event_segments``'s
+    synthetic ``MAIN`` shim stands for "no segment", exactly as the console's
+    ``null`` does.
+    """
+    out: Dict[str, _UnitRef] = {}
+    event_code = _event_public_code(event)
+    draw_format = event.format
     for segment in _event_segments(event):
         total = len(segment.rounds)
+        segment_id = None if segment.id == "MAIN" and not event.segments else segment.id
         for r_index, round_ids in enumerate(segment.rounds):
             short = _short_round(total, r_index, knockout)
             for position, unit_id in enumerate(round_ids, start=1):
-                out[unit_id] = (segment.label, short, position)
+                identity = bracket_identity(
+                    event_code=event_code,
+                    draw_format=draw_format,
+                    round_index=r_index,
+                    stage=short,
+                    sequence=position,
+                    segment=segment_id,
+                )
+                out[unit_id] = _UnitRef(
+                    segment_label=segment.label,
+                    short_round=short,
+                    position=position,
+                    reference=format_match_identity(identity),
+                    short_reference=format_match_identity(identity, include_event=False),
+                )
     return out
 
 
@@ -945,9 +1026,11 @@ def _feeder_reference(slot, locator, *, feeder_id=None, take: Optional[str] = No
     where = locator.get(feeder_id)
     if where is None:
         return kind, "an earlier match"
-    segment_label, short, position = where
-    prefix = f"{segment_label} " if segment_label else ""
-    return kind, f"{prefix}{short} {position}"
+    # §6.1: the SHARED reference, not a locally spelled "QF 3". The draw page
+    # this reaches has one event, so the event code is dropped (§6.1's
+    # single-event rule) and the feeder reads "from QF2" beside a node
+    # labelled "QF2".
+    return kind, where.short_reference or f"{where.short_round}{where.position}"
 
 
 def _pending_pair_keys(event) -> frozenset:
@@ -1433,10 +1516,13 @@ def draw_detail(
                     continue
                 assignment = assignments.get(unit_id)
                 result = results.get(unit_id) if results_on else None
+                unit_ref = locator.get(unit_id)
                 matches.append(
                     MatchNodeDTO(
                         nodeKey=unit.id,
                         position=position,
+                        reference=unit_ref.reference if unit_ref else None,
+                        shortReference=unit_ref.short_reference if unit_ref else None,
                         sides=[
                             _side(
                                 unit,
@@ -2128,10 +2214,15 @@ def player_page(
                             else "live" if assignment is not None and assignment.actual_start_slot is not None
                             else "scheduled"
                         )
+                        unit_ref = locator.get(unit_id)
                         matches.append(
                             PlayerMatchDTO(
                                 eventCode=_event_public_code(event),
                                 roundLabel=_round_label(total, r_index, knockout),
+                                reference=unit_ref.reference if unit_ref else None,
+                                shortReference=(
+                                    unit_ref.short_reference if unit_ref else None
+                                ),
                                 sides=sides,
                                 score=_score_rows(result.score) if result else None,
                                 decided=decided,
@@ -2379,10 +2470,15 @@ def _meet_matches(
             and isinstance(assignment.get("slotId"), int)
         ):
             scheduled = _hhmm_plus(day_start, assignment["slotId"] * interval)
+        # See ``_meet_schedule_matches``: the stored rank IS the console's
+        # meet identity, handed to the shared authority whole (§6.1).
+        meet_ref = meet_identity(event_code=event_rank)
         out.matches.append(
             PlayerMatchDTO(
                 eventCode=event_rank,
                 roundLabel=None,
+                reference=format_match_identity(meet_ref),
+                shortReference=format_match_identity(meet_ref, include_event=False),
                 sides=[
                     PlayerMatchSideDTO(
                         persons=people_for(side_a, event_key, event_rank),
@@ -2729,8 +2825,11 @@ def _bracket_schedule_matches(
                         )
                     slot_id = assignment.slot_id if assignment else None
                     scheduled = _slot_time(payload, slot_id)
+                    unit_ref = locator.get(unit_id)
                     out.append(ScheduleMatchDTO(
                         matchKey=f"{event.id}:{unit.id}",
+                        reference=unit_ref.reference if unit_ref else None,
+                        shortReference=unit_ref.short_reference if unit_ref else None,
                         source="bracket",
                         eventCode=_event_public_code(event),
                         discipline=event.discipline,
@@ -2744,6 +2843,11 @@ def _bracket_schedule_matches(
                         sides=sides,
                         score=_score_rows(result.score) if result is not None and results_on else None,
                         walkover=bool(result.walkover) if result is not None and results_on else False,
+                        winnerSide=(
+                            result.winner_side
+                            if result is not None and result.winner_side in ("A", "B")
+                            else None
+                        ),
                         updatedAt=updated_at,
                     ))
     return out
@@ -2848,12 +2952,32 @@ def _meet_schedule_matches(
         score = None
         if results_on and state_row is not None and state_row.score_side_a is not None and state_row.score_side_b is not None:
             score = [[state_row.score_side_a, state_row.score_side_b]]
+        # Meet's authoritative outcome IS the recorded final score on a
+        # FINISHED match — there is no separate winner column (``MatchState``)
+        # — so it is decided here, once, rather than by every renderer
+        # counting games (§5.1 rule 3). An unfinished match has no winner,
+        # whatever the running score says.
+        winner_side = None
+        if state == "completed" and score:
+            if score[0][0] > score[0][1]:
+                winner_side = "A"
+            elif score[0][1] > score[0][0]:
+                winner_side = "B"
+        # Meet's stored ``eventRank`` ("MS1") already IS the console's meet
+        # identity — ``formatMatchIdentity`` reassembles exactly
+        # ``{event_code}{position}`` — so it is handed to the authority whole
+        # rather than decomposed and rebuilt. A meet match never appears in a
+        # single-event draw view, so it publishes no short spelling.
+        identity = meet_identity(event_code=event_code)
         event_discipline = labels.get(event_code)
         out.append(
             ScheduleMatchDTO(
                 matchKey=f"meet:{match_id}",
                 source="meet",
                 eventCode=event_code,
+                reference=format_match_identity(identity),
+                shortReference=format_match_identity(identity, include_event=False),
+                winnerSide=winner_side,
                 discipline=event_discipline,
                 status=state,
                 scheduledDate=tournament_date if scheduled else None,

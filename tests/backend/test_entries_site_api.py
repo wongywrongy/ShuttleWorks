@@ -18,6 +18,7 @@ hand-built imitation of it.
 
 from __future__ import annotations
 
+import json
 import uuid
 from types import SimpleNamespace
 
@@ -682,15 +683,29 @@ def test_the_tree_renders_rounds_seeds_schedule_and_placeholders(client, bracket
     assert sf2["scheduledTime"] is None
 
     (final,) = segment["rounds"][1]["matches"]
+    # public-visual-fixes P3: the feeder reference is the SHARED one
+    # (state-and-formatting §6.1) — "SF1", the same string the node it points
+    # at is labelled with and the same string the operator's match list
+    # shows. The tier's own "SF 1" speller is gone.
     assert [side["placeholder"] for side in final["sides"]] == [
-        "Winner of SF 1",
-        "Winner of SF 2",
+        "Winner of SF1",
+        "Winner of SF2",
     ]
     assert [side["feederNodeKey"] for side in final["sides"]] == [
         sf1["nodeKey"],
         sf2["nodeKey"],
     ]
     assert [side["feederTake"] for side in final["sides"]] == ["winner", "winner"]
+
+    # P3: every node publishes the shared human match reference — full for a
+    # mixed-event view, event-code-dropped for this single-draw one.
+    assert [(m["reference"], m["shortReference"]) for m in segment["rounds"][0]["matches"]] == [
+        ("MS SF1", "SF1"),
+        ("MS SF2", "SF2"),
+    ]
+    assert (final["reference"], final["shortReference"]) == ("MS F", "F")
+    # ...and no surface publishes a bare row number as a label any more.
+    assert "Match 1" not in json.dumps(body)
 
 
 def test_the_tree_carries_the_discriminated_unresolved_reason(client, bracket_page):
@@ -702,8 +717,8 @@ def test_the_tree_carries_the_discriminated_unresolved_reason(client, bracket_pa
     (segment,) = body["segments"]
     (final,) = segment["rounds"][1]["matches"]
     assert [side["unresolved"] for side in final["sides"]] == [
-        {"kind": "winner_of", "known": [], "missing": 0, "reference": "SF 1"},
-        {"kind": "winner_of", "known": [], "missing": 0, "reference": "SF 2"},
+        {"kind": "winner_of", "known": [], "missing": 0, "reference": "SF1"},
+        {"kind": "winner_of", "known": [], "missing": 0, "reference": "SF2"},
     ]
 
     # A resolved side has no reason at all — the persons ARE the answer, and
@@ -736,9 +751,13 @@ def test_approved_slot_with_unresolved_predecessor_still_reads_scheduled(
     # ``schedulePublicState`` reads to say "Time to be confirmed".
     assert final["scheduledTime"] is None
     assert [side["placeholder"] for side in final["sides"]] == [
-        "Winner of SF 1",
-        "Winner of SF 2",
+        "Winner of SF1",
+        "Winner of SF2",
     ]
+    # P3: the schedule row names the match the same way the bracket node and
+    # the operator's list do (§6.1, "One reference, both tiers").
+    assert (sf1["reference"], sf1["shortReference"]) == ("MS SF1", "SF1")
+    assert (final["reference"], final["shortReference"]) == ("MS F", "F")
 
 
 def test_courts_reach_live_bracket_matches_assigned_directly(client, bracket_page):
@@ -820,7 +839,7 @@ def test_results_off_hides_scores_and_resolved_advancement(client, bracket_page)
     assert sf_node["result"] is None
     (final,) = segment["rounds"][1]["matches"]
     assert final["sides"][0]["participantKey"] is None
-    assert final["sides"][0]["placeholder"] == "Winner of SF 1"
+    assert final["sides"][0]["placeholder"] == "Winner of SF1"
     assert body["standings"] is None
 
     # Publish results: the same read now carries all of it.

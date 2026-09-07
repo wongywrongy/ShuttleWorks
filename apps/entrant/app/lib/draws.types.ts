@@ -98,6 +98,15 @@ export interface NodeResultDTO {
 export interface MatchNodeDTO {
   nodeKey: string;
   position: number;
+  /** The SHARED human match reference (state-and-formatting §6.1, "One
+   *  reference, both tiers") — the identical string the operator's match
+   *  list shows for this match, e.g. `MS R32·11`. `shortReference` drops the
+   *  event code for a view whose event is already unambiguous (a single
+   *  draw: `R16·2 · 10:00 · Court 3`). Both are null when the coordinates
+   *  cannot name a match; nothing is rendered then — never a row number,
+   *  never `Match n`. */
+  reference?: string | null;
+  shortReference?: string | null;
   sides: SideDTO[];
   result: NodeResultDTO | null;
   scheduledTime: string | null;

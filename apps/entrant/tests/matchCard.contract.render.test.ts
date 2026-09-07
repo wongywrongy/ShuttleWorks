@@ -102,14 +102,48 @@ describe('match-card contract — state and schedule words (§3.3)', () => {
 });
 
 describe('match-card contract — bracket node (§4.3)', () => {
-  it('every node carries a visible human match number (V3-PE10.1)', () => {
-    expect(renderNode(MC.singlesScheduled)).toContain('Match 1');
-    expect(renderNode(MC.unresolvedPredecessor)).toContain('Match 5');
+  it('every node carries the SHARED match reference, never a bare "Match n" (V3-PE10.1, §6.1)', () => {
+    // public-visual-fixes P3: the same string the operator's match list
+    // shows for this match, event code dropped because a draw page has one
+    // event. `Match 1` was a per-surface renumbering nobody could quote at
+    // the desk, and it is deleted rather than restyled.
+    expect(renderNode(MC.singlesScheduled)).toContain('MS R16·1');
+    expect(renderNode(MC.unresolvedPredecessor)).toContain('MS R16·5');
+    expect(renderNode(MC.singlesScheduled)).not.toContain('Match 1');
   });
 
-  it('an unresolved predecessor renders its label, never inventing a person', () => {
+  it('an exceptional outcome reads as a LEADING cue, not a second trailing word', () => {
+    const html = renderNode(MC.walkover);
+    // The cue precedes the reference on the node's one metadata line.
+    expect(html).toMatch(/Walkover<\/span>[\s\S]{0,80}MS R16·9|Walkover MS R16·9/);
+  });
+
+  it('the paired score sits on the node trailing edge, first-listed-side order', () => {
+    // §4.3: one right-aligned lane, `21–16, 22–20` — not a column per side
+    // per game, which a node cannot hold beside two doubles pairs.
+    expect(renderNode(MC.completedLoserWonAGame)).toContain('21–15, 18–21, 21–19');
+    // §5.1 rule 6: an absent score renders nothing. Never 0–0, never a dash.
+    expect(renderNode(MC.walkover)).not.toContain('–');
+  });
+
+  it('an unresolved predecessor is an EMPTY slot with a muted feeder line', () => {
+    // §6.2 / §4.3 (public-visual-fixes P3): no "Winner of", no node key, no
+    // slot index — one muted `from {reference}` line in a slot that keeps a
+    // name's own height, so nothing jumps when the result lands.
     const html = renderNode(MC.unresolvedPredecessor);
-    expect(html).toContain('Winner of QF1');
+    expect(html).toContain('from QF1');
+    expect(html).not.toContain('Winner of');
+    expect(html).toContain('data-feeder-slot');
+  });
+
+  it('a bye and a withheld person stay distinct from an unknown feeder', () => {
+    // Three different facts, three different renderings: a settled bye, a
+    // real person the organizer has not published, and a slot nobody has
+    // reached yet. The last is the only muted one.
+    expect(renderNode(MC.bye)).not.toContain('data-feeder-slot');
+    expect(renderNode(MC.withheldSide)).not.toContain('data-feeder-slot');
+    expect(renderNode(MC.bye)).toContain('Bye');
+    expect(renderNode(MC.withheldSide)).toContain('Player not published');
   });
 
   it('a bye side renders "Bye" in the same structure as a name', () => {
@@ -160,7 +194,9 @@ describe('match-card contract — accessible summary (§6.1 "versus"/"and")', ()
 
   it('an unresolved side folds into the phrase by its label, not a slash join', () => {
     const html = renderNode(MC.unresolvedPredecessor);
-    expect(html).toContain('Ada Lovelace versus Winner of QF1');
+    // One spelling, visible and accessible (P3): the phrase says where the
+    // side comes from rather than asserting a winner that does not exist.
+    expect(html).toContain('Ada Lovelace versus from QF1');
   });
 
   it('MC-04: the pending partner is a term in the phrase, joined with "and"', () => {
@@ -183,7 +219,10 @@ describe('match-card contract — labels come from the discriminant (§2.1/§6.1
       ] as typeof MC.unresolvedPredecessor.sides,
     };
     const html = renderNode(match);
-    expect(html).toContain('Loser of SF 2');
+    // P3: both feeder takes read the same way on the public tier — the
+    // structure says which half of SF 2 this side is, the line says where
+    // it comes from, and neither claims an outcome nobody has recorded.
+    expect(html).toContain('from SF 2');
     expect(html).not.toContain('NONSENSE');
   });
 
