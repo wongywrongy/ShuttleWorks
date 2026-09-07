@@ -228,6 +228,32 @@ describe('the tab bar and its panels (Z6)', () => {
   );
 });
 
+describe('key dates: venue-local, and exact on a deadline (P7)', () => {
+  /** One closing moment across every event, so the row is a single moment
+   * rather than the fixture's per-event variance. */
+  const ONE_DEADLINE = {
+    ...PAGE,
+    tournament: { ...PAGE.tournament, timeZone: 'Asia/Seoul' },
+    events: PAGE.events.map((event) => ({ ...event, closesAt: '2026-07-31 15:30 UTC' })),
+  };
+
+  it('states a deadline to the minute, converted into the venue zone', async () => {
+    const html = await render(ONE_DEADLINE);
+    // 15:30 UTC on 31 July is 00:30 on 1 August in Seoul. The row used to
+    // read "Closes 1 Aug" — the right DAY, but silently rounded off the
+    // deadline the director actually set; before that it read the UTC day,
+    // which was the wrong one.
+    expect(html).toContain('1 Aug, 00:30');
+    // Never the zone, the offset or the identifier: the hero says it once.
+    expect(html).not.toMatch(/\bUTC\b|GMT[+-]|KST|Asia\/Seoul/);
+  });
+
+  it('leaves the play day as a date — it is a day, not an instant', async () => {
+    const html = await render(ONE_DEADLINE);
+    expect(html).toContain('Saturday 12 September 2026');
+  });
+});
+
 describe('the panels', () => {
   it('Overview: About card, currently-relevant key dates, fees pointer, documents, venue (P6)', async () => {
     const html = await render();
@@ -361,6 +387,36 @@ describe('the panels', () => {
     expect(html).toContain('data-name="ada lovelace"');
     expect(html).toContain('data-club="analytical bc"');
     expect(html).toContain('3 players');
+  });
+
+  it('Players: the directory search is a native GET that keeps the tab (P7)', async () => {
+    const roster = {
+      published: true,
+      players: PAGE.entrants.map((row) => ({
+        playerKey: `entry-${row.person.identity.id}`,
+        person: row.person,
+        club: row.club,
+        eventCodes: row.eventCodes,
+      })),
+      referencedPlayerCount: PAGE.entrants.length,
+      missingNameCount: 0,
+    };
+    const html = await render({ ...PAGE, players: roster }, '/e/spring-open?tab=players');
+    // A real form on the page itself, carrying the tab so a search cannot
+    // drop the reader back onto Overview.
+    expect(html).toMatch(/<form[^>]*action="\/e\/spring-open"[^>]*method="get"/);
+    expect(html).toContain('<input type="hidden" name="tab" value="players"/>');
+    expect(html).toMatch(/<button type="submit" class="sr-only">Search<\/button>/);
+
+    // And it FILTERS on the server: no script has run in this document.
+    const searched = await render(
+      { ...PAGE, players: roster },
+      '/e/spring-open?tab=players&q=analytical',
+    );
+    expect(searched).toContain('Ada Lovelace');
+    expect(searched).not.toContain('Grace Hopper');
+    expect(searched).toContain('1 result');
+    expect(searched).toContain('value="analytical"');
   });
 });
 

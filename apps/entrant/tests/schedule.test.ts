@@ -70,8 +70,10 @@ const MATCHES = {
 describe("schedule freshness", () => {
   it("converts the update instant into venue-local time, with no zone in the prose", () => {
     const formatted = formatScheduleUpdated("2026-09-12T10:35:00+00:00", "Asia/Seoul");
-    // Converted, not merely stripped: 10:35 UTC is 19:35 in Seoul.
-    expect(formatted).toContain("Sep 12, 2026, 7:35 PM");
+    // Converted, not merely stripped: 10:35 UTC is 19:35 in Seoul. P7: in
+    // the tier's own day-first, 24-hour vocabulary — this line used to be
+    // the one American, 12-hour date on the public site.
+    expect(formatted).toBe("12 Sep 2026, 19:35");
     expect(formatted).not.toContain("GMT");
     expect(formatted).not.toContain("Asia/Seoul");
   });
@@ -136,15 +138,14 @@ async function render(
 describe("Schedule / Live", () => {
   it("renders a mobile-readable match card with explicit state and timezone", async () => {
     const html = await render();
-    // Plan §4: the page title matches its navigation destination ("Schedule"),
-    // not a slash-assembled compound.
-    // v3-consolidated work package 26b: `h2`, not `h1` — `HeroHeader`
-    // already renders the document's one `<h1 id="tournament-title">`
-    // (the tournament name); a second `h1` here failed the plan §6
-    // "Accessibility" heading-order check. `tournament.tsx`'s own panel
-    // headings (`Overview`, `Draws`) were already `h2`; this brings
-    // Schedule in line with that convention.
-    expect(html).toMatch(/<h2[^>]*id="schedule-title"[^>]*>\s*Schedule\s*<\/h2>/);
+    // public-visual-fixes P7: the route's own "Schedule" heading and its
+    // "Find matches by day, time, or court." sentence are GONE — the frame's
+    // breadcrumb, its current tab and the browser tab already name the page,
+    // and the sentence described the controls directly beneath it. The
+    // landmark keeps the accessible name.
+    expect(html).toMatch(/<main[^>]*aria-label="Schedule"/);
+    expect(html).not.toMatch(/id="schedule-title"/);
+    expect(html).not.toContain("Find matches by day, time, or court.");
     expect(html).not.toContain("Schedule / Live");
     expect(html).toContain("Live now");
     expect(html).toContain("Ada Lovelace");
@@ -257,6 +258,89 @@ describe("Schedule / Live", () => {
     expect(html).toContain("By court");
     expect(html).toContain("organization=court");
     expect(html).toContain("Court 1");
+  });
+
+  // ---- public-visual-fixes P7 -----------------------------------------
+
+  it("puts the day, the organisation and the search in ONE sticky row", async () => {
+    const html = await render();
+    const row =
+      html.match(/<div class="sticky top-0[\s\S]*?<\/form>/)?.[0] ?? "";
+    expect(row).not.toBe("");
+    // The three controls the critique asked for, in that order, in one band.
+    expect(row).toContain('aria-label="Schedule days"');
+    expect(row).toContain('aria-label="Schedule organization"');
+    expect(row).toContain('name="player"');
+    // The remaining facets fold into a disclosure rather than a second card.
+    expect(row).toContain("More filters");
+    expect(row).toContain('name="event"');
+    expect(row).toContain('name="court"');
+    expect(row).toContain('name="state"');
+    // Exactly one control card: the old day/organisation band plus filter
+    // grid was two stacked panels.
+    expect(html.match(/data-schedule-filters/g)).toHaveLength(1);
+  });
+
+  it("submits natively on Enter and keeps the other active filters in the URL", async () => {
+    const html = await render(
+      "/e/spring-open/schedule?day=2026-09-12&organization=court&event=MS",
+    );
+    const form = html.match(/<form[^>]*data-schedule-filters[\s\S]*?<\/form>/)?.[0] ?? "";
+    expect(form).not.toBe("");
+    expect(form).toMatch(/action="\/e\/spring-open\/schedule"[^>]*method="get"/);
+    // The state a search must not silently drop travels as hidden fields.
+    expect(form).toContain('<input type="hidden" name="organization" value="court"/>');
+    expect(form).toContain('<input type="hidden" name="day" value="2026-09-12"/>');
+    // The typed query survives the round trip in the field itself.
+    expect(form).toContain('name="event"');
+  });
+
+  it("has no visible Apply or Find button — the submits are sr-only", async () => {
+    const html = await render();
+    expect(html).not.toMatch(/>\s*Apply\s*<\/button>/);
+    expect(html).not.toMatch(/>\s*Find\s*<\/button>/);
+    expect(html).toMatch(/<button type="submit" class="sr-only">Search matches<\/button>/);
+    expect(html).toMatch(/<button type="submit" class="sr-only">Apply filters<\/button>/);
+    // The search field carries a real, associated label and a magnifier.
+    expect(html).toMatch(/<label for="schedule-player" class="sr-only">Search matches by player<\/label>/);
+  });
+
+  it("changes the day and the view without JavaScript, and enhances the selects", async () => {
+    const html = await render();
+    // Days and organisation are LINKS — a full document load, no script.
+    expect(html).toMatch(/<a href="\/e\/spring-open\/schedule\?day=2026-09-12"/);
+    expect(html).toContain("organization=court");
+    // The enhancement is one page-scoped module, and it is additive.
+    expect(html).toContain('src="/e/assets/schedule-filters.js"');
+  });
+
+  it("falls back to a native day SELECT once the run of days is long or gappy", async () => {
+    const days = [
+      "2026-09-12", "2026-09-13", "2026-09-14",
+      "2026-10-01", "2026-10-02", "2026-11-20",
+    ].map((day) => ({ day, count: 2 }));
+    const html = await render("/e/spring-open/schedule", {
+      ...MATCHES,
+      facets: { ...MATCHES.facets, days },
+    });
+    // The month-grouped block of dozens of anchors this replaces could not
+    // live in one row; a select can, and it still needs no script (the
+    // sr-only submit applies it).
+    expect(html).toMatch(/<select id="schedule-day" name="day"/);
+    expect(html).toMatch(/<label class="sr-only" for="schedule-day">Day<\/label>/);
+    expect(html).toContain('value="2026-11-20"');
+    expect(html).not.toContain('aria-label="Schedule days"');
+  });
+
+  it("drops the trailing arrows from pagination", async () => {
+    const html = await render("/e/spring-open/schedule", {
+      ...MATCHES,
+      total: 60,
+      pageSize: 25,
+    });
+    expect(html).toContain(">Next</a>");
+    expect(html).not.toContain("Next →");
+    expect(html).not.toContain("← Previous");
   });
 
   it("explains an unpublished and an empty schedule", async () => {

@@ -10,11 +10,15 @@
  * the C4 ruling — the acknowledgment copy now consents to "name and club".
  *
  * Multi-column via CSS columns, letter groups kept whole
- * (`break-inside-avoid`); single column at phone widths. The search filter
- * is progressive enhancement: rows carry `data-name`/`data-club`, and the
- * page-scoped script (`/e/assets/entrants-filter.js`) mounts an input into
- * `#entrants-filter-root` — without JS there is no dead search box,
- * because the box does not exist.
+ * (`break-inside-avoid`); single column at phone widths.
+ *
+ * **The search is native first (P7).** The box is a server-rendered GET form
+ * over `?q=`, filtered on the SERVER by the same `matchField` the browser
+ * uses, so it works with scripting off: Enter submits, the URL carries the
+ * query, and the result is shareable. The page-scoped script
+ * (`/e/assets/entrants-filter.js`) then enhances that same field to filter
+ * the rendered rows as you type, using `data-name`/`data-club`; it mints no
+ * control of its own, so there is no second box and no second count.
  *
  * **The toolbar (public-visual-fixes P2).** Count, search box and A–Z index
  * are ONE sticky element, not three things that scroll apart: on a 252-name
@@ -35,8 +39,9 @@ import { eventCodeLabel } from '../lib/draws.types';
 import { eventLabel } from '../lib/eventLabels';
 import type { PersonReferenceDTO } from '../lib/person.types';
 import { personRefModel } from '../../public/assets/person-ref.js';
-import { searchKey } from '../../public/assets/entrants-filter.js';
+import { findLabel, matchField, searchKey } from '../../public/assets/entrants-filter.js';
 import { PersonRef } from './PersonRef';
+import { SearchField } from './SearchField';
 
 interface DirectoryRow {
   playerKey: string;
@@ -79,13 +84,27 @@ export function EntrantsList({
   entrants,
   noun = 'entrant',
   linkEventsToDraws = false,
+  query = '',
+  action = '',
+  hidden = [],
 }: {
   slug: string;
   entrants: DirectoryRow[];
   noun?: 'entrant' | 'player';
   linkEventsToDraws?: boolean;
+  /** The URL's own `?q=` — applied on the SERVER, so the search works with
+   * no script at all (P7). The script re-applies it as you type. */
+  query?: string;
+  /** Where the search form submits; the page that renders this list. */
+  action?: string;
+  /** The other URL state the search must not drop (the `tab`, typically). */
+  hidden?: readonly { name: string; value: string }[];
 }) {
-  const sorted = [...entrants].sort((a, b) => searchableName(a).localeCompare(searchableName(b)));
+  const searching = query.trim() !== '';
+  const matched = searching
+    ? entrants.filter((row) => matchField(query, searchableName(row), row.club ?? '') !== '')
+    : entrants;
+  const sorted = [...matched].sort((a, b) => searchableName(a).localeCompare(searchableName(b)));
   const groups: { letter: string; rows: DirectoryRow[] }[] = [];
   for (const row of sorted) {
     const letter = letterOf(row);
@@ -109,9 +128,37 @@ export function EntrantsList({
               (`data-search-count`) — no second count appearing once the
               script boots beside the search input. */}
           <p data-search-count aria-live="polite" className="text-sm text-muted-foreground">
-            {`${entrants.length} ${entrants.length === 1 ? noun : `${noun}s`}`}
+            {searching
+              ? `${sorted.length} ${sorted.length === 1 ? 'result' : 'results'}`
+              : `${entrants.length} ${entrants.length === 1 ? noun : `${noun}s`}`}
           </p>
-          <div id="entrants-filter-root" data-filter-noun={noun} className="w-full sm:w-72" />
+          {/* P7: a REAL native GET form, server-filtered. It used to be an
+              empty mount point that only became a search box once the script
+              ran — a directory whose search did not exist without JavaScript,
+              and whose visible "Find a player" label repeated the placeholder
+              beneath it. The label is still here, still real, and now
+              `sr-only`; the script enhances this same field to filter as you
+              type instead of minting a second one. */}
+          <form
+            method="get"
+            action={action}
+            role="search"
+            id="entrants-filter-root"
+            data-filter-noun={noun}
+            className="flex w-full min-w-0 sm:w-72"
+          >
+            {hidden.map((field) => (
+              <input key={field.name} type="hidden" name={field.name} value={field.value} />
+            ))}
+            <SearchField
+              id="entrants-search"
+              name="q"
+              label={findLabel(noun)}
+              placeholder="Name or club"
+              defaultValue={query}
+              className="w-full"
+            />
+          </form>
         </div>
 
         {/* V3-PE05.1: a compact A–Z jump control tied to the letter sections
@@ -203,7 +250,11 @@ export function EntrantsList({
         ))}
       </div>
 
-      <p data-no-matches hidden className="text-sm text-muted-foreground">
+      <p
+        data-no-matches
+        hidden={groups.length > 0 || undefined}
+        className="text-sm text-muted-foreground"
+      >
         {`No ${noun}s match your search.`}
       </p>
       <script type="module" src="/e/assets/entrants-filter.js" />

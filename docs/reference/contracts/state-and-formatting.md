@@ -730,6 +730,25 @@ surface:
   browser is in another timezone. The shared fixture carries venue-local entry windows written with
   the venue's real offset for exactly this.
 
+**Implemented by public P7** *(2026-09-07)*. The entrant tier's time authority
+(`apps/entrant/app/lib/format.ts`) is the only place that turns an instant into words, and it now
+carries the venue-local pair this section asks for: `formatDayMonthTimeInZone` (`1 Aug, 00:30`) and
+`formatDateTimeInZone` (`15 Aug 2026, 00:59`) for deadlines, beside the date-only
+`formatDayMonthInZone` / `formatDateInZone`, plus `formatInstantInZone` for an ISO instant (the
+schedule freshness line). Consequences worth stating:
+
+- **A deadline is stated to the minute**, converted — the Overview's Key dates row reads
+  `Closes 1 Aug, 00:30`, not `Closes 1 Aug`. Rounding a closing time to a friendlier one is the
+  "never rounded" rule above, applied.
+- **Every rendered date on the tier is day-first and 24-hour.** The one `Intl` call that produced
+  `Sep 12, 2026, 7:35 PM` was replaced; there is no second formatter.
+- **The venue-time note is per FRAME, and the entry form states it too** — it is tournament-scoped
+  and quotes a deadline, so it says the line once itself rather than borrowing the frame's.
+- Fixture-checked at both boundaries: `apps/entrant/tests/components.test.ts` →
+  "venue-local instants (P7)" (a 15:30 UTC deadline is 1 August in Seoul; a 23:30 local match keeps
+  its day; midnight stays on its own day), and `tournamentFrame.render.test.ts` fails on any zone
+  identifier, offset or abbreviation reaching public prose on any tournament-scoped route.
+
 **Browser locale date order alone does not prove a timezone bug** (plan §5). A reviewer seeing
 `8/8/2026` where they expected `8 Aug 2026` has found a locale observation, not a defect; the named
 contexts above are explicit enough that locale order is never load-bearing.

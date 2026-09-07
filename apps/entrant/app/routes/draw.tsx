@@ -29,6 +29,7 @@ import { Fragment } from "react";
 import { isRouteErrorResponse, useRouteError } from "react-router";
 
 import { MatchCard } from "../components/MatchCard";
+import { SearchField } from "../components/SearchField";
 import { PersonGroup } from "../components/PersonGroup";
 import { EmptyState } from "../components/EmptyState";
 import { MessagePage } from "../components/MessagePage";
@@ -52,7 +53,7 @@ import {
   roundShortLabel,
 } from "../lib/draws.types";
 import type { EntryPageDTO } from "../lib/entryPage.types";
-import { FIELD_INPUT, SECTION_TITLE } from "../lib/ui";
+import { ACTION_LINK, ACTION_LINK_MUTED, SECTION_TITLE } from "../lib/ui";
 import { sectionHref, sectionLabel } from "../lib/tournamentFrame";
 import { formatCalendarDay } from "../lib/format";
 import type { MatchCardData } from "../components/MatchCard";
@@ -654,10 +655,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
             <span className="text-muted-foreground">
               Path: <strong className="font-semibold text-foreground">{selectedPersonLabel}</strong>
             </span>
-            <a
-              href={clearPlayerHref}
-              className="text-accent underline-offset-4 hover:underline"
-            >
+            <a href={clearPlayerHref} className={ACTION_LINK}>
               Clear path
             </a>
           </p>
@@ -776,28 +774,25 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
               playerQuery={playerQuery}
             />
           ) : null}
+          {/* P7: the visible "Find" button is gone. The field is the tier's
+              one search treatment — icon, real (`sr-only`) label, invisible
+              submit — and the form is still a native GET that keeps the view
+              and the segment in the URL. */}
           {!roundRobin ? (
-            <form method="get" className="flex max-w-xl flex-wrap items-center gap-2">
+            <form method="get" role="search" className="flex max-w-xl flex-wrap items-center gap-3">
               {view ? <input type="hidden" name="view" value={view} /> : null}
               <input type="hidden" name="segment" value={activeSegment} />
-              <label className="sr-only" htmlFor="draw-player">
-                Find a player or pair
-              </label>
-              <input
+              <SearchField
                 id="draw-player"
                 name="player"
-                defaultValue={playerQuery}
+                label="Find a player or pair"
                 placeholder="Find a player or pair"
-                className={`${FIELD_INPUT} flex-1`}
+                defaultValue={playerQuery}
+                submitLabel="Find in this draw"
+                className="min-w-0 flex-1 basis-56"
               />
-              <button
-                type="submit"
-                className="h-10 rounded-sm border border-action-primary bg-surface-raised px-3 text-sm font-semibold text-foreground hover:bg-surface-sunken"
-              >
-                Find
-              </button>
               {playerQuery ? (
-                <a href={clearPlayerHref} className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+                <a href={clearPlayerHref} className={ACTION_LINK_MUTED}>
                   Clear search
                 </a>
               ) : null}
@@ -826,7 +821,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                     view: 'path',
                     player: soleNameMatch.identity.id!,
                   })}`}
-                  className="font-medium text-accent underline-offset-4 hover:underline"
+                  className={ACTION_LINK}
                 >
                   Show{' '}
                   {

@@ -29,7 +29,7 @@ import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { DrawCardDTO, DrawsIndexDTO, PlayersDTO } from '../lib/draws.types';
 import { eventCodeLabel } from '../lib/draws.types';
 import type { EntryPageDTO, ReserveRowDTO } from '../lib/entryPage.types';
-import { dateOfIso, formatDateLong, formatDayMonthInZone } from '../lib/format';
+import { dateOfIso, formatDateLong, formatDayMonthTimeInZone } from '../lib/format';
 import {
   activeTab,
   legacyDrawsTab,
@@ -38,7 +38,7 @@ import {
   type Tab,
 } from '../lib/phase';
 import type { Route } from './+types/tournament';
-import { LIST_CARD, LIST_CARD_ROW } from '../lib/ui';
+import { ACTION_LINK, LIST_CARD, LIST_CARD_ROW } from '../lib/ui';
 
 export interface TournamentLoaderData {
   page: EntryPageDTO;
@@ -50,6 +50,9 @@ export interface TournamentLoaderData {
    * per document, never a fan-out (SP-P7 §3.4–3.6). */
   draws?: DrawsIndexDTO;
   players?: PlayersDTO;
+  /** The Players directory's `?q=` — filtered on the server (P7), so the
+   * search works with no script and the URL is shareable. */
+  playerQuery?: string;
 }
 
 /**
@@ -109,6 +112,7 @@ export async function loader({
     // roster rows. This keeps the public directory complete before and after
     // draws are released without maintaining a second client-side roster.
     payload.players = await apiGet<PlayersDTO>(`${base}/players`);
+    payload.playerQuery = (new URL(request.url).searchParams.get('q') ?? '').trim();
   } else if (active === 'draws' && page.publication?.draws) {
     // The Draws panel is the event list from day one; the draw index joins
     // it only once the organizer has published draws (ADR 0028). Seeds ride
@@ -168,7 +172,9 @@ function tabHref(slug: string, tab: Tab): string {
 
 function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
   const slug = page.page.slug;
-  const timeZone = page.tournament.timeZone;
+  // `?? 'UTC'`: a projection without a declared zone must still render a
+  // real instant, and never in the SSR node's own local zone (P7).
+  const timeZone = page.tournament.timeZone ?? 'UTC';
   const moments = timelineModel(page.events, page.tournament.date, now);
   const regulations = page.page.regulationsText;
   const updated = dateOfIso(page.page.regulationsUpdatedAt);
@@ -219,7 +225,7 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
               </div>
               <a
                 href={`/e/${encodeURIComponent(slug)}/regulations`}
-                className="shrink-0 font-medium text-accent underline-offset-4 hover:underline"
+                className={`shrink-0 ${ACTION_LINK}`}
               >
                 View
               </a>
@@ -248,11 +254,16 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
                 ) : moment.kind === 'play' ? (
                   formatDateLong(moment.at)
                 ) : (
-                  // Venue-local day and month, converted (contract §7.1) —
-                  // never a UTC instant with its zone spelling trimmed off,
-                  // and never an offset in public prose: the hero already
-                  // says all times are local to the venue.
-                  [moment.status, formatDayMonthInZone(moment.at!, timeZone)]
+                  // Venue-local, converted (contract §7.1) — never a UTC
+                  // instant with its zone spelling trimmed off, and never an
+                  // offset in public prose: the hero already says all times
+                  // are local to the venue.
+                  //
+                  // P7: a DEADLINE is stated to the minute ("Closes 1 Aug,
+                  // 23:59"). It is the one row here a reader can be late
+                  // for, and a day alone silently rounds it — usually
+                  // forward, by the better part of a day.
+                  [moment.status, formatDayMonthTimeInZone(moment.at!, timeZone)]
                     .filter(Boolean)
                     .join(' ')
                 )}
@@ -390,6 +401,7 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
               slug={slug}
               roster={loaderData.players}
               drawsPublished={page.publication.draws}
+              query={loaderData.playerQuery ?? ''}
             />
             <ReserveList reserves={page.reserves ?? []} slug={page.page.slug} />
           </>

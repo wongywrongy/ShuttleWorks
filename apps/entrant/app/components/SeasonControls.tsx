@@ -21,6 +21,7 @@
  * here with the box — exactly one per page.
  */
 import { filtersToParams, type Filters } from '../lib/phase';
+import { SearchField } from './SearchField';
 import { SegmentedNav } from './SegmentedNav';
 
 const ACTION = '/e/#calendar';
@@ -108,7 +109,7 @@ export function SeasonControls({
           role="search"
           method="get"
           action={ACTION}
-          className="flex h-9 min-w-0 max-w-full flex-1 basis-full items-stretch rounded-sm border border-rule-control bg-surface-raised sm:max-w-md sm:basis-80"
+          className="flex min-w-0 max-w-full flex-1 basis-full items-stretch sm:max-w-md sm:basis-80"
         >
           {/* The RESOLVED season, not the raw query field: searching from a
               default visit must stay in the season the reader is looking at
@@ -116,23 +117,14 @@ export function SeasonControls({
               Widening is the "All seasons" link's job, and it keeps the
               search text when it does it. */}
           <Hidden name="year" value={season === null ? 'all' : String(season)} />
-          <label className="flex min-w-0 flex-1 items-center gap-2 px-3">
-            <svg aria-hidden width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="shrink-0 text-muted-foreground">
-              <circle cx="7" cy="7" r="4.5" />
-              <path d="M10.5 10.5 14 14" />
-            </svg>
-            <input
-              type="search"
-              name="q"
-              defaultValue={filters.q}
-              placeholder="Search tournaments"
-              aria-label="Search tournaments, organizers or venues"
-              className="h-full w-full min-w-0 border-0 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-            />
-          </label>
-          <button type="submit" className="sr-only">
-            Search
-          </button>
+          <SearchField
+            id="season-search"
+            name="q"
+            label="Search tournaments, organizers or venues"
+            placeholder="Search tournaments"
+            defaultValue={filters.q}
+            className="w-full"
+          />
         </form>
       </div>
     </div>

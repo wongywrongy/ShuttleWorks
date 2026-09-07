@@ -21,6 +21,7 @@
  */
 import { formatDateLong } from '../lib/format';
 import type { SeasonRow } from '../lib/phase';
+import { ACTION_LINK, ACTION_LINK_MUTED } from '../lib/ui';
 
 export function NowStrip({ row, moreCount }: { row: SeasonRow; moreCount: number }) {
   const parts = [
@@ -49,16 +50,16 @@ export function NowStrip({ row, moreCount }: { row: SeasonRow; moreCount: number
         </div>
         <a
           href={`/e/${encodeURIComponent(row.slug)}?tab=draws`}
-          className="shrink-0 text-sm font-semibold text-accent underline-offset-4 hover:underline"
+          className={`shrink-0 ${ACTION_LINK}`}
         >
-          Draws &amp; results →
+          Draws &amp; results
         </a>
         {moreCount > 0 ? (
           // The calendar's own anchor, not a second listing: "more" means
           // "keep reading down this page".
           <a
             href="#calendar"
-            className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+            className={ACTION_LINK_MUTED}
           >
             +{moreCount} more
           </a>

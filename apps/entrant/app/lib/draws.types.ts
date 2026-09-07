@@ -301,9 +301,11 @@ export function drawProgressLabel(progress: DrawProgressDTO | null | undefined):
   return `${round} to play`;
 }
 
-/** Public count copy: singles are players, doubles are pairs. */
+/** Public count copy: singles are players, doubles are pairs — and one of
+ * either is singular (P7). A one-entry doubles event read `1 pairs`. */
 export function entryCountLabel(code: string, size: number): string {
-  const unit = ['MD', 'WD', 'XD'].includes(eventCodeLabel(code)) ? 'pairs' : 'players';
+  const doubles = ['MD', 'WD', 'XD'].includes(eventCodeLabel(code));
+  const unit = doubles ? (size === 1 ? 'pair' : 'pairs') : size === 1 ? 'player' : 'players';
   return `${size} ${unit}`;
 }
 

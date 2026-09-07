@@ -20,7 +20,7 @@ import { TournamentFrame } from '../components/TournamentFrame';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { dateOfIso, formatDateLong } from '../lib/format';
-import { SECTION_TITLE } from '../lib/ui';
+import { ACTION_SECONDARY, SECTION_TITLE } from '../lib/ui';
 import type { Route } from './+types/regulations';
 
 export interface RegulationsLoaderData {
@@ -295,18 +295,14 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
               document, and calling that "Save as PDF" would be a lie about
               the file the reader gets. */}
           <div id="regulations-actions" hidden className="flex flex-wrap gap-2" data-document-title={title}>
-            <button
-              type="button"
-              data-regulations-print
-              className="inline-flex min-h-10 items-center rounded-md border border-rule-soft bg-surface-raised px-3 py-2 text-sm font-semibold text-foreground hover:border-action-primary"
-            >
+            {/* P7: both wear the tier's ONE secondary register
+                (`ACTION_SECONDARY`) rather than a bespoke copy of it, so a
+                document action looks like every other non-committing control
+                on the public site. */}
+            <button type="button" data-regulations-print className={ACTION_SECONDARY}>
               Print
             </button>
-            <button
-              type="button"
-              data-regulations-download
-              className="inline-flex min-h-10 items-center rounded-md border border-rule-soft bg-surface-raised px-3 py-2 text-sm font-semibold text-foreground hover:border-action-primary"
-            >
+            <button type="button" data-regulations-download className={ACTION_SECONDARY}>
               Download
             </button>
           </div>

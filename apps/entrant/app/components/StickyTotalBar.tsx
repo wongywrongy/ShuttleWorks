@@ -17,7 +17,7 @@
  */
 import { Button, Notice } from '@scheduler/design-system/components';
 
-import { formatMoment } from '../lib/format';
+import { formatDateTimeInZone } from '../lib/format';
 import { formatCents } from '../lib/money';
 import { chipLabel, type ChipState, type TotalBarState } from '../lib/phase';
 
@@ -25,14 +25,19 @@ export function StickyTotalBar({
   state,
   chip,
   deadline,
+  timeZone,
   quoteAction,
 }: {
   state: TotalBarState;
   chip: ChipState;
   /** The nearest `closesAt` over open events (raw wire string), or null. */
   deadline: string | null;
+  /** The tournament's own zone — the deadline is CONVERTED into it (P7),
+   * never printed as the wire's UTC instant with a zone suffix. */
+  timeZone: string;
   quoteAction: string;
 }) {
+  const deadlineText = deadline === null ? null : formatDateTimeInZone(deadline, timeZone);
   return (
     <section
       id="total"
@@ -82,8 +87,8 @@ export function StickyTotalBar({
           made. `chipLabel` carries the countdown; the moment names the day. */}
       <p className="text-xs text-muted-foreground">
         {chipLabel(chip)}
-        {chip.kind === 'entriesOpen' && deadline !== null
-          ? ` · ${formatMoment(deadline)}`
+        {chip.kind === 'entriesOpen' && deadlineText !== null
+          ? ` · ${deadlineText}`
           : ''}
       </p>
       {/* Side by side on a phone — two stacked full-width buttons were the

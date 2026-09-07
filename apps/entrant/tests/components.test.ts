@@ -30,7 +30,14 @@ import { TabBar } from '../app/components/TabBar';
 import { Breadcrumbs } from '../app/components/Breadcrumbs';
 import { SegmentedNav } from '../app/components/SegmentedNav';
 import type { FrameTab } from '../app/lib/tournamentFrame';
-import { capChipCountdown, formatDateInZone, formatDateLong } from '../app/lib/format';
+import {
+  capChipCountdown,
+  formatDateInZone,
+  formatDateLong,
+  formatDateTimeInZone,
+  formatDayMonthInZone,
+  formatDayMonthTimeInZone,
+} from '../app/lib/format';
 import type { EntryEventDTO } from '../app/lib/entryPage.types';
 import type { DrawCardDTO } from '../app/lib/draws.types';
 import { actionCell, seasonModel } from '../app/lib/phase';
@@ -183,6 +190,49 @@ describe('formatDateInZone', () => {
   });
 });
 
+/**
+ * public-visual-fixes P7: the venue-local conversions, at the two boundaries
+ * that break a naive "trim the suffix" implementation — midnight and a
+ * cross-zone deadline.
+ */
+describe('venue-local instants (P7)', () => {
+  it('moves a deadline onto the RIGHT calendar day in the venue zone', () => {
+    // 15:30 UTC on 31 July is 00:30 on 1 August in Seoul. A day-only
+    // rendering that trimmed the suffix off the UTC value would state
+    // 31 July — the day before the deadline the director actually set.
+    expect(formatDayMonthInZone('2026-07-31 15:30 UTC', 'Asia/Seoul')).toBe('1 Aug');
+    expect(formatDayMonthTimeInZone('2026-07-31 15:30 UTC', 'Asia/Seoul')).toBe('1 Aug, 00:30');
+    expect(formatDateTimeInZone('2026-07-31 15:30 UTC', 'Asia/Seoul')).toBe('1 Aug 2026, 00:30');
+    // The same instant read at the venue in London is still 31 July.
+    expect(formatDayMonthTimeInZone('2026-07-31 15:30 UTC', 'Europe/London')).toBe('31 Jul, 16:30');
+  });
+
+  it('keeps midnight on its own day and does not roll a 23:30 evening over', () => {
+    // Exactly midnight, venue-local: the day is the one the clock reads,
+    // never the previous one via a 24:00 spelling.
+    expect(formatDayMonthTimeInZone('2026-07-31 15:00 UTC', 'Asia/Seoul')).toBe('1 Aug, 00:00');
+    // A 23:30 local match must not shift its day either — the case a
+    // UTC-rendered card gets wrong in the other direction.
+    expect(formatDayMonthTimeInZone('2026-08-01 14:30 UTC', 'Asia/Seoul')).toBe('1 Aug, 23:30');
+    expect(formatDateTimeInZone('2026-08-01 14:30 UTC', 'Asia/Seoul')).toBe('1 Aug 2026, 23:30');
+  });
+
+  it('never rounds a real deadline, and never prints a zone or an offset', () => {
+    const closes = formatDateTimeInZone('2026-08-14 23:59 UTC', 'Europe/London');
+    // 23:59 stays 23:59 (as 00:59 the next day in BST) — not "midnight",
+    // not "about 1am", not the 15th at 01:00.
+    expect(closes).toBe('15 Aug 2026, 00:59');
+    expect(closes).not.toMatch(/UTC|GMT|BST|[+-]\d{2}:?\d{2}|Europe\/London/);
+  });
+
+  it('omits an unparseable moment and degrades an unknown zone to UTC', () => {
+    expect(formatDayMonthTimeInZone('not-a-moment', 'Asia/Seoul')).toBeNull();
+    expect(formatDateTimeInZone('not-a-moment', 'Asia/Seoul')).toBeNull();
+    // An unrecognised zone is not a reason to drop a known instant.
+    expect(formatDateTimeInZone('2026-08-14 23:59 UTC', 'Mars/Olympus')).toBe('14 Aug 2026, 23:59');
+  });
+});
+
 // ---- DateBadge -------------------------------------------------------------
 
 describe('DateBadge', () => {
@@ -232,7 +282,11 @@ describe('SeasonStatusCell', () => {
     const live = renderToStaticMarkup(
       h(SeasonStatusCell, { cell: actionCell(row({ slug: 'x', status: 'in_progress_live' }), false) }),
     );
-    expect(live).toContain('Follow live →');
+    // P7: the decorative trailing arrow is gone from every action arm — an
+    // underlined link already says it leads somewhere, and the glyph rode
+    // only two of the four arms.
+    expect(live).toContain('Follow live');
+    expect(live).not.toContain('→');
   });
 
   it('lifts every real link above the row-wide stretched link', () => {
@@ -362,7 +416,7 @@ describe('SeasonCalendar', () => {
     expect(html).not.toContain('id="past"');
   });
 
-  it('mutes a past row, drops its venue line and offers Results only', () => {
+  it('quiets a past row by what it drops, and offers Results only', () => {
     const html = renderToStaticMarkup(
       h(SeasonCalendar, {
         model: model([
@@ -378,7 +432,10 @@ describe('SeasonCalendar', () => {
     expect(html).not.toContain('Riverside Hall');
     expect(html).not.toContain('Winchester');
     expect(html).not.toContain('Wessex BC');
-    expect(classTokens(html, 'after:absolute')).toContain('text-muted-foreground');
+    // P7: a completed tournament's NAME stays in normal ink — what makes
+    // the past section quieter is the venue/organizer line and the entry
+    // action it does NOT carry, not a greyed-out title.
+    expect(classTokens(html, 'after:absolute')).toContain('text-foreground');
   });
 
   it('keeps the venue block on an upcoming row', () => {
@@ -937,15 +994,71 @@ describe('EntrantsList (SP-P7 §3.2 — alphabetical, letter-grouped)', () => {
     expect(html).not.toContain('null');
   });
 
-  it('ships the filter substrate: data attributes, mount point, script', () => {
+  it('ships the filter substrate: data attributes, the native form, the script', () => {
     const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
     expect(html).toContain('data-name="tom barker"');
     expect(html).toContain('data-club="riverside bc"');
     expect(html).toContain('id="entrants-filter-root"');
     expect(html).toContain('src="/e/assets/entrants-filter.js"');
     expect(html).toContain('3 entrants');
-    // The no-matches line ships hidden; only the script reveals it.
+    // The no-matches line ships hidden while there is a list; only a search
+    // that empties it (server- or script-side) reveals it.
     expect(html).toMatch(/<p[^>]*data-no-matches[^>]*hidden/);
+  });
+
+  // ---- public-visual-fixes P7 ---------------------------------------------
+
+  it('searches natively: a GET form with an icon, a real sr-only label and no visible Find button', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, {
+        slug: 'spring-open',
+        entrants,
+        noun: 'player' as const,
+        action: '/e/spring-open',
+        hidden: [{ name: 'tab', value: 'players' }],
+      }),
+    );
+    // A real form, submitting by GET to the page it is on — Enter works with
+    // no script at all, and the query lands in a shareable URL.
+    expect(html).toMatch(/<form[^>]*action="\/e\/spring-open"[^>]*method="get"/);
+    // The other URL state travels with the search: without this the search
+    // would drop the reader back onto the Overview tab.
+    expect(html).toContain('<input type="hidden" name="tab" value="players"/>');
+    expect(html).toContain('name="q"');
+    // The label is REAL and associated — but not a visible "Find a player"
+    // repeating the placeholder underneath it.
+    expect(html).toMatch(/<label for="entrants-search" class="sr-only">Find a player<\/label>/);
+    expect(html).toContain('placeholder="Name or club"');
+    // The submit exists for assistive tech and the keyboard, and is invisible.
+    expect(html).toMatch(/<button type="submit" class="sr-only">Search<\/button>/);
+    expect(html).not.toMatch(/>Find<\/button>/);
+    expect(html).not.toMatch(/>Apply<\/button>/);
+    // The magnifier is decoration, so it is hidden from the accessibility tree.
+    expect(html).toContain('<svg width="16" height="16"');
+  });
+
+  it('applies ?q= on the SERVER, so the directory search works with no script', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, { slug: 'spring-open', entrants, noun: 'player' as const, query: 'northside' }),
+    );
+    // A club-only match still finds the person (same folding as the script).
+    expect(html).toContain('Tessa Ngo');
+    expect(html).not.toContain('Tom Barker');
+    expect(html).not.toContain('Priya');
+    // The count switches register while a query is on, exactly as the
+    // script's own count does.
+    expect(html).toContain('1 result');
+    // The field keeps what was typed.
+    expect(html).toContain('value="northside"');
+  });
+
+  it('shows the no-matches line when a server-side search empties the list', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, { slug: 'spring-open', entrants, noun: 'player' as const, query: 'nobody at all' }),
+    );
+    expect(html).toContain('No players match your search.');
+    expect(html).not.toMatch(/<p[^>]*data-no-matches[^>]*hidden/);
+    expect(html).toContain('0 results');
   });
 
   it('still carries no contact data — the strict projection, rendered', () => {
@@ -1036,6 +1149,8 @@ describe('StickyTotalBar', () => {
   const base = {
     chip: OPEN_CHIP,
     deadline: '2026-08-14 23:59 UTC',
+    // P7: the bar converts the deadline into the tournament's own zone.
+    timeZone: 'Europe/London',
     quoteAction: '/e/api/quote/spring-open',
   };
 
@@ -1069,7 +1184,11 @@ describe('StickyTotalBar', () => {
       h(StickyTotalBar, { ...base, state: { kind: 'unquoted' } }),
     );
     expect(html).toContain('Entries open · closes in 4d');
-    expect(html).toContain('14 Aug 2026, 23:59 UTC');
+    // P7: CONVERTED into the tournament's zone, and with no zone spelling —
+    // 23:59 UTC on 14 August is 00:59 on the 15th in London (BST), which is
+    // exactly why trimming the suffix off a UTC rendering is not a fix.
+    expect(html).toContain('15 Aug 2026, 00:59');
+    expect(html).not.toContain('UTC');
   });
 
   it('omits the moment when no deadline is known, and the countdown when closed', () => {
@@ -1102,6 +1221,7 @@ describe('StickyTotalBar', () => {
         state: { kind: 'unquoted' },
         chip: OPEN_CHIP,
         deadline: '2026-08-14 23:59 UTC',
+        timeZone: 'Europe/London',
         quoteAction: '/e/api/quote/spring-open',
       }),
     );

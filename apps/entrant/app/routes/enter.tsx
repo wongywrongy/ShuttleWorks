@@ -33,6 +33,7 @@
 import { Button, Notice, TextField } from '@scheduler/design-system/components';
 import { data, isRouteErrorResponse, useRouteError } from 'react-router';
 
+import { Breadcrumbs } from '../components/Breadcrumbs';
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { StatusChip } from '../components/StatusChip';
@@ -43,8 +44,9 @@ import type { EntryEventDTO, EntryPageDTO } from '../lib/entryPage.types';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { hasEntrantSession } from '../lib/session.server';
+import { VENUE_TIME_NOTE } from '../lib/tournamentFrame';
 import { formatCents } from '../lib/money';
-import { capChipCountdown } from '../lib/format';
+import { capChipCountdown, formatDateLong, formatDateTimeInZone } from '../lib/format';
 import { eventCodeLabel } from '../lib/draws.types';
 import {
   chipState,
@@ -408,14 +410,18 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
     <PlayShell>
       <section className="border-b border-rule-soft bg-surface-raised">
         <div className="mx-auto w-full max-w-5xl px-4 py-6 md:py-8">
-          <p className="text-sm">
-            <a
-              href={`/e/${encodeURIComponent(slug)}`}
-              className="text-accent underline-offset-4 hover:underline"
-            >
-              ← {page.tournament.name ?? 'Tournament page'}
-            </a>
-          </p>
+          {/* P7: the entry form is the last tournament-scoped page that still
+              carried its own floating back arrow. It now speaks the frame's
+              grammar — the same breadcrumb trail, the same ancestors, the
+              current page as plain text — even though the wizard keeps its
+              own header band rather than the tournament frame. */}
+          <Breadcrumbs
+            crumbs={[
+              { label: 'Tournaments', href: '/e/' },
+              { label: page.tournament.name ?? 'Tournament', href: `/e/${encodeURIComponent(slug)}` },
+              { label: 'Enter', href: null },
+            ]}
+          />
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
             <h1 className={PAGE_TITLE}>
               {openEvents.length > 0 ? 'Enter this tournament' : 'Entries are closed'}
@@ -497,17 +503,34 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
           <dl className="grid gap-3 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-xs text-muted-foreground">Tournament date</dt>
-              <dd className="mt-1 font-medium text-foreground">{page.tournament.date ?? 'To be announced'}</dd>
+              {/* P7: a human date, not the raw `YYYY-MM-DD` this row used to
+                  print straight from the wire. */}
+              <dd className="mt-1 font-medium text-foreground">
+                {formatDateLong(page.tournament.date) || 'To be announced'}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">Entry deadline</dt>
-              <dd className="mt-1 font-medium text-foreground">{deadline ? deadline : 'See event dates below'}</dd>
+              {/* P7: converted into the tournament's own zone and stated to
+                  the minute — this row used to print the wire moment itself
+                  ("14 Aug 2026 23:59 UTC"), which is both an offset in public
+                  copy and, for an evening deadline, the wrong day. A deadline
+                  is never rounded to a friendlier time. */}
+              <dd className="mt-1 font-medium text-foreground">
+                {(deadline && formatDateTimeInZone(deadline, page.tournament.timeZone ?? 'UTC')) ||
+                  'See event dates below'}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">Fees</dt>
               <dd className="mt-1 font-medium text-foreground">{feeTiers.length > 0 ? feeTiers.map(([count, cents]) => `${count} ${count === '1' ? 'event' : 'events'} · ${formatCents(cents)}`).join(', ') : 'Shown beside each event'}</dd>
             </div>
           </dl>
+          {/* Contract §7.1 / P7: the venue-time rule, stated ONCE on this
+              page, exactly as the tournament frame states it on the others.
+              Having said it, the deadline above carries no offset and no
+              zone identifier. */}
+          <p className="text-xs text-muted-foreground">{VENUE_TIME_NOTE}</p>
           <p className="max-w-prose text-sm text-muted-foreground">You can review everything before submitting. Payment, when required, is handled using the organizer&rsquo;s instructions after submission.</p>
         </section>
 
@@ -693,6 +716,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                 state={bar}
                 chip={chip}
                 deadline={deadline}
+                timeZone={page.tournament.timeZone ?? 'UTC'}
                 quoteAction={`/e/api/quote/${slug}${justSignedIn ? '?signedIn=1' : ''}`}
               />
             </div>

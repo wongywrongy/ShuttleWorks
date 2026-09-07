@@ -117,7 +117,13 @@ export function formatMomentInZone(wire: string, timeZone: string): string | nul
  */
 export function formatDateInZone(wire: string, timeZone: string): string | null {
   const moment = parseMoment(wire);
-  if (moment === null) return null;
+  return moment === null ? null : dateFromInstant(moment, timeZone);
+}
+
+/** `12 Sep 2026` for an already-parsed instant read in `timeZone` — the
+ * day-first vocabulary the rest of this module speaks, not `Intl`'s
+ * locale-ordered default. */
+function dateFromInstant(moment: Date, timeZone: string): string {
   try {
     const parts = new Intl.DateTimeFormat('en', {
       day: 'numeric', month: 'short', year: 'numeric', timeZone,
@@ -127,6 +133,22 @@ export function formatDateInZone(wire: string, timeZone: string): string | null 
   } catch {
     return `${moment.getUTCDate()} ${MONTHS[moment.getUTCMonth()]} ${moment.getUTCFullYear()}`;
   }
+}
+
+/**
+ * An ISO-8601 INSTANT (`2026-09-12T10:35:00+00:00` — what the matches
+ * projection stamps, not the pinned `_moment` wire shape) as a venue-local
+ * `12 Sep 2026, 19:35`.
+ *
+ * P7: the schedule's freshness line used to build its own `Intl` format and
+ * came out `Sep 12, 2026, 7:35 PM` — the one American, 12-hour date on a
+ * tier whose every other date is day-first and 24-hour. Unparseable input
+ * returns null, so the caller omits the line rather than printing raw ISO.
+ */
+export function formatInstantInZone(iso: string, timeZone: string): string | null {
+  const moment = new Date(iso);
+  if (Number.isNaN(moment.getTime())) return null;
+  return `${dateFromInstant(moment, timeZone)}, ${formatClockInZone(moment, timeZone)}`;
 }
 
 /**
@@ -154,6 +176,57 @@ export function formatDayMonthInZone(wire: string, timeZone: string): string | n
     return `${value('day')} ${value('month')}`;
   } catch {
     return `${moment.getUTCDate()} ${MONTHS[moment.getUTCMonth()]}`;
+  }
+}
+
+/**
+ * A DEADLINE in the tournament's own zone, to the minute, with no zone
+ * spelling: `1 Aug, 23:59` (public-visual-fixes P7).
+ *
+ * A closing time is the one instant on a tournament page a reader can be
+ * late for, so the tier states it exactly — the minute is never rounded to
+ * a friendlier one, and never widened to a bare day, because "closes 1 Aug"
+ * and "closes 1 Aug, 23:59" are different promises. The year is absent for
+ * the same reason it is absent from `formatDayMonthInZone`: the page it sits
+ * on already says which tournament, and which year that is.
+ *
+ * CONVERSION, not suffix-trimming (contract §7.1): 15:30 UTC on 31 July is
+ * 1 August in Seoul, and printing the UTC clock without its zone would state
+ * the wrong day AND the wrong time.
+ */
+export function formatDayMonthTimeInZone(wire: string, timeZone: string): string | null {
+  const moment = parseMoment(wire);
+  if (moment === null) return null;
+  const day = formatDayMonthInZone(wire, timeZone);
+  const clock = formatClockInZone(moment, timeZone);
+  return day === null ? null : `${day}, ${clock}`;
+}
+
+/**
+ * The same instant with its year — `14 Aug 2026, 23:59` — for a deadline
+ * quoted away from the tournament's own date context (the entry form's
+ * sticky total bar). Same rules as its siblings.
+ */
+export function formatDateTimeInZone(wire: string, timeZone: string): string | null {
+  const moment = parseMoment(wire);
+  if (moment === null) return null;
+  const day = formatDateInZone(wire, timeZone);
+  const clock = formatClockInZone(moment, timeZone);
+  return day === null ? null : `${day}, ${clock}`;
+}
+
+/** 24-hour `HH:MM` for an instant read in `timeZone`; an unrecognised zone
+ * degrades to the UTC clock, exactly as the date helpers degrade to the UTC
+ * day, rather than dropping a known instant. */
+function formatClockInZone(moment: Date, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone,
+    }).formatToParts(moment);
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('hour')}:${value('minute')}`;
+  } catch {
+    return `${String(moment.getUTCHours()).padStart(2, '0')}:${String(moment.getUTCMinutes()).padStart(2, '0')}`;
   }
 }
 

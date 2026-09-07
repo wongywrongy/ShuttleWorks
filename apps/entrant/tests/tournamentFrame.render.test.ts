@@ -302,6 +302,21 @@ describe.each(CASES)('the tournament frame on $name', ({ path, routes, activeTab
     expect((nav.match(/<ol/g) ?? []).length).toBe(1);
   });
 
+  it('prints no timezone identifier, offset or zone abbreviation anywhere (P7)', async () => {
+    stubApi(routes);
+    const html = await render(path);
+    // The frame said "All times local to the venue" once; having said it,
+    // every instant on the page is CONVERTED into that zone and none of
+    // them spells it. The fixture's zone is Asia/Seoul on the schedule
+    // projection, so all three spellings have something to catch.
+    const body = html.replace(/<script[\s\S]*?<\/script>/g, '');
+    expect(body).not.toMatch(/\bAsia\/Seoul\b/);
+    expect(body).not.toMatch(/\bUTC\b/);
+    expect(body).not.toMatch(/GMT[+-]?\d*/);
+    expect(body).not.toMatch(/\bKST\b|\bBST\b/);
+    expect(body).not.toMatch(/[+-]\d{2}:\d{2}\b/);
+  });
+
   it('carries no floating text-arrow back link and no second navigation', async () => {
     stubApi(routes);
     const html = await render(path);

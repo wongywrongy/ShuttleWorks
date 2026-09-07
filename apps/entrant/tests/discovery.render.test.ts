@@ -437,3 +437,30 @@ describe('the retired sidebar and facets leave nothing behind', () => {
     expect(html).not.toMatch(/<a[^>]*>Entries open<\/a>/);
   });
 });
+
+// ---- public-visual-fixes P7 ------------------------------------------------
+
+describe('one control grammar on the front door (P7)', () => {
+  it('carries no decorative trailing arrow on any action', async () => {
+    // Every discovery action — Follow live, Results, Draws & results, Enter —
+    // is an underlined link, and an underlined link already says it leads
+    // somewhere. The glyph rode only some of them, which read as a
+    // difference between them that does not exist.
+    for (const path of ['/e/', '/e/#past']) {
+      const html = await render(path);
+      expect(html).not.toContain('→');
+      expect(html).not.toContain('&rarr;');
+    }
+  });
+
+  it('searches with an icon, a real sr-only label and an invisible submit', async () => {
+    const html = await render('/e/', NO_NOW);
+    // The one search landmark on the page (asserted above) is this form.
+    expect(html).toMatch(/<label for="season-search" class="sr-only">/);
+    expect(html).toContain('placeholder="Search tournaments"');
+    expect(html).toMatch(/<button type="submit" class="sr-only">Search<\/button>/);
+    // No visible submit anywhere beside the field.
+    expect(html).not.toMatch(/>\s*Find\s*<\/button>/);
+    expect(html).not.toMatch(/>\s*Apply\s*<\/button>/);
+  });
+});

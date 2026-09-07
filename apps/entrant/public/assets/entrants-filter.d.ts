@@ -17,3 +17,4 @@ export function matches(
 export function filterNoun(root: Element | null | undefined): 'player' | 'entrant';
 export function apply(scope: ParentNode, query: string): number;
 export function findLabel(noun: 'player' | 'entrant'): string;
+export function boot(root: Element): void;

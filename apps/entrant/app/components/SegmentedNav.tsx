@@ -31,7 +31,13 @@ export interface Segment {
 // real running page: this alone (with the `SeasonControls.tsx` popover fix
 // alongside it) closes Discovery's 320/390px horizontal-scroll defect.
 const GROUP = 'inline-flex flex-wrap gap-4 border-b border-rule-soft';
-const ITEM = 'inline-flex min-h-9 items-center px-0.5 text-sm';
+// P7: the shared navigation control carries the same visible focus as every
+// other action on the tier (`ACTION_LINK`'s outline) — it had none, so a
+// keyboard reader tabbing across the tournament sections, the schedule days
+// or the season selector saw only the browser default, which is invisible
+// against this ground in several browsers.
+const ITEM =
+  'inline-flex min-h-9 items-center px-0.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 const DIVIDER = '';
 export const SEGMENT_ACTIVE = 'border-b-2 border-accent font-semibold text-accent';
 export const SEGMENT_IDLE = 'text-muted-foreground hover:text-foreground';

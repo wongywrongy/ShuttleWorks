@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   apply,
+  boot,
   filterNoun,
   findLabel,
   matchField,
@@ -53,8 +54,8 @@ describe('matchField', () => {
   });
 });
 
-describe('findLabel (V3-PE05.2)', () => {
-  it('is the persistent visible label — never disappears once a query is typed', () => {
+describe('findLabel (V3-PE05.2, P7)', () => {
+  it('is the field\'s one accessible name, shared by SSR and the script', () => {
     expect(findLabel('player')).toBe('Find a player');
     expect(findLabel('entrant')).toBe('Find an entrant');
   });
@@ -148,5 +149,56 @@ describe('apply', () => {
     row.setAttribute('data-name', searchKey('Rasmus Kjær'));
     expect(apply(doc, 'kjaer')).toBe(1);
     expect(row.hidden).toBe(false);
+  });
+});
+
+
+// ---- public-visual-fixes P7 ------------------------------------------------
+
+describe('boot (P7 — enhance the SSR form, never mint a control)', () => {
+  function ssr(query = '') {
+    document.body.innerHTML = `
+      <section id="dir-P" data-letter-group>
+        <li data-entrant data-name="priya radhakrishnan" data-club=""></li>
+      </section>
+      <section id="dir-T" data-letter-group>
+        <li data-entrant data-name="tom barker" data-club="riverside bc"></li>
+      </section>
+      <form id="entrants-filter-root" data-filter-noun="player" method="get">
+        <label for="entrants-search" class="sr-only">Find a player</label>
+        <input id="entrants-search" type="search" name="q" value="${query}" />
+        <button type="submit" class="sr-only">Search</button>
+      </form>
+      <p data-search-count></p>
+      <p data-no-matches hidden></p>
+    `;
+    return document.getElementById('entrants-filter-root') as HTMLFormElement;
+  }
+
+  it('adds live filtering to the field the document already shipped', () => {
+    const form = ssr();
+    boot(form);
+    // It creates nothing: the document had exactly one input before boot and
+    // has exactly one after (the old script minted the box itself, which is
+    // why a scriptless reader had no search at all).
+    expect(document.querySelectorAll('input[type="search"]')).toHaveLength(1);
+
+    const input = document.getElementById('entrants-search') as HTMLInputElement;
+    input.value = 'priya';
+    input.dispatchEvent(new Event('input'));
+    const rows = [...document.querySelectorAll('[data-entrant]')] as HTMLElement[];
+    expect(rows[0].hidden).toBe(false);
+    expect(rows[1].hidden).toBe(true);
+    expect(document.querySelector('[data-search-count]')?.textContent).toBe('1 result');
+  });
+
+  it('re-applies a server-side ?q= so the count reads in the same register', () => {
+    boot(ssr('riverside'));
+    expect(document.querySelector('[data-search-count]')?.textContent).toBe('1 result');
+  });
+
+  it('is inert, not broken, when there is no field to enhance', () => {
+    document.body.innerHTML = '<form id="entrants-filter-root"></form>';
+    expect(() => boot(document.getElementById('entrants-filter-root') as HTMLFormElement)).not.toThrow();
   });
 });

@@ -24,8 +24,14 @@
  */
 import { formatDayMonthInZone } from '../lib/format';
 import type { ActionCell } from '../lib/phase';
+import { ACTION_LINK_BASE } from '../lib/ui';
 
-const LINK = 'relative z-10 text-sm font-semibold underline-offset-4 hover:underline';
+/** The shared link register (`ACTION_LINK`), plus the stretched-row escape.
+ * The tone is composed at the call site; the trailing arrows these actions
+ * used to carry are gone (P7) — an underlined accent link already says it
+ * leads somewhere, and the glyph only survived on two of the four arms, so
+ * it read as a difference between them that does not exist. */
+const LINK = `relative z-10 ${ACTION_LINK_BASE}`;
 
 /** `Enter · closes 15 Aug`, or the bare invitation when the organizer set no
  * deadline (rule 4: degrade to what is known, never to a placeholder). */
@@ -46,7 +52,7 @@ export function SeasonStatusCell({ cell }: { cell: ActionCell }) {
   if (cell.kind === 'live') {
     return (
       <a href={cell.href} className={`${LINK} text-status-live`}>
-        {cell.label} →
+        {cell.label}
       </a>
     );
   }
@@ -54,7 +60,7 @@ export function SeasonStatusCell({ cell }: { cell: ActionCell }) {
   if (cell.kind === 'results') {
     return (
       <a href={cell.href} className={`${LINK} text-accent`}>
-        Results →
+        Results
       </a>
     );
   }

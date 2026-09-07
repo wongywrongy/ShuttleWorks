@@ -83,8 +83,13 @@ function CalendarRow({ row, past }: { row: SeasonRow; past: boolean }) {
         <div className="min-w-0 flex-1">
           <a
             href={`/e/${encodeURIComponent(row.slug)}`}
+            /* P7: a completed tournament's NAME is still the row's primary
+               text, so it reads in normal ink; what makes the past section
+               quieter is that its rows carry no venue/organizer line and no
+               entry action, not that the name itself was greyed to the
+               muted register. */
             className={`after:absolute after:inset-0 hover:underline ${
-              past ? 'text-muted-foreground' : 'font-medium text-foreground'
+              past ? 'text-foreground' : 'font-medium text-foreground'
             }`}
           >
             {displayTitle(row)}

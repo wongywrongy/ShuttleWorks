@@ -69,7 +69,11 @@ export function PersonGroup({
     if (isFeederSide({ persons, placeholder: label, unresolved })) {
       return (
         <span className={className} data-feeder-slot="">
-          <span className="block text-muted-foreground">
+          {/* P7: the feeder line is subordinate, not faint — it is the only
+              thing an empty slot says, so it sits one register below the
+              name ink (`text-secondary`) rather than in the muted register
+              used for card furniture. */}
+          <span className="block text-text-secondary">
             {feederLabel(unresolved?.reference)}
           </span>
         </span>
