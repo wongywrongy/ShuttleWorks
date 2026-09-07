@@ -31,4 +31,15 @@ describe('NextUpList', () => {
     expect(meta).toBeInTheDocument();
     expect(meta.textContent).not.toContain('·');
   });
+
+  it('keeps the embedded preview bounded at five rows', () => {
+    render(
+      <NextUpList
+        items={Array.from({ length: 6 }, (_, i) => m({ code: `MS${i + 1}` }))}
+      />,
+    );
+    expect(screen.getByText('MS1')).toBeInTheDocument();
+    expect(screen.getByText('MS5')).toBeInTheDocument();
+    expect(screen.queryByText('MS6')).not.toBeInTheDocument();
+  });
 });

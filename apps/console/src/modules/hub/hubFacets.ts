@@ -43,6 +43,7 @@ import { needsAttention } from './hubSignals';
 
 export type HubFacetId =
   | 'all'
+  | 'active'
   // E4: ONE facet for all three entries phases, not three.
   //
   // A director filtering the Hub is asking "which of my events are in the
@@ -69,6 +70,7 @@ export interface HubFacet {
  *  order an event actually travels, then the cross-cutting facets. */
 export const HUB_FACETS: HubFacet[] = [
   { id: 'all', label: 'All' },
+  { id: 'active', label: 'Active' },
   { id: 'entries', label: MODULE_LABELS.entries },
   { id: 'setup', label: 'Setup' },
   { id: 'ready', label: 'Ready' },
@@ -110,6 +112,8 @@ export function matchesFacet(t: TournamentSummaryDTO, facet: HubFacetId): boolea
   switch (facet) {
     case 'all':
       return true;
+    case 'active':
+      return t.status !== 'archived' && resolvePhase(t) !== 'complete';
     case 'shared':
       return isShared(t);
     case 'attention':
@@ -125,6 +129,7 @@ export function matchesFacet(t: TournamentSummaryDTO, facet: HubFacetId): boolea
 export function facetCounts(list: TournamentSummaryDTO[]): Record<HubFacetId, number> {
   const counts = {
     all: 0,
+    active: 0,
     entries: 0,
     setup: 0,
     ready: 0,

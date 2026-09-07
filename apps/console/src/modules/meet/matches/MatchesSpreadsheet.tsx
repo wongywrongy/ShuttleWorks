@@ -55,6 +55,9 @@ import { meetMatchIdentityFromStored } from '../../../platform/domain/matchIdent
 import { slotToTime } from '../../../lib/time';
 import { formatIsoClock } from '../../../lib/timeFormatters';
 import { useMatchStateSnapshot } from '../../../hooks/useMatchStateSnapshot';
+import { useInventoryPage } from '../../../hooks/useInventoryPage';
+import { useListScrollRestore } from '../../../hooks/useListScrollRestore';
+import { DenseDataPagination } from '../../../components/control-plane/DenseDataTable';
 
 /** Stable empty-array reference so MatchRow's useMemo deps don't churn
  *  when a match has no disruptions. */
@@ -72,6 +75,7 @@ export function MatchesSpreadsheet({
   onFocusConsumed?: () => void;
 } = {}) {
   const matches = useTournamentStore((s) => s.matches);
+  const listScrollRef = useListScrollRestore<HTMLDivElement>('meet-matches', matches.length > 0);
   const players = useTournamentStore((s) => s.players);
   const groups = useTournamentStore((s) => s.groups);
   const updateMatch = useTournamentStore((s) => s.updateMatch);
@@ -94,6 +98,7 @@ export function MatchesSpreadsheet({
   // contract as `?q=` — no debounce needed for a click, but consistency
   // beats a second mechanism.
   const [statusParam, setStatusParam] = useSearchParamState('status', '');
+  const [sortParam, setSortParam] = useSearchParamState('sort', 'asc');
   const statusFilter = parseMatchStatusFilter(statusParam);
   // Legacy filter params kept for URL backward compatibility — not
   // currently surfaced in any UI; if the user lands with these set, the
@@ -277,7 +282,7 @@ export function MatchesSpreadsheet({
   // actually changes.
   const tableGroups = useMemo<BandedTableGroup<MatchDTO>[]>(() => {
     const groupsByPrefix = new Map<string, MatchDTO[]>();
-    for (const m of filteredMatches) {
+    for (const m of matches) {
       const { event_code } = meetMatchIdentityFromStored({
         event_rank: m.eventRank,
         configured_event_codes: configuredEventCodes,
@@ -290,7 +295,7 @@ export function MatchesSpreadsheet({
       ...EVENT_ORDER.filter((p) => groupsByPrefix.has(p)),
       ...[...groupsByPrefix.keys()].filter(
         (k) => !(EVENT_ORDER as readonly string[]).includes(k),
-      ),
+      ).sort(),
     ];
     return orderedKeys.map((key) => {
       const label = key === '–' ? 'Unassigned' : EVENT_LABEL[key]?.full ?? key;
@@ -302,7 +307,16 @@ export function MatchesSpreadsheet({
         testId: `match-group-${label}`,
       };
     });
-  }, [filteredMatches, configuredEventCodes]);
+  }, [matches, configuredEventCodes]);
+
+  const matchingIds = new Set(filteredMatches.map((m) => m.id));
+  const orderedMatches = tableGroups.flatMap((group) => group.items.filter((m) => matchingIds.has(m.id)).sort((a, b) =>
+    ((a.matchNumber ?? 0) - (b.matchNumber ?? 0)) * (sortParam === 'desc' ? -1 : 1) || a.id.localeCompare(b.id)));
+  const inventory = useInventoryPage(orderedMatches, matches, (m) => m.id, 'meet-matches',
+    JSON.stringify([searchQuery, statusFilter, [...eventFilter], [...schoolFilter], [...typeFilter], sortParam]));
+  const pageIds = new Set(inventory.page.rows.map((m) => m.id));
+  const pageGroups = tableGroups.map((group) => ({ ...group, items: inventory.page.rows.filter((m) =>
+    group.items.some((item) => item.id === m.id) && pageIds.has(m.id)) })).filter((group) => group.items.length > 0);
 
   if (matches.length === 0) {
     return (
@@ -347,8 +361,11 @@ export function MatchesSpreadsheet({
           onChange={(v) => setStatusParam(v === 'all' ? '' : v)}
           testIdPrefix="matches"
         />
-        <div className="min-h-0 flex-1 overflow-auto">
-        {filteredMatches.length === 0 ? (
+        <label className="flex flex-wrap items-center gap-2 px-5 py-2 text-xs text-muted-foreground">Match number within event
+          <select aria-label="Sort matches" className="min-h-9 rounded-md border border-border bg-card px-2 text-foreground" value={sortParam === 'desc' ? 'desc' : 'asc'} onChange={(event) => setSortParam(event.target.value)}><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+        </label>
+        <div ref={listScrollRef} data-list-scroll="meet-matches" className="min-h-0 flex-1 overflow-auto">
+        {inventory.page.total === 0 ? (
           <>
             {/* ColumnHeaderRow publishes role="row"/"columnheader" — they need
                 the table they claim to live in even with no rows under them. */}
@@ -364,7 +381,7 @@ export function MatchesSpreadsheet({
         ) : (
           <BandedTable
             columns={MEET_MATCH_LIST_COLUMNS}
-            groups={tableGroups}
+            groups={pageGroups}
             rowId={(m) => m.id}
             onRowClick={(m) =>
               setSelectedId((prev) => (prev === m.id ? null : m.id))
@@ -389,6 +406,8 @@ export function MatchesSpreadsheet({
           />
         )}
         </div>
+        {inventory.pending && <button type="button" className="min-h-9 px-3 text-sm text-accent" onClick={inventory.refresh}>Refresh results</button>}
+        <DenseDataPagination page={inventory.page} onPageChange={inventory.actions.setPage} onPageSizeChange={inventory.actions.setPageSize} />
       </div>
       {/* Floor derived from MEET_MATCH_LIST_COLUMNS, not hand-picked: the old 560
           default sat under the 672 `@2xl` tier, so selecting a match deleted

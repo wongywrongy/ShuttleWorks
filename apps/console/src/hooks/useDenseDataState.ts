@@ -1,5 +1,6 @@
 /** URL-backed state for dense operator views. */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { UNSAFE_LocationContext, UNSAFE_NavigationContext } from 'react-router-dom';
 import {
   decodeDenseDataState,
   mergeDenseDataStateParams,
@@ -29,11 +30,17 @@ export function useDenseDataState(
   defaults: Partial<DenseDataState> = {},
   prefix = 'table',
 ): [DenseDataState, DenseDataStateActions] {
+  const route = useContext(UNSAFE_LocationContext);
+  const navigation = useContext(UNSAFE_NavigationContext);
+  const search = route?.location.search ?? (typeof window === 'undefined' ? '' : window.location.search);
   const [state, setLocalState] = useState<DenseDataState>(() =>
-    decodeDenseDataState(typeof window === 'undefined' ? '' : window.location.search, defaults, prefix),
+    decodeDenseDataState(search, defaults, prefix),
   );
   const defaultsKey = JSON.stringify(defaults);
   const defaultsSnapshot = useMemo(() => ({ ...defaults }), [defaultsKey]);
+  useEffect(() => {
+    setLocalState(decodeDenseDataState(search, defaultsSnapshot, prefix));
+  }, [search, defaultsSnapshot, prefix]);
 
   useEffect(() => {
     const onPopState = () => setLocalState(decodeDenseDataState(window.location.search, defaultsSnapshot, prefix));
@@ -44,15 +51,17 @@ export function useDenseDataState(
   const setState = useCallback(
     (next: DenseDataState | ((previous: DenseDataState) => DenseDataState)) => {
       const resolved = typeof next === 'function' ? next(state) : next;
-      const currentParams = typeof window === 'undefined' ? '' : window.location.search;
+      const currentParams = route?.location.search ?? (typeof window === 'undefined' ? '' : window.location.search);
       const merged = mergeDenseDataStateParams(currentParams, resolved, prefix);
-      if (typeof window !== 'undefined') {
+      if (navigation && route) {
+        navigation.navigator.replace({ ...route.location, search: merged.toString() ? `?${merged}` : '' }, route.location.state);
+      } else if (typeof window !== 'undefined') {
         const query = merged.toString();
         window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
       }
       setLocalState(resolved);
     },
-    [prefix, state],
+    [prefix, state, route, navigation],
   );
 
   const setSearch = useCallback((search: string) => setState((previous) => ({ ...previous, search, page: 1 })), [setState]);

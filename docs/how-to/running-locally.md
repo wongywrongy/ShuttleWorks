@@ -129,6 +129,27 @@ layout is for the private tech demo only; production deployments must keep
 the operator and entrant surfaces on distinct hostnames as documented in the
 self-host deployment guide.
 
+### Serve generated surface books privately
+
+Generated surface-book PDFs, HTML captures, and manifests can be served for a
+review session from one exact artifact directory over the host's Tailscale
+IPv4 address:
+
+```bash
+tools/serve-surface-books.sh up docs/screenshots/ui-review/remediation-2026-09-06/tailscale-release
+tools/serve-surface-books.sh url docs/screenshots/ui-review/remediation-2026-09-06/tailscale-release
+tools/serve-surface-books.sh status docs/screenshots/ui-review/remediation-2026-09-06/tailscale-release
+tools/serve-surface-books.sh down docs/screenshots/ui-review/remediation-2026-09-06/tailscale-release
+```
+
+The helper uses a dedicated non-root `nginx-unprivileged` container named
+`shuttleworks-surface-books`, mounts only the supplied artifact directory
+read-only, and binds port 8093 only to the host's Tailscale IPv4 address. It
+does not expose a parent directory or a public interface. Set
+`SURFACE_BOOKS_TAILSCALE_IP` when automatic discovery is unavailable; the
+helper rejects addresses outside `100.64.0.0/10`. The directory must already
+exist, and all files are served as static review content.
+
 If Tailscale is installed but its address is not discovered automatically, set
 `DEMO_TAILSCALE_IP` to the host's `100.x` address for the command. The launcher
 rejects any address outside the Tailscale IPv4 range rather than falling back

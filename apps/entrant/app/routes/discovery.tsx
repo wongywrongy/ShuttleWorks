@@ -27,6 +27,7 @@ import { SeasonControls } from '../components/SeasonControls';
 import { apiGet } from '../lib/apiFetch.server';
 import {
   parseFilters,
+  paginateRows,
   rowMatches,
   viewRows,
   type Filters,
@@ -41,6 +42,10 @@ export interface DiscoveryLoaderData {
   /** The server's UNFILTERED segment counts (§2.3) — the labels never move. */
   counts: { takingEntries: number; completed: number };
   listedCount: number;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
   nowStrip: { row: SeasonRow; moreCount: number } | null;
   /** SSR render instant, ms — the pure functions take `now` as a parameter
    * (no `Date.now()` below the loader). */
@@ -90,19 +95,97 @@ export async function loader({ request }: { request: Request }) {
   const season = await apiGet<SeasonList>('/e/api/pages');
   const now = new Date();
   const matching = season.tournaments.filter((r) => rowMatches(r, filters, now));
+  const ordered = viewRows(matching, filters.view);
+  const pageSize = filters.view === 'completed' ? 20 : 10;
+  const requestedPage = Number.parseInt(url.searchParams.get('page') ?? '1', 10);
+  const paged = paginateRows(ordered, requestedPage, pageSize);
+  if (url.searchParams.has('page') && requestedPage !== paged.page) {
+    // Loader redirects receive the router basename automatically; rendered
+    // links need it explicitly. Passing /e/ here would redirect to /e/e/.
+    throw redirect(pageHref(filters, paged.page, false));
+  }
+  const filteredCounts = {
+    takingEntries: matching.filter((row) => row.status === 'entries_open').length,
+    completed: matching.filter((row) => row.status === 'completed' || row.status === 'completed_winners').length,
+  };
   const nowRow =
     season.now === null
       ? null
       : (season.tournaments.find((r) => r.slug === season.now!.slug) ?? null);
   const payload: DiscoveryLoaderData = {
     filters,
-    rows: viewRows(matching, filters.view),
-    counts: season.counts,
-    listedCount: season.tournaments.length,
+    rows: paged.rows,
+    counts: filteredCounts,
+    listedCount: ordered.length,
+    totalCount: ordered.length,
+    page: paged.page,
+    pageSize,
+    pageCount: paged.pageCount,
     nowStrip: nowRow === null ? null : { row: nowRow, moreCount: season.now!.moreCount },
     nowMs: now.getTime(),
   };
   return payload;
+}
+
+function pageHref(filters: Filters, page: number, includeBasename = true): string {
+  const params = new URLSearchParams();
+  if (filters.view !== 'season' || filters.scopeExplicit) params.set('view', filters.view);
+  if (filters.q.trim() !== '') params.set('q', filters.q);
+  if (filters.preset !== null) params.set('preset', filters.preset);
+  if (filters.from !== null && filters.from !== '') params.set('from', filters.from);
+  if (filters.to !== null && filters.to !== '') params.set('to', filters.to);
+  if (filters.year !== null && filters.year !== undefined) params.set('year', String(filters.year));
+  if (page > 1) params.set('page', String(page));
+  const query = params.toString();
+  const base = includeBasename ? '/e/' : '/';
+  return query === '' ? `${base}#calendar` : `${base}?${query}#calendar`;
+}
+
+function Pagination({ filters, page, pageCount, totalCount, pageSize }: {
+  filters: Filters;
+  page: number;
+  pageCount: number;
+  totalCount: number;
+  pageSize: number;
+}) {
+  if (pageCount <= 1) return null;
+  const first = (page - 1) * pageSize + 1;
+  const last = Math.min(page * pageSize, totalCount);
+  const numbers = paginationPages(page, pageCount);
+  return (
+    <nav aria-label="Tournament pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft px-4 py-4 text-sm">
+      <p className="tabular-nums text-muted-foreground">Showing {first}–{last} of {totalCount} tournaments</p>
+      <div className="flex flex-wrap items-center gap-3">
+        {page > 1 ? <a href={pageHref(filters, page - 1)} rel="prev" aria-label="Previous page" className="inline-flex min-h-9 items-center text-accent underline-offset-4 hover:underline">Previous</a> : <span className="inline-flex min-h-9 items-center text-muted-foreground" aria-disabled="true">Previous</span>}
+        <ol className="flex flex-wrap items-center gap-2" aria-label="Choose page">
+          {numbers.map((number, index) => (
+            <li key={number === 'ellipsis' ? `ellipsis-${index}` : number}>
+              {number === 'ellipsis' ? (
+                <span aria-hidden="true" className="inline-flex min-h-9 min-w-9 items-center justify-center px-2 text-muted-foreground">…</span>
+              ) : number === page ? (
+                <span aria-current="page" aria-label={`Page ${number}`} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded border border-accent px-2 font-semibold text-foreground">{number}</span>
+              ) : (
+                <a href={pageHref(filters, number)} aria-label={`Page ${number}`} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded border border-rule-control px-2 text-accent hover:border-accent">{number}</a>
+              )}
+            </li>
+          ))}
+        </ol>
+        {page < pageCount ? <a href={pageHref(filters, page + 1)} rel="next" aria-label="Next page" className="inline-flex min-h-9 items-center text-accent underline-offset-4 hover:underline">Next</a> : <span className="inline-flex min-h-9 items-center text-muted-foreground" aria-disabled="true">Next</span>}
+      </div>
+    </nav>
+  );
+}
+
+function paginationPages(page: number, pageCount: number): Array<number | 'ellipsis'> {
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
+  const pages = new Set([1, pageCount, page - 1, page, page + 1]);
+  const ordered = [...pages].filter((value) => value >= 1 && value <= pageCount).sort((a, b) => a - b);
+  const result: Array<number | 'ellipsis'> = [];
+  ordered.forEach((value, index) => {
+    if (index > 0 && value - ordered[index - 1] > 1) result.push('ellipsis');
+    result.push(value);
+  });
+  return result;
 }
 
 export const meta: Route.MetaFunction = () => [
@@ -117,22 +200,24 @@ export const meta: Route.MetaFunction = () => [
 ];
 
 export default function Discovery({ loaderData }: Route.ComponentProps) {
-  const { filters, rows, counts, listedCount, nowStrip } = loaderData;
+  const { filters, rows, counts, listedCount, totalCount, page, pageSize, pageCount, nowStrip } = loaderData;
 
   return (
     <PlayShell>
       {/* Absence is the page not rendering the band — never an empty band
           with a placeholder in it (§2.1). */}
-      {nowStrip === null || filters.view === 'completed' ? null : (
+      {nowStrip === null || (filters.view !== 'season' && filters.view !== 'open') ? null : (
         <NowStrip row={nowStrip.row} moreCount={nowStrip.moreCount} />
       )}
       <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-10">
         <h1 className="type-display text-[1.75rem] tracking-[-0.02em] text-foreground">
-          {filters.view === 'completed' ? 'Completed tournaments' : 'Tournaments'}
+          {filters.view === 'completed' ? 'Completed tournaments' : filters.view === 'all' ? 'All tournaments' : 'Live & upcoming'}
         </h1>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
           {filters.view === 'completed'
             ? 'Browse completed badminton tournaments and their published results.'
+            : filters.view === 'all'
+              ? 'Search all published tournaments, including completed results.'
             : `Find ${BRAND.sportName.toLowerCase()} tournaments, schedules, and results.`}
         </p>
 
@@ -162,10 +247,11 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
               has zero rows and no filter set — and "Clear filters" honestly
               returns the reader to the full Season view. `SeasonCalendar`
               therefore never receives an empty `rows`. */}
-          {listedCount === 0 ? (
+          {seasonEmpty(listedCount, filters) ? (
             <EmptyState
               heading="No tournaments on the calendar yet"
-              body="No tournament is taking entries right now. Check back soon, or open the entry link your organizer gave you."
+              body="No live or upcoming tournament is published right now. Check completed results or try again soon."
+              action={{ label: 'View completed tournaments', href: '/e/?view=completed#calendar' }}
             />
           ) : rows.length === 0 ? (
             <EmptyState
@@ -174,10 +260,27 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
               action={{ label: 'Clear filters', href: '/e/' }}
             />
           ) : (
-            <SeasonCalendar rows={rows} view={filters.view} />
+            <>
+              {totalCount > 0 && pageCount <= 1 ? <p className="text-sm tabular-nums text-muted-foreground">Showing 1–{totalCount} of {totalCount} tournaments</p> : null}
+              <SeasonCalendar rows={rows} view={filters.view} />
+              <Pagination filters={filters} page={page} pageCount={pageCount} totalCount={totalCount} pageSize={pageSize} />
+              {filters.view === 'season' || filters.view === 'open' ? (
+                <p className="text-sm text-muted-foreground">
+                  Looking for past results?{' '}
+                  <a href="/e/?view=completed#calendar" className="text-accent underline underline-offset-4 hover:no-underline">
+                    View completed tournaments →
+                  </a>
+                </p>
+              ) : null}
+            </>
           )}
         </div>
       </main>
     </PlayShell>
   );
+}
+
+function seasonEmpty(listedCount: number, filters: Filters): boolean {
+  return listedCount === 0 && filters.view === 'season' && filters.q.trim() === '' &&
+    filters.year == null && filters.preset === null && filters.from === null && filters.to === null;
 }

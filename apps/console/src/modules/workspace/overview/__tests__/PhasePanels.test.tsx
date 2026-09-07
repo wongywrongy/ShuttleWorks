@@ -86,4 +86,26 @@ describe('PhasePanels — Live (V3-OC19.1 / V3-OC19.2 / V3-03-3)', () => {
     );
     expect(screen.queryByTestId('overview-live-line')).not.toBeInTheDocument();
   });
+
+  it('offers the full matches destination below the bounded preview', () => {
+    const onNavigate = vi.fn();
+    render(
+      <PhasePanels
+        phase="live"
+        summary={summary({
+          signals: {
+            health: 'good', attention: [],
+            modules: { enabled: 1, available: 1, disabled: 0, comingSoon: 0 },
+            setup: {}, collaboration: { memberCount: 0, activeInviteCount: 0 }, phase: 'live',
+            matches: { total: 6, scheduled: 6, toDo: 0, playing: 0, disputedCourts: 0, courtsFree: 2 },
+            nextUp: [{ code: 'MS1', timeLabel: '09:00', courtLabel: 'Court 1', status: 'scheduled' }],
+          },
+        })}
+        steps={[]}
+        onNavigate={onNavigate}
+      />,
+    );
+    screen.getByRole('button', { name: /view all matches/i }).click();
+    expect(onNavigate).toHaveBeenCalledWith('matches');
+  });
 });

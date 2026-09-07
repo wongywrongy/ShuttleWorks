@@ -140,7 +140,7 @@ export function MatchesTab() {
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
         >
           <Download aria-hidden="true" className="h-3.5 w-3.5" />
-          Export XLSX
+          Export all matches
         </button>
         <RegenerateMenu />
       </MeetActionsBar>

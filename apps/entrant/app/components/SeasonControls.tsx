@@ -69,15 +69,20 @@ function queryHref(filters: Filters, patch: Partial<Filters>): string {
   const next = { ...filters, ...patch };
   const params = new URLSearchParams();
   if (next.q.trim() !== '') params.set('q', next.q);
-  if (next.view !== 'season') params.set('view', next.view);
+  // An implicit `all` is only a search result scope. Keep it implicit while
+  // removing another filter so clearing the query returns to the default
+  // calendar; deliberate status/all selections remain explicit.
+  if ((next.view !== 'season' && next.view !== 'all') || next.scopeExplicit) params.set('view', next.view);
   if (next.preset !== null) params.set('preset', next.preset);
   if (next.from !== null && next.from !== '') params.set('from', next.from);
   if (next.to !== null && next.to !== '') params.set('to', next.to);
+  if (next.year !== null && next.year !== undefined) params.set('year', String(next.year));
+  // Any filter change starts from its first page.
   const query = params.toString();
   return query === '' ? ACTION : `/e/?${query}#calendar`;
 }
 
-const NO_DATES: Partial<Filters> = Object.freeze({ preset: null, from: null, to: null });
+const NO_DATES: Partial<Filters> = Object.freeze({ preset: null, from: null, to: null, year: null });
 
 /** The fields a form must carry so submitting it does not silently clear the
  * state the entrant set somewhere else in this row. */
@@ -111,12 +116,13 @@ export function SeasonControls({
   counts: { takingEntries: number; completed: number };
 }) {
   const labels: Readonly<Record<View, string>> = {
-    season: 'Season',
-    open: `Taking entries · ${counts.takingEntries}`,
+    season: 'Live & upcoming',
+    open: `Entries open · ${counts.takingEntries}`,
     completed: `Completed · ${counts.completed}`,
+    all: 'All results',
   };
-  const activeDates = [filters.preset, filters.from, filters.to].filter(
-    (value) => value !== null && value !== '',
+  const activeDates = [filters.preset, filters.from, filters.to, filters.year].filter(
+    (value) => value !== null && value !== undefined && value !== '',
   ).length;
 
   return (
@@ -183,10 +189,11 @@ export function SeasonControls({
             action={ACTION}
             className="flex min-w-0 flex-1 items-center"
           >
-            <Hidden name="view" value={filters.view === 'season' ? null : filters.view} />
+            <Hidden name="view" value={filters.scopeExplicit ? filters.view : null} />
             <Hidden name="preset" value={filters.preset} />
             <Hidden name="from" value={filters.from} />
-            <Hidden name="to" value={filters.to} />
+                <Hidden name="to" value={filters.to} />
+                <Hidden name="year" value={filters.year == null ? null : String(filters.year)} />
             <label className="flex min-w-0 flex-1 items-center gap-2 px-3">
               <svg aria-hidden width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="shrink-0 text-muted-foreground">
                 <circle cx="7" cy="7" r="4.5" />
@@ -240,7 +247,8 @@ export function SeasonControls({
             <div className="hidden group-open:block absolute right-0 top-full z-20 mt-2 w-72 rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-md max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:mt-0 max-sm:w-full max-sm:rounded-b-none">
               <form method="get" action={ACTION} className="grid gap-3">
                 <Hidden name="q" value={filters.q.trim() === '' ? null : filters.q} />
-                <Hidden name="view" value={filters.view === 'season' ? null : filters.view} />
+                <Hidden name="view" value={filters.scopeExplicit ? filters.view : null} />
+                <Hidden name="year" value={filters.year == null ? null : String(filters.year)} />
 
                 <fieldset className="grid gap-1.5">
                   <legend className="mb-1 text-xs font-semibold text-muted-foreground">
@@ -278,6 +286,20 @@ export function SeasonControls({
                   />
                 </label>
 
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                  Year
+                  <input
+                    type="number"
+                    name="year"
+                    min="2000"
+                    max="2100"
+                    inputMode="numeric"
+                    placeholder="All years"
+                    defaultValue={filters.year == null ? '' : String(filters.year)}
+                    className={FIELD_INPUT}
+                  />
+                </label>
+
                 <div className="mt-1 flex items-center gap-3">
                   <Button type="submit" size="sm">
                     Apply dates
@@ -311,6 +333,9 @@ export function SeasonControls({
           )}
           {parseIsoDate(filters.to) === null ? null : (
             <ActiveFilterLink label={`To ${filters.to}`} href={queryHref(filters, { to: null })} />
+          )}
+          {filters.year == null ? null : (
+            <ActiveFilterLink label={`Year ${filters.year}`} href={queryHref(filters, { year: null })} />
           )}
           <a
             href={queryHref(filters, NO_DATES)}

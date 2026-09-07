@@ -237,7 +237,9 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
     '11-public-bracket-geometry.spec.ts',
     'console-a11y.spec.ts',
     'console-browser-contracts.spec.ts',
+    'console-pagination.spec.ts',
     'entrant-a11y.spec.ts',
+    'public-pagination.spec.ts',
   ]);
   expect(interaction).toMatch(/E2E_TAIPEI_TID/);
   expect(interaction).toMatch(/E2E_KOREA_TID/);

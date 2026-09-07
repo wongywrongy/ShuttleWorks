@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-06T23:29:03.521Z",
+  "generatedAt": "2026-09-07T06:47:36.221Z",
   "roots": [
     "apps/console/src",
     "apps/entrant/app",
@@ -16,18 +16,18 @@
     "file-name-shaped and uuid-shaped tokens"
   ],
   "counts": {
-    "jsx-text": 852,
-    "prop:aria-label": 86,
+    "jsx-text": 873,
+    "prop:aria-label": 95,
     "prop:title": 86,
     "prop:label": 167,
-    "prop:placeholder": 22,
+    "prop:placeholder": 23,
     "label-map:stateWords.ts": 12,
     "prop:ariaLabel": 59,
     "prop:hint": 15,
     "label-map:ui.ts": 10,
     "dom-text": 10
   },
-  "totalKeys": 1319,
+  "totalKeys": 1350,
   "entries": [
     {
       "key": "console:apps/console/src/app/App.tsx:45:Loading…",
@@ -490,123 +490,133 @@
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:523:aria-label:Select",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:541:aria-label:Select",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 523,
+      "line": 541,
       "text": "Select",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:523"
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:541"
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:585:aria-label:Actions",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:603:aria-label:Actions",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 585,
+      "line": 603,
       "text": "Actions",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:585"
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:603"
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:754:Rows",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:742:Refresh results",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 754,
-      "text": "Rows",
+      "line": 742,
+      "text": "Refresh results",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:754"
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:742"
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:757:aria-label:Rows per page",
-      "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 757,
-      "text": "Rows per page",
-      "kind": "prop:aria-label",
-      "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:757"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:770:aria-label:Previous page",
-      "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 770,
-      "text": "Previous page",
-      "kind": "prop:aria-label",
-      "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:770"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:777:Page",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:777:Rows",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
       "line": 777,
-      "text": "Page",
+      "text": "Rows",
       "kind": "jsx-text",
       "usage": [
         "apps/console/src/components/control-plane/DenseDataTable.tsx:777"
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:782:aria-label:Next page",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:780:aria-label:Rows per page",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 782,
+      "line": 780,
+      "text": "Rows per page",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:780"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:792:aria-label:Pagination",
+      "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
+      "line": 792,
+      "text": "Pagination",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:792"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:795:aria-label:Previous page",
+      "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
+      "line": 795,
+      "text": "Previous page",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:795"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:810:aria-label:Next page",
+      "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
+      "line": 810,
       "text": "Next page",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:782"
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:810"
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:825:Search records",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:854:Search records",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 825,
+      "line": 854,
       "text": "Search records",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:825"
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:854"
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:838:Filter by",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:867:Filter by",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 838,
+      "line": 867,
       "text": "Filter by",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:838"
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:867"
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:893:Clear",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:922:Clear",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 893,
+      "line": 922,
       "text": "Clear",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:893"
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:922"
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:902:selected",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:931:selected",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 902,
+      "line": 931,
       "text": "selected",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:902"
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:931"
       ]
     },
     {
-      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:925:Columns",
+      "key": "console:apps/console/src/components/control-plane/DenseDataTable.tsx:954:Columns",
       "file": "apps/console/src/components/control-plane/DenseDataTable.tsx",
-      "line": 925,
+      "line": 954,
       "text": "Columns",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/components/control-plane/DenseDataTable.tsx:925"
+        "apps/console/src/components/control-plane/DenseDataTable.tsx:954"
       ]
     },
     {
@@ -1385,13 +1395,13 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketMatchesTab.tsx:251:Winner",
+      "key": "console:apps/console/src/modules/bracket/BracketMatchesTab.tsx:252:Winner",
       "file": "apps/console/src/modules/bracket/BracketMatchesTab.tsx",
-      "line": 251,
+      "line": 252,
       "text": "Winner",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/BracketMatchesTab.tsx:251"
+        "apps/console/src/modules/bracket/BracketMatchesTab.tsx:252"
       ]
     },
     {
@@ -1435,20 +1445,20 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketMatchesTab.tsx:523:title:Export the listed matche",
+      "key": "console:apps/console/src/modules/bracket/BracketMatchesTab.tsx:523:title:Export all filtered matc",
       "file": "apps/console/src/modules/bracket/BracketMatchesTab.tsx",
       "line": 523,
-      "text": "Export the listed matches to a spreadsheet",
+      "text": "Export all filtered matches, across every page, to a spreadsheet",
       "kind": "prop:title",
       "usage": [
         "apps/console/src/modules/bracket/BracketMatchesTab.tsx:523"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketMatchesTab.tsx:527:Export XLSX",
+      "key": "console:apps/console/src/modules/bracket/BracketMatchesTab.tsx:527:Export filtered matches",
       "file": "apps/console/src/modules/bracket/BracketMatchesTab.tsx",
       "line": 527,
-      "text": "Export XLSX",
+      "text": "Export filtered matches",
       "kind": "jsx-text",
       "usage": [
         "apps/console/src/modules/bracket/BracketMatchesTab.tsx:527"
@@ -1635,183 +1645,203 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:251:title:Roster",
-      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 251,
-      "text": "Roster",
-      "kind": "prop:title",
-      "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:251"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:255:player",
-      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 255,
-      "text": "player",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:255"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:258:· showing",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:258:title:Roster",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
       "line": 258,
-      "text": "· showing",
-      "kind": "jsx-text",
+      "text": "Roster",
+      "kind": "prop:title",
       "usage": [
         "apps/console/src/modules/bracket/BracketRosterTab.tsx:258"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:272:Export XLSX",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:262:player",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 272,
-      "text": "Export XLSX",
+      "line": 262,
+      "text": "player",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:272"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:262"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:279:Add player",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:265:· showing",
+      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
+      "line": 265,
+      "text": "· showing",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:265"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:279:Export full roster",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
       "line": 279,
-      "text": "Add player",
+      "text": "Export full roster",
       "kind": "jsx-text",
       "usage": [
         "apps/console/src/modules/bracket/BracketRosterTab.tsx:279"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:295:Event",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:286:Add player",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 295,
-      "text": "Event",
+      "line": 286,
+      "text": "Add player",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:295"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:286"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:297:aria-label:Filter by event",
-      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 297,
-      "text": "Filter by event",
-      "kind": "prop:aria-label",
-      "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:297"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:298:All events",
-      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 298,
-      "text": "All events",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:298"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:302:Issues",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:302:Event",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
       "line": 302,
-      "text": "Issues",
+      "text": "Event",
       "kind": "jsx-text",
       "usage": [
         "apps/console/src/modules/bracket/BracketRosterTab.tsx:302"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:304:aria-label:Filter by issues",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:304:aria-label:Filter by event",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
       "line": 304,
-      "text": "Filter by issues",
+      "text": "Filter by event",
       "kind": "prop:aria-label",
       "usage": [
         "apps/console/src/modules/bracket/BracketRosterTab.tsx:304"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:305:All",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:305:All events",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
       "line": 305,
+      "text": "All events",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:305"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:309:Issues",
+      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
+      "line": 309,
+      "text": "Issues",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:309"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:311:aria-label:Filter by issues",
+      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
+      "line": 311,
+      "text": "Filter by issues",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:311"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:312:All",
+      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
+      "line": 312,
       "text": "All",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:305"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:312"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:305:Needs attention",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:312:Needs attention",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 305,
+      "line": 312,
       "text": "Needs attention",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:305"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:312"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:305:No issues",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:312:No issues",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 305,
+      "line": 312,
       "text": "No issues",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:305"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:312"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:324:Delete selected",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:320:Select all",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 324,
+      "line": 320,
+      "text": "Select all",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:320"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:320:matching players",
+      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
+      "line": 320,
+      "text": "matching players",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:320"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:332:Delete selected",
+      "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
+      "line": 332,
       "text": "Delete selected",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:324"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:332"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:354:placeholder:New player name…",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:365:placeholder:New player name…",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 354,
+      "line": 365,
       "text": "New player name…",
       "kind": "prop:placeholder",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:354"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:365"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:374:[n]",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:385:[n]",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 374,
+      "line": 385,
       "text": "[n]",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:374"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:385"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:374:after an event code is t",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:385:after an event code is t",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 374,
+      "line": 385,
       "text": "after an event code is that player’s seed in the draw.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:374"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:385"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:387:label:Player",
+      "key": "console:apps/console/src/modules/bracket/BracketRosterTab.tsx:398:label:Player",
       "file": "apps/console/src/modules/bracket/BracketRosterTab.tsx",
-      "line": 387,
+      "line": 398,
       "text": "Player",
       "kind": "prop:label",
       "usage": [
-        "apps/console/src/modules/bracket/BracketRosterTab.tsx:387"
+        "apps/console/src/modules/bracket/BracketRosterTab.tsx:398"
       ]
     },
     {
@@ -3176,203 +3206,273 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:265:placeholder:Search or jump to…",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:380:placeholder:Search or jump to…",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 265,
+      "line": 380,
       "text": "Search or jump to…",
       "kind": "prop:placeholder",
       "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:265"
+        "apps/console/src/modules/hub/HubPage.tsx:380"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:266:aria-label:Search workspaces",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:381:aria-label:Search workspaces",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 266,
+      "line": 381,
       "text": "Search workspaces",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:266"
+        "apps/console/src/modules/hub/HubPage.tsx:381"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:277:New workspace",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:392:New workspace",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 277,
+      "line": 392,
       "text": "New workspace",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:277"
+        "apps/console/src/modules/hub/HubPage.tsx:392"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:295:Workspaces",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:410:Workspaces",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 295,
+      "line": 410,
       "text": "Workspaces",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:295"
+        "apps/console/src/modules/hub/HubPage.tsx:410"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:348:title:No workspaces yet",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 348,
-      "text": "No workspaces yet",
-      "kind": "prop:title",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:348"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:350:Create workspace",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 350,
-      "text": "Create workspace",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:350"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:369:Workspace",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 369,
-      "text": "Workspace",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:369"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:370:Attention",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 370,
-      "text": "Attention",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:370"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:374:Date",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 374,
-      "text": "Date",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:374"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:378:Next action",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 378,
-      "text": "Next action",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:378"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:407:Create a workspace",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 407,
-      "text": "Create a workspace",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:407"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:423:workspace",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 423,
-      "text": "workspace",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:423"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:428:need attention",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 428,
-      "text": "need attention",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:428"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:440:Updated",
-      "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 440,
-      "text": "Updated",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:440"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:472:Delete “",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:472:title:No workspaces yet",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
       "line": 472,
-      "text": "Delete “",
-      "kind": "jsx-text",
+      "text": "No workspaces yet",
+      "kind": "prop:title",
       "usage": [
         "apps/console/src/modules/hub/HubPage.tsx:472"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:473:”?",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:474:Create workspace",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 473,
+      "line": 474,
+      "text": "Create workspace",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:474"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:493:Workspace",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 493,
+      "text": "Workspace",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:493"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:494:Attention",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 494,
+      "text": "Attention",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:494"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:498:Date",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 498,
+      "text": "Date",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:498"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:502:Next action",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 502,
+      "text": "Next action",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:502"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:524:aria-label:Workspace pages",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 524,
+      "text": "Workspace pages",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:524"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:528:Showing",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 528,
+      "text": "Showing",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:528"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:530:workspaces",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 530,
+      "text": "workspaces",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:530"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:537:aria-label:Previous page",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 537,
+      "text": "Previous page",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:537"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:539:Previous",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 539,
+      "text": "Previous",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:539"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:565:aria-label:Next page",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 565,
+      "text": "Next page",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:565"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:567:Next",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 567,
+      "text": "Next",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:567"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:582:Create a workspace",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 582,
+      "text": "Create a workspace",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:582"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:598:workspace",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 598,
+      "text": "workspace",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:598"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:603:need attention",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 603,
+      "text": "need attention",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:603"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:615:Updated",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 615,
+      "text": "Updated",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:615"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:647:Delete “",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 647,
+      "text": "Delete “",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/HubPage.tsx:647"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:648:”?",
+      "file": "apps/console/src/modules/hub/HubPage.tsx",
+      "line": 648,
       "text": "”?",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:473"
+        "apps/console/src/modules/hub/HubPage.tsx:648"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:475:This permanently removes",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:650:This permanently removes",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 475,
+      "line": 650,
       "text": "This permanently removes the",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:475"
+        "apps/console/src/modules/hub/HubPage.tsx:650"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:476:, its members, invites, ",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:651:, its members, invites, ",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 476,
+      "line": 651,
       "text": ", its members, invites, and",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:476"
+        "apps/console/src/modules/hub/HubPage.tsx:651"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:478:. Can’t be undone.",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:653:. Can’t be undone.",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 478,
+      "line": 653,
       "text": ". Can’t be undone.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:478"
+        "apps/console/src/modules/hub/HubPage.tsx:653"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/hub/HubPage.tsx:491:Cancel",
+      "key": "console:apps/console/src/modules/hub/HubPage.tsx:666:Cancel",
       "file": "apps/console/src/modules/hub/HubPage.tsx",
-      "line": 491,
+      "line": 666,
       "text": "Cancel",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/hub/HubPage.tsx:491"
+        "apps/console/src/modules/hub/HubPage.tsx:666"
       ]
     },
     {
@@ -3738,6 +3838,16 @@
       ]
     },
     {
+      "key": "console:apps/console/src/modules/hub/WorkspaceInspector.tsx:322:View all matches →",
+      "file": "apps/console/src/modules/hub/WorkspaceInspector.tsx",
+      "line": 322,
+      "text": "View all matches →",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/hub/WorkspaceInspector.tsx:322"
+      ]
+    },
+    {
       "key": "console:apps/console/src/modules/hub/WorkspaceRow.tsx:62:more issue",
       "file": "apps/console/src/modules/hub/WorkspaceRow.tsx",
       "line": 62,
@@ -3748,43 +3858,93 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:309:No matches yet. Use Rege",
+      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:323:No matches yet. Use Rege",
       "file": "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx",
-      "line": 309,
+      "line": 323,
       "text": "No matches yet. Use Regenerate from roster above to build the supported lineup, or add a custom match from the actions bar.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:309"
+        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:323"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:360:No matches match the cur",
+      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:364:Match number within even",
       "file": "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx",
-      "line": 360,
+      "line": 364,
+      "text": "Match number within event",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:364"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:365:aria-label:Sort matches",
+      "file": "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx",
+      "line": 365,
+      "text": "Sort matches",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:365"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:365:Ascending",
+      "file": "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx",
+      "line": 365,
+      "text": "Ascending",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:365"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:365:Descending",
+      "file": "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx",
+      "line": 365,
+      "text": "Descending",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:365"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:377:No matches match the cur",
+      "file": "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx",
+      "line": 377,
       "text": "No matches match the current filters.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:360"
+        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:377"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:510:unset",
+      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:409:Refresh results",
       "file": "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx",
-      "line": 510,
+      "line": 409,
+      "text": "Refresh results",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:409"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:529:unset",
+      "file": "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx",
+      "line": 529,
       "text": "unset",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:510"
+        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:529"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:602:To be decided",
+      "key": "console:apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:621:To be decided",
       "file": "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx",
-      "line": 602,
+      "line": 621,
       "text": "To be decided",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:602"
+        "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:621"
       ]
     },
     {
@@ -3858,10 +4018,10 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/matches/MatchesTab.tsx:142:Export XLSX",
+      "key": "console:apps/console/src/modules/meet/matches/MatchesTab.tsx:142:Export all matches",
       "file": "apps/console/src/modules/meet/matches/MatchesTab.tsx",
       "line": 142,
-      "text": "Export XLSX",
+      "text": "Export all matches",
       "kind": "jsx-text",
       "usage": [
         "apps/console/src/modules/meet/matches/MatchesTab.tsx:142"
@@ -4280,316 +4440,326 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:310:title:Roster",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:322:title:Roster",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 310,
+      "line": 322,
       "text": "Roster",
       "kind": "prop:title",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:310"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:322"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:317:school",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:329:school",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 317,
+      "line": 329,
       "text": "school",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:317"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:329"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:318:player",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:330:player",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 318,
+      "line": 330,
       "text": "player",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:318"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:330"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:344:Export XLSX",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:356:Export full roster",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 344,
-      "text": "Export XLSX",
+      "line": 356,
+      "text": "Export full roster",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:344"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:356"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:363:title:No schools yet",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:375:title:No schools yet",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 363,
+      "line": 375,
       "text": "No schools yet",
       "kind": "prop:title",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:363"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:375"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:375:Add school",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:387:Add school",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 375,
+      "line": 387,
       "text": "Add school",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:375",
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:639"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:387",
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:652"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:413:placeholder:Filter players…",
-      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 413,
-      "text": "Filter players…",
-      "kind": "prop:placeholder",
-      "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:413"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:416:Event",
-      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 416,
-      "text": "Event",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:416"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:418:aria-label:Filter roster by event",
-      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 418,
-      "text": "Filter roster by event",
-      "kind": "prop:aria-label",
-      "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:418"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:419:All events",
-      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 419,
-      "text": "All events",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:419"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:423:Issues",
-      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 423,
-      "text": "Issues",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:423"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:425:aria-label:Filter roster by issues",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:425:placeholder:Filter players…",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
       "line": 425,
-      "text": "Filter roster by issues",
-      "kind": "prop:aria-label",
+      "text": "Filter players…",
+      "kind": "prop:placeholder",
       "usage": [
         "apps/console/src/modules/meet/roster/RosterTab.tsx:425"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:426:All",
-      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 426,
-      "text": "All",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:426"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:427:Needs attention",
-      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 427,
-      "text": "Needs attention",
-      "kind": "jsx-text",
-      "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:427"
-      ]
-    },
-    {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:428:No issues",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:428:Event",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
       "line": 428,
-      "text": "No issues",
+      "text": "Event",
       "kind": "jsx-text",
       "usage": [
         "apps/console/src/modules/meet/roster/RosterTab.tsx:428"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:442:Player",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:430:aria-label:Filter roster by event",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 442,
-      "text": "Player",
-      "kind": "jsx-text",
+      "line": 430,
+      "text": "Filter roster by event",
+      "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:442"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:430"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:443:Events",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:431:All events",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 443,
+      "line": 431,
+      "text": "All events",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:431"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:435:Issues",
+      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "line": 435,
+      "text": "Issues",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:435"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:437:aria-label:Filter roster by issues",
+      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "line": 437,
+      "text": "Filter roster by issues",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:437"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:438:All",
+      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "line": 438,
+      "text": "All",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:438"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:439:Needs attention",
+      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "line": 439,
+      "text": "Needs attention",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:439"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:440:No issues",
+      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "line": 440,
+      "text": "No issues",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:440"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:453:Player (",
+      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "line": 453,
+      "text": "Player (",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:453"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:454:Events",
+      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "line": 454,
       "text": "Events",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:443"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:454"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:467:entrant",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:466:Refresh results",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 467,
+      "line": 466,
+      "text": "Refresh results",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:466"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:480:entrant",
+      "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "line": 480,
       "text": "entrant",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:467"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:480"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:467:awaiting a position",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:480:awaiting a position",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 467,
+      "line": 480,
       "text": "awaiting a position",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:467"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:480"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:475:Seat entrants",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:488:Seat entrants",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 475,
+      "line": 488,
       "text": "Seat entrants",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:475"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:488"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:495:Select a school above to",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:508:Select a school above to",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 495,
+      "line": 508,
       "text": "Select a school above to place its players.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:495"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:508"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:577:aria-label:Schools",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:590:aria-label:Schools",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 577,
+      "line": 590,
       "text": "Schools",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:577"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:590"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:645:aria-label:Add school",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:658:aria-label:Add school",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 645,
+      "line": 658,
       "text": "Add school",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:645"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:658"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:657:placeholder:School name",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:670:placeholder:School name",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 657,
+      "line": 670,
       "text": "School name",
       "kind": "prop:placeholder",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:657"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:670"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:669:Cancel",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:682:Cancel",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 669,
+      "line": 682,
       "text": "Cancel",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:669",
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:770"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:682",
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:783"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:677:Add",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:690:Add",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 677,
+      "line": 690,
       "text": "Add",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:677",
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:779"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:690",
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:792"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:738:Bulk import",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:751:Bulk import",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 738,
+      "line": 751,
       "text": "Bulk import",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:738"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:751"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:744:aria-label:Bulk-import players",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:757:aria-label:Bulk-import players",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 744,
+      "line": 757,
       "text": "Bulk-import players",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:744"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:757"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:754:placeholder:Paste names, one per lin",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:767:placeholder:Paste names, one per lin",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 754,
+      "line": 767,
       "text": "Paste names, one per line. Toan Le Kyle Wong",
       "kind": "prop:placeholder",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:754"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:767"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:811:Select a school above.",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:825:Select a school above.",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 811,
+      "line": 825,
       "text": "Select a school above.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:811"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:825"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:825:No matches for",
+      "key": "console:apps/console/src/modules/meet/roster/RosterTab.tsx:839:No matches for",
       "file": "apps/console/src/modules/meet/roster/RosterTab.tsx",
-      "line": 825,
+      "line": 839,
       "text": "No matches for",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/meet/roster/RosterTab.tsx:825"
+        "apps/console/src/modules/meet/roster/RosterTab.tsx:839"
       ]
     },
     {
@@ -8796,7 +8966,7 @@
       "kind": "jsx-text",
       "usage": [
         "apps/console/src/modules/setup/SetupProduct.tsx:740",
-        "apps/console/src/modules/setup/SetupProduct.tsx:870"
+        "apps/console/src/modules/setup/SetupProduct.tsx:872"
       ]
     },
     {
@@ -8851,45 +9021,45 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupRowsEditor.tsx:146:Select",
+      "key": "console:apps/console/src/modules/setup/SetupRowsEditor.tsx:153:Select",
       "file": "apps/console/src/modules/setup/SetupRowsEditor.tsx",
-      "line": 146,
+      "line": 153,
       "text": "Select",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupRowsEditor.tsx:146",
-        "apps/console/src/modules/setup/SetupRowsEditor.tsx:236"
+        "apps/console/src/modules/setup/SetupRowsEditor.tsx:153",
+        "apps/console/src/modules/setup/SetupRowsEditor.tsx:246"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupRowsEditor.tsx:168:Remove",
+      "key": "console:apps/console/src/modules/setup/SetupRowsEditor.tsx:178:Remove",
       "file": "apps/console/src/modules/setup/SetupRowsEditor.tsx",
-      "line": 168,
+      "line": 178,
       "text": "Remove",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupRowsEditor.tsx:168",
-        "apps/console/src/modules/setup/SetupRowsEditor.tsx:259"
+        "apps/console/src/modules/setup/SetupRowsEditor.tsx:178",
+        "apps/console/src/modules/setup/SetupRowsEditor.tsx:269"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupRowsEditor.tsx:204:Add named courts in Venu",
+      "key": "console:apps/console/src/modules/setup/SetupRowsEditor.tsx:214:Add named courts in Venu",
       "file": "apps/console/src/modules/setup/SetupRowsEditor.tsx",
-      "line": 204,
+      "line": 214,
       "text": "Add named courts in Venue and courts to assign them here.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupRowsEditor.tsx:204"
+        "apps/console/src/modules/setup/SetupRowsEditor.tsx:214"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/setup/SetupRowsEditor.tsx:267:Nothing here yet.",
+      "key": "console:apps/console/src/modules/setup/SetupRowsEditor.tsx:277:Nothing here yet.",
       "file": "apps/console/src/modules/setup/SetupRowsEditor.tsx",
-      "line": 267,
+      "line": 277,
       "text": "Nothing here yet.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/setup/SetupRowsEditor.tsx:267"
+        "apps/console/src/modules/setup/SetupRowsEditor.tsx:277"
       ]
     },
     {
@@ -9344,64 +9514,74 @@
       ]
     },
     {
-      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:252:Results",
+      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:245:View all matches →",
       "file": "apps/console/src/modules/workspace/overview/PhasePanels.tsx",
-      "line": 252,
+      "line": 245,
+      "text": "View all matches →",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:245"
+      ]
+    },
+    {
+      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:259:Results",
+      "file": "apps/console/src/modules/workspace/overview/PhasePanels.tsx",
+      "line": 259,
       "text": "Results",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:252"
+        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:259"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:264:Back up this event",
+      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:271:Back up this event",
       "file": "apps/console/src/modules/workspace/overview/PhasePanels.tsx",
-      "line": 264,
+      "line": 271,
       "text": "Back up this event",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:264"
+        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:271"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:299:Entries",
+      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:306:Entries",
       "file": "apps/console/src/modules/workspace/overview/PhasePanels.tsx",
-      "line": 299,
+      "line": 306,
       "text": "Entries",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:299",
-        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:330"
+        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:306",
+        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:337"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:300:The entry page is publis",
+      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:307:The entry page is publis",
       "file": "apps/console/src/modules/workspace/overview/PhasePanels.tsx",
-      "line": 300,
+      "line": 307,
       "text": "The entry page is published and not open yet. Nobody can enter until an event’s window opens.",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:300"
+        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:307"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:306:Entry page settings",
+      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:313:Entry page settings",
       "file": "apps/console/src/modules/workspace/overview/PhasePanels.tsx",
-      "line": 306,
+      "line": 313,
       "text": "Entry page settings",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:306"
+        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:313"
       ]
     },
     {
-      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:339:Open the entries desk",
+      "key": "console:apps/console/src/modules/workspace/overview/PhasePanels.tsx:346:Open the entries desk",
       "file": "apps/console/src/modules/workspace/overview/PhasePanels.tsx",
-      "line": 339,
+      "line": 346,
       "text": "Open the entries desk",
       "kind": "jsx-text",
       "usage": [
-        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:339"
+        "apps/console/src/modules/workspace/overview/PhasePanels.tsx:346"
       ]
     },
     {
@@ -10625,133 +10805,153 @@
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonCalendar.tsx:144:aria-label:Season calendar",
+      "key": "entrant:apps/entrant/app/components/SeasonCalendar.tsx:139:aria-label:Season calendar",
       "file": "apps/entrant/app/components/SeasonCalendar.tsx",
-      "line": 144,
+      "line": 139,
       "text": "Season calendar",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/components/SeasonCalendar.tsx:144"
+        "apps/entrant/app/components/SeasonCalendar.tsx:139"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonCalendar.tsx:172:label:Completed",
+      "key": "entrant:apps/entrant/app/components/SeasonCalendar.tsx:168:label:Completed",
       "file": "apps/entrant/app/components/SeasonCalendar.tsx",
-      "line": 172,
+      "line": 168,
       "text": "Completed",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/components/SeasonCalendar.tsx:172"
+        "apps/entrant/app/components/SeasonCalendar.tsx:168"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:101:(remove)",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:106:(remove)",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 101,
+      "line": 106,
       "text": "(remove)",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:101"
+        "apps/entrant/app/components/SeasonControls.tsx:106"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:141:label:Calendar view",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:147:label:Calendar view",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 141,
+      "line": 147,
       "text": "Calendar view",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:141"
+        "apps/entrant/app/components/SeasonControls.tsx:147"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:199:placeholder:Search tournaments",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:206:placeholder:Search tournaments",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 199,
+      "line": 206,
       "text": "Search tournaments",
       "kind": "prop:placeholder",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:199"
+        "apps/entrant/app/components/SeasonControls.tsx:206"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:200:aria-label:Search tournaments, orga",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:207:aria-label:Search tournaments, orga",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 200,
+      "line": 207,
       "text": "Search tournaments, organizers or venues",
       "kind": "prop:aria-label",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:200"
+        "apps/entrant/app/components/SeasonControls.tsx:207"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:204:Search",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:211:Search",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 204,
+      "line": 211,
       "text": "Search",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:204"
+        "apps/entrant/app/components/SeasonControls.tsx:211"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:246:When",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:254:When",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 246,
+      "line": 254,
       "text": "When",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:246"
+        "apps/entrant/app/components/SeasonControls.tsx:254"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:262:From",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:270:From",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 262,
+      "line": 270,
       "text": "From",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:262"
+        "apps/entrant/app/components/SeasonControls.tsx:270"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:271:To",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:279:To",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 271,
+      "line": 279,
       "text": "To",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:271"
+        "apps/entrant/app/components/SeasonControls.tsx:279"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:282:Apply dates",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:289:Year",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 282,
+      "line": 289,
+      "text": "Year",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/components/SeasonControls.tsx:289"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:297:placeholder:All years",
+      "file": "apps/entrant/app/components/SeasonControls.tsx",
+      "line": 297,
+      "text": "All years",
+      "kind": "prop:placeholder",
+      "usage": [
+        "apps/entrant/app/components/SeasonControls.tsx:297"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:304:Apply dates",
+      "file": "apps/entrant/app/components/SeasonControls.tsx",
+      "line": 304,
       "text": "Apply dates",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:282"
+        "apps/entrant/app/components/SeasonControls.tsx:304"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:288:Reset",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:310:Reset",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 288,
+      "line": 310,
       "text": "Reset",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:288"
+        "apps/entrant/app/components/SeasonControls.tsx:310"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:318:Clear all",
+      "key": "entrant:apps/entrant/app/components/SeasonControls.tsx:343:Clear all",
       "file": "apps/entrant/app/components/SeasonControls.tsx",
-      "line": 318,
+      "line": 343,
       "text": "Clear all",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/components/SeasonControls.tsx:318"
+        "apps/entrant/app/components/SeasonControls.tsx:343"
       ]
     },
     {
@@ -10922,6 +11122,119 @@
       "kind": "label-map:ui.ts",
       "usage": [
         "apps/entrant/app/lib/ui.ts:81"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:156:aria-label:Tournament pages",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 156,
+      "text": "Tournament pages",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:156"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:157:Showing",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 157,
+      "text": "Showing",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:157"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:157:tournaments",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 157,
+      "text": "tournaments",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:157",
+        "apps/entrant/app/routes/discovery.tsx:264"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:159:aria-label:Previous page",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 159,
+      "text": "Previous page",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:159"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:159:Previous",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 159,
+      "text": "Previous",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:159",
+        "apps/entrant/app/routes/discovery.tsx:159"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:160:aria-label:Choose page",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 160,
+      "text": "Choose page",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:160"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:173:aria-label:Next page",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 173,
+      "text": "Next page",
+      "kind": "prop:aria-label",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:173"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:173:Next",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 173,
+      "text": "Next",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:173",
+        "apps/entrant/app/routes/discovery.tsx:173"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:264:Showing 1–",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 264,
+      "text": "Showing 1–",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:264"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:268:Looking for past results",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 268,
+      "text": "Looking for past results?",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:268"
+      ]
+    },
+    {
+      "key": "entrant:apps/entrant/app/routes/discovery.tsx:270:View completed tournamen",
+      "file": "apps/entrant/app/routes/discovery.tsx",
+      "line": 270,
+      "text": "View completed tournaments →",
+      "kind": "jsx-text",
+      "usage": [
+        "apps/entrant/app/routes/discovery.tsx:270"
       ]
     },
     {
@@ -12527,123 +12840,123 @@
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:312:label:Password",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:313:label:Password",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 312,
+      "line": 313,
       "text": "Password",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:312"
+        "apps/entrant/app/routes/signup.tsx:313"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:325:hint:Use at least 8 character",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:326:hint:Use at least 8 character",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 325,
+      "line": 326,
       "text": "Use at least 8 characters and avoid common passwords.",
       "kind": "prop:hint",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:325"
+        "apps/entrant/app/routes/signup.tsx:326"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:335:label:Your name (optional)",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:337:label:Your name (optional)",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 335,
+      "line": 337,
       "text": "Your name (optional)",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:335"
+        "apps/entrant/app/routes/signup.tsx:337"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:339:hint:Name shown to the organi",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:341:hint:Name shown to the organi",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 339,
+      "line": 341,
       "text": "Name shown to the organizer.",
       "kind": "prop:hint",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:339"
+        "apps/entrant/app/routes/signup.tsx:341"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:344:label:Phone (optional)",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:347:label:Phone (optional)",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 344,
+      "line": 347,
       "text": "Phone (optional)",
       "kind": "prop:label",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:344"
+        "apps/entrant/app/routes/signup.tsx:347"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:349:hint:Only used if the organiz",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:352:hint:Only used if the organiz",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 349,
+      "line": 352,
       "text": "Only used if the organizer needs to reach you about an entry.",
       "kind": "prop:hint",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:349"
+        "apps/entrant/app/routes/signup.tsx:352"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:365:Human check",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:369:Human check",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 365,
+      "line": 369,
       "text": "Human check",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:365"
+        "apps/entrant/app/routes/signup.tsx:369"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:377:Loading the human check",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:381:Loading the human check",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 377,
+      "line": 381,
       "text": "Loading the human check",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:377"
+        "apps/entrant/app/routes/signup.tsx:381"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:380:The human check needs Ja",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:384:The human check needs Ja",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 380,
+      "line": 384,
       "text": "The human check needs JavaScript. With scripting turned off, the form still fills in and submits, but the check cannot run. Ask the organizer to set your account up instead.",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:380"
+        "apps/entrant/app/routes/signup.tsx:384"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:394:Create account",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:398:Create account",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 394,
+      "line": 398,
       "text": "Create account",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:394"
+        "apps/entrant/app/routes/signup.tsx:398"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:405:Already have one?",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:409:Already have one?",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 405,
+      "line": 409,
       "text": "Already have one?",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:405"
+        "apps/entrant/app/routes/signup.tsx:409"
       ]
     },
     {
-      "key": "entrant:apps/entrant/app/routes/signup.tsx:407:Sign in",
+      "key": "entrant:apps/entrant/app/routes/signup.tsx:411:Sign in",
       "file": "apps/entrant/app/routes/signup.tsx",
-      "line": 407,
+      "line": 411,
       "text": "Sign in",
       "kind": "jsx-text",
       "usage": [
-        "apps/entrant/app/routes/signup.tsx:407"
+        "apps/entrant/app/routes/signup.tsx:411"
       ]
     },
     {

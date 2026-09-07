@@ -312,9 +312,16 @@ export function WorkspaceInspector({
             linkFor={(n) =>
               n.matchId && n.source
                 ? `/tournaments/${tournament.id}/operations/live?select=${n.source}:${n.matchId}`
-                : null
+              : null
             }
           />
+          <button
+            type="button"
+            onClick={() => onOpen(tournament.id, 'competition/matches')}
+            className="mt-2 text-sm text-accent underline underline-offset-2 hover:no-underline"
+          >
+            View all matches →
+          </button>
         </DetailPanel.Section>
       ) : null}
     </DetailPanel>

@@ -105,6 +105,20 @@ describe('WorkspaceInspector', () => {
     render(<WorkspaceInspector tournament={readyWs} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
     expect(screen.queryByTestId('inspector-next-up')).toBeNull();
   });
+
+  it('offers the canonical full matches destination below the preview', () => {
+    const onOpen = vi.fn();
+    const withNext: TournamentSummaryDTO = {
+      ...readyWs,
+      signals: {
+        ...readyWs.signals!,
+        nextUp: [{ code: 'MS1', timeLabel: '09:30', courtLabel: 'Court 1', status: 'scheduled' }],
+      },
+    };
+    render(<WorkspaceInspector tournament={withNext} onOpen={onOpen} onSetDate={noop} onSettings={noop} onClose={noop} />);
+    screen.getByRole('button', { name: /view all matches/i }).click();
+    expect(onOpen).toHaveBeenCalledWith('t1', 'competition/matches');
+  });
   // SP-UI-1: the rail used to render a separate `inspector-todos` list AND a
   // readiness checklist — one fact set in two shapes. They are now ONE merged
   // checklist (shared with the Overview), so the attention copy appears as the

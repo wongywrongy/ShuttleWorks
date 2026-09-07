@@ -226,6 +226,13 @@ describe('SeasonStatusCell', () => {
     expect(done).not.toContain('<a');
   });
 
+  it('gives Follow live the same arrow affordance as Results', () => {
+    const live = renderToStaticMarkup(
+      h(SeasonStatusCell, { cell: statusCell(row({ slug: 'x', status: 'in_progress_live' })) }),
+    );
+    expect(live).toContain('Follow live →');
+  });
+
   it('lifts every real link above the row-wide stretched link', () => {
     for (const status of ['in_progress_live', 'completed_winners'] as const) {
       const html = renderToStaticMarkup(
@@ -381,7 +388,7 @@ describe('SeasonCalendar', () => {
     expect(html).toContain('after:absolute after:inset-0');
     expect(html).toContain(formatDateLong('2026-09-11'));
     expect(html).toContain('Hall · Wessex CBA');
-    expect(classTokens(html, 'sm:block')).toContain('hidden');
+    expect(html).not.toContain('events</span>');
   });
 
   // Task 11 live QA (380x840), R11: the status cell held `min-w-[8rem]
@@ -415,8 +422,8 @@ describe('SeasonCalendar', () => {
     expect(status).not.toContain('min-w-[8rem]');
     expect(status).not.toContain('shrink-0');
     expect(status).not.toContain('justify-end');
-    // The badge keeps the name's line, and the count still hides on phones.
-    expect(classTokens(html, 'sm:block')).toContain('hidden');
+    // Event-count texture is intentionally omitted from discovery rows.
+    expect(html).not.toContain('events</span>');
   });
 
   it('renders no sr-only date line for a row with no parseable date', () => {
@@ -437,14 +444,14 @@ describe('SeasonControls', () => {
 
   it('renders live counts on the segments', () => {
     const html = renderToStaticMarkup(h(SeasonControls, { filters: NO_FILTERS, counts }));
-    expect(html).toContain('Taking entries · 2');
+    expect(html).toContain('Entries open · 2');
     expect(html).toContain('Completed · 3');
-    expect(html).toContain('Season');
+    expect(html).toContain('Live &amp; upcoming');
   });
 
   it('keeps search a GET form aimed at the calendar, carrying the date filters', () => {
     const html = renderToStaticMarkup(
-      h(SeasonControls, { filters: { ...NO_FILTERS, preset: '7d', view: 'completed' }, counts }),
+      h(SeasonControls, { filters: { ...NO_FILTERS, preset: '7d', view: 'completed', scopeExplicit: true }, counts }),
     );
     const form = html.match(/<form[^>]*>/)?.[0] ?? '';
     expect(form).toContain('method="get"');

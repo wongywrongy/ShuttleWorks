@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
 
 export type DenseDataSortDirection = 'asc' | 'desc';
 export type DenseDataDensity = 'comfortable' | 'compact';
-export type DenseDataPageSize = 50 | 100;
+export type DenseDataPageSize = 25 | 50 | 100;
 
 export interface DenseDataSort {
   id: string;
@@ -93,11 +93,12 @@ function compareValues(a: unknown, b: unknown): number {
 }
 
 /** Apply the shared search, facet, sort and page behavior to a row collection. */
-export function getDenseDataPage<T>(
+export function getDenseDataRows<T>(
   rows: readonly T[],
   columns: readonly DenseDataColumn<T>[],
   state: DenseDataState,
-): DenseDataPage<T> {
+  rowId?: (row: T) => string,
+): T[] {
   const search = state.search.trim().toLocaleLowerCase();
   const filtered = rows.filter((row) => {
     if (search) {
@@ -124,10 +125,16 @@ export function getDenseDataPage<T>(
         const result = column?.compare
           ? column.compare(a, b)
           : compareValues(column?.accessor(a), column?.accessor(b));
-        return state.sort?.direction === 'desc' ? result * -1 : result;
+        return (state.sort?.direction === 'desc' ? result * -1 : result) ||
+          (rowId ? rowId(a).localeCompare(rowId(b)) : 0);
       })
     : filtered;
 
+  return sorted;
+}
+
+export function getDenseDataPage<T>(rows: readonly T[], columns: readonly DenseDataColumn<T>[], state: DenseDataState, rowId?: (row: T) => string): DenseDataPage<T> {
+  const sorted = getDenseDataRows(rows, columns, state, rowId);
   const pageCount = Math.max(1, Math.ceil(sorted.length / state.pageSize));
   const page = Math.min(Math.max(1, state.page), pageCount);
   const start = (page - 1) * state.pageSize;
@@ -240,7 +247,8 @@ export function decodeDenseDataState(
       : base.hiddenColumns,
     density: params.get(key(prefix, 'density')) === 'compact' ? 'compact' : base.density,
     page: parsePositiveInteger(params.get(key(prefix, 'page')), base.page),
-    pageSize: params.get(key(prefix, 'pageSize')) === '100' ? 100 : base.pageSize,
+    pageSize: [25, 50, 100].includes(Number(params.get(key(prefix, 'pageSize'))))
+      ? Number(params.get(key(prefix, 'pageSize'))) as DenseDataPageSize : base.pageSize,
     groupBy: params.get(key(prefix, 'group')) ?? base.groupBy,
   };
 }
@@ -263,7 +271,7 @@ export function encodeDenseDataState(
   if (state.hiddenColumns.length) params.set(key(prefix, 'columns'), [...state.hiddenColumns].sort().join(','));
   if (state.density !== 'comfortable') params.set(key(prefix, 'density'), state.density);
   if (state.page !== 1) params.set(key(prefix, 'page'), String(state.page));
-  if (state.pageSize !== 50) params.set(key(prefix, 'pageSize'), String(state.pageSize));
+  params.set(key(prefix, 'pageSize'), String(state.pageSize));
   if (state.groupBy) params.set(key(prefix, 'group'), state.groupBy);
   return params;
 }

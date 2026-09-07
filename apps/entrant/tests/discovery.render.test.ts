@@ -123,7 +123,7 @@ describe('the front door', () => {
 
     expect(res.status).toBe(200);
     // Not `toContain('Tournaments')`: the shell's wordmark carries that word.
-    expect(html).toMatch(/<h1[^>]*>\s*Tournaments\s*<\/h1>/);
+    expect(html).toMatch(/<h1[^>]*>\s*Live &amp; upcoming\s*<\/h1>/);
     expect(html).toContain(MASTHEAD);
     expect(html).toContain(SEASON_INTRO);
     expect(html).toContain('Wessex Autumn Gold');
@@ -207,7 +207,7 @@ describe('the control row (§2.3)', () => {
   it("labels the segments with the server's unfiltered counts, verbatim", async () => {
     const html = await render();
 
-    expect(html).toContain('Taking entries · 1');
+    expect(html).toContain('Entries open · 1');
     expect(html).toContain('Completed · 2');
   });
 
@@ -234,8 +234,14 @@ describe('the calendar (§2.4)', () => {
     expect(html).toContain('September 2026');
   });
 
-  it('links Results where they are published and says Completed where they are not (§7 trap 3)', async () => {
+  it('keeps a clear archive link below the current collection', async () => {
     const html = await render();
+    expect(html).toMatch(/View completed tournaments →/);
+    expect(html.indexOf('View completed tournaments →')).toBeGreaterThan(html.indexOf('Wessex Autumn Gold'));
+  });
+
+  it('links Results where they are published and says Completed where they are not (§7 trap 3)', async () => {
+    const html = await render('/e/?view=completed');
 
     expect(html).toMatch(/<a href="\/e\/sussex-winners\?tab=draws"/);
     expect(html).toContain('Results');
@@ -257,6 +263,47 @@ describe('the calendar (§2.4)', () => {
     expect(html).toContain('Some Hall');
     expect(html).toContain('Winchester, United Kingdom');
   });
+
+  it.each([
+    [10, false, 'Tenth completed'],
+    [11, false, 'Eleventh completed'],
+    [20, false, 'Twentieth completed'],
+    [21, true, 'Twenty-first completed'],
+  ])('bounds completed results at twenty rows (%i)', async (count, paginated, lastName) => {
+    const tournaments = Array.from({ length: count }, (_, index) => row(
+      `completed-${index + 1}`,
+      index === count - 1 ? lastName : `Completed ${index + 1}`,
+      'completed_winners',
+      { date: `2026-${String(12 - Math.floor(index / 28)).padStart(2, '0')}-${String((index % 28) + 1).padStart(2, '0')}`, winnersPublished: true },
+    ));
+    const html = await render('/e/?view=completed', {
+      tournaments,
+      counts: { takingEntries: 0, completed: count },
+      now: null,
+    });
+    expect(html).toContain('Completed tournaments');
+    expect(html).toContain(lastName);
+    if (paginated) {
+      expect(html).toContain('Showing');
+      expect(html).toContain('21');
+      expect(html).toContain('Tournament pages');
+    }
+    else expect(html).not.toContain('Tournament pages');
+  });
+
+  it('searches the complete public set and can find a completed row absent from the default page', async () => {
+    const html = await render('/e/?q=Triangle', NO_NOW);
+    expect(html).toContain('All tournaments');
+    expect(html).toContain('Triangle Trophy');
+    expect(html).toContain('Search all published tournaments');
+  });
+
+  it('keeps deliberate status and year scope when searching', async () => {
+    const html = await render('/e/?view=completed&year=2026&q=Sussex', NO_NOW);
+    expect(html).toContain('Completed tournaments');
+    expect(html).toContain('Sussex Spring Restricted');
+    expect(html).toMatch(/name="year"[^>]*value="2026"/);
+  });
 });
 
 describe('the two empty states', () => {
@@ -264,7 +311,8 @@ describe('the two empty states', () => {
     const html = await render('/e/', EMPTY);
 
     expect(html).toContain('No tournaments on the calendar yet');
-    expect(html).toContain('No tournament is taking entries right now');
+    expect(html).toContain('No live or upcoming tournament is published right now');
+    expect(html).toContain('View completed tournaments');
     expect(html).not.toContain('Clear filters');
   });
 
@@ -294,6 +342,19 @@ describe('the two empty states', () => {
 });
 
 describe('E5: empty filter fields never survive into a shareable URL', () => {
+  it.each([
+    ['/e/?page=2', '/e/#calendar'],
+    ['/e/?view=completed&year=2026&page=999', '/e/?view=completed&year=2026#calendar'],
+    ['/e/?q=Gold&page=invalid', '/e/?view=all&q=Gold#calendar'],
+  ])('clamps %s to a reachable URL with one basename', async (path, expected) => {
+    const response = await respond(path);
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(expected);
+    const destination = await respond(expected);
+    expect(destination.status).toBe(200);
+    expect(await destination.text()).toContain('id="calendar"');
+  });
+
   it('drops empty filter fields from the URL instead of echoing them', async () => {
     // A native GET form submits every named control, including the ones left
     // blank — so an empty submit produced `/e/?q=&preset=&from=&to=`, which is

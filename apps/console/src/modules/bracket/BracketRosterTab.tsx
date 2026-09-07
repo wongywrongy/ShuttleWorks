@@ -13,7 +13,7 @@
  * The panel body is `BracketPlayerDetailFields` (AVAILABILITY / EVENTS /
  * NOTES sections); the panel header already owns player identity.
  */
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Download } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../lib/utils';
@@ -34,6 +34,7 @@ import {
 import { BracketApiContext, useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
 import { useDenseDataState } from '../../hooks/useDenseDataState';
+import { useListScrollRestore } from '../../hooks/useListScrollRestore';
 import { lockedPlayerIds, ROSTER_LOCKED_REASON } from './lockedPlayers';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../api/dto';
@@ -101,6 +102,7 @@ function BracketRosterTabCore({
   onCommitEvent: CommitEventFn | null;
 }) {
   const players = useTournamentStore((s) => s.bracketPlayers);
+  const listScrollRef = useListScrollRestore<HTMLDivElement>('bracket-roster', players.length > 0);
   const addPlayer = useTournamentStore((s) => s.addBracketPlayer);
   const updatePlayer = useTournamentStore((s) => s.updateBracketPlayer);
   const deletePlayer = useTournamentStore((s) => s.deleteBracketPlayer);
@@ -123,14 +125,16 @@ function BracketRosterTabCore({
   // from the start — DenseDataTable already exposes it via aria-sort + the
   // header's sort icon, and its own header button already changes it.
   const [denseState, denseActions] = useDenseDataState(
-    { sort: { id: 'player', direction: 'asc' } },
+    { pageSize: 100, sort: { id: 'player', direction: 'asc' } },
     'bracket-roster',
   );
   const setDenseState = denseActions.setState;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
-  const [eventFilter, setEventFilter] = useState('all');
-  const [issueFilter, setIssueFilter] = useState('all');
+  const eventFilter = denseState.filters.event?.[0] ?? 'all';
+  const issueFilter = denseState.filters.issueScope?.[0] ?? 'all';
+  const setEventFilter = (value: string) => setDenseState({ ...denseState, page: 1, filters: { ...denseState.filters, event: value === 'all' ? [] : [value] } });
+  const setIssueFilter = (value: string) => setDenseState({ ...denseState, page: 1, filters: { ...denseState.filters, issueScope: value === 'all' ? [] : [value] } });
   const [draft, setDraft] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     typeof window === 'undefined'
@@ -204,6 +208,9 @@ function BracketRosterTabCore({
     });
   }, [denseState.search, eventFilter, issueFilter, rosterRows]);
   const filteredCount = filteredRows.length;
+  const selectionScope = JSON.stringify([denseState.search, denseState.filters]);
+  useEffect(() => { setSelectedIds([]); }, [selectionScope]);
+  useEffect(() => { setSelectedIds((ids) => ids.filter((id) => players.some((p) => p.id === id))); }, [players]);
 
   const commitAdd = () => {
     const name = draft.trim();
@@ -270,7 +277,7 @@ function BracketRosterTabCore({
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
         >
           <Download aria-hidden="true" className="h-3.5 w-3.5" />
-          Export XLSX
+          Export full roster
         </button>
         <button
           type="button"
@@ -286,7 +293,7 @@ function BracketRosterTabCore({
           @container/table column priorities instead of being covered.
           `relative` anchors the dock's narrow-viewport overlay fallback. */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <div className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
+        <div ref={listScrollRef} data-list-scroll="bracket-roster" className="min-h-0 min-w-0 flex-1 overflow-auto @container/table">
           <DenseDataToolbar
             state={denseState}
             onStateChange={setDenseState}
@@ -310,6 +317,7 @@ function BracketRosterTabCore({
               state={denseState}
               onStateChange={setDenseState}
             />
+            {filteredCount > 0 && <button type="button" className={`${INTERACTIVE_BASE} min-h-9 px-2.5 text-sm text-accent`} onClick={() => setSelectedIds(filteredRows.map((row) => row.player.id))}>Select all {filteredCount} matching players</button>}
             {selectedIds.length > 0 ? (
               <button
                 type="button"
@@ -329,6 +337,8 @@ function BracketRosterTabCore({
           <DenseDataTable
             columns={rosterColumns}
             rows={filteredRows}
+            liveSource={rosterRows}
+            liveScope={JSON.stringify([eventFilter, issueFilter])}
             state={denseState}
             onStateChange={setDenseState}
             rowId={(row) => row.player.id}
@@ -342,6 +352,7 @@ function BracketRosterTabCore({
             rowTestId={(row) => `roster-row-${row.player.id}`}
              renderActions={(row) => <OverflowMenu label={`Actions for ${row.player.name}`} items={rowOverflowItems(row.player)} />}
             strictRows
+            wrapIdentityOnMobile
             strictRowHeight="roster"
             elasticColumnId="player"
             emptyState={players.length === 0 ? 'No players yet. Add the first one.' : 'No players match the current view.'}

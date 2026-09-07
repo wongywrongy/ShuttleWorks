@@ -55,9 +55,15 @@ export function groupWorkspaces(
     else past.push(t);
   }
 
-  upcoming.sort((a, b) => dayKey(a.tournamentDate!).localeCompare(dayKey(b.tournamentDate!)));
-  past.sort((a, b) => dayKey(b.tournamentDate!).localeCompare(dayKey(a.tournamentDate!)));
-  undated.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+  upcoming.sort((a, b) =>
+    dayKey(a.tournamentDate!).localeCompare(dayKey(b.tournamentDate!)) || a.id.localeCompare(b.id),
+  );
+  past.sort((a, b) =>
+    dayKey(b.tournamentDate!).localeCompare(dayKey(a.tournamentDate!)) || a.id.localeCompare(b.id),
+  );
+  undated.sort((a, b) =>
+    (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.id.localeCompare(b.id),
+  );
 
   return [
     { id: 'upcoming', label: 'Upcoming', items: upcoming },
