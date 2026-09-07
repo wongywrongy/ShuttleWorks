@@ -4,17 +4,15 @@ import { isRouteErrorResponse, useRouteError } from "react-router";
 import { Button } from "@scheduler/design-system/components";
 
 import { EmptyState } from "../components/EmptyState";
-import { HeroHeader } from "../components/HeroHeader";
 import { MatchCard, type MatchCardData } from "../components/MatchCard";
 import { MessagePage } from "../components/MessagePage";
 import { PlayShell } from "../components/PlayShell";
 import { SegmentedNav } from "../components/SegmentedNav";
-import { TabBar } from "../components/TabBar";
+import { TournamentFrame } from "../components/TournamentFrame";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
 import type { EntryPageDTO } from "../lib/entryPage.types";
 import { eventDisciplineLabel } from "../lib/draws.types";
-import { capChipCountdown, formatCalendarMonth, formatDateLong } from "../lib/format";
-import { chipState, nearestCloseAt, tournamentPhase, visibleTabs } from "../lib/phase";
+import { formatCalendarMonth } from "../lib/format";
 import {
   SCHEDULE_STATES,
   schedulePublicState,
@@ -233,7 +231,15 @@ function dayDistance(a: string, b: string): number {
     : 99;
 }
 
-/** Human-readable freshness in the tournament's configured timezone. */
+/**
+ * Human-readable freshness, converted into the tournament's own timezone.
+ *
+ * Contract §7.1 (public P0): the instant is CONVERTED to venue-local time —
+ * removing a suffix from a UTC value would be a wrong time stated
+ * confidently — but the rendered prose carries no zone abbreviation, offset
+ * or IANA identifier, because the frame already said "All times local to the
+ * venue" once. `timeZoneName: 'short'` is what left with P1.
+ */
 export function formatScheduleUpdated(value: string | null, timeZone: string): string {
   if (!value) return '';
   const date = new Date(value);
@@ -246,7 +252,6 @@ export function formatScheduleUpdated(value: string | null, timeZone: string): s
       hour: 'numeric',
       minute: '2-digit',
       timeZone,
-      timeZoneName: 'short',
     }).format(date);
   } catch {
     return value;
@@ -589,11 +594,6 @@ function ByCourt({
 export default function Schedule({ loaderData }: Route.ComponentProps) {
   const { page, matches, filters, nowMs } = loaderData;
   const slug = page.page.slug;
-  const phase = tournamentPhase({
-    publication: page.publication,
-    events: page.events,
-  });
-  const tabs = visibleTabs(page.events, page.entrants, page.publication);
   const pages = Math.ceil(matches.total / matches.pageSize);
   const previous =
     filters.page > 1 ? { ...filters, page: filters.page - 1 } : null;
@@ -606,43 +606,11 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
   const showNow = live.length > 0;
   return (
     <PlayShell>
-      <HeroHeader
-        orgName={page.org?.name === 'Local Workspace' ? null : page.org?.name ?? null}
-        title={page.tournament.name ?? slug}
-        metaLine={[formatDateLong(page.tournament.date), page.venue?.name]
-          .filter(Boolean)
-          .join(" · ")}
-        chip={capChipCountdown(
-          chipState(page.events, new Date(nowMs)),
-          nearestCloseAt(page.events),
-          page.tournament.timeZone,
-        )}
-        cta={{ kind: "closed" }}
-        phaseAction={
-          phase === "entries_open"
-            ? {
-                label: "Enter this tournament",
-                href: `/e/${encodeURIComponent(slug)}/enter`,
-              }
-            : null
-        }
-        freshness={
-          matches.updatedAt
-          ? `Schedule updated ${formatScheduleUpdated(matches.updatedAt, matches.timeZone)} · ${matches.timeZone}`
-            : `Tournament time · ${matches.timeZone}`
-        }
-      >
-        <TabBar
-          tabs={tabs}
-          active="schedule"
-          hrefFor={(tab) =>
-            tab === "overview"
-              ? `/e/${encodeURIComponent(slug)}`
-              : `/e/${encodeURIComponent(slug)}?tab=${tab}`
-          }
-          scheduleHref={`/e/${encodeURIComponent(slug)}/schedule`}
-        />
-      </HeroHeader>
+      {/* Contract §11: Schedule had its OWN hero, with its own metadata, its
+          own chip, its own freshness line and a timezone identifier repeated
+          three times down the page. It now wears the one frame, with the
+          Schedule tab current; freshness moved below the list. */}
+      <TournamentFrame page={page} nowMs={nowMs} active="schedule" />
       <main
         className="mx-auto w-full max-w-6xl px-4 py-4 md:py-8"
         aria-labelledby="schedule-title"
@@ -655,12 +623,9 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
             Schedule
           </h2>
           <p className="text-sm text-muted-foreground">
-            Find matches by day, time, or court in tournament time (
-            {matches.timeZone}).
+            Find matches by day, time, or court.
           </p>
         </div>
-        {/* The hero already carries the freshness timestamp; repeating it here
-            pushes the first live/next row below the mobile viewport. */}
         {!matches.published ? (
           <div className="mt-6">
             <EmptyState
@@ -744,6 +709,16 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
                       </a>
                     ) : null}
                   </nav>
+                ) : null}
+                {/* Contract §11.1/§7.1: the ONE freshness line, below the
+                    thing it describes, in venue-local time and with no zone
+                    identifier or offset in the prose. It used to sit in this
+                    route's own hero, in two variants, with the IANA name
+                    appended. */}
+                {matches.updatedAt ? (
+                  <p className="text-xs text-muted-foreground">
+                    {`Updated ${formatScheduleUpdated(matches.updatedAt, matches.timeZone)}`}
+                  </p>
                 ) : null}
               </>
             )}

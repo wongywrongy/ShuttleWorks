@@ -65,9 +65,12 @@ const MATCHES = {
 };
 
 describe("schedule freshness", () => {
-  it("formats the update instant in tournament time", () => {
-    expect(formatScheduleUpdated("2026-09-12T10:35:00+00:00", "Asia/Seoul"))
-      .toContain("Sep 12, 2026, 7:35 PM");
+  it("converts the update instant into venue-local time, with no zone in the prose", () => {
+    const formatted = formatScheduleUpdated("2026-09-12T10:35:00+00:00", "Asia/Seoul");
+    // Converted, not merely stripped: 10:35 UTC is 19:35 in Seoul.
+    expect(formatted).toContain("Sep 12, 2026, 7:35 PM");
+    expect(formatted).not.toContain("GMT");
+    expect(formatted).not.toContain("Asia/Seoul");
   });
 
   it("preserves an unparseable server value instead of inventing a date", () => {
@@ -144,7 +147,12 @@ describe("Schedule / Live", () => {
     expect(html).toContain("Ada Lovelace");
     expect(html).toContain("Grace Hopper");
     expect(html).toContain("Court 1");
-    expect(html).toContain("Asia/Seoul");
+    // Contract §7.1/§11.1: the frame states the venue-time rule ONCE, and
+    // public prose then carries no IANA identifier, offset or zone
+    // abbreviation. This page used to print "Asia/Seoul" three times.
+    expect(html).toContain("All times local to the venue");
+    expect(html).not.toContain("Asia/Seoul");
+    expect(html).not.toMatch(/GMT[+-]\d|KST/);
     expect(html).toContain("10:30");
     expect(html).toContain("/players/ada");
   });

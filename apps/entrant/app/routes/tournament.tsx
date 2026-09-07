@@ -20,25 +20,19 @@ import { isRouteErrorResponse, useRouteError } from 'react-router';
 
 import { EventRow } from '../components/EventRow';
 import { PersonRef } from '../components/PersonRef';
-import { HeroHeader } from '../components/HeroHeader';
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { PlayersList } from '../components/PlayersList';
 import { SectionCard, SectionRow } from '../components/SectionCard';
-import { TabBar } from '../components/TabBar';
+import { TournamentFrame } from '../components/TournamentFrame';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { DrawCardDTO, DrawsIndexDTO, PlayersDTO } from '../lib/draws.types';
 import { eventCodeLabel } from '../lib/draws.types';
 import type { EntryPageDTO, ReserveRowDTO } from '../lib/entryPage.types';
-import { capChipCountdown, dateOfIso, formatDateLong, formatMomentInZone } from '../lib/format';
+import { dateOfIso, formatDateLong, formatMomentInZone } from '../lib/format';
 import {
   activeTab,
-  chipState,
-  ctaState,
-  nearestCloseAt,
-  phaseLabel,
   timelineModel,
-  tournamentPhase,
   visibleTabs,
   type Tab,
 } from '../lib/phase';
@@ -206,7 +200,6 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
           {entriesOpen && registeredSoFar > 0 ? (
             <div><dt className="text-xs text-muted-foreground">Entered so far</dt><dd className="mt-0.5 font-semibold tabular-nums">{registeredSoFar}</dd></div>
           ) : null}
-          {tournamentView.timeZone ? <div className="col-span-2"><dt className="text-xs text-muted-foreground">Tournament time</dt><dd className="mt-0.5 font-medium">{tournamentView.timeZone}</dd></div> : null}
         </dl>
       </div>
 
@@ -360,50 +353,10 @@ function DrawsPanel({
 }
 
 export default function Tournament({ loaderData }: Route.ComponentProps) {
-  const { page, tabs, active, nowMs } = loaderData;
-  const tournamentView = page.tournament as EntryPageDTO['tournament'] & { phase?: string | null; status?: string | null; timeZone?: string | null };
+  const { page, active, nowMs } = loaderData;
   const now = new Date(nowMs);
   const slug = page.page.slug;
-  // V3-26-5: cap the relative countdown at an absolute date past the
-  // threshold (the hero's status line).
-  const chip = capChipCountdown(
-    chipState(page.events, now),
-    nearestCloseAt(page.events),
-    tournamentView.timeZone ?? 'UTC',
-  );
-  const cta = ctaState(page.events, slug);
-  const phase = tournamentPhase({
-    phase: tournamentView.phase,
-    status: tournamentView.status,
-    publication: page.publication,
-    events: page.events,
-  });
-  const hasExplicitPhase = Boolean(tournamentView.phase || tournamentView.status);
-  const phaseAction = phase === 'entries_open'
-    ? { label: 'Enter this tournament', href: `/e/${encodeURIComponent(slug)}/enter` }
-    : phase === 'live' && tabs.includes('draws')
-      ? { label: 'Follow live matches', href: `/e/${encodeURIComponent(slug)}/schedule` }
-      : phase === 'draws_published' && tabs.includes('draws')
-        ? { label: 'View draws', href: tabHref(slug, 'draws') }
-        : (phase === 'complete' || phase === 'archived') && tabs.includes('draws')
-          ? { label: 'View results', href: tabHref(slug, 'draws') }
-          : phase === 'entries_closed' && tabs.includes('players')
-            ? { label: 'View entrants', href: tabHref(slug, 'players') }
-            : phase === 'announced'
-              ? { label: 'View tournament information', href: `/e/${encodeURIComponent(slug)}` }
-              : null;
-  // Date, timezone, and venue are each presented once in the overview cards.
-  // Keeping them out of the hero prevents the same facts being repeated in
-  // two competing reading sequences (PE03.3).
-  const metaLine = '';
-  // V3-PE03.3: once the server states an explicit phase, the subtitle leads
-  // with it — "Live now", not "Entries closed" under a "Follow live
-  // matches" button. Entry closure is still available; it moved to the Key
-  // dates section (`timelineModel`'s "Entries close" row) rather than being
-  // the first line a spectator reads.
-  const statusOverride = hasExplicitPhase
-    ? { label: phaseLabel(phase), live: phase === 'entries_open' || phase === 'live' }
-    : null;
+  const tabs = loaderData.tabs;
   // The by-event anchors died with the by-event grouping (SP-P7 §3.2): the
   // list is alphabetical now, so an event's "N entered" links to the tab.
   const entrantsHref = tabs.includes('players')
@@ -412,24 +365,12 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
 
   return (
     <PlayShell>
-      <HeroHeader
-        orgName={page.org?.name === 'Local Workspace' ? null : page.org?.name ?? null}
-        title={page.tournament.name ?? slug}
-        metaLine={metaLine}
-        chip={chip}
-        cta={cta}
-        phaseAction={hasExplicitPhase ? phaseAction : null}
-        statusOverride={statusOverride}
-      >
-        <TabBar
-          tabs={tabs}
-          active={active}
-          hrefFor={(tab) => tabHref(slug, tab)}
-          scheduleHref={`/e/${encodeURIComponent(slug)}/schedule`}
-        />
-      </HeroHeader>
+      {/* Contract §11: hero, tabs and breadcrumbs are the frame's, not this
+          route's. Overview is the tournament itself, so its breadcrumb trail
+          ends at the tournament name and the frame supplies no tail. */}
+      <TournamentFrame page={page} nowMs={nowMs} active={active} />
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-8 md:py-8">
+      <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
         {active === 'overview' ? <OverviewPanel page={page} now={now} /> : null}
         {active === 'draws' ? (
           <DrawsPanel page={page} draws={loaderData.draws} entrantsHref={entrantsHref === null ? null : entrantsHref()} />

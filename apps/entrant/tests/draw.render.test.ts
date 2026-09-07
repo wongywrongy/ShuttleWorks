@@ -339,14 +339,17 @@ async function render(path: string): Promise<string> {
 }
 
 describe("the tab bar under full publication", () => {
-  it("renders the four ADR 0028 entries: Overview · Schedule · Draws · Players", async () => {
+  // Contract §11.1: Documents joins the ADR 0028 four whenever the organizer
+  // published regulations, and it is how the reader reaches them — the
+  // regulations reader no longer carries a navigation of its own.
+  it("renders Overview · Schedule · Draws · Players · Documents", async () => {
     stubApi({});
     const html = await render("/e/spring-open");
     const nav =
       html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ??
       "";
     const labels = [...nav.matchAll(/>([^<]+)<\/a>/g)].map((m) => m[1]);
-    expect(labels).toEqual(["Overview", "Schedule", "Draws", "Players"]);
+    expect(labels).toEqual(["Overview", "Schedule", "Draws", "Players", "Documents"]);
   });
 });
 

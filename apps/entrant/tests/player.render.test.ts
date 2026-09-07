@@ -102,7 +102,10 @@ describe('the header card', () => {
     stubApi(PLAYER);
     const html = await (await render(URL_PATH)).text();
 
-    expect(html).toMatch(/<h1[^>]*>[\s\S]*href="\/e\/spring-open\/players\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"[\s\S]*Ada Lovelace[\s\S]*<\/h1>/);
+    // Contract §11.1: the document's one `h1` is the TOURNAMENT, rendered by
+    // the shared frame; the person's name is this page's section heading.
+    expect(html).toMatch(/<h1[^>]*id="tournament-title"[^>]*>Spring Open<\/h1>/);
+    expect(html).toMatch(/<h2[^>]*>[\s\S]*href="\/e\/spring-open\/players\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"[\s\S]*Ada Lovelace[\s\S]*<\/h2>/);
     expect(html).toContain('Analytical BC');
     expect(html).toContain('Men&#x27;s Singles');
     expect(html).not.toContain('2-0');

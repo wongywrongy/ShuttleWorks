@@ -27,7 +27,9 @@ import { SeasonStatusCell } from '../app/components/SeasonStatusCell';
 import { StatusChip } from '../app/components/StatusChip';
 import { StickyTotalBar } from '../app/components/StickyTotalBar';
 import { TabBar } from '../app/components/TabBar';
+import { Breadcrumbs } from '../app/components/Breadcrumbs';
 import { SegmentedNav } from '../app/components/SegmentedNav';
+import type { FrameTab } from '../app/lib/tournamentFrame';
 import { capChipCountdown, formatDateInZone, formatDateLong } from '../app/lib/format';
 import type { EntryEventDTO } from '../app/lib/entryPage.types';
 import type { DrawCardDTO } from '../app/lib/draws.types';
@@ -647,20 +649,26 @@ describe('HeroHeader', () => {
 // ---- TabBar ----------------------------------------------------------------
 
 describe('TabBar', () => {
-  const hrefFor = (tab: string) => (tab === 'overview' ? '/e/s' : `/e/s?tab=${tab}`);
+  // Contract §11: the bar is BUILT by the frame (`frameTabs`) and handed
+  // here whole, so every tournament route renders the same one.
+  const tabs: FrameTab[] = [
+    { id: 'overview', label: 'Overview', href: '/e/s' },
+    { id: 'schedule', label: 'Schedule', href: '/e/s/schedule' },
+    { id: 'draws', label: 'Draws', href: '/e/s?tab=draws' },
+    { id: 'players', label: 'Players', href: '/e/s?tab=players' },
+    { id: 'documents', label: 'Documents', href: '/e/s/regulations' },
+  ];
 
   it('renders nothing below two entries — a one-tab bar is a placeholder', () => {
     expect(
-      renderToStaticMarkup(h(TabBar, { tabs: ['overview'], active: 'overview', hrefFor })),
+      renderToStaticMarkup(h(TabBar, { tabs: tabs.slice(0, 1), active: 'overview' })),
     ).toBe('');
   });
 
   it('is a labelled nav of links with aria-current on the active one', () => {
-    const html = renderToStaticMarkup(
-      h(TabBar, { tabs: ['overview', 'draws', 'players'], active: 'draws', hrefFor }),
-    );
+    const html = renderToStaticMarkup(h(TabBar, { tabs: tabs.slice(0, 4), active: 'draws' }));
     expect(html).toContain('aria-label="Tournament sections"');
-    expect(html.match(/<a /g)).toHaveLength(3);
+    expect(html.match(/<a /g)).toHaveLength(4);
     const active = html.match(/<a[^>]*aria-current="page"[^>]*>[^<]*/g) ?? [];
     expect(active).toHaveLength(1);
     expect(active[0]).toContain('Draws');
@@ -669,13 +677,41 @@ describe('TabBar', () => {
     expect(html).not.toContain('disabled');
   });
 
-  it('seats Schedule second, after Overview (ADR 0028 order)', () => {
-    const html = renderToStaticMarkup(
-      h(TabBar, { tabs: ['overview', 'draws', 'players'], active: 'schedule', hrefFor, scheduleHref: '/e/s/schedule' }),
-    );
+  it('seats Schedule second and Documents last (ADR 0028 + contract §11.1)', () => {
+    const html = renderToStaticMarkup(h(TabBar, { tabs, active: 'documents' }));
     const labels = [...html.matchAll(/>([^<]+)<\/a>/g)].map((m) => m[1]);
-    expect(labels).toEqual(['Overview', 'Schedule', 'Draws', 'Players']);
-    expect(html).toMatch(/<a href="\/e\/s\/schedule" aria-current="page"/);
+    expect(labels).toEqual(['Overview', 'Schedule', 'Draws', 'Players', 'Documents']);
+    expect(html).toMatch(/<a href="\/e\/s\/regulations" aria-current="page"/);
+  });
+});
+
+// ---- Breadcrumbs -----------------------------------------------------------
+
+describe('Breadcrumbs', () => {
+  it('links every ancestor and marks the current segment, which is not a link', () => {
+    const html = renderToStaticMarkup(
+      h(Breadcrumbs, {
+        crumbs: [
+          { label: 'Tournaments', href: '/e/' },
+          { label: 'Korea Masters', href: '/e/korea' },
+          { label: 'Draws', href: '/e/korea?tab=draws' },
+          { label: "Men's Singles", href: null },
+        ],
+      }),
+    );
+    expect(html).toContain('aria-label="Breadcrumb"');
+    expect(html.match(/<a /g)).toHaveLength(3);
+    expect(html).toContain('href="/e/"');
+    expect(html).toContain('href="/e/korea"');
+    // The current page is text, never a link back to itself.
+    expect(html).toMatch(/<span aria-current="page"[^>]*>Men&#x27;s Singles<\/span>/);
+    expect(html).not.toContain('href="/e/korea/draws');
+  });
+
+  it('renders nothing when there is no trail to show', () => {
+    expect(
+      renderToStaticMarkup(h(Breadcrumbs, { crumbs: [{ label: 'Tournaments', href: null }] })),
+    ).toBe('');
   });
 });
 

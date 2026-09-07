@@ -16,22 +16,26 @@ import { isRouteErrorResponse, useRouteError } from 'react-router';
 
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
+import { TournamentFrame } from '../components/TournamentFrame';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { dateOfIso, formatDateLong } from '../lib/format';
-import { PAGE_TITLE } from '../lib/ui';
+import { SECTION_TITLE } from '../lib/ui';
 import type { Route } from './+types/regulations';
 
 export interface RegulationsLoaderData {
   slug: string;
   tournamentName: string | null;
-  organizerName: string | null;
-  venueName: string | null;
-  venueAddress: string | null;
-  tournamentDate: string | null;
+  /** The public projection the shared frame is built from (contract §11.1).
+   * The venue/organizer/date facts this route used to restate in its own
+   * header dl are the hero's now, so they arrive here as part of one payload
+   * rather than as four hand-copied fields. */
+  page: EntryPageDTO;
   text: string;
   version: number;
   updatedAt: string | null;
+  /** SSR render instant, ms. */
+  nowMs: number;
 }
 
 export interface RegulationSection {
@@ -159,13 +163,11 @@ export async function loader({ params }: { params: { slug?: string } }) {
   const payload: RegulationsLoaderData = {
     slug: page.page.slug,
     tournamentName: page.tournament.name,
-    organizerName: page.org?.name === 'Local Workspace' ? null : page.org?.name ?? null,
-    venueName: page.venue?.name ?? null,
-    venueAddress: page.venue?.address ?? null,
-    tournamentDate: page.tournament.date ?? null,
+    page,
     text: page.page.regulationsText,
     version: page.page.regulationsVersion,
     updatedAt: page.page.regulationsUpdatedAt,
+    nowMs: Date.now(),
   };
   return payload;
 }
@@ -182,30 +184,29 @@ export const meta: Route.MetaFunction = ({ data }) => {
 };
 
 export default function Regulations({ loaderData }: Route.ComponentProps) {
-  const {
-    slug,
-    tournamentName,
-    organizerName,
-    venueName,
-    venueAddress,
-    tournamentDate,
-    text,
-    version,
-    updatedAt,
-  } = loaderData;
+  const { tournamentName, page, text, version, updatedAt, nowMs } = loaderData;
   const sections = parseRegulationSections(text);
   const updatedDate = dateOfIso(updatedAt);
   const title = tournamentName ? `${tournamentName} regulations` : 'Tournament regulations';
   return (
     <PlayShell>
+      {/* Contract §11 (public P1): the reader used to carry a floating
+          "← Tournament page" link, its own eyebrow/title/facts header, and a
+          left column whose lower half restated the tab bar. All three are
+          gone: this is the Documents section of the one tournament frame,
+          reached through the Documents tab and the breadcrumb. */}
+      <TournamentFrame page={page} nowMs={nowMs} active="documents" />
       <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <a
-            href={`/e/${encodeURIComponent(slug)}`}
-            className="text-sm font-medium text-accent underline-offset-4 hover:underline"
-          >
-            ← {tournamentName ?? 'Tournament page'}
-          </a>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className={SECTION_TITLE}>Tournament regulations</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {`Version ${version}`}
+              {updatedDate ? ` · updated ${formatDateLong(updatedDate)}` : ''}
+            </p>
+          </div>
+          {/* Document actions stay with the document, inside the shared page
+              hierarchy — they are not a second navigation. */}
           <div id="regulations-actions" hidden className="flex flex-wrap gap-2" data-document-title={title}>
             <button
               type="button"
@@ -224,82 +225,37 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
           </div>
         </div>
 
-        <header className="mt-6 max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-            Organizer-published document
-          </p>
-          <h1 className={`mt-2 ${PAGE_TITLE}`}>
-            Tournament regulations
-          </h1>
-          {tournamentName ? <p className="mt-1 text-base text-foreground">{tournamentName}</p> : null}
-          <p className="mt-2 text-sm text-muted-foreground">
-            {`Version ${version}`}
-            {updatedDate ? ` · updated ${formatDateLong(updatedDate)}` : ''}
-          </p>
-          <dl className="mt-5 grid gap-3 border-y border-rule-soft py-4 text-sm sm:grid-cols-3">
-            {tournamentDate ? (
-              <div>
-                <dt className="text-xs text-muted-foreground">Tournament date</dt>
-                <dd className="mt-1 break-words font-medium text-foreground [overflow-wrap:anywhere]">{tournamentDate}</dd>
-              </div>
-            ) : null}
-            {venueName || venueAddress ? (
-              <div>
-                <dt className="text-xs text-muted-foreground">Venue</dt>
-                <dd className="mt-1 break-words font-medium text-foreground [overflow-wrap:anywhere]">
-                  {venueName}
-                  {venueAddress ? <span className="block font-normal text-muted-foreground">{venueAddress}</span> : null}
-                </dd>
-              </div>
-            ) : null}
-            {organizerName ? (
-              <div>
-                <dt className="text-xs text-muted-foreground">Organizer</dt>
-                <dd className="mt-1 break-words font-medium text-foreground [overflow-wrap:anywhere]">{organizerName}</dd>
-              </div>
-            ) : null}
-          </dl>
-        </header>
-
-        <div className="mt-8 grid gap-8 md:grid-cols-[14rem_minmax(0,1fr)] md:items-start">
-          <aside className="md:sticky md:top-4" aria-label={sections.length > 1 ? 'Document navigation' : undefined}>
-            {sections.length > 1 ? <nav className="rounded-lg border border-rule-soft bg-surface-raised p-4">
-              <h2 className="font-display text-sm font-bold tracking-tight text-foreground">On this page</h2>
-              <ol className="mt-3 grid gap-2 text-sm">
-                {sections.map((section) => (
-                  <li key={section.id}>
-                    <a href={`#${section.id}`} className="text-accent underline-offset-4 hover:underline">
-                      {section.title}
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            </nav> : null}
-            <div className="mt-4 grid gap-2 text-sm">
-              {/* V3-PE15.2: link text matches the destination's own nav label
-                  (`TabBar`'s "Overview"/"Draws"/"Players") rather than a
-                  paraphrase, so a reader does not have to learn a second name
-                  for the same page. */}
-              <a href={`/e/${encodeURIComponent(slug)}`} className="text-accent underline-offset-4 hover:underline">Overview</a>
-              <a href={`/e/${encodeURIComponent(slug)}?tab=draws`} className="text-accent underline-offset-4 hover:underline">Draws</a>
-              <a href={`/e/${encodeURIComponent(slug)}?tab=players`} className="text-accent underline-offset-4 hover:underline">Players</a>
-            </div>
-          </aside>
-
-          <article id="regulations-document" className="min-w-0 max-w-3xl" aria-labelledby="regulations-heading">
-            <h2 id="regulations-heading" className="sr-only">Regulations document</h2>
-            <div className="grid gap-7">
+        {/* The in-document outline is the document's own table of contents,
+            not a page navigation: it names only sections of the text below
+            it, and sits above the document rather than beside it. */}
+        {sections.length > 1 ? (
+          <nav aria-label="Document sections" className="mt-6 max-w-3xl rounded-lg border border-rule-soft bg-surface-raised p-4">
+            <h3 className="font-display text-sm font-bold tracking-tight text-foreground">On this page</h3>
+            <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
               {sections.map((section) => (
-                <section key={section.id} id={section.id} className="scroll-mt-6">
-                  <h3 className="font-display text-xl font-bold tracking-tight text-foreground">{section.title}</h3>
-                  {section.body ? (
-                    <p className="mt-3 whitespace-pre-line break-words text-base leading-8 text-foreground [overflow-wrap:anywhere]">{renderBody(section.body)}</p>
-                  ) : null}
-                </section>
+                <li key={section.id}>
+                  <a href={`#${section.id}`} className="text-accent underline-offset-4 hover:underline">
+                    {section.title}
+                  </a>
+                </li>
               ))}
-            </div>
-          </article>
-        </div>
+            </ol>
+          </nav>
+        ) : null}
+
+        <article id="regulations-document" className="mt-8 min-w-0 max-w-3xl" aria-labelledby="regulations-heading">
+          <h3 id="regulations-heading" className="sr-only">Regulations document</h3>
+          <div className="grid gap-7">
+            {sections.map((section) => (
+              <section key={section.id} id={section.id} className="scroll-mt-6">
+                <h4 className="font-display text-xl font-bold tracking-tight text-foreground">{section.title}</h4>
+                {section.body ? (
+                  <p className="mt-3 whitespace-pre-line break-words text-base leading-8 text-foreground [overflow-wrap:anywhere]">{renderBody(section.body)}</p>
+                ) : null}
+              </section>
+            ))}
+          </div>
+        </article>
         <noscript>
           <p className="mt-6 text-sm text-muted-foreground">Use your browser&rsquo;s print command to print or save this document. The regulations remain readable without JavaScript.</p>
         </noscript>

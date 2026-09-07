@@ -18,12 +18,14 @@ import { MatchCard } from '../components/MatchCard';
 import { PersonRef } from '../components/PersonRef';
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
+import { TournamentFrame } from '../components/TournamentFrame';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { eventCodeLabel } from '../lib/draws.types';
 import { formatDateLong } from '../lib/format';
 import type { PlayerPageDTO } from '../lib/player.types';
-import { PAGE_TITLE } from '../lib/ui';
+import { SECTION_TITLE } from '../lib/ui';
+import { sectionHref, sectionLabel } from '../lib/tournamentFrame';
 import { personRefModel } from '../../public/assets/person-ref.js';
 import type { Route } from './+types/player';
 
@@ -31,7 +33,13 @@ export interface PlayerLoaderData {
   slug: string;
   tournamentName: string | null;
   tournamentDate: string | null;
+  /** The full public projection: a tournament-scoped player page wears the
+   * SAME frame as every other tournament route (contract §11.1), and the
+   * frame is a pure function of this. */
+  page: EntryPageDTO;
   player: PlayerPageDTO;
+  /** SSR render instant, ms. */
+  nowMs: number;
 }
 
 function notFound(): Response {
@@ -53,7 +61,9 @@ export async function loader({ params }: { params: { slug?: string; personKey?: 
       slug: page.page.slug,
       tournamentName: page.tournament.name,
       tournamentDate: page.tournament.date,
+      page,
       player,
+      nowMs: Date.now(),
     };
     return payload;
   } catch (err) {
@@ -80,23 +90,35 @@ export const meta: Route.MetaFunction = ({ data }) => {
 };
 
 export default function Player({ loaderData }: Route.ComponentProps) {
-  const { slug, tournamentName, tournamentDate, player } = loaderData;
+  const { slug, tournamentDate, page, player, nowMs } = loaderData;
   const coming = player.matches.filter((match) => !match.decided);
   const played = player.matches.filter((match) => match.decided);
   const liveMatch = player.matches.find((match) => match.status === 'live');
+  const playerName = personRefModel({
+    slug,
+    identity: player.person.identity,
+    state: player.person.resolution,
+    label: player.person.label ?? 'Player',
+  }).text;
 
   return (
     <PlayShell>
+      {/* Contract §11: the tournament-scoped player page is a tournament
+          route, so it keeps the tournament hero, the tab bar with Players
+          current, and a breadcrumb back through Players. The floating
+          "← Tournament page" link it used to lead with is gone. */}
+      <TournamentFrame
+        page={page}
+        nowMs={nowMs}
+        active="players"
+        trail={[
+          { label: sectionLabel('players'), href: sectionHref(slug, 'players') },
+          { label: playerName, href: null },
+        ]}
+      />
       <section className="border-b border-rule-soft bg-surface-raised">
-        <div className="mx-auto w-full max-w-3xl px-4 py-8">
-          <a
-            href={`/e/${encodeURIComponent(slug)}`}
-            className="text-sm font-medium text-accent underline-offset-4 hover:underline"
-          >
-            ← {tournamentName ?? 'Tournament page'}
-          </a>
-
-          <h1 className={`mt-4 ${PAGE_TITLE}`}>
+        <div className="mx-auto w-full max-w-3xl px-4 py-5">
+          <h2 className={SECTION_TITLE}>
             <PersonRef
               slug={slug}
               identity={player.person.identity}
@@ -104,7 +126,7 @@ export default function Player({ loaderData }: Route.ComponentProps) {
               label={player.person.label}
               current
             />
-          </h1>
+          </h2>
           {player.club ? <p className="mt-1 text-sm text-muted-foreground">{player.club}</p> : null}
           {liveMatch ? (
             <div className="mt-4 border-s-2 border-s-status-live ps-4">

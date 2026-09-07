@@ -23,6 +23,7 @@ import { EmptyState } from "../components/EmptyState";
 import { MessagePage } from "../components/MessagePage";
 import { PlayShell } from "../components/PlayShell";
 import { SegmentedNav } from "../components/SegmentedNav";
+import { TournamentFrame } from "../components/TournamentFrame";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
 import type {
   DrawDetailDTO,
@@ -39,7 +40,8 @@ import {
   roundLabel,
 } from "../lib/draws.types";
 import type { EntryPageDTO } from "../lib/entryPage.types";
-import { FIELD_INPUT, PAGE_TITLE } from "../lib/ui";
+import { FIELD_INPUT, SECTION_TITLE } from "../lib/ui";
+import { sectionHref, sectionLabel } from "../lib/tournamentFrame";
 import { formatCalendarDay } from "../lib/format";
 import type { MatchCardData } from "../components/MatchCard";
 import { personRefModel } from "../../public/assets/person-ref.js";
@@ -63,6 +65,8 @@ export interface DrawLoaderData {
   view: "bracket" | "round" | "list" | null;
   roundIndex: number;
   playerQuery: string;
+  /** SSR render instant, ms — the frame's one clock parameter. */
+  nowMs: number;
 }
 
 /** Clamp once at the loader boundary so every view/link sees the same round. */
@@ -118,6 +122,7 @@ export async function loader({
       view,
       roundIndex,
       playerQuery: query.get("player")?.trim() ?? "",
+      nowMs: Date.now(),
     };
     return payload;
   } catch (err) {
@@ -472,13 +477,13 @@ function ConnectorColumn({
 export default function Draw({ loaderData }: Route.ComponentProps) {
   const {
     slug,
-    tournamentName,
     page,
     draw,
     activeSegment,
     view,
     roundIndex,
     playerQuery,
+    nowMs,
   } = loaderData;
   const teams = new Map(draw.teams.map((team) => [team.participantKey, team]));
   const selectedPersonId = playerQuery
@@ -617,28 +622,29 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
 
   return (
     <PlayShell>
+      {/* Contract §11: a draw detail keeps the tournament's identity, its
+          live CTA and the Draws tab highlighted; the breadcrumb ends at this
+          draw's own discipline, which replaces the floating
+          "← Tournament · Draws" link this page used to carry. */}
+      <TournamentFrame
+        page={page}
+        nowMs={nowMs}
+        active="draws"
+        trail={[
+          { label: sectionLabel("draws"), href: sectionHref(slug, "draws") },
+          { label: eventDisciplineLabel(draw.discipline), href: null },
+        ]}
+      />
       <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
-        <a
-          href={`/e/${encodeURIComponent(slug)}?tab=draws`}
-          className="text-sm font-medium text-accent underline-offset-4 hover:underline"
-        >
-          ← {tournamentName ? `${tournamentName} · Draws` : "Draws"}
-        </a>
-        <h1 className={`mt-5 ${PAGE_TITLE}`}>
+        <h2 className={SECTION_TITLE}>
           {eventDisciplineLabel(draw.discipline)}
-        </h1>
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {[
             eventCodeLabel(draw.eventCode),
             kindLabel(draw.kind),
             entryCountLabel(draw.eventCode, draw.size),
           ].join(" · ")}
-        </p>
-        {/* V3-PE13.1: stated once beside the list, from the DTO's own
-            timezone — never hardcoded — so a direct link to this draw
-            never leaves the reader guessing without returning to Overview. */}
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          All times in {page.tournament.timeZone}.
         </p>
 
         <div className="mt-5 grid gap-3">
