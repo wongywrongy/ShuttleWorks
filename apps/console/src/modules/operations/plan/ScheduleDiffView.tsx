@@ -46,9 +46,10 @@ function pluralize(n: number, singular: string, plural?: string): string {
   return `${n} ${n === 1 ? singular : plural ?? singular + 's'}`;
 }
 
-function defaultFormatSlot(slotId: number | null | undefined): string {
-  if (slotId === null || slotId === undefined) return '–';
-  return `slot ${slotId}`;
+// No caller-supplied clock formatter → there is no time to name, and a raw
+// slot index is storage, never operator copy (§3.1).
+function defaultFormatSlot(): string {
+  return '–';
 }
 
 function formatMinuteDelta(min: number): string {

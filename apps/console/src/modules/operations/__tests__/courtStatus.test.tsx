@@ -46,6 +46,7 @@ const {
 
 vi.mock('../../../hooks/useTournamentId', () => ({
   useTournamentId: () => 'test-tid',
+  useTournamentIdOrNull: () => 'test-tid',
 }));
 
 vi.mock('../../../api/client', () => ({
@@ -160,6 +161,13 @@ vi.mock('../UnifiedOpsBoard', () => ({
   UnifiedOpsBoard: () => <div data-testid="unified-ops-board" />,
 }));
 
+// P2: court queues are the DEFAULT Plan view; the board is the secondary
+// Timeline toggle. Both are stubbed so this file keeps testing WHICH surface
+// each branch renders.
+vi.mock('../plan/PlanCourtQueues', () => ({
+  PlanCourtQueues: () => <div data-testid="plan-court-queues" />,
+}));
+
 vi.mock('../UnifiedOpsList', () => ({
   UnifiedOpsList: () => <div data-testid="unified-ops-list" />,
 }));
@@ -199,12 +207,24 @@ describe('OperationsProduct — Live segment renders RunSurface', () => {
 });
 
 describe('OperationsProduct — Courts (Plan) segment renders the interactive board', () => {
-  it('renders the schedule header (ops-generate-meet), the interactive board, and no run-surface for the Courts tab', () => {
+  it('renders the schedule header (ops-generate-meet), the court queues, and no run-surface for the Courts tab', () => {
     mockTab.value = 'schedule';
     render(<OperationsProduct />);
     expect(screen.getByTestId('ops-generate-meet')).toBeInTheDocument();
-    expect(screen.getByTestId('unified-ops-board')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-court-queues')).toBeInTheDocument();
+    // The time-scaled board is behind the Timeline toggle, not the default.
+    expect(screen.queryByTestId('unified-ops-board')).toBeNull();
     expect(screen.queryByTestId('run-surface')).toBeNull();
+  });
+
+  it('the Timeline toggle swaps the queues for the time-scaled board', () => {
+    mockTab.value = 'schedule';
+    render(<OperationsProduct />);
+    fireEvent.click(screen.getByTestId('plan-view-timeline'));
+    expect(screen.getByTestId('unified-ops-board')).toBeInTheDocument();
+    expect(screen.queryByTestId('plan-court-queues')).toBeNull();
+    fireEvent.click(screen.getByTestId('plan-view-queues'));
+    expect(screen.getByTestId('plan-court-queues')).toBeInTheDocument();
   });
 });
 
@@ -219,7 +239,7 @@ describe('OperationsProduct — Plan spatial history matrix', () => {
     ['Meet', true, 'complete'],
     ['Bracket', false, 'ready'],
     ['Bracket', false, 'complete'],
-  ])('%s · %s keeps the court grid as the default', (_source, meet, phase) => {
+  ])('%s · %s keeps court queues as the default', (_source, meet, phase) => {
     mockTab.value = 'schedule';
     mockPhase.value = phase;
     mockConfig.value = meet ? { courtPolicy: 'pinned' } : null;
@@ -235,7 +255,7 @@ describe('OperationsProduct — Plan spatial history matrix', () => {
 
     render(<OperationsProduct engines={{ meet, bracket: !meet }} />);
 
-    expect(screen.getByTestId('unified-ops-board')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-court-queues')).toBeInTheDocument();
     if (phase === 'complete') {
       expect(screen.getByTestId('plan-review-note')).toHaveTextContent('Day complete · reviewing');
       expect(screen.queryByText('The day is complete: review how it ran')).toBeNull();
@@ -263,6 +283,7 @@ describe('OperationsProduct — Plan spatial history matrix', () => {
     render(<OperationsProduct engines={{ meet, bracket: !meet }} />);
 
     expect(screen.getByTestId('plan-grid-unavailable')).toHaveTextContent('no placement has been inferred');
+    expect(screen.queryByTestId('plan-court-queues')).toBeNull();
     expect(screen.queryByTestId('unified-ops-board')).toBeNull();
     expect(screen.getByTestId('unified-ops-list')).toBeInTheDocument();
     expect(screen.getByTestId('plan-review-note')).toHaveTextContent('Day complete · reviewing');
@@ -313,19 +334,18 @@ describe('OperationsProduct — Plan-side "plan ready" toggle (Task 17)', () => 
 });
 
 describe('OperationsProduct — Live-day header readiness pill (single header)', () => {
-  it('Live + planFinalized shows the "ready for live day" pill, not the pending note', () => {
+  it('Live + planFinalized shows the "ready for live day" pill', () => {
     mockTab.value = 'live';
     mockPlanFinalized.value = true;
     render(<OperationsProduct />);
     expect(screen.getByTestId('run-plan-finalized')).toBeInTheDocument();
-    expect(screen.queryByTestId('run-plan-pending')).toBeNull();
   });
 
-  it('Live + not finalized shows the "Plan not finalized" note', () => {
+  it('Live + not finalized carries NO banner: the blocker is the Overview next action (P2)', () => {
     mockTab.value = 'live';
     mockPlanFinalized.value = undefined;
     render(<OperationsProduct />);
-    expect(screen.getByTestId('run-plan-pending')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-plan-pending')).toBeNull();
     expect(screen.queryByTestId('run-plan-finalized')).toBeNull();
   });
 });

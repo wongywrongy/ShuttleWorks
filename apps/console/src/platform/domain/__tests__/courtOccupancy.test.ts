@@ -9,6 +9,7 @@ import {
   deriveCourtStates,
   deriveDisputes,
   disputedCourtCount,
+  findPlannedClashes,
   occupiedCourtCount,
   occupiesCourtNow,
   holdsCourtCommitment,
@@ -105,5 +106,47 @@ describe('courtOccupancy', () => {
     expect(states.get(1)).toBe('disputed');
     expect(states.get(2)).toBe('occupied');
     expect(deriveDisputes(matches, 'board').map((d) => d.courtId)).toEqual([1]);
+  });
+});
+
+// ── planned clashes (P2) ──────────────────────────────────────────────────
+// The Plan surface's question, and the console twin of the rule the
+// `plan-finalized` write boundary enforces: does the SCHEDULE put two matches
+// on one court at overlapping times?
+
+describe('findPlannedClashes', () => {
+  const p = (key: string, court: number | null, slot: number | null, span = 1) => ({
+    key,
+    court,
+    slot,
+    span,
+  });
+
+  it('reports one cluster per overlapping group, keyed on its earliest slot', () => {
+    expect(
+      findPlannedClashes([p('a', 1, 0, 2), p('b', 1, 1), p('c', 1, 4), p('d', 2, 0)]),
+    ).toEqual([{ courtId: 1, slotId: 0, keys: ['a', 'b'] }]);
+  });
+
+  it('back-to-back is not an overlap, and a second court is a different resource', () => {
+    expect(findPlannedClashes([p('a', 1, 0), p('b', 1, 1), p('c', 2, 0)])).toEqual([]);
+  });
+
+  it('an unplaced match cannot clash: no court, or no slot, is not a placement', () => {
+    expect(findPlannedClashes([p('a', 1, 0), p('b', null, 0), p('c', 1, null)])).toEqual([]);
+  });
+
+  it('names every claimant in a three-way pile-up, and both courts when both are bad', () => {
+    const clashes = findPlannedClashes([
+      p('a', 1, 0, 3),
+      p('b', 1, 1),
+      p('c', 1, 2),
+      p('x', 2, 5),
+      p('y', 2, 5),
+    ]);
+    expect(clashes).toEqual([
+      { courtId: 1, slotId: 0, keys: ['a', 'b', 'c'] },
+      { courtId: 2, slotId: 5, keys: ['x', 'y'] },
+    ]);
   });
 });

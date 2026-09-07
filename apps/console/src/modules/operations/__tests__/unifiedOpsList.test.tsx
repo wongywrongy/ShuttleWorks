@@ -67,18 +67,10 @@ describe('UnifiedOpsList', () => {
     expect(screen.queryByTestId('ops-row-location')).not.toBeInTheDocument();
   });
 
-  it('removes invariant finished markers but keeps markers when a section varies', () => {
-    const { unmount } = render(
-      <UnifiedOpsList
-        blocks={[
-          blk({ source: 'bracket', id: 'done-1', done: true, status: 'finished' }),
-          blk({ source: 'bracket', id: 'done-2', done: true, status: 'finished' }),
-        ]}
-      />,
-    );
-    expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(2);
-    unmount();
-
+  // P6: the section band already names the state and section membership is
+  // derived from the SAME predicates, so a per-row state word could only ever
+  // repeat the heading above it.
+  it('carries no per-row state word — the section band is the only place state is said', () => {
     render(
       <UnifiedOpsList
         blocks={[
@@ -87,7 +79,20 @@ describe('UnifiedOpsList', () => {
         ]}
       />,
     );
-    expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(2);
+    expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(0);
+  });
+
+  // P6: a slot index is storage, never operator copy — the location column
+  // names the court in words and nothing else.
+  it('names the court in words and never prints a slot index', () => {
+    render(
+      <UnifiedOpsList
+        blocks={[blk({ source: 'meet', id: 'm1', court: 3, slot: 152, status: 'scheduled' })]}
+      />,
+    );
+    const location = screen.getByTestId('ops-row-location');
+    expect(location).toHaveTextContent('Court 3');
+    expect(location).not.toHaveTextContent(/S152|C3/);
   });
 
   // V3-OC18.1: a filter over a category that never varies is a control with

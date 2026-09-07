@@ -1008,6 +1008,9 @@ export interface WorkspaceSignalsDTO {
   nextUp?: NextMatchDTO[];
   /** Lifecycle phase derived from real play state (2026-07-09 audit):
    *  setup → ready → live → complete. Optional for older payloads. */
+  /** SP-G1 Plan→Run handoff: true once the operator has marked the plan
+   *  ready. False on older payloads, which is also the honest default. */
+  planFinalized?: boolean;
   /** E4: the entries desk in numbers. Absent where there is no entry page,
    *  which is every local-mode workspace (invariant I3). Counts only — this
    *  rides on a summary the Hub renders for every workspace at once, and a
@@ -1103,6 +1106,41 @@ export interface UserDTO {
 export interface DisplayTokenDTO {
   token: string;
   url: string;
+}
+
+/**
+ * Venue-board settings — what the board LOOKS like and which optional
+ * content it carries. Stored on its own column (``tournaments.board_settings``),
+ * NOT in the state blob, and read by every board: meet, bracket and hybrid.
+ * That is why `showNext` and the branding are here rather than as more
+ * `tvXxx` fields on `TournamentConfig` — the bracket board never reads the
+ * meet config, and "Show next" has to mean the same thing on every board.
+ *
+ * `showNext` defaults to **false** (match-card contract §4.4): the board's
+ * job is what is happening on a court now; a preview is opt-in.
+ */
+export interface BoardSettingsDTO {
+  /** Overrides the tournament name in the board header when set. */
+  title: string | null;
+  /** Image source for the board mark. Either an ordinary URL or an inline
+   *  `data:` URI — the latter is what makes branding survive a venue with
+   *  no internet and the app's own `img-src 'self' data: blob:` CSP. */
+  logoUrl: string | null;
+  bannerUrl: string | null;
+  /** Hex `#RRGGBB`; falls back to the board's default accent when null. */
+  accent: string | null;
+  showNext: boolean;
+  showScores: boolean;
+}
+
+/** The public board's own summary projection (`/display/{token}/summary`).
+ *  `timeZone` is the workspace's IANA venue zone — null when unavailable,
+ *  and the board then omits its clock rather than inventing one. */
+export interface DisplaySummaryDTO {
+  kind: string;
+  name: string | null;
+  timeZone: string | null;
+  board: BoardSettingsDTO;
 }
 
 /** The stored entry page as the operator sees it (SP-P7 adds the

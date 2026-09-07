@@ -329,9 +329,10 @@ export function UnifiedOpsBoard({
       renderBlock={renderBlock}
       renderCell={renderCell}
       currentSlot={currentSlot}
-      renderSlotLabel={(slotId, i) =>
-        i % 2 === 0 ? (formatSlot ? formatSlot(slotId) : `S${slotId}`) : ''
-      }
+      /* Wall-clock only: a raw slot index is storage, never operator copy
+         (state-and-formatting contract §3.1). Without a configured clock the
+         ruler carries no label rather than an internal identifier. */
+      renderSlotLabel={(slotId, i) => (i % 2 === 0 ? formatSlot?.(slotId) ?? '' : '')}
     />
   );
 
@@ -392,13 +393,12 @@ export function UnifiedOpsBoard({
           {hoverCell && validation ? (
             validation.feasible ? (
               <span className="inline-flex items-center gap-1 text-status-done">
-                {/* V3-OC18.1 (minimal fix): the raw slot index ("S152") is
-                 * internal-engine jargon the operator cannot read as a time.
-                 * `formatSlot` renders the same wall-clock the timeline
-                 * ruler above already shows; falls back to the slot index
-                 * only when no formatter was supplied (never in production). */}
-                <Check className="h-3.5 w-3.5" /> Feasible: drop to pin at Court {hoverCell.courtId} ·{' '}
-                {formatSlot ? formatSlot(hoverCell.slotId) : `S${hoverCell.slotId}`}
+                {/* V3-OC18.1: the raw slot index ("S152") is internal-engine
+                 * jargon the operator cannot read as a time. `formatSlot`
+                 * renders the same wall-clock the timeline ruler shows; with
+                 * no configured clock the cell is named by its court alone. */}
+                <Check className="h-3.5 w-3.5" /> Feasible: drop to pin at Court {hoverCell.courtId}
+                {formatSlot?.(hoverCell.slotId) ? ` · ${formatSlot(hoverCell.slotId)}` : ''}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-destructive">

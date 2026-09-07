@@ -67,7 +67,7 @@ describe('court dispute — accessibility', () => {
 
     // Every resolution action is a real, enabled <button> — natively
     // focusable and keyboard-activatable (Enter/Space), no click-only div.
-    const buttons = screen.getAllByRole('button', { name: /Keep this/ });
+    const buttons = screen.getAllByRole('button', { name: /Keep this one on court/ });
     expect(buttons.length).toBeGreaterThan(0);
     for (const button of buttons) {
       expect(button.tagName).toBe('BUTTON');

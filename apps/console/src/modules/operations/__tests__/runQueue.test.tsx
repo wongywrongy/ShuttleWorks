@@ -101,7 +101,7 @@ describe('RunQueue — readiness is legible on the row', () => {
     mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', identity: identityFixture('MS1') }),
     mkMatch({
       key: 'bracket:pu9', id: 'pu9', source: 'bracket', identity: identityFixture('SF1'),
-      eligible: false, sideA: 'TBD', sideB: 'TBD',
+      eligible: false, sideA: 'To be decided', sideB: 'To be decided',
     }),
     mkMatch({ key: 'meet:m7', id: 'm7', source: 'meet', identity: identityFixture('MS7'), status: 'called' }),
   ];

@@ -181,7 +181,7 @@ describe('computeAutoPull (pure helper)', () => {
     expect(computeAutoPull(m.key, [m], [lane], [], 0)).toBeNull();
   });
 
-  it('returns null when queue head is ineligible (TBD sides)', () => {
+  it('returns null when queue head is ineligible (unresolved sides)', () => {
     const m = mkMatch({ key: 'meet:m1', id: 'm1', source: 'meet', court: 1, status: 'playing' });
     const lane = mkLane(1, m, 1);
     // eligible=false → nextEligible skips it
@@ -444,8 +444,8 @@ describe('RunSurface — auto-pull after record empties a court', () => {
 });
 
 describe('RunSurface — auto-pull skips ineligible queue head', () => {
-  it('does NOT fire assign when the only queue match is TBD-sided (ineligible)', () => {
-    // m1: playing on court 1; m2: TBD sides → eligible=false → nextEligible returns undefined
+  it('does NOT fire assign when the only queue match has unresolved sides (ineligible)', () => {
+    // m1: playing on court 1; m2: unresolved sides → eligible=false → nextEligible returns undefined
     const blocks: OpsBlock[] = [
       mkBlock({
         id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MS1'),
@@ -454,7 +454,8 @@ describe('RunSurface — auto-pull skips ineligible queue head', () => {
       }),
       mkBlock({
         id: 'm2', source: 'meet', key: 'meet:m2', identity: identityFixture('MS2'),
-        status: 'scheduled', sideA: 'TBD', sideB: 'TBD',
+        status: 'scheduled', sideA: 'To be decided', sideB: 'To be decided',
+        sidesUnresolved: true,
         court: undefined, slot: undefined,
       }),
     ];
@@ -816,10 +817,12 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Court disputes — actionable assignments, not banners (contract §4.2, D18,
-// V3-OC19.1). Two meet matches marked `started` on the same court derive a
-// dispute; the block names both claims and offers one button per resolution
-// action, distinct from the rejected-command toast strip above.
+// Court disputes — ONE resolution card, one row per involved match, ONE action
+// per row (P2; contract §4.2, D18, V3-OC19.1). Two meet matches marked
+// `started` on the same court derive a dispute; the card names both claims and
+// offers the single action that resolves it, distinct from the
+// rejected-command strip above. A bracket claim gets the action its own engine
+// supports rather than a disabled button and an instruction to go elsewhere.
 // ═════════════════════════════════════════════════════════════════════════════
 
 function makeDisputeBlocks(): OpsBlock[] {
@@ -853,16 +856,19 @@ describe('RunSurface — court disputes are actionable assignments', () => {
     expect(block).toHaveTextContent('MS1');
     expect(block).toHaveTextContent('MS2');
 
-    // One button per resolution action, per claim, all real <button> elements
-    // (focusable / keyboard-operable by default, unlike a banner).
-    const buttons = screen.getAllByRole('button', { name: /Keep this/ });
-    expect(buttons.length).toBeGreaterThanOrEqual(3);
+    // EXACTLY one action per involved match — two claims, two buttons, all
+    // real <button> elements (focusable / keyboard-operable by default).
+    const buttons = screen.getAllByRole('button', { name: /Keep this one on court/ });
+    expect(buttons).toHaveLength(2);
 
     // The disputed court is a separate block from the rejected-command strip.
     expect(screen.queryByTestId('run-conflicts')).toBeNull();
+    // ...and it is the ONLY zone describing this dispute: the court card grid
+    // no longer carries a red conflict variant (P2).
+    expect(screen.queryByTestId('run-court-conflict-1')).toBeNull();
   });
 
-  it('submits resolve_court with the chosen and displaced match keys', async () => {
+  it('submits resolve_court keeping the chosen match and clearing the rest', async () => {
     mockMeetSubmit.mockResolvedValue({ commandId: 'cmd-1', result: { kind: 'ok', matchStatus: 'started', matchVersion: 2, courtId: 1, timeSlot: 0 } });
     render(
       <RunSurface
@@ -875,7 +881,7 @@ describe('RunSurface — court disputes are actionable assignments', () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId('dispute-keep-move-meet:a'));
+      fireEvent.click(screen.getByTestId('dispute-keep-meet:a'));
     });
 
     expect(mockMeetSubmit).toHaveBeenCalledWith(
@@ -884,12 +890,12 @@ describe('RunSurface — court disputes are actionable assignments', () => {
       expect.objectContaining({
         chosenMatchKey: 'a',
         displacedMatchKeys: ['b'],
-        action: 'keep_and_move',
+        action: 'keep_and_unassign',
       }),
     );
   });
 
-  it('disables resolution and explains when a bracket match is involved', () => {
+  it('offers the working per-engine action when a bracket match is involved', () => {
     const blocks: OpsBlock[] = [
       mkBlock({
         id: 'a', source: 'meet', key: 'meet:a', identity: identityFixture('MS1'),
@@ -911,8 +917,13 @@ describe('RunSurface — court disputes are actionable assignments', () => {
     );
 
     const block = screen.getByTestId('run-dispute-court-1');
-    expect(block).toHaveTextContent('Bracket engine');
-    const buttons = screen.getAllByRole('button', { name: /Keep this/ });
-    for (const button of buttons) expect(button).toBeDisabled();
+    // No disabled control and no "resolve it from the Bracket engine": the
+    // `resolve_court` command only mutates meet rows (ADR 0006), so the card
+    // offers the action that DOES work for both sources.
+    expect(block).not.toHaveTextContent('Bracket engine');
+    expect(screen.queryByTestId('dispute-keep-meet:a')).toBeNull();
+    const buttons = screen.getAllByRole('button', { name: 'Take off court' });
+    expect(buttons).toHaveLength(2);
+    for (const button of buttons) expect(button).not.toBeDisabled();
   });
 });

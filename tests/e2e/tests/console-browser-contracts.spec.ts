@@ -57,10 +57,16 @@ test.describe("canonical console browser contracts", () => {
     expect(await fatalHarnessEvents(page)).toEqual([]);
   });
 
-  test("Taipei Plan is a court-by-time grid and its public display is projected", async ({
+  test("Taipei Plan is court queues, its Timeline toggle is the grid, and its public display is projected", async ({
     page,
   }) => {
     await page.goto(`/tournaments/${TAIPEI_TID}/operations/plan`);
+    // P2: court queues are the default; the court-by-time grid is the
+    // secondary Timeline view, which this test then opens.
+    await expect(page.getByTestId("plan-court-queues")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByTestId("plan-view-timeline").click();
     await expect(page.getByTestId("unified-ops-board")).toBeVisible({
       timeout: 15_000,
     });
@@ -84,13 +90,18 @@ test.describe("canonical console browser contracts", () => {
   test("Korea is upcoming, fully configured, and has no playing court", async ({
     page,
   }) => {
-    await page.goto(`/tournaments/${KOREA_TID}/setup`);
-    await expect(
-      page.getByRole("region", { name: "Readiness checklist" }),
-    ).toBeVisible({
+    // The readiness checklist lives on Overview, once. The consolidated
+    // route is canonical; retired section aliases are not part of the flow.
+    await page.goto(`/tournaments/${KOREA_TID}/overview`);
+    await expect(page.getByTestId("overview-ready-summary")).toContainText(
+      /setup complete/i,
+      { timeout: 15_000 },
+    );
+    await expect(page.getByTestId("overview-checklist")).toHaveCount(0);
+    await page.goto(`/tournaments/${KOREA_TID}/setup/details`);
+    await expect(page.getByLabel("Tournament name")).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText(/overall:\s*ready/i)).toBeVisible();
     expect(await fatalHarnessEvents(page)).toEqual([]);
 
     await page.goto(`/tournaments/${KOREA_TID}/operations/live`);
@@ -100,6 +111,28 @@ test.describe("canonical console browser contracts", () => {
     await expect(page.getByTestId("run-court-grid")).not.toContainText(
       /\blive\b/i,
     );
+    expect(await fatalHarnessEvents(page)).toEqual([]);
+  });
+
+  test("retired workspace URLs are not alternate product surfaces", async ({ page }) => {
+    for (const retiredPath of [
+      "competition/draws",
+      "publish/links",
+      "bracket-draws",
+      "nonsense/overview",
+    ]) {
+      await page.goto(`/tournaments/${KOREA_TID}/${retiredPath}`);
+      await expect(page.getByText("Page not found", { exact: true })).toBeVisible();
+      await expect(page.getByTestId("workspace-not-found")).toBeVisible();
+      await expect(page).toHaveURL(
+        new RegExp(`/tournaments/${KOREA_TID}/${retiredPath}$`),
+      );
+    }
+    for (const retiredPath of ["/tracking", "/live-ops"]) {
+      await page.goto(retiredPath);
+      await expect(page.getByRole("heading", { name: "Page not found", level: 1 })).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`${retiredPath.replace("/", "\\/")}$`));
+    }
     expect(await fatalHarnessEvents(page)).toEqual([]);
   });
 
@@ -119,14 +152,13 @@ test.describe("canonical console browser contracts", () => {
     expect(await fatalHarnessEvents(page)).toEqual([]);
   });
 
-  test("audit: publication is staged and old relay routes reach their owner", async ({ page }, testInfo) => {
+  test("audit: publication is staged on its canonical owners", async ({ page }, testInfo) => {
     const created = await page.request.post('/api/tournaments', { headers: { 'X-ShuttleWorks-CSRF': '1' }, data: { name: 'Publication review' } });
     expect(created.ok()).toBe(true);
     const publicationTid = (await created.json()).id;
     const configured = await page.request.put(`/api/tournaments/${publicationTid}/entry-page`, { headers: { 'X-ShuttleWorks-CSRF': '1' }, data: { slug: 'publication-review', isOpen: true } });
     expect(configured.ok()).toBe(true);
-    await page.goto(`/tournaments/${publicationTid}/publish/draws-results`);
-    await expect(page).toHaveURL(new RegExp(`/publish/site$`));
+    await page.goto(`/tournaments/${publicationTid}/setup/public-site`);
     const publication = page.getByTestId('sharing-publication');
     await expect(publication).toBeVisible();
     const writes: string[] = [];
@@ -151,14 +183,18 @@ test.describe("canonical console browser contracts", () => {
     await page.screenshot({ path: testInfo.outputPath('publish-site.png'), fullPage: true });
     await page.reload();
     await expect(publication.getByRole('combobox', { name: 'Public audience' })).toContainText('Unlisted');
-    await page.goto(`/tournaments/${TAIPEI_TID}/publish/links`);
-    await expect(page).toHaveURL(new RegExp(`/publish/displays$`));
-    await expect(page.getByLabel('Venue board link', { exact: true })).toBeVisible();
+    await page.goto(`/tournaments/${TAIPEI_TID}/display/board`);
+    // P4 replaced the raw mono `?token=…` field with a readable label
+    // ("Venue board · <host>"); the real URL stays on Copy / Open fullscreen
+    // and on `title`. The contract here is that the moved route's owner shows
+    // the venue-board link control, not what the old field was called.
+    await expect(page.getByTestId('display-link-label')).toBeVisible();
+    await expect(page.getByTestId('display-link-label')).toContainText('Venue board');
     expect(await fatalHarnessEvents(page)).toEqual([]);
   });
 
   test("audit: a checked-out tournament keeps publication drafts after refusal", async ({ page }) => {
-    await page.goto(`/tournaments/${TAIPEI_TID}/publish/site`);
+    await page.goto(`/tournaments/${TAIPEI_TID}/setup/public-site`);
     const publication = page.getByTestId('sharing-publication');
     await expect(publication).toBeVisible();
     await publication.getByRole('combobox', { name: 'Public audience' }).click();

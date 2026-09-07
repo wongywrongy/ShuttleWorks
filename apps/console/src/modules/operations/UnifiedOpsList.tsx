@@ -2,7 +2,7 @@
  * UnifiedOpsList — the both-engines working queue beneath the board.
  *
  * The same dense, sectioned design as the single-engine list (Up next /
- * Waiting / Finished; status dot · id · court·slot · sides · action), but
+ * Waiting / Finished; id · court · sides · action), but
  * rows interleave meet + bracket, each tagged by source and carrying its
  * engine's real actions. The board above is the spatial map; this is where
  * the operator runs the day.
@@ -137,15 +137,10 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
     return { onCourt: current, upNext: up, waiting: wait, finished: fin };
   }, [visible]);
 
-  const row = (b: OpsBlock, showLocation: boolean, showStatusMarker: boolean) => {
-    // Shared match-state vocabulary (contract §2) — no screen-local synonym.
-    const statusLabel = b.done
-      ? STATE_WORD.done
-      : b.started
-        ? STATE_WORD.onCourt
-        : b.court != null
-          ? STATE_WORD.called
-          : STATE_WORD.pending;
+  // The section band above every row already names the state (On court / Up
+  // next / Pending / Finished), and membership is derived from the SAME
+  // predicates, so a per-row state word could only ever repeat it (P6).
+  const row = (b: OpsBlock, showLocation: boolean) => {
     const isSelected = selectedKey === b.key;
     return (
       <li
@@ -164,28 +159,21 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
           onSelect ? `cursor-pointer ${SELECTABLE_ROW_FOCUS}` : ''
         } ${isSelected ? 'bg-muted/40' : ''}`}
       >
-        {showStatusMarker ? (
-          <span
-            data-testid="ops-status-marker"
-            className="flex-shrink-0 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground"
-          >
-            {statusLabel}
-          </span>
-        ) : null}
         {/* Same match-code grammar as the Run queue rows. */}
         <span className="w-20 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">{formatMatchIdentity(b.identity, b.id)}</span>
         {/* SP-OPCON-1 SWP-6: the section owns this column. If no row in a
             section has a court (the 155-row completed bracket capture), the
             column does not mount at all rather than becoming empty ballast. */}
         {showLocation ? (
-          <span data-testid="ops-row-location" className="w-24 flex-shrink-0 sw-num text-2xs text-muted-foreground tabular-nums">
-            {b.court != null ? `C${b.court} · S${b.slot}` : ''}
+          <span data-testid="ops-row-location" className="w-24 flex-shrink-0 text-xs text-muted-foreground tabular-nums">
+            {b.court != null ? `Court ${b.court}` : ''}
           </span>
         ) : null}
+        {/* One side per line, no joiner — the shared match grammar (§3.2);
+            "vs" belongs to the inspector alone. */}
         <span className="min-w-[10rem] flex-1 break-words text-2sm">
-          {b.sideA}
-          <span className="px-1.5 text-xs uppercase tracking-[0.06em] text-muted-foreground">vs</span>
-          {b.sideB}
+          <span className="block">{b.sideA}</span>
+          <span className="block">{b.sideB}</span>
         </span>
         {onAction ? (
           <span className="flex flex-shrink-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -199,15 +187,12 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
   const section = (title: string, items: OpsBlock[]) => {
     if (items.length === 0) return null;
     const showLocation = items.some((candidate) => candidate.court != null);
-    // State must remain readable when color is removed, even when a section
-    // happens to contain only one state (for example an all-called Up next).
-    const showStatusMarker = true;
     return (
       <>
         <li className={`border-y border-border bg-muted/40 px-4 py-1 ${EYEBROW_CLASS} text-muted-foreground`}>
           {title} · {items.length}
         </li>
-        {items.map((item) => row(item, showLocation, showStatusMarker))}
+        {items.map((item) => row(item, showLocation))}
       </>
     );
   };

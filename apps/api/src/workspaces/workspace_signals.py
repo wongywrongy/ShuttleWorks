@@ -198,6 +198,10 @@ class WorkspaceSignalsDTO(BaseModel):
     #   live     — at least one match has been called/started/finished
     #   complete — every engine with matches has fully resolved them
     phase: str = "setup"
+    # SP-G1's Plan -> Run handoff flag, surfaced so the Overview can carry
+    # "Plan not finalized" as the workspace's next action (P2). A persisted
+    # boolean on the state blob; no derivation here.
+    planFinalized: bool = False
     # E4: the entries desk in numbers, or absent where there is no entry page.
     entries: Optional[EntriesMetricsDTO] = None
 
@@ -871,5 +875,6 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
         # play-state derivation is untouched and is what answers once the
         # desk is clear.
         phase=_entries_phase(counts.entries) or _derive_phase(data_blob, counts),
+        planFinalized=bool(data_blob.get("planFinalized")),
         entries=_entries_metrics(counts.entries),
     )

@@ -40,7 +40,9 @@ describe('PlanCallList', () => {
       'plan-call-row-meet:a-first',
       'plan-call-row-meet:late',
     ]);
-    expect(rows[0]).toHaveTextContent('Scheduled');
+    // P2: the routine "Scheduled" stamp is gone — every row in a call list is
+    // scheduled, so printing it on each one said nothing.
+    expect(rows[0]).not.toHaveTextContent('Scheduled');
     // Shared match-state vocabulary (contract §2): a `started` match reads
     // "On court", never the deleted screen-local "Playing".
     expect(rows[2]).toHaveTextContent('On court');

@@ -20,7 +20,8 @@ export function SuggestionPreview({ proposalId, config }: Props) {
 
   const formatSlot = (slotId: number | null | undefined): string => {
     if (slotId == null) return '–';
-    if (!config) return `slot ${slotId}`;
+    // A raw slot index is storage, never operator copy (§3.1).
+    if (!config) return '–';
     return formatSlotTime(slotId, config);
   };
 

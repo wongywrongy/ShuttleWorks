@@ -23,8 +23,11 @@ import { STATE_WORD } from '../../../lib/stateWords';
 // Shared match-state vocabulary (contract §2) — `started` reads as
 // "On court" everywhere in the console; the literal 'Playing' this used to
 // carry (D5) is deleted, not redirected to a second constant.
-const PLAN_STATE_LABEL: Record<OpsBlock['status'], string> = {
-  scheduled: STATE_WORD.scheduled,
+//
+// `scheduled` is deliberately absent (P2): every row in a call list is
+// scheduled, so a routine "Scheduled" stamp on each of them is noise. Only
+// the states that differ from the lane's own meaning are named.
+const PLAN_STATE_LABEL: Partial<Record<OpsBlock['status'], string>> = {
   called: STATE_WORD.called,
   started: STATE_WORD.onCourt,
   finished: STATE_WORD.done,
@@ -68,7 +71,9 @@ export function PlanCallList({
   const endsAt = useMemo(() => {
     if (ordered.length === 0) return null;
     const last = Math.max(...ordered.map((b) => (b.slot ?? 0) + (b.span ?? 1)));
-    return formatSlot(last);
+    // '' when the workspace has no configured clock — the band then makes no
+    // claim about the finish rather than printing a slot index.
+    return formatSlot(last) || null;
   }, [ordered, formatSlot]);
 
   if (ordered.length === 0) {
@@ -120,21 +125,24 @@ export function PlanCallList({
                 <span className="w-16 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">
                   {formatMatchIdentity(b.identity, b.id)}
                 </span>
+                {/* One side per line, no joiner — the shared match grammar
+                    (§3.2); "vs" belongs to the inspector alone. */}
                 <span className="min-w-[10rem] flex-1 break-words text-sm">
-                  {b.sideA}
-                  <span className="px-1.5 text-xs uppercase tracking-[0.06em] text-muted-foreground">
-                    v
-                  </span>
-                  {b.sideB}
+                  <span className="block">{b.sideA}</span>
+                  <span className="block">{b.sideB}</span>
                 </span>
                 {/* Approximate start — honest tilde: queue mode promises the
                     ORDER; the clock time is the solve's estimate. */}
-                <span className="flex-shrink-0 text-2xs sw-num text-muted-foreground">
-                  ~{formatSlot(b.slot ?? 0)}
-                </span>
-                <span className="flex-shrink-0 text-xs text-muted-foreground">
-                  {PLAN_STATE_LABEL[b.status]}
-                </span>
+                {formatSlot(b.slot ?? 0) ? (
+                  <span className="flex-shrink-0 text-2xs sw-num text-muted-foreground">
+                    ~{formatSlot(b.slot ?? 0)}
+                  </span>
+                ) : null}
+                {PLAN_STATE_LABEL[b.status] ? (
+                  <span className="flex-shrink-0 text-xs text-muted-foreground">
+                    {PLAN_STATE_LABEL[b.status]}
+                  </span>
+                ) : null}
               </div>
             </li>
           );

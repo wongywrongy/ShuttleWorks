@@ -16,7 +16,6 @@
  * SP-CONSOLE-4 routing flip; actions render per engine.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import { BracketApiProvider, useBracketApi } from '../../api/bracketClient';
 import { useBracket } from '../../hooks/useBracket';
@@ -34,6 +33,7 @@ import { BracketScheduleModal } from '../bracket/BracketScheduleModal';
 import { AdvisoryBanner } from '../../components/status/AdvisoryBanner';
 import { meetToOpsBlocks, bracketToOpsBlocks } from './opsBlock';
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
+import { PlanCourtQueues } from './plan/PlanCourtQueues';
 import { UnifiedOpsList } from './UnifiedOpsList';
 import { DetailDock, MatchInspector } from '../../components/control-plane';
 import { RunSurface } from './run/RunSurface';
@@ -51,11 +51,55 @@ import { dialogForAdvisory, type PlanDialog } from './plan/planDialogs';
 import { opsPlanMode, showPlanReadinessChips } from './lifecycleMatrix';
 import { SyncHealthIndicator } from '../../components/SyncHealthIndicator';
 import { resolvePlanView } from './plan/planView';
+import { findPlannedClashes } from '../../platform/domain/courtOccupancy';
+import { ActiveChoice } from '../../components/ActiveChoice';
 import { STATE_WORD } from '../../lib/stateWords';
 
 export interface OperationsEngines {
   meet: boolean;
   bracket: boolean;
+}
+
+/** Plan's two ways of looking at the same solved plan (P2). */
+type PlanViewMode = 'queues' | 'timeline';
+
+/**
+ * Court queues / Timeline. Not a setting and not a mode with consequences —
+ * both views read the same assignments and both move a match through the same
+ * validated commands. The zoom controls belong to Timeline alone.
+ */
+function PlanViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: PlanViewMode;
+  onChange: (mode: PlanViewMode) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Plan view"
+      data-testid="plan-view-toggle"
+      className="flex items-center gap-1 border-b border-border bg-muted/40 px-3 py-1 text-xs"
+    >
+      {([
+        ['queues', 'Court queues'],
+        ['timeline', 'Timeline'],
+      ] as const).map(([value, label]) => (
+        <ActiveChoice
+          key={value}
+          active={mode === value}
+          geometry="segment"
+          semantics="radio"
+          onClick={() => onChange(value)}
+          data-testid={`plan-view-${value}`}
+          className="px-2 py-0.5"
+        >
+          {label}
+        </ActiveChoice>
+      ))}
+    </div>
+  );
 }
 
 export function OperationsProduct({ engines }: { engines?: OperationsEngines }) {
@@ -73,11 +117,6 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
   const phase = useUiStore((s) => s.activeTournamentPhase);
   const isLive = isLiveSegment(activeTab);
   const review = opsPlanMode(phase) === 'plan-review';
-  // The Plan segment paired with whichever Live segment is active — the two
-  // Operations segments come in per-engine pairs (`live`/`schedule`,
-  // `bracket-live`/`bracket-schedule`), so the SIG-2 blocker routes back to
-  // the Plan the operator actually came from.
-  const planSegment = activeTab === 'bracket-live' ? 'bracket-schedule' : 'schedule';
 
   // Meet live-day seams for the Run surface (C4) — mounting useMeetRunOps
   // ALSO keeps the meet match-states converged with the backend while any
@@ -160,8 +199,11 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
 
   // Wall-clock label for a slot — operators think in time ("9:15"), not slot
   // indices ("S8"). Shared by BOTH boards so the time axis reads identically.
+  // Wall-clock only. A raw slot index is storage, never operator copy
+  // (state-and-formatting contract §3.1) — without a configured clock the
+  // time is simply omitted.
   const formatSlot = useCallback(
-    (s: number) => (config ? slotToTime(s, config) : `S${s}`),
+    (s: number) => (config ? slotToTime(s, config) : ''),
     [config],
   );
 
@@ -175,6 +217,16 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
     const fromBlocks = blocks.reduce((m, b) => Math.max(m, b.court ?? 0), 0);
     return Math.max(1, fromCfg, fromBlocks);
   }, [config?.courtCount, data?.courts, blocks]);
+
+  // ---- Plan view mode (P2) — court queues by default, timeline behind the
+  // secondary toggle. Session-local: it is a way of looking at the same plan,
+  // not a workspace setting.
+  const [planViewMode, setPlanViewMode] = useState<PlanViewMode>('queues');
+
+  // Courts the PLAN double-books. `Mark plan ready` refuses while any exist,
+  // and so does the write boundary (`POST /plan-finalized`), which is what
+  // holds when two desks submit against different views of the plan.
+  const plannedClashes = useMemo(() => findPlannedClashes(blocks), [blocks]);
 
   // ---- planFinalized — Plan-side "plan ready" toggle (Task 17) ----
   const planFinalized = useTournamentStore((s) => s.planFinalized);
@@ -244,6 +296,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
             schedulableCount={schedulableCount}
             blockedCount={blockedCount}
             onOpenScheduleNext={() => setScheduling(true)}
+            doubleBookedCourts={[...new Set(plannedClashes.map((c) => c.courtId))].sort((a, b) => a - b)}
             planFinalized={!!planFinalized}
             planFinalizePending={planFinalizeAction.pending}
             onTogglePlanFinalized={() => void planFinalizeAction.run()}
@@ -258,34 +311,12 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
               error={meetOps.syncError}
               terminal={meetOps.pollTerminal}
             />
-            {!showPlanReadinessChips(phase) ? null : planFinalized ? (
+            {!showPlanReadinessChips(phase) || !planFinalized ? null : (
               <span
                 data-testid="run-plan-finalized"
                 className="inline-flex items-center rounded-full border border-status-done/30 bg-status-done/10 px-2.5 py-0.5 text-xs font-medium text-status-done"
               >
                 Plan finalized · ready for live day
-              </span>
-            ) : (
-              /* SIG-2: this is the blocker that stops the day running — until
-                 the plan is marked ready nothing is late, the board is not
-                 "running", and the floor has no authority behind it. It used
-                 to be the quietest thing on the screen: muted grey text in the
-                 top-right, while the RESOLVED state above it got a full tinted
-                 pill. Weight follows consequence now, and it carries the route
-                 to the existing Plan control rather than inventing a second
-                 way to finalize. */
-              <span
-                data-testid="run-plan-pending"
-                className="inline-flex items-center gap-2 rounded-full border border-status-warning/40 bg-status-warning/10 px-2.5 py-0.5 text-xs font-medium text-status-warning"
-              >
-                Plan not finalized
-                <Link
-                  to={`/tournaments/${tid}/${planSegment}`}
-                  data-testid="run-plan-pending-link"
-                  className="font-semibold underline underline-offset-2 hover:no-underline"
-                >
-                  Open Plan
-                </Link>
               </span>
             )}
           </div>
@@ -391,16 +422,32 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                             remain in the list below.
                           </div>
                         ) : null}
-                        <UnifiedOpsBoard
-                          blocks={blocks}
-                          courtCount={courtCount}
-                          currentSlot={currentSlot}
-                          selectedKey={selectedKey}
-                          onSelect={setSelectedKey}
-                          meet={{ config, matches, schedule }}
-                          onBracketData={setData}
-                          formatSlot={formatSlot}
-                        />
+                        {/* P2: court queues are the DEFAULT Plan view; the
+                            time-scaled board is the secondary Timeline
+                            toggle, which owns the zoom controls. */}
+                        <PlanViewToggle mode={planViewMode} onChange={setPlanViewMode} />
+                        {planViewMode === 'timeline' ? (
+                          <UnifiedOpsBoard
+                            blocks={blocks}
+                            courtCount={courtCount}
+                            currentSlot={currentSlot}
+                            selectedKey={selectedKey}
+                            onSelect={setSelectedKey}
+                            meet={{ config, matches, schedule }}
+                            onBracketData={setData}
+                            formatSlot={formatSlot}
+                          />
+                        ) : (
+                          <PlanCourtQueues
+                            blocks={blocks}
+                            courtCount={courtCount}
+                            selectedKey={selectedKey}
+                            onSelect={setSelectedKey}
+                            meet={{ config, matches, schedule }}
+                            onBracketData={setData}
+                            formatSlot={formatSlot}
+                          />
+                        )}
                       </>
                     )}
                   </>
@@ -431,15 +478,16 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
                       sideA: selectedBlock.sideA,
                       sideB: selectedBlock.sideB,
                       assignment: {
-                        court: selectedBlock.court != null ? `C${selectedBlock.court}` : null,
-                        planned: selectedBlock.slot != null ? formatSlot(selectedBlock.slot) : null,
+                        court: selectedBlock.court ?? null,
+                        planned:
+                          selectedBlock.slot != null ? formatSlot(selectedBlock.slot) || null : null,
                         actualStart:
                           selectedBlock.actualStartSlot != null
-                            ? formatSlot(selectedBlock.actualStartSlot)
+                            ? formatSlot(selectedBlock.actualStartSlot) || null
                             : null,
                         actualEnd:
                           selectedBlock.actualEndSlot != null
-                            ? formatSlot(selectedBlock.actualEndSlot)
+                            ? formatSlot(selectedBlock.actualEndSlot) || null
                             : null,
                       },
                       result: selectedBlock.score

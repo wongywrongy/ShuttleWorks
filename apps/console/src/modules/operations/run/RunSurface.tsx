@@ -12,7 +12,9 @@
  * Task 16 will wire `OperationsProduct` to pass blocks/bracketData/etc down.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useBracketApi } from '../../../api/bracketClient';
+import { useTournamentIdOrNull } from '../../../hooks/useTournamentId';
 import { useCommandQueue } from '../../../hooks/useCommandQueue';
 import { useBracketResultQueue } from '../../../hooks/useBracketResultQueue';
 import { useUiStore } from '../../../store/uiStore';
@@ -140,6 +142,9 @@ export function RunSurface({
   onAdvisoryReview,
 }: RunSurfaceProps) {
   // ── seam hooks: owns the seam hooks for the Run (live) surface ───────────
+  // OrNull: RunSurface is mounted bare in tests and by the shell alike; the
+  // bracket deep link is simply omitted when there is no workspace route.
+  const tid = useTournamentIdOrNull();
   const pushToast = useUiStore((s) => s.pushToast);
   const { submit: meetSubmit } = useCommandQueue();
   const bracketApi = useBracketApi();
@@ -313,52 +318,6 @@ export function RunSurface({
     [matches],
   );
 
-  const handleResolveCourt = useCallback(
-    async (
-      dispute: CourtDispute,
-      chosenKey: string,
-      resolutionAction: 'keep_and_move' | 'keep_and_unassign' | 'keep_and_finish',
-    ) => {
-      const chosen = matches.find((m) => m.key === chosenKey);
-      const displaced = dispute.claims
-        .filter((c) => c.matchKey !== chosenKey)
-        .map((c) => matches.find((m) => m.key === c.matchKey))
-        .filter((m): m is RunMatch => m != null);
-      // The backend `resolve_court` command mutates rows in the unified
-      // meet `matches` table (ADR 0006: match records are non-merged).
-      // Bracket assignments live in the bracket session blob and have no
-      // row there yet, so a bracket-involved dispute can't be resolved
-      // through this command — logged as debt, not silently mis-applied.
-      if (!chosen || chosen.source !== 'meet' || displaced.some((m) => m.source !== 'meet') || displaced.length === 0) {
-        pushToast({
-          level: 'error',
-          message: 'Cannot resolve this court conflict here yet',
-          detail: 'A bracket match is involved: open it from the Bracket engine instead.',
-        });
-        return;
-      }
-      setResolvingKey(chosenKey);
-      try {
-        const outcome = await meetSubmit('resolve_court', chosen.id, {
-          chosenMatchKey: chosen.id,
-          displacedMatchKeys: displaced.map((m) => m.id),
-          action: resolutionAction,
-          note: null,
-        });
-        if (outcome.result.kind === 'conflict' || outcome.result.kind === 'staleVersion') {
-          pushToast({
-            level: 'error',
-            message: 'Could not resolve court conflict',
-            detail: outcome.result.message,
-          });
-        }
-      } finally {
-        setResolvingKey(null);
-      }
-    },
-    [matches, meetSubmit, pushToast],
-  );
-
   const conflictIds = useMemo(() => Object.keys(conflicts), [conflicts]);
   const labelForMatchId = useCallback(
     (matchId: string) => {
@@ -418,6 +377,63 @@ export function RunSurface({
       });
     },
     [seams],
+  );
+
+  /**
+   * Resolve a court dispute by keeping ONE claim and clearing the rest.
+   *
+   * The backend `resolve_court` command mutates rows in the unified meet
+   * `matches` table (ADR 0006: match records are non-merged), so it can only
+   * be used when every claim on the court is a meet match. A bracket claim
+   * has no row there — the working, supported recovery for it is to take the
+   * match off the court through its own engine (`postpone`, which is
+   * `bracket/unassign`), which `takeOffCourt` below does. Nothing here
+   * renders a control that cannot perform what it says.
+   */
+  const keepOnCourt = useCallback(
+    async (dispute: CourtDispute, chosenKey: string) => {
+      const chosen = matches.find((m) => m.key === chosenKey);
+      const displaced = dispute.claims
+        .filter((c) => c.matchKey !== chosenKey)
+        .map((c) => matches.find((m) => m.key === c.matchKey))
+        .filter((m): m is RunMatch => m != null);
+      if (!chosen || displaced.length === 0) return;
+      setResolvingKey(chosenKey);
+      try {
+        const outcome = await meetSubmit('resolve_court', chosen.id, {
+          chosenMatchKey: chosen.id,
+          displacedMatchKeys: displaced.map((m) => m.id),
+          action: 'keep_and_unassign',
+          note: null,
+        });
+        if (outcome.result.kind === 'conflict' || outcome.result.kind === 'staleVersion') {
+          pushToast({
+            level: 'error',
+            message: 'Could not resolve court conflict',
+            detail: outcome.result.message,
+          });
+        }
+      } finally {
+        setResolvingKey(null);
+      }
+    },
+    [matches, meetSubmit, pushToast],
+  );
+
+  /** Take one claim off the court, through its own engine. Works for both
+   *  sources, which is why it is the action a mixed dispute offers. */
+  const takeOffCourt = useCallback(
+    async (matchKey: string) => {
+      const match = matches.find((m) => m.key === matchKey);
+      if (!match) return;
+      setResolvingKey(matchKey);
+      try {
+        await runAction(match, 'postpone', undefined, seams);
+      } finally {
+        setResolvingKey(null);
+      }
+    },
+    [matches, seams],
   );
 
   // ── queue affordances (LATE badge + quick-send) ───────────────────────────
@@ -518,19 +534,18 @@ export function RunSurface({
       sideA: selectedMatch.sideA,
       sideB: selectedMatch.sideB,
       assignment: {
-        court: selectedMatch.court != null ? `C${selectedMatch.court}` : null,
+        // The inspector's own `Court` label supplies the word; the value is
+        // the court number. A raw slot index is storage, never operator copy
+        // (§3.1) — with no configured clock the fact is simply absent.
+        court: selectedMatch.court ?? null,
         planned:
           selectedMatch.plannedSlot != null
-            ? formatSlot?.(selectedMatch.plannedSlot) ?? `S${selectedMatch.plannedSlot}`
+            ? formatSlot?.(selectedMatch.plannedSlot) ?? null
             : null,
         actualStart:
-          block?.actualStartSlot != null
-            ? formatSlot?.(block.actualStartSlot) ?? `S${block.actualStartSlot}`
-            : null,
+          block?.actualStartSlot != null ? formatSlot?.(block.actualStartSlot) ?? null : null,
         actualEnd:
-          block?.actualEndSlot != null
-            ? formatSlot?.(block.actualEndSlot) ?? `S${block.actualEndSlot}`
-            : null,
+          block?.actualEndSlot != null ? formatSlot?.(block.actualEndSlot) ?? null : null,
       },
       result:
         selectedMatch.score || winner
@@ -626,7 +641,7 @@ export function RunSurface({
           suggested action to the Plan-hosted dialogs. */}
       {meetOps ? (
         <AlertsActivityPanel
-          collapseWhenEmpty
+          hideWhenEmpty
           onReview={onAdvisoryReview}
           className="max-h-48 shrink-0"
         />
@@ -648,10 +663,18 @@ export function RunSurface({
         </div>
       )}
 
-      {/* Court disputes — actionable assignments, not banners (D18, V3-OC19.1).
-          Each names the competing claims by match identity and offers one
-          button per resolution action; keyboard-reachable like any other
-          control on the surface. */}
+      {/* Court conflicts — ONE resolution card per disputed court, and the
+          only place on Live day a dispute is described (P2). The court cards
+          below no longer carry a red conflict variant, so the same dispute is
+          never restated in two zones. One row per involved match, one action
+          per row, and every action is one the product can actually perform:
+            · all-meet dispute  → "Keep this one on court" (`resolve_court`
+              keep_and_unassign — the persisted operator decision, contract
+              §4.2);
+            · bracket involved  → "Take off court" per row, through that
+              match's own engine (meet postpone / bracket unassign), because
+              `resolve_court` only mutates meet rows (ADR 0006). No disabled
+              button, and no instruction to go and use another surface. */}
       {disputes.length > 0 && (
         <div data-testid="run-disputes" className="shrink-0 space-y-2 px-4 pt-2">
           {disputes.map((dispute) => {
@@ -659,62 +682,70 @@ export function RunSurface({
               claim,
               match: matches.find((m) => m.key === claim.matchKey),
             }));
-            const bracketInvolved = claimMatches.some(({ match }) => match?.source !== 'meet');
+            const allMeet = claimMatches.every(({ match }) => match?.source === 'meet');
             return (
               <div
                 key={dispute.courtId}
                 data-testid={`run-dispute-court-${dispute.courtId}`}
                 role="group"
                 aria-label={`Court ${dispute.courtId} needs resolution`}
-                className="rounded border border-status-overdue-solid bg-status-overdue-bg/10 p-3"
+                className="rounded border border-status-overdue-border bg-status-overdue-bg p-3"
               >
-                <p className={`${EYEBROW_CLASS} text-status-overdue-ink`}>
+                {/* On this wash (not the solid fill) the on-surface
+                    foreground is the legible token; `-ink` is near-white and
+                    left the heading pale (P6). */}
+                <p className={`${EYEBROW_CLASS} text-status-overdue`}>
                   Court {dispute.courtId} needs resolution: {claimMatches.length} matches assigned
                 </p>
                 <ul className="mt-1.5 space-y-2.5">
-                  {claimMatches.map(({ claim, match }) => (
-                    <li key={claim.matchKey} className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-foreground">
-                        {match ? `${formatMatchIdentity(match.identity, match.id)} · ${match.sideA} vs ${match.sideB}` : claim.matchKey}
-                      </span>
-                      <span className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          data-testid={`dispute-keep-move-${claim.matchKey}`}
-                          disabled={bracketInvolved || resolvingKey != null}
-                          onClick={() => handleResolveCourt(dispute, claim.matchKey, 'keep_and_move')}
-                          className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Keep this, move the other
-                        </button>
-                        <button
-                          type="button"
-                          data-testid={`dispute-keep-unassign-${claim.matchKey}`}
-                          disabled={bracketInvolved || resolvingKey != null}
-                          onClick={() => handleResolveCourt(dispute, claim.matchKey, 'keep_and_unassign')}
-                          className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Keep this, unassign the other
-                        </button>
-                        <button
-                          type="button"
-                          data-testid={`dispute-keep-finish-${claim.matchKey}`}
-                          disabled={bracketInvolved || resolvingKey != null}
-                          onClick={() => handleResolveCourt(dispute, claim.matchKey, 'keep_and_finish')}
-                          className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Keep this, mark the other finished
-                        </button>
-                      </span>
-                    </li>
-                  ))}
+                  {claimMatches.map(({ claim, match }) => {
+                    const label = match
+                      ? `${formatMatchIdentity(match.identity, match.id)} · ${match.sideA} vs ${match.sideB}`
+                      : claim.matchKey;
+                    return (
+                      <li
+                        key={claim.matchKey}
+                        className="flex flex-wrap items-center justify-between gap-2"
+                      >
+                        {match && match.source === 'bracket' && tid ? (
+                          // A direct route to the match in the engine that
+                          // owns it, so the operator can act on the draw
+                          // itself if the desk decision belongs there.
+                          <Link
+                            to={`/tournaments/${tid}/bracket/matches`}
+                            data-testid={`dispute-open-bracket-${claim.matchKey}`}
+                            className="text-xs font-semibold text-foreground underline underline-offset-2 hover:no-underline"
+                          >
+                            {label}
+                          </Link>
+                        ) : (
+                          <span className="text-xs font-semibold text-foreground">{label}</span>
+                        )}
+                        {allMeet ? (
+                          <button
+                            type="button"
+                            data-testid={`dispute-keep-${claim.matchKey}`}
+                            disabled={resolvingKey != null}
+                            onClick={() => void keepOnCourt(dispute, claim.matchKey)}
+                            className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Keep this one on court
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            data-testid={`dispute-take-off-${claim.matchKey}`}
+                            disabled={resolvingKey != null || match == null}
+                            onClick={() => void takeOffCourt(claim.matchKey)}
+                            className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Take off court
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
-                {bracketInvolved ? (
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    A bracket match is involved: resolve it from the Bracket engine; only
-                    meet-vs-meet court conflicts can be resolved here today.
-                  </p>
-                ) : null}
               </div>
             );
           })}
