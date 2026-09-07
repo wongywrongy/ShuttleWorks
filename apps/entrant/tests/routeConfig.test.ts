@@ -47,6 +47,10 @@ describe('node routes and the FastAPI prefixes do not overlap (R8-A)', () => {
     // here rather than as silent green.
     expect(paths.length).toBeGreaterThan(0);
     expect(paths).toContain('/e/signup');
+    expect(paths).not.toContain('/e/signup/:slug');
+    expect(paths).not.toContain('/e/signup/partner/:token');
+    expect(paths).not.toContain('/e/partner');
+    expect(paths).toContain('/e/partner/:token');
     expect(paths.every((p) => p.startsWith('/e/'))).toBe(true);
     // ...and the OTHER derivation. `it.each([])` generates no tests at all,
     // so an nginx.conf this helper could no longer read would delete the

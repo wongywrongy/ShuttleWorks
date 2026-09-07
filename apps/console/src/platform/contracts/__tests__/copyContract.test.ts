@@ -46,7 +46,7 @@ const RULES: Rule[] = [
   {
     id: 'retired-workflow-labels',
     pattern: /label:\s*["'](?:Sharing|Members|Sync and backups|Venue and schedule)["']|>\s*(?:Sharing|Sync and backups|Venue and schedule)\s*</g,
-    why: 'phase navigation uses Site, Team, Backups, Venue, and Links and embeds',
+    why: 'phase navigation uses Public site, Team, Backups, Details, and Board',
   },
   {
     id: 'stale-nav-bracket',
@@ -143,7 +143,11 @@ describe('COPY-5 — banned phrases never reach a surface', () => {
     ]));
     expect(labels).not.toContain('Links and embeds');
     expect(labels).not.toContain('Draws & results');
-    expect(labels).toContain('Site');
-    expect(labels).toContain('Displays');
+    // Publication lives with the public content it governs; the venue board
+    // lives with Display. Neither is a "Publish" category any more.
+    expect(labels).not.toContain('Publish');
+    expect(labels).not.toContain('Competition');
+    expect(labels).toContain('Public site');
+    expect(labels).toContain('Board');
   });
 });

@@ -13,14 +13,17 @@ import { GearSix, SignOut } from '@phosphor-icons/react';
 import { useAuth } from '../context/AuthContext';
 import { SwMonogram } from '../components/ShuttleWorksMark';
 import { ActiveChoice } from '../components/ActiveChoice';
+import { presentIdentity, LOCAL_OWNER_LABEL } from '../modules/settings/memberIdentity';
 
 export function AppSidebar() {
   const location = useLocation();
   const { user, signOut, isBootstrap, authMode } = useAuth();
   const onSettings = location.pathname === '/settings';
   const onHub = location.pathname === '/';
-  // Prefer the display name; fall back to email; 'L' for the local bootstrap.
-  const identity = user?.displayName?.trim() || user?.email || 'Local';
+  // Prefer the display name; fall back to the address — presented, so the
+  // local-mode bootstrap placeholder never reaches a title or accessible name.
+  const identity =
+    user?.displayName?.trim() || presentIdentity(user?.email) || LOCAL_OWNER_LABEL;
   const initial = identity.trim().charAt(0).toUpperCase() || 'L';
   // The local bootstrap identity has no session to end — signing out would
   // just re-probe back into the same identity, so hide the affordance.

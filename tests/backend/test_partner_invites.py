@@ -18,6 +18,7 @@ The claims this file exists to hold, in the order they matter:
 from __future__ import annotations
 
 import uuid
+from urllib.parse import quote
 
 import pytest
 
@@ -745,6 +746,8 @@ def test_the_invite_mail_names_the_inviter_and_the_event_and_nothing_more(
     assert to == "sam@example.com"
     assert "Alex Kim" in subject
     assert token in body
+    assert f"/e/partner/{quote(token, safe='')}" in body
+    assert "/e/partner?token=" not in body
     assert "Pairs Open" in body
     # No fee, no other entrants, no workspace id.
     assert "40.00" not in body

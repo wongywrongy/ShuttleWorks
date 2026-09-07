@@ -16,7 +16,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Download } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
-import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../lib/utils';
+import { INTERACTIVE_BASE, ACCENT_PRESS, UTILITY_BUTTON } from '../../lib/utils';
 import {
   ActionsBar,
   DenseDataTable,
@@ -275,7 +275,7 @@ function BracketRosterTabCore({
           onClick={() => void exportBracketRosterXlsx(players, badgesById)}
           disabled={players.length === 0}
           data-testid="export-bracket-roster"
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
+          className={UTILITY_BUTTON}
         >
           <Download aria-hidden="true" className="h-3.5 w-3.5" />
           Export full roster
@@ -283,7 +283,7 @@ function BracketRosterTabCore({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS}`}
+          className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1.5 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS}`}
         >
           Add player
         </button>

@@ -34,24 +34,6 @@ export default [
   // Static, so it ranks above the `:slug` route below and a workspace can
   // never be called "signup".
   route('signup', 'routes/signup.tsx'),
-  // The same page, told which tournament the entrant came from (E3).
-  //
-  // The sign-in link on `/e/{slug}/enter` has always carried a `next`; the
-  // sign-up link beside it was a bare `/e/signup`, so creating an account
-  // dropped the entrant on a generic page with nothing pointing back at the
-  // tournament they were half-way through entering.
-  //
-  // A PATH SEGMENT, not a `?next=`: what travels is a slug, and the
-  // destination URL is composed from it by code in `signup.tsx` and then
-  // validated by `safeNext` — the same allowlist `login.tsx` uses and the
-  // byte-identical twin of the backend's `_SAFE_NEXT`, which validates it
-  // again when the form posts. So there is no free-form destination for a
-  // crafted link to carry, and the constant the field used to hold is still
-  // what a non-slug lands on.
-  route('signup/:slug', 'routes/signup.tsx', { id: 'signup-for' }),
-  // Invitation-preserving account creation. A path segment keeps the opaque
-  // token inside the strict auth `next` allowlist at both tiers.
-  route('signup/partner/:token', 'routes/signup.tsx', { id: 'signup-partner' }),
   // The login PAGE, node-owned for exactly the reason above: `/e/account/login`
   // is FastAPI's POST and a node GET there is a 405 in production and fine in
   // dev, which is the worst pair. Static, so it ranks above `:slug`.
@@ -107,15 +89,14 @@ export default [
   route('reset/failed', 'routes/resetPassword.tsx', { id: 'reset-failed' }),
   route('reset/password-failed', 'routes/resetPassword.tsx', { id: 'reset-password-failed' }),
   // The doubles invitation (E3, Phase 8) and its two outcomes. The mailed
-  // link is `/e/partner?token=…`; the page previews anonymously and its form
+  // link is `/e/partner/:token`; the page previews anonymously and its form
   // posts to a FastAPI route that requires a signed-in verified entrant —
   // which is the whole difference between an invite and the capability token
   // R10 retired. Static, so no workspace can be called "partner".
-  route('partner', 'routes/partner.tsx'),
   // Canonical invitation path used when sign-in interrupts acceptance. The
   // existing authentication `next` allowlist accepts path segments but no
   // query strings, so this form preserves the exact task without widening
-  // the redirect contract. Mailed `?token=` links above remain supported.
+  // the redirect contract.
   route('partner/:token', 'routes/partner.tsx', { id: 'partner-token' }),
   route('partner/accepted', 'routes/partner.tsx', { id: 'partner-accepted' }),
   route('partner/failed', 'routes/partner.tsx', { id: 'partner-failed' }),

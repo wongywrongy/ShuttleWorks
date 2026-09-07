@@ -549,7 +549,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                     `signup.tsx` composes the return URL from it, under the
                     same allowlist the sign-in link's `next` goes through. */}
                 <a
-                  href={`/e/signup/${encodeURIComponent(slug)}`}
+                  href={`/e/signup?next=${encodeURIComponent(`/e/${slug}/enter/created`)}`}
                   className="underline underline-offset-4"
                 >
                   create one

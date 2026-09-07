@@ -11,8 +11,8 @@
  * **Phase-gating is the pure functions', not this file's**: `visibleTabs`
  * decides which tabs exist (a tab renders only when its data does — rule 4:
  * no placeholders, no disabled tabs, no coming-soon under any state),
- * `activeTab` validates `?tab` (anything unknown or hidden renders
- * Overview), `chipState`/`ctaState` decide the hero. Tabs are links with
+ * `activeTab` validates `?tab` (anything unknown or hidden is an honest 404),
+ * `chipState`/`ctaState` decide the hero. Tabs are links with
  * `aria-current`, deliberately not an ARIA tablist (Z6) — each switch is a
  * full, KB-scale document load.
  */
@@ -87,6 +87,7 @@ export async function loader({
 
   const tabs = visibleTabs(page.events, page.entrants, page.publication);
   const active = activeTab(new URL(request.url).searchParams.get('tab'), tabs);
+  if (active === null) throw notFound();
   const payload: TournamentLoaderData = {
     page,
     tabs,

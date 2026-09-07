@@ -296,48 +296,38 @@ describe('activeTab', () => {
   it.each([
     ['a visible tab', 'draws', 'draws'],
     ['null', null, 'overview'],
-    ['an unknown string', 'results', 'overview'],
-    ['a data-hidden tab', 'entrants', 'overview'],
+    ['an unknown string', 'results', null],
+    ['a data-hidden tab', 'entrants', null],
   ])('%s → %s', (_label, requested, expected) => {
     expect(activeTab(requested, [...visible])).toBe(expected);
   });
 
-  it('maps a legacy entrants bookmark to the unified Players directory', () => {
-    expect(activeTab('entrants', ['overview', 'players'])).toBe('players');
-  });
-
-  // ADR 0028: the Events, Seeded entries and Winners tabs folded into Draws;
-  // a poster or bookmark naming any of them lands on that panel.
-  it.each(['events', 'seeds', 'winners'])('maps the retired %s tab onto Draws', (legacy) => {
-    expect(activeTab(legacy, ['overview', 'draws'])).toBe('draws');
-    expect(activeTab(legacy, ['overview'])).toBe('overview');
+  it.each(['events', 'entrants', 'seeds', 'winners'])('rejects removed %s tabs', (removed) => {
+    expect(activeTab(removed, ['overview', 'draws', 'players'])).toBeNull();
   });
 });
 
 // ---- the SP-P8 season list: filters, views, sections, the status cell -------
 
-describe('parseFilters (SP-P8 §2.3 + old-deep-link compatibility)', () => {
+describe('parseFilters (SP-P8 §2.3 canonical query)', () => {
   it('defaults to the season view', () => {
     expect(parseFilters(new URLSearchParams()).view).toBe('season');
   });
   it('reads ?view=', () => {
     expect(parseFilters(new URLSearchParams('view=completed')).view).toBe('completed');
   });
-  it('maps the legacy ?status=open onto Taking entries', () => {
-    expect(parseFilters(new URLSearchParams('status=open')).view).toBe('open');
+  it('ignores the removed status query', () => {
+    expect(parseFilters(new URLSearchParams('status=open')).view).toBe('season');
+    expect(parseFilters(new URLSearchParams('status=past')).view).toBe('season');
   });
-  it('maps ?status=past to Completed and ?status=upcoming to Season (D6)', () => {
-    expect(parseFilters(new URLSearchParams('status=past')).view).toBe('completed');
-    expect(parseFilters(new URLSearchParams('status=upcoming')).view).toBe('season');
-  });
-  it('?view= wins over a legacy ?status=', () => {
+  it('uses the canonical view query when present', () => {
     expect(parseFilters(new URLSearchParams('view=season&status=open')).view).toBe('season');
   });
   it('keeps legacy presets valid so old preset links still filter', () => {
     expect(parseFilters(new URLSearchParams('preset=30d')).preset).toBe('30d');
   });
   it.each([['toString'], ['constructor'], ['__proto__'], ['hasOwnProperty']])(
-    'reads ?status=%s off the legacy map WITHOUT its prototype chain',
+    'ignores unknown query values safely: %s',
     (key) => {
       // `key in map` would answer true for every Object.prototype member and
       // put a FUNCTION in `view` — a public-tier URL is attacker-typeable, and

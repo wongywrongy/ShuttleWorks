@@ -82,7 +82,7 @@ describe('partner invitation context', () => {
     expect(html).toContain(
       `href="/e/login?next=%2Fe%2Fpartner%2F${TOKEN}"`,
     );
-    expect(html).toContain(`href="/e/signup/partner/${TOKEN}"`);
+    expect(html).toContain(`href="/e/signup?next=%2Fe%2Fpartner%2F${TOKEN}"`);
     expect(html).toContain('You will return to this invitation.');
   });
 });

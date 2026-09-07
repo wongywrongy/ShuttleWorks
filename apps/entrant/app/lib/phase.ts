@@ -34,10 +34,6 @@ import type { FormEcho } from './echo';
  */
 export type Tab = 'overview' | 'draws' | 'players';
 
-/** Retired `?tab=` ids that posters and bookmarks still carry; `activeTab`
- * folds each onto the panel that absorbed it. */
-export type LegacyTab = 'events' | 'entrants' | 'seeds' | 'winners';
-
 export type ChipState =
   | {
       kind: 'entriesOpen';
@@ -191,7 +187,7 @@ export interface Filters {
   to: string | null;
   year?: number | null;
   q: string;
-  /** Whether the URL deliberately selected a view/status scope. */
+  /** Whether the URL deliberately selected a canonical view scope. */
   scopeExplicit?: boolean;
 }
 
@@ -401,20 +397,12 @@ export function visibleTabs(
   return table.filter(([, visible]) => visible).map(([tab]) => tab);
 }
 
-const LEGACY_TABS: Readonly<Record<LegacyTab, Tab>> = Object.freeze({
-  events: 'draws',
-  seeds: 'draws',
-  winners: 'draws',
-  entrants: 'players',
-});
-
-/** Requested ∈ visible → requested; a retired id maps to the panel that absorbed it. */
-export function activeTab(requested: string | null, visible: readonly Tab[]): Tab {
-  const wanted =
-    requested !== null && requested in LEGACY_TABS
-      ? LEGACY_TABS[requested as LegacyTab]
-      : (requested as Tab);
-  return visible.includes(wanted) ? wanted : 'overview';
+/** Resolve the one canonical section query. An explicit unknown or hidden
+ * section is invalid; callers turn it into the route's honest 404 rather than
+ * silently rendering a different section. */
+export function activeTab(requested: string | null, visible: readonly Tab[]): Tab | null {
+  if (requested === null) return 'overview';
+  return visible.includes(requested as Tab) ? requested as Tab : null;
 }
 
 /** A chain, not a module-scoped Map: the mutable-bindings guard
@@ -468,33 +456,18 @@ const VIEW_CHOICES = Object.freeze<View[]>(['season', 'open', 'completed', 'all'
 const PRESET_CHOICES = Object.freeze<DatePreset[]>(['7d', '30d', '90d']);
 const COMPLETED_STATUSES = Object.freeze<PageStatus[]>(['completed', 'completed_winners']);
 
-/** D6: the retired status facet's values, mapped onto the new views so a
- * mailing-list link from the old page lands on the equivalent state. */
-const LEGACY_STATUS_VIEWS = Object.freeze<Record<string, View>>({
-  open: 'open',
-  past: 'completed',
-  upcoming: 'season',
-});
-
 /** The control row's query string → a validated `Filters`. Unknown values fall
  * back to "no filter" rather than erroring — a URL is typeable. */
 export function parseFilters(params: URLSearchParams): Filters {
   const view = params.get('view');
-  const legacy = params.get('status');
   const preset = params.get('preset');
   const yearValue = params.get('year');
   const year = yearValue !== null && /^\d{4}$/.test(yearValue) ? Number(yearValue) : null;
-  const explicitScope = params.has('view') || params.has('status');
+  const explicitScope = params.has('view');
   const requestedView = VIEW_CHOICES.includes(view as View)
     ? (view as View)
-    : legacy !== null && Object.hasOwn(LEGACY_STATUS_VIEWS, legacy)
-      ? LEGACY_STATUS_VIEWS[legacy]
       : 'season';
   return {
-    // `Object.hasOwn`, never `legacy in LEGACY_STATUS_VIEWS`: `in` walks the
-    // prototype chain, so `?status=toString` would answer true and put
-    // `Object.prototype.toString` — a FUNCTION — into `view`. This parses a
-    // public URL, which is typeable by anyone.
     view: !explicitScope && (params.get('q') ?? '').trim() !== '' ? 'all' : requestedView,
     preset: PRESET_CHOICES.includes(preset as DatePreset) ? (preset as DatePreset) : null,
     from: params.get('from') || null,

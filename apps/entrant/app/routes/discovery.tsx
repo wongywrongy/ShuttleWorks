@@ -88,6 +88,9 @@ function canonicalQuery(url: URL): string | null {
 
 export async function loader({ request }: { request: Request }) {
   const url = new URL(request.url);
+  if (url.searchParams.has('status')) {
+    throw new Response('Not found', { status: 404 });
+  }
   const canonical = canonicalQuery(url);
   if (canonical !== null) {
     // Root-relative and WITHOUT the basename: React Router prefixes

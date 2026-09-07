@@ -488,7 +488,7 @@ test.describe('entrant app — R11 evidence', () => {
 
     // The panel, not just the tab: asking for the gated-off one must land on
     // Overview, which is the intro text and the card grid.
-    await page.goto(`/e/${slug}?tab=entrants`);
+    await page.goto(`/e/${slug}?tab=players`);
     await expect(page.locator('[aria-current="page"]')).toHaveText('Overview');
   });
 

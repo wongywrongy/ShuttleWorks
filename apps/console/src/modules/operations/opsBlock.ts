@@ -23,19 +23,31 @@ import { msToSlot, parseMatchStartMs, hasStaleActualTiming } from '../../lib/tim
 /** @deprecated Use `Match` from `platform/domain/match`. Kept as an alias. */
 export type OpsBlock = Match;
 
-const TBD = 'TBD';
+/** The fixed §2.1 label for a side with no claim at all. Display copy only —
+ *  nothing decides eligibility by comparing against it (see `sidesUnresolved`
+ *  on the `Match` contract, which carries that fact structurally). */
+const UNRESOLVED_SIDE_LABEL = 'To be decided';
 const UNRESOLVED_OPERATIONAL_SIDE = 'Participant unresolved: action required';
 
-function operationalSide(label: string, status: MatchStatus): string {
+/** `resolved` is the STRUCTURAL fact (the side names known participants), not
+ *  a string comparison: a future scheduled match may truthfully name its
+ *  feeder, but once started or terminal an unresolved side is an integrity
+ *  alert, never a participant label. Bracket omits it — every unresolved
+ *  bracket side is a FEEDER, caught by the label rule below. */
+function operationalSide(label: string, status: MatchStatus, resolved = true): string {
   if (status === 'scheduled') return label;
-  return label === TBD || /^(Winner|Loser) of /.test(label)
+  return !resolved || /^(Winner|Loser) of /.test(label)
     ? UNRESOLVED_OPERATIONAL_SIDE
     : label;
 }
 
+function meetSideResolved(ids: string[] | undefined): boolean {
+  return (ids?.length ?? 0) > 0;
+}
+
 function meetSide(ids: string[] | undefined, nameById: Record<string, string>): string {
-  if (!ids || ids.length === 0) return TBD;
-  return ids.map((id) => nameById[id] ?? id).join(' / ');
+  if (!meetSideResolved(ids)) return UNRESOLVED_SIDE_LABEL;
+  return ids!.map((id) => nameById[id] ?? id).join(' / ');
 }
 
 /** The identities behind the display sides. `meetSide` joins names for the
@@ -113,8 +125,9 @@ export function meetToOpsBlocks(
       slot: slot,
       span: a?.durationSlots ?? 1,
       status,
-      sideA: operationalSide(meetSide(m.sideA, nameById), status),
-      sideB: operationalSide(meetSide(m.sideB, nameById), status),
+      sideA: operationalSide(meetSide(m.sideA, nameById), status, meetSideResolved(m.sideA)),
+      sideB: operationalSide(meetSide(m.sideB, nameById), status, meetSideResolved(m.sideB)),
+      sidesUnresolved: !meetSideResolved(m.sideA) || !meetSideResolved(m.sideB),
       playerIds: meetPlayerIds(m),
       score:
         status === 'finished' && st?.score

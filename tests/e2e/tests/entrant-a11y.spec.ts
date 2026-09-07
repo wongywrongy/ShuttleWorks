@@ -203,7 +203,7 @@ const SURFACES: Surface[] = [
   },
   {
     name: 'Invitation unavailable',
-    path: () => '/e/partner?token=doesnotexist12345',
+    path: () => '/e/partner/missing-fixture-token',
     ready: (p) => p.getByRole('heading', { name: 'Invitation unavailable', level: 1 }),
   },
 ];
