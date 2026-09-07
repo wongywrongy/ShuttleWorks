@@ -44,7 +44,7 @@ import logging
 import re
 import uuid
 from typing import Optional, Type
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.exceptions import RequestValidationError
@@ -230,6 +230,11 @@ _OPTIONAL_TEXT = frozenset({"displayName", "phone"})
 # ever made.
 _SAFE_NEXT = re.compile(r"^/e/[A-Za-z0-9/_.~-]*$")
 
+# The literal prefix the pattern above anchors on, named so ``next_target``
+# can rebuild an accepted destination from a constant rather than returning
+# the string it was handed (2026-09-07).
+_SAFE_NEXT_PREFIX = "/e/"
+
 
 def is_form_post(request: Request) -> bool:
     return (
@@ -300,11 +305,28 @@ def next_target(raw: Optional[str], fallback: str) -> str:
     anything else is discarded for the fallback. Matching beats stripping
     because a stripper has to anticipate every encoding and a matcher does
     not.
+
+    2026-09-07: the accepted value is rebuilt from its parsed components
+    rather than handed back as the caller's own string. The allowlist above
+    already refuses anything that is not a relative ``/e/`` path — the
+    character class excludes ``:``, ``?`` and ``#``, so a match cannot carry
+    a scheme, an authority, a query or a fragment — and the split below
+    therefore rejects nothing the regex accepts. It is a second, independent
+    statement of the same invariant (the browser must stay on this origin) in
+    a shape a static analyser can follow: CodeQL's ``py/url-redirection``
+    does not recognise a regex allowlist as a sanitiser, and an open-redirect
+    alert on a login route is not a finding to leave standing while the
+    reasoning lives only in a docstring.
     """
     value = str(raw or "")
     if ".." in value or not _SAFE_NEXT.match(value):
         return fallback
-    return value
+    parts = urlsplit(value)
+    if parts.scheme or parts.netloc or parts.query or parts.fragment:
+        return fallback
+    if not parts.path.startswith(_SAFE_NEXT_PREFIX):
+        return fallback
+    return _SAFE_NEXT_PREFIX + parts.path[len(_SAFE_NEXT_PREFIX) :]
 
 
 async def _payload(request: Request) -> dict:

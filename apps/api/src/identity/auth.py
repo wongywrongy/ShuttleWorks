@@ -152,12 +152,26 @@ def password_needs_rehash(password_hash: str) -> bool:
         return True
 
 
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# 2026-09-07: was ``^[^@\s]+@[^@\s]+\.[^@\s]+$``, which CodeQL flags as
+# ``py/polynomial-redos`` and rightly: the two ``[^@\s]+`` runs either side of
+# the literal dot both match a dot, so a long dotless tail makes the engine
+# try every split before failing — quadratic in the length of the input, and
+# this pattern runs on an unauthenticated request body. The shape check below
+# is deterministic (``@`` is excluded from both classes, so there is exactly
+# one way to split) and the "domain has an interior dot" half is an explicit
+# membership test. Accept/reject semantics are unchanged: the old pattern
+# accepted exactly those strings with one ``@``, no whitespace, and a ``.``
+# somewhere in the domain other than its first or last character. The length
+# bound is now applied first so nothing unbounded reaches the regex at all.
+_EMAIL_SHAPE_RE = re.compile(r"^[^@\s]+@[^@\s]+$")
 
 
 def normalize_email(email: str) -> str:
     email = email.strip()
-    if not _EMAIL_RE.match(email) or len(email) > 320:
+    if len(email) > 320 or not _EMAIL_SHAPE_RE.match(email):
+        raise AuthError("INVALID_EMAIL", "Not a valid email address")
+    domain = email.split("@", 1)[1]
+    if "." not in domain[1:-1]:
         raise AuthError("INVALID_EMAIL", "Not a valid email address")
     return email
 

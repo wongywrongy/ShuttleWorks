@@ -270,3 +270,78 @@ def test_a_long_passphrase_is_still_accepted():
     from identity.auth import validate_password
 
     validate_password("correct horse battery staple")
+
+
+# --- normalize_email ---------------------------------------------------
+#
+# 2026-09-07. ``normalize_email`` used one pattern,
+# ``^[^@\s]+@[^@\s]+\.[^@\s]+$``, and CodeQL flagged it ``py/polynomial-redos``:
+# the two ``[^@\s]+`` runs either side of the literal dot both match a dot, so
+# a long dotless tail makes the engine try every split before failing. The
+# rewrite must keep the grammar exactly and lose the backtracking, so these
+# tests pin both halves — the accept/reject table, and the running time on an
+# adversarial input.
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "a@b.c",
+        "director@example.com",
+        "first.last+tag@sub.example.co.uk",
+        "x@a.b.c",
+        "x@a..b",          # consecutive dots were accepted before and still are
+        "x@a.b.",          # trailing dot: the interior dot carries the match
+        "x@.a.b",          # leading dot: likewise
+    ],
+)
+def test_normalize_email_accepts(address):
+    from identity.auth import normalize_email
+
+    assert normalize_email(address) == address
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "",
+        "nodomain",
+        "no@dot",
+        "@example.com",
+        "user@",
+        "user@.",
+        "user@a.",           # dot is the last character of the domain
+        "user@.a",           # dot is the first character of the domain
+        "two@at@example.com",
+        "spa ce@example.com",
+        "user@exa mple.com",
+        "user@example.com extra",
+        "a" * 316 + "@b.cd",  # 321 characters, one over the bound
+    ],
+)
+def test_normalize_email_rejects(address):
+    from identity.auth import AuthError, normalize_email
+
+    with pytest.raises(AuthError) as exc:
+        normalize_email(address)
+    assert exc.value.code == "INVALID_EMAIL"
+
+
+def test_normalize_email_is_linear_on_adversarial_input():
+    """A 200k-character dotless tail must not cost quadratic time.
+
+    This is the shape the old pattern died on: everything before the ``@``
+    matches, the domain then has no dot, and the engine re-splits the two
+    ``[^@\\s]+`` runs at every position. Under the old regex this input took
+    minutes; the rewrite refuses it in microseconds. The threshold is loose on
+    purpose — it is asserting a complexity class, not a benchmark.
+    """
+    import time
+
+    from identity.auth import AuthError, normalize_email
+
+    hostile = "a@" + "a" * 200_000
+    started = time.perf_counter()
+    with pytest.raises(AuthError):
+        normalize_email(hostile)
+    assert time.perf_counter() - started < 0.5

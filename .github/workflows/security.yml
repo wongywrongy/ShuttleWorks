@@ -24,6 +24,9 @@ jobs:
         uses: github/codeql-action/init@60168efe1c415ce0f5521ea06d5c2062adbeed1b # v3.28.17
         with:
           languages: ${{ matrix.language }}
+          # Keeps vendored and frozen trees out of the alert list — see the
+          # file for why each is excluded (2026-09-07).
+          config-file: .github/codeql/codeql-config.yml
       - name: Autobuild
         uses: github/codeql-action/autobuild@60168efe1c415ce0f5521ea06d5c2062adbeed1b # v3.28.17
       - name: Analyze

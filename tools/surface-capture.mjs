@@ -291,6 +291,14 @@ const VIEWPORTS = [
 const esc = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// For text interpolated INSIDE an attribute value. `esc` alone leaves quotes
+// intact, so a label containing `"` closes the attribute and everything after
+// it is parsed as markup (2026-09-07, CodeQL
+// js/incomplete-html-attribute-sanitization). Both quote forms are escaped so
+// the helper is correct in single- and double-quoted attributes alike.
+const escAttr = (s) =>
+  esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
 const artifactStem = outPath.slice(0, -extname(outPath).length);
 const manifestPath = `${artifactStem}.manifest.json`;
 const runningPath = `${artifactStem}.running.json`;
@@ -491,7 +499,7 @@ ${pages.map(({card:c,index,viewport,shot,segment,count})=>`<section class="sheet
 <p class="eyebrow">${esc(c.ref)} · ${viewport} · segment ${segment+1} / ${count}</p>
 <h2>${esc(c.label)}</h2><p>${esc(c.description)}</p>
 <p class="path">Requested <code>${esc(c.path)}</code> · ${esc(`HTTP ${c.viewportRuns[viewport]?.httpStatus ?? "unavailable"} · final ${c.viewportRuns[viewport]?.finalUrl ?? "unavailable"} · ${c.viewportRuns[viewport]?.consoleErrors?.length ?? 0} console errors`)}</p>
-<div class="frame"><div class="capture">${shot?`<img src="data:image/png;base64,${shot.png}" alt="${esc(c.label)} ${viewport} segment ${segment+1}"><p class="caption">${shot.width} CSS px wide · document y=${shot.top}–${shot.top+shot.height} · 2× capture. ${segment?'Continuation of the same page; top navigation may be outside this segment.':'Initial document position; no interactive controls changed.'}</p>`:'<p class="err">Capture unavailable. Consult the manifest; do not treat this as an empty product state.</p>'}</div>
+<div class="frame"><div class="capture">${shot?`<img src="data:image/png;base64,${shot.png}" alt="${escAttr(c.label)} ${escAttr(viewport)} segment ${segment+1}"><p class="caption">${shot.width} CSS px wide · document y=${shot.top}–${shot.top+shot.height} · 2× capture. ${segment?'Continuation of the same page; top navigation may be outside this segment.':'Initial document position; no interactive controls changed.'}</p>`:'<p class="err">Capture unavailable. Consult the manifest; do not treat this as an empty product state.</p>'}</div>
 <aside><h2>Reviewer notes</h2><p>${esc(reviewFocus(c.label))}</p><p>Compare this surface with its desktop sheets. Review at a comfortable zoom; printed screenshot size is not the physical target size.</p><p>Record: observation → user impact → proposed treatment → acceptance criterion.</p></aside></div>
 <p class="focus"><strong>Review focus:</strong> ${esc(reviewFocus(c.label))}</p></section>`).join('')}
 </body></html>`;
