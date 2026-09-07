@@ -27,8 +27,9 @@ import {
   BRACKET_MATCH_CELL,
   BRACKET_MATCH_LIST_COLUMNS,
   BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
-  MatchStatus,
   MatchInspector,
+  ScoreLane,
+  formatGamePairs,
   OverflowMenu,
   parseMatchStatusFilter,
   STATUS_LABEL,
@@ -44,7 +45,7 @@ import {
   sideSummaryText,
   type Side,
 } from '../../platform/domain/sides';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { UTILITY_BUTTON } from '../../lib/utils';
 import { disciplineOrderIndex } from '../../lib/eventColors';
 import { formatMatchIdentity } from '../../platform/domain/matchIdentity';
 import { matchKey } from '../../platform/domain/match';
@@ -215,12 +216,19 @@ export function BracketMatchesTab({
     return resolveFeederReference(raw, labelById);
   };
 
-  // Render form of a side: real names take the operator's stored
-  // presentation, one side per condensed line; an unresolved side renders
-  // its fixed §2.1 label ("Winner of QF1", "To be decided", "Bye"…) in the
-  // same muted-italic treatment the list has always used for a placeholder.
+  // Render form of a side: real names ONE PER LINE (match-card §3.1, P3 —
+  // the ` / ` condensed join reads as a single name at scan speed and made
+  // the two sides of a doubles row impossible to line up); an unresolved side
+  // renders its fixed §2.1 label ("Winner of QF1", "To be decided", "Bye"…)
+  // in the same muted-italic treatment the list has always used.
   const renderSide = (sideModel: Side) => {
-    if (sideModel.persons.length > 0) return formatSideCondensed(sideModel);
+    if (sideModel.persons.length > 0) {
+      return formatSideLines(sideModel).map((line, i) => (
+        <span key={i} className="block break-words">
+          {line}
+        </span>
+      ));
+    }
     return (
       <span className="text-xs italic text-muted-foreground">
         {formatSideLines(sideModel)[0]}
@@ -228,14 +236,11 @@ export function BracketMatchesTab({
     );
   };
 
-  // Result scores belong to the opponent rows, where their ownership is
-  // immediately legible. Keep the status column for lifecycle state only.
-  const renderScoredSide = (
-    pu: PlayUnitDTO,
-    side: 'A' | 'B',
-  ) => {
+  // A side is NAMES ONLY. The games live once, in the centred lane between
+  // the two sides (match-card §3.4) — never as two per-side columns the
+  // reader has to align across a name to read one game.
+  const renderNamedSide = (pu: PlayUnitDTO, side: 'A' | 'B') => {
     const result = resultByPu.get(pu.id);
-    const sets = result?.score?.sets ?? [];
     const sideModel = sideOf(pu, side);
     // §2.7 rule 4 / §3.5: the match winner comes from the recorded outcome
     // (`winner_side`), never from counting sets — retirement/walkover
@@ -243,53 +248,13 @@ export function BracketMatchesTab({
     // ever set once a result exists (never on an unfinished match).
     const winner = result?.winner_side === side;
     return (
-      <div className="flex min-h-0 min-w-0 items-center justify-between gap-2">
-        <span
-          className={`min-w-0 break-words ${winner ? 'font-semibold text-foreground' : ''}`}
-          title={sideSummaryText(sideModel)}
-        >
-          {renderSide(sideModel)}
-          {winner ? <span className="sr-only"> Winner</span> : null}
-        </span>
-        {/* §3.4 — the ledger collapses entirely (no cell, no reserved width)
-         *  when there is nothing to show. */}
-        {sets.length > 0 ? (
-          <span
-            data-testid={`bracket-match-row-score-${side.toLowerCase()}-${pu.id}`}
-            className="shrink-0 tabular-nums text-muted-foreground"
-          >
-            {[0, 1, 2].map((index) => {
-              const set = sets[index];
-              if (!set) {
-                return (
-                  <span
-                    key={index}
-                    aria-label={`Game ${index + 1} not recorded`}
-                    className="ml-2 inline-block w-6 text-right"
-                  />
-                );
-              }
-              // §2.7 rule 3 — per-game emphasis is independent of the match
-              // winner: a recorded set is complete by construction (this
-              // surface only ever sees a FINISHED result's sets, never a
-              // live in-progress score), so its own two numbers, not the
-              // match outcome, decide which one is bold.
-              const gameWinner =
-                set.sideA === set.sideB ? null : set.sideA > set.sideB ? 'A' : 'B';
-              const value = side === 'A' ? set.sideA : set.sideB;
-              return (
-                <span
-                  key={index}
-                  aria-label={`Game ${index + 1} score`}
-                  className={`ml-2 inline-block w-6 text-right ${gameWinner === side ? 'font-semibold text-foreground' : ''}`}
-                >
-                  {value}
-                </span>
-              );
-            })}
-          </span>
-        ) : null}
-      </div>
+      <span
+        className={`flex min-w-0 flex-col justify-center ${winner ? 'font-semibold text-foreground' : ''}`}
+        title={sideSummaryText(sideModel)}
+      >
+        {renderSide(sideModel)}
+        {winner ? <span className="sr-only">Winner</span> : null}
+      </span>
     );
   };
 
@@ -389,35 +354,44 @@ export function BracketMatchesTab({
     },
     {
       id: 'sideA', label: BRACKET_MATCH_LIST_COLUMNS[2].label, accessor: ({ pu }) => formatSideCondensed(sideOf(pu, 'A')), className: BRACKET_MATCH_CELL.side,
-      render: (_value, { pu }) => renderScoredSide(pu, 'A'),
+      render: (_value, { pu }) => renderNamedSide(pu, 'A'),
     },
     {
-      id: 'sideB', label: BRACKET_MATCH_LIST_COLUMNS[3].label, accessor: ({ pu }) => formatSideCondensed(sideOf(pu, 'B')), className: BRACKET_MATCH_CELL.side,
-      render: (_value, { pu }) => renderScoredSide(pu, 'B'),
-    },
-    {
-      id: 'status', label: BRACKET_MATCH_LIST_COLUMNS[4].label, accessor: ({ pu }) => statusOf(pu.id), align: 'right', className: BRACKET_MATCH_CELL.status,
+      // The centred paired lane BETWEEN the opponents (match-card §3.4):
+      // "18–21, 21–15, 21–13", first number = Side A, no emphasis on any
+      // game. A partial ledger from a walkover/retirement renders WITH its
+      // badge; the winner is still the recorded `winner_side`, never the
+      // numbers. Nothing recorded → the cell stays empty rather than
+      // reserving an invisible marker.
+      id: 'score', label: BRACKET_MATCH_LIST_COLUMNS[3].label,
+      accessor: ({ pu }) => formatGamePairs(resultByPu.get(pu.id)?.score?.sets ?? []),
+      align: 'center', className: BRACKET_MATCH_CELL.score,
       render: (_value, { pu }) => {
         const result = resultByPu.get(pu.id);
-        const reason = result?.reason ?? (result?.walkover ? 'walkover' : null);
-        return <span data-testid={`bracket-match-status-${pu.id}`} className="inline-flex min-w-0 items-center justify-end"><MatchStatus status={statusOf(pu.id)} />{reason ? <span className="ml-1 text-xs text-muted-foreground">{reason === 'walkover' ? 'W.O.' : reason}</span> : null}</span>;
+        const sets = (result?.score?.sets ?? []).filter(
+          (set): set is { sideA: number; sideB: number } =>
+            !!set && typeof set.sideA === 'number' && typeof set.sideB === 'number',
+        );
+        const reason =
+          result?.reason === 'retired' || result?.reason === 'forfeit'
+            ? result.reason
+            : result?.walkover
+              ? 'walkover'
+              : null;
+        return (
+          <ScoreLane
+            sets={sets}
+            reason={reason}
+            sideALabel={sideSummaryText(sideOf(pu, 'A'))}
+            sideBLabel={sideSummaryText(sideOf(pu, 'B'))}
+            data-testid={`bracket-match-score-${pu.id}`}
+          />
+        );
       },
     },
     {
-      // SP-OPCON-1 SWP-4: exceptions only. "Unassigned court" is NOT an issue
-      // for a bracket match — courts are assigned at play time by Operations
-      // (queue scheduling), and a result can be recorded with no assignment at
-      // all, so the old predicate stamped every row of a finished event. The
-      // one real exception this list can see is an unresolved feeder on an
-      // unplayed match. Rows without an issue render NOTHING (X6: a column
-      // painting the same word on every row is decoration, not information).
-      id: 'issue', label: 'Issues',
-      accessor: ({ pu }) =>
-        !resultByPu.has(pu.id) && ((pu.side_a?.length ?? 0) === 0 || (pu.side_b?.length ?? 0) === 0)
-          ? 'Waiting on draw'
-          : '',
-      mobile: true,
-      render: (value) => value ? <span className="font-medium text-status-warning">{String(value)}</span> : null,
+      id: 'sideB', label: BRACKET_MATCH_LIST_COLUMNS[4].label, accessor: ({ pu }) => formatSideCondensed(sideOf(pu, 'B')), className: BRACKET_MATCH_CELL.side,
+      render: (_value, { pu }) => renderNamedSide(pu, 'B'),
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [labelById, resultByPu, shortLabelById]);
@@ -505,9 +479,6 @@ export function BracketMatchesTab({
             <span className="text-sm font-semibold text-foreground tabular-nums">
               {total} match{total === 1 ? '' : 'es'}
             </span>
-            <span className="whitespace-nowrap text-xs text-muted-foreground">
-              · from draws
-            </span>
             {q && shown !== total ? (
               <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
                 · showing {shown}
@@ -522,7 +493,7 @@ export function BracketMatchesTab({
           disabled={exportRows.length === 0}
           title="Export all filtered matches, across every page, to a spreadsheet"
           data-testid="bracket-export-matches"
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
+          className={UTILITY_BUTTON}
         >
           <Download aria-hidden="true" className="h-3.5 w-3.5" />
           Export filtered matches

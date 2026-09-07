@@ -3449,6 +3449,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/board-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Board Settings */
+        get: operations["get_board_settings_tournaments__tournament_id__board_settings_get"];
+        /**
+         * Put Board Settings
+         * @description Replace the board settings wholesale. Small, self-contained document —
+         *     a merge would need a per-field "unset" sentinel to clear a logo.
+         */
+        put: operations["put_board_settings_tournaments__tournament_id__board_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -3895,6 +3917,41 @@ export interface components {
         BackupListDTO: {
             /** Backups */
             backups: components["schemas"]["BackupEntryDTO"][];
+        };
+        /**
+         * BoardSettingsDTO
+         * @description What the venue board LOOKS like and WHICH optional content it carries.
+         *
+         *     Stored on ``tournaments.board_settings`` (one JSON column, this DTO's
+         *     ``model_dump``) rather than in the state blob, and read by BOTH boards —
+         *     meet, bracket and hybrid — plus the public token projection. That is the
+         *     reason it is not another ``tvXxx`` field on ``TournamentConfig``: the
+         *     bracket board never reads the meet config, and ``showNext`` has to mean
+         *     the same thing on every board (operator-visual-fixes P4; match-card
+         *     contract §4.4).
+         *
+         *     ``showNext`` defaults to **False**: the venue board's job is to say what
+         *     is happening on a court now, and a "next" preview is opt-in.
+         */
+        BoardSettingsDTO: {
+            /** Title */
+            title?: string | null;
+            /** Logourl */
+            logoUrl?: string | null;
+            /** Bannerurl */
+            bannerUrl?: string | null;
+            /** Accent */
+            accent?: string | null;
+            /**
+             * Shownext
+             * @default false
+             */
+            showNext: boolean;
+            /**
+             * Showscores
+             * @default true
+             */
+            showScores: boolean;
         };
         /** Body_import_match_states_tournaments__tournament_id__match_states_import_upload_post */
         Body_import_match_states_tournaments__tournament_id__match_states_import_upload_post: {
@@ -4551,12 +4608,25 @@ export interface components {
          * @description ``kind`` is the BOARD kind — which engine(s) the display renders —
          *     not the workspace's legacy ``kind`` column. ``meet`` | ``bracket`` |
          *     ``hybrid``.
+         *
+         *     ``timeZone`` is the workspace's IANA venue zone, carried here so the
+         *     board's clock is the TOURNAMENT's clock. Until operator-visual-fixes P4
+         *     no timezone reached the board's wire at all and both boards hardcoded
+         *     UTC (match-card contract §4.4: "timezone is data, not a constant"). It
+         *     is ``None`` when the workspace has no usable zone, and the board then
+         *     omits the clock rather than inventing one.
+         *
+         *     ``board`` is the venue-board settings document — see ``BoardSettingsDTO``.
+         *     Branding is public by construction: it is what is projected on the wall.
          */
         DisplaySummaryDTO: {
             /** Kind */
             kind: string;
             /** Name */
             name?: string | null;
+            /** Timezone */
+            timeZone?: string | null;
+            board?: components["schemas"]["BoardSettingsDTO"];
         };
         /** DisplayTokenDTO */
         DisplayTokenDTO: {
@@ -8611,6 +8681,11 @@ export interface components {
              * @default setup
              */
             phase: string;
+            /**
+             * Planfinalized
+             * @default false
+             */
+            planFinalized: boolean;
             entries?: components["schemas"]["EntriesMetricsDTO"] | null;
         };
     };
@@ -13401,6 +13476,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DisplayTokenDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_board_settings_tournaments__tournament_id__board_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardSettingsDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_board_settings_tournaments__tournament_id__board_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardSettingsDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardSettingsDTO"];
                 };
             };
             /** @description Validation Error */

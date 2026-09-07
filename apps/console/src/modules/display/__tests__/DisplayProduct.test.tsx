@@ -64,7 +64,7 @@ describe('DisplayProduct', () => {
     await screen.findByTestId('public-display');
     await userEvent.click(screen.getByRole('link', { name: /configure display/i }));
     expect(screen.getByTestId('loc')).toHaveTextContent(
-      '/tournaments/abc123/publish/displays',
+      '/tournaments/abc123/display/board',
     );
   });
 });

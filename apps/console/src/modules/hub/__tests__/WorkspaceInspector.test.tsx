@@ -117,7 +117,7 @@ describe('WorkspaceInspector', () => {
     };
     render(<WorkspaceInspector tournament={withNext} onOpen={onOpen} onSetDate={noop} onSettings={noop} onClose={noop} />);
     screen.getByRole('button', { name: /view all matches/i }).click();
-    expect(onOpen).toHaveBeenCalledWith('t1', 'competition/matches');
+    expect(onOpen).toHaveBeenCalledWith('t1', 'operations/live');
   });
   // SP-UI-1: the rail used to render a separate `inspector-todos` list AND a
   // readiness checklist — one fact set in two shapes. They are now ONE merged

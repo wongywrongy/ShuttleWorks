@@ -95,7 +95,7 @@ export function TournamentSetupPage() {
               locked
               action={
                 <Link
-                  to={`/tournaments/${tid}/competition/matches`}
+                  to={`/tournaments/${tid}/meet/matches`}
                   className="ml-1 font-medium text-accent hover:underline"
                 >
                   View matches →

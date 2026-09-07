@@ -92,7 +92,7 @@ export function resolveActivePane(
           ? 'Displays'
           : primary === 'entries'
             ? 'Entries'
-            : 'Setup · General',
+            : 'Setup · Details',
     canOpenSettings: active?.status === 'disabled',
     reason:
       active?.status === 'disabled'
@@ -170,7 +170,14 @@ export function AppShell() {
   // Whether to render the module outlet or the unavailable panel. The third
   // argument is what makes the absent-module case fail CLOSED once we know
   // what this workspace actually has.
-  const pane = resolveActivePane(activeModule, modules, realModules != null);
+  // Setup is WORKSPACE configuration, not a Meet surface: its four pages
+  // (Details, Entries, Scoring, Public site) must open in every workspace,
+  // including a Bracket-only one whose Meet module is absent. Everything else
+  // still fails closed through the module guard.
+  const pane =
+    activeTab === 'setup'
+      ? ({ kind: 'outlet' } as const)
+      : resolveActivePane(activeModule, modules, realModules != null);
 
   // Discard any in-flight proposal when the operator switches tabs.
   // Otherwise the next visit to the originating tab re-opens the
@@ -272,7 +279,7 @@ export function AppShell() {
         activeTab={activeTab}
         adminActive={
           location.pathname.includes('/administration/') ||
-          (!location.pathname.includes('/publish/') && isAdminSegment(activeTab))
+          isAdminSegment(activeTab)
         }
         onOpenAdmin={() => {
           if (tid) navigate(`/tournaments/${tid}/administration/team`);

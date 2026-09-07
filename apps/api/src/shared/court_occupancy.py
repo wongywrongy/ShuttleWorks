@@ -146,3 +146,70 @@ def occupied_court_count(states: Dict[int, CourtState]) -> int:
 def disputed_court_count(states: Dict[int, CourtState]) -> int:
     """Number of courts in state ``disputed``."""
     return sum(1 for state in states.values() if state == "disputed")
+
+
+# ---- planned occupancy (the Plan surface's question) --------------------
+#
+# Everything above answers "what is on this court RIGHT NOW". A plan asks a
+# different question about the same resource: does the SCHEDULE put two
+# matches on one court at overlapping times? That has nothing to do with
+# ``playing`` status — it is interval arithmetic over court/slot/span, and it
+# is what ``POST /tournaments/{id}/plan-finalized`` refuses to mark ready.
+# The console twin is ``findPlannedClashes`` in
+# ``apps/console/src/platform/domain/courtOccupancy.ts``.
+
+
+@dataclass(frozen=True)
+class PlannedClash:
+    """One court whose plan puts two or more matches in overlapping slots."""
+
+    court_id: int
+    slot_id: int
+    match_keys: List[str]
+
+
+def find_planned_clashes(placements: Iterable[Any]) -> List[PlannedClash]:
+    """Every overlapping cluster in a set of planned placements.
+
+    ``placements`` are dicts or objects carrying ``key``, ``court_id``,
+    ``slot_id`` and (optionally) ``span``; a placement missing a court or a
+    slot is not placed and cannot clash. One entry per cluster, not per pair,
+    ordered by court then slot.
+    """
+    by_court: Dict[int, List[Any]] = {}
+    for placement in placements:
+        court_id = _get(placement, "court_id")
+        slot_id = _get(placement, "slot_id")
+        if court_id is None or slot_id is None:
+            continue
+        by_court.setdefault(int(court_id), []).append(placement)
+
+    clashes: List[PlannedClash] = []
+    for court_id, items in sorted(by_court.items()):
+        ordered = sorted(items, key=lambda p: int(_get(p, "slot_id") or 0))
+        cluster: List[Any] = []
+        cluster_end: Optional[int] = None
+
+        def flush() -> None:
+            if len(cluster) > 1:
+                clashes.append(
+                    PlannedClash(
+                        court_id=court_id,
+                        slot_id=int(_get(cluster[0], "slot_id") or 0),
+                        match_keys=[str(_get(p, "key")) for p in cluster],
+                    )
+                )
+
+        for placement in ordered:
+            start = int(_get(placement, "slot_id") or 0)
+            span = _get(placement, "span") or 1
+            end = start + max(1, int(span))
+            if cluster_end is not None and start < cluster_end:
+                cluster.append(placement)
+                cluster_end = max(cluster_end, end)
+            else:
+                flush()
+                cluster = [placement]
+                cluster_end = end
+        flush()
+    return clashes

@@ -437,7 +437,7 @@ const ROUTES: RouteCase[] = [
     fallback: null,
   },
   { name: 'entry wizard', path: '/e/spring-open/enter' },
-  { name: 'partner invite — unavailable', path: '/e/partner?token=doesnotexist', fallback: 'Not found', fallbackStatus: 404 },
+  { name: 'partner invite — unavailable', path: '/e/partner/doesnotexist', fallback: 'Not found', fallbackStatus: 404 },
   { name: 'my entries (signed out)', path: '/e/me/entries', fallback: null },
   {
     name: 'receipt gate (signed out)',

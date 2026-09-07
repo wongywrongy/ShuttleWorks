@@ -165,3 +165,79 @@ export function disputedCourtCount(states: ReadonlyMap<number, CourtState>): num
   for (const state of states.values()) if (state === 'disputed') n += 1;
   return n;
 }
+
+// ── planned occupancy (Plan surface) ──────────────────────────────────────
+// The three functions above answer "what is on this court RIGHT NOW". The
+// Plan surface asks a different question about the same resource: does the
+// PLAN put two matches on one court at overlapping times? That is a clash in
+// a schedule nobody has run yet, so it has nothing to do with `playing`
+// status — it is pure interval arithmetic over court/slot/span. The backend
+// twin is `find_planned_clashes` in `apps/api/src/shared/court_occupancy.py`,
+// which the `plan-finalized` write boundary enforces.
+
+export interface PlannedPlacement {
+  /** Stable identifier for the placed match (`{source}:{id}` on the console). */
+  key: string;
+  court?: number | null;
+  slot?: number | null;
+  /** Slots the match occupies from `slot`. Defaults to 1. */
+  span?: number | null;
+}
+
+export interface PlannedClash {
+  courtId: number;
+  /** First slot of the overlapping window. */
+  slotId: number;
+  /** Keys of every placement overlapping in that window, in placement order. */
+  keys: string[];
+}
+
+/**
+ * Every court whose plan puts two or more matches in overlapping slots.
+ *
+ * One entry per overlapping cluster (not per pair), keyed on the cluster's
+ * earliest slot, ordered by court then slot. A placement without a court or
+ * a slot is not placed, so it cannot clash.
+ */
+export function findPlannedClashes(
+  placements: readonly PlannedPlacement[],
+): PlannedClash[] {
+  const byCourt = new Map<number, PlannedPlacement[]>();
+  for (const p of placements) {
+    if (p.court == null || p.slot == null) continue;
+    const list = byCourt.get(p.court) ?? [];
+    list.push(p);
+    byCourt.set(p.court, list);
+  }
+  const clashes: PlannedClash[] = [];
+  for (const [court, list] of [...byCourt.entries()].sort((a, b) => a[0] - b[0])) {
+    const sorted = [...list].sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0));
+    let cluster: PlannedPlacement[] = [];
+    let clusterEnd = -Infinity;
+    const flush = () => {
+      if (cluster.length > 1) {
+        clashes.push({
+          courtId: court,
+          slotId: cluster[0].slot ?? 0,
+          keys: cluster.map((p) => p.key),
+        });
+      }
+      cluster = [];
+      clusterEnd = -Infinity;
+    };
+    for (const p of sorted) {
+      const start = p.slot ?? 0;
+      const end = start + Math.max(1, p.span ?? 1);
+      if (start < clusterEnd) {
+        cluster.push(p);
+        clusterEnd = Math.max(clusterEnd, end);
+      } else {
+        flush();
+        cluster = [p];
+        clusterEnd = end;
+      }
+    }
+    flush();
+  }
+  return clashes;
+}

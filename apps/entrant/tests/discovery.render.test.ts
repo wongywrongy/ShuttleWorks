@@ -226,12 +226,10 @@ describe('the control row (§2.3)', () => {
     expect(completed).toContain('Completed · 2');
   });
 
-  it('maps a legacy ?status= link onto the equivalent view (§7 trap 5)', async () => {
+  it('returns 404 for the removed ?status= route alias', async () => {
     const html = await render('/e/?status=open', NO_NOW);
 
-    expect(html).toContain('Wessex Autumn Gold');
-    expect(html).not.toContain('Meadowbank Masters');
-    expect(html).not.toContain('Harbour Invitational');
+    expect(html).toContain('This page is not available');
   });
 
   it('searches name, organizer and venue', async () => {

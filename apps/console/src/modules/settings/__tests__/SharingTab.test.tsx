@@ -67,10 +67,17 @@ describe('SharingTab', () => {
 
   it('shows the capability display link fetched from getDisplayToken', async () => {
     render(<SharingTab tid="t1" />);
-    const input = screen.getByLabelText('Venue board link') as HTMLInputElement;
-    await waitFor(() => expect(input.value).toContain('/display?token=tok-abc'));
+    // The surface shows a READABLE label; the real capability URL is what
+    // Copy puts on the clipboard and what `title` carries for hover/AT.
+    const link = await screen.findByTestId('display-link-label');
+    await waitFor(() =>
+      expect(link.getAttribute('title')).toContain('/display?token=tok-abc'),
+    );
+    expect(link.textContent).toContain('Venue board');
+    // The opaque token is not printed on the page.
+    expect(link.textContent).not.toContain('tok-abc');
     expect(apiClient.getDisplayToken).toHaveBeenCalledWith('t1');
-    expect(input.value).not.toContain('?id=');
+    expect(link.getAttribute('title')).not.toContain('?id=');
   });
 
   /* Rotate revokes the LIVE venue display link on the spot: mid-event, the
@@ -80,13 +87,13 @@ describe('SharingTab', () => {
    * outside that row. */
   it('Rotate link does NOT rotate on the first click: it arms', async () => {
     render(<SharingTab tid="t1" />);
-    const input = screen.getByLabelText('Venue board link') as HTMLInputElement;
-    await waitFor(() => expect(input.value).toContain('tok-abc'));
+    const link = await screen.findByTestId('display-link-label');
+    await waitFor(() => expect(link.getAttribute('title')).toContain('tok-abc'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
 
     expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
-    expect(input.value).toContain('tok-abc');
+    expect(link.getAttribute('title')).toContain('tok-abc');
     // Armed state names the consequence rather than repeating the label.
     expect(
       screen.getByRole('button', { name: 'Confirm replacing the venue board link' }),
@@ -95,15 +102,15 @@ describe('SharingTab', () => {
 
   it('Rotate link swaps in the new token on the confirming second click', async () => {
     render(<SharingTab tid="t1" />);
-    const input = screen.getByLabelText('Venue board link') as HTMLInputElement;
-    await waitFor(() => expect(input.value).toContain('tok-abc'));
+    const link = await screen.findByTestId('display-link-label');
+    await waitFor(() => expect(link.getAttribute('title')).toContain('tok-abc'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
     fireEvent.click(
       screen.getByRole('button', { name: 'Confirm replacing the venue board link' }),
     );
 
-    await waitFor(() => expect(input.value).toContain('/display?token=tok-new'));
+    await waitFor(() => expect(link.getAttribute('title')).toContain('/display?token=tok-new'));
     expect(apiClient.rotateDisplayToken).toHaveBeenCalledWith('t1');
   });
 
@@ -111,7 +118,7 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        (screen.getByLabelText('Venue board link') as HTMLInputElement).value,
+        screen.getByTestId('display-link-label').getAttribute('title'),
       ).toContain('tok-abc'),
     );
 
@@ -128,7 +135,7 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        (screen.getByLabelText('Venue board link') as HTMLInputElement).value,
+        screen.getByTestId('display-link-label').getAttribute('title'),
       ).toContain('tok-abc'),
     );
 
@@ -149,7 +156,7 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        (screen.getByLabelText('Venue board link') as HTMLInputElement).value,
+        screen.getByTestId('display-link-label').getAttribute('title'),
       ).toContain('tok-abc'),
     );
     const replaceButton = screen.getByRole('button', { name: 'Replace the venue board link' });
@@ -164,7 +171,7 @@ describe('SharingTab', () => {
   // must not render a second page heading for the same board.
   it('scope="links" renders no page heading of its own (DisplayConfig owns it)', async () => {
     render(<SharingTab tid="t1" scope="links" />);
-    await screen.findByLabelText('Venue board link');
+    await screen.findByTestId('display-link-label');
     expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
   });
 
@@ -184,7 +191,7 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     const pub = screen.getByTestId('sharing-public');
     expect(pub).toHaveTextContent(/anyone with this link/i);
-    expect(within(pub).getByLabelText('Venue board link')).toBeInTheDocument();
+    expect(within(pub).getByTestId('display-link-label')).toBeInTheDocument();
     const inv = screen.getByTestId('sharing-invites');
     expect(within(inv).getByText(/operate this workspace/i)).toBeInTheDocument();
     expect(within(inv).getByRole('button', { name: 'Send invitation' })).toBeInTheDocument();
@@ -262,7 +269,7 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
 
   it('is absent when the workspace has no entry page', async () => {
     render(<SharingTab tid="t1" />);
-    await screen.findByLabelText('Venue board link');
+    await screen.findByTestId('display-link-label');
     expect(screen.queryByTestId('sharing-publication')).toBeNull();
   });
 

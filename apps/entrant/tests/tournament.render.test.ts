@@ -130,24 +130,12 @@ describe('the tab bar and its panels (Z6)', () => {
     expect(draws).not.toContain('Bank transfer on the day.');
   });
 
-  it('folds the retired Events bookmark onto the Draws panel (ADR 0028)', async () => {
-    const html = await render(PAGE, '/e/spring-open?tab=events');
-    const nav = html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? '';
-    expect(nav).toMatch(/aria-current="page"[^>]*>Draws<\/a>/);
-    expect(html).toContain('7 players');
+  it.each(['events', 'entrants', 'seeds', 'winners', 'results'])('returns 404 for removed %s tab URLs', async (removed) => {
+    const response = await respond(PAGE, 200, `/e/spring-open?tab=${removed}`);
+    expect(response.status).toBe(404);
   });
 
-  it('maps a legacy Entrants bookmark to the unified Players panel', async () => {
-    const html = await render(PAGE, '/e/spring-open?tab=entrants');
-    const nav = html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? '';
-    expect(nav).toMatch(/aria-current="page"[^>]*>Players<\/a>/);
-    expect(html).toContain('No players published yet.');
-  });
-
-  it('renders Overview for an unknown or gate-hidden ?tab', async () => {
-    const unknown = await render(PAGE, '/e/spring-open?tab=results');
-    expect(unknown).toContain('Key dates');
-
+  it('returns 404 for a hidden canonical ?tab', async () => {
     // SP-P7 §4: the entrants tab is the PUBLICATION's, not the list
     // length's — unpublished hides the tab and folds its ?tab to Overview,
     // even when confirmed entrants exist behind the gate.
@@ -156,9 +144,8 @@ describe('the tab bar and its panels (Z6)', () => {
       publication: { ...PAGE.publication, entrants: false },
       entrants: [],
     };
-    const hidden = await render(unpublished, '/e/spring-open?tab=entrants');
-    expect(hidden).toContain('Key dates');
-    expect(hidden).not.toContain('>Entrants<');
+    const hidden = await respond(unpublished, 200, '/e/spring-open?tab=players');
+    expect(hidden.status).toBe(404);
   });
 
   it('a published-but-empty player list is a real tab with a plain answer', async () => {

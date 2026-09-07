@@ -1,6 +1,13 @@
 """Reconstruct legacy bracket court/scheduling states the write invariants
 now prevent — directly through the ORM, on the shared tournament fixture.
 
+**FAILURE MODE ONLY.** `tools/fixture-up.sh` runs this script only under
+``FIXTURE_MODE=failure``. The default ``normal`` mode is the clean
+visual-review dataset a surface book is captured from, and the deliberately
+corrupted and conflicting states below must never appear in it
+(operator-visual-fixes.md, package P0). Nothing here is deleted — it is
+kept, behind that flag, for failure and recovery testing.
+
 Work package 01b of the v3 consolidated plan. Work package 01a
 (``docs/audits/v3-consolidated/reports/01-fixture.md``, debt-log V3-01-2)
 found that four fixture states have NO API write path at all for a

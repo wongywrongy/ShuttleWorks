@@ -63,7 +63,7 @@ export function InvitePage() {
     try {
       const r = await apiClient.acceptInvite(token);
       navigate(
-        `/tournaments/${encodeURIComponent(r.tournamentId)}/setup/general`,
+        `/tournaments/${encodeURIComponent(r.tournamentId)}/setup/details`,
         {
           replace: true,
         },

@@ -23,7 +23,7 @@ describe('nextActionFor', () => {
   it('routes attention actions to the canonical workflow destination', () => {
     expect(rowActionFor(t('NO_ROSTER'), 'upcoming').segment).toBe('participants/people');
     expect(rowActionFor(t('NOT_SCHEDULED'), 'upcoming').segment).toBe('operations/plan');
-    expect(rowActionFor(t('NO_BRACKET'), 'upcoming').segment).toBe('competition/draws');
+    expect(rowActionFor(t('NO_BRACKET'), 'upcoming').segment).toBe('bracket/draws');
   });
 });
 
@@ -45,12 +45,12 @@ describe('rowActionFor', () => {
     expect(rowActionFor(bracket, 'upcoming')).toEqual({
       label: 'View draws',
       kind: 'results',
-      segment: 'competition/draws',
+      segment: 'bracket/draws',
     });
     expect(rowActionFor({ ...bracket, signals: undefined }, 'past')).toEqual({
       label: 'View draws',
       kind: 'results',
-      segment: 'competition/draws',
+      segment: 'bracket/draws',
     });
   });
 });

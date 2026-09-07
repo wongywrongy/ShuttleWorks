@@ -176,7 +176,7 @@ describe('WorkspaceOverview', () => {
     it('complete: frames the event as results', () => {
       renderOverview(withPhase('complete'));
       screen.getByRole('button', { name: 'View results' }).click();
-      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/competition/matches');
+      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/meet/matches');
     });
 
     it('routes a bracket workspace to the bracket surfaces', () => {
@@ -187,7 +187,7 @@ describe('WorkspaceOverview', () => {
       };
       renderOverview(br);
       screen.getByRole('button', { name: 'View draws' }).click();
-      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/competition/draws');
+      expect(navigate).toHaveBeenCalledWith('/tournaments/t1/bracket/draws');
     });
   });
 

@@ -34,6 +34,9 @@ import { staleCaption, STALE_MS } from './publicDisplay/freshness';
 import { formatDateTime } from '../../lib/formatDateTime';
 import { useFullscreen } from './publicDisplay/useFullscreen';
 import { formatTournamentDate } from './publicDisplay/helpers';
+import { BoardBanner, BoardClock, BoardMark, resolveBoardAccent } from './publicDisplay/boardChrome';
+import { DEFAULT_BOARD_SETTINGS } from './useDisplayKind';
+import type { BoardSettingsDTO } from '../../api/dto';
 import { FullscreenButton } from './publicDisplay/FullscreenButton';
 import { BoardSwitch } from './publicDisplay/BoardSwitch';
 import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
@@ -52,7 +55,6 @@ import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
 import { orderCourts, visibleCourts, defaultColumns, autoLayout } from './publicDisplay/courtLayout';
 import { standingsPlacement } from './publicDisplay/standingsLayout';
 import {
-  resolveTvAccent,
   resolveCardHeightPx,
   resolveCardSizeClasses,
   resolveGridColsClass,
@@ -65,21 +67,6 @@ import { formatMatchIdentity, meetMatchIdentityFromStored } from '../../platform
 
 /** How long the NOW CALLING strip holds before the board moves on. */
 const NOW_CALLING_DWELL_MS = 8_000;
-
-/**
- * The board is supposed to render the TOURNAMENT timezone (state-and-
- * formatting contract §7.1/§7.4, D13, V3-OC24.2), never the viewer's own
- * browser zone — a board in one hall and a phone checking it from another
- * time zone must read the same clock. No timezone reaches this page's wire
- * data today: neither `TournamentConfig` (the `config` this page hydrates)
- * nor `ScheduleDTO` carries a `timeZone` field, unlike `TournamentSummaryDTO`
- * (which the in-shell Settings tabs read separately). Falling back to UTC
- * and LABELING it (§7.2's documented fallback: "14:30 UTC", never a silent
- * local-time assumption) is the honest behavior until that field is wired
- * through the display projection — see docs/audits/v3-consolidated/reports/
- * 17-signage.md and debt-log.md for the follow-up.
- */
-const BOARD_TIME_ZONE = 'UTC';
 
 function getMatchCode(match: { id: string; eventRank?: string | null; matchNumber?: number | null }): string {
   const identity = meetMatchIdentityFromStored({
@@ -98,7 +85,25 @@ type ViewMode = 'courts' | 'schedule';
  *  tournament half of which it cannot see. Meet and Bracket match records are
  *  non-merged by design (ADR 0006) — there is no cross-engine denominator to
  *  state, so the honest fix is to name the half being counted. */
-export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: boolean; preview?: boolean } = {}) {
+export function MeetDisplayPage({
+  hybrid = false,
+  preview = false,
+  name = null,
+  timeZone = null,
+  board = DEFAULT_BOARD_SETTINGS,
+}: {
+  hybrid?: boolean;
+  preview?: boolean;
+  /** The workspace's own name — the board title falls back to it. */
+  name?: string | null;
+  /** The TOURNAMENT's IANA zone, resolved once by `PublicDisplayPage`. Null
+   *  when unavailable, and the clock is then omitted rather than guessed
+   *  (match-card §4.4). This page used to hardcode `BOARD_TIME_ZONE = 'UTC'`
+   *  because no zone reached its wire at all; the zone is data now. */
+  timeZone?: string | null;
+  /** Persisted board settings: branding, Show next, Show scores. */
+  board?: BoardSettingsDTO;
+} = {}) {
   const [searchParams] = useSearchParams();
   // Whitelist, not a blind cast: a stale bookmarked/QR'd URL from before
   // task 9 (`?view=standings` was a real, documented param) must still
@@ -140,11 +145,6 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
 
   // Fullscreen toggle + F-key shortcut. See ./publicDisplay/useFullscreen.ts.
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
-
-  // `clock_with_zone` (state-and-formatting §7.1): time-of-day + zone
-  // abbreviation, tournament-tz-aware — see BOARD_TIME_ZONE's doc comment
-  // for why that is 'UTC', labeled, rather than the browser's own zone.
-  const currentTime = formatDateTime(now.toISOString(), 'clock_with_zone', BOARD_TIME_ZONE);
 
   const playerNames = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
   const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
@@ -433,10 +433,11 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
         className="min-h-[100dvh] bg-background text-foreground flex items-center justify-center"
       >
         <div className="absolute right-4 top-4 flex items-center gap-3">
-          {/* A freshness pill on a dead link promises a recovery that can never
-              come; the board is not "Delayed", it is finished. */}
-          {linkDead ? null : <LiveStatusPill status={freshness} />}
-          <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+          {/* Freshness is operator information (match-card §4.4): the pill
+              rides the preview only. A pill on a dead link would in any case
+              promise a recovery that can never come. */}
+          {preview && !linkDead ? <LiveStatusPill status={freshness} /> : null}
+          {preview ? <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} /> : null}
         </div>
         {linkDead ? (
           <div className="text-center" data-testid="display-link-invalid">
@@ -456,6 +457,11 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
       </div>
     );
   }
+
+  // On an unusable or expired snapshot the VENUE board withholds the match
+  // content rather than showing it behind a public warning (match-card
+  // §4.4). The operator's preview keeps rendering it, dimmed and captioned.
+  const contentSuppressed = freshness === 'stale' && !preview;
 
   const finishedCount = matchesByStatus.finished.length;
   const totalCount = schedule.assignments.length;
@@ -478,11 +484,14 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
   // (previously duplicated verbatim across board renderers; extracted as
   // part of task 7 to remove that drift risk. The sample-data DisplayPreview
   // swatch that also shared it was dead code, removed in package 16).
-  const tvAccent = resolveTvAccent(config.tvAccent);
+  // The accent is a BOARD setting now (one owner, both boards) with the
+  // legacy `config.tvAccent` as the fallback so a workspace that set one
+  // before the appearance controls existed keeps it.
+  const tvAccent = resolveBoardAccent(board.accent ?? config.tvAccent);
   const tvCardSize = config.tvCardSize ?? 'auto';
-  const tvShowScores = config.tvShowScores !== false;
+  const tvShowScores = board.showScores;
   const cardHeightPx = resolveCardHeightPx(tvCardSize, isFullscreen);
-  const { courtNumSize, eventCodeSize, playerSize, cardPadX } = resolveCardSizeClasses(cardHeightPx);
+  const { cardPadX } = resolveCardSizeClasses(cardHeightPx);
 
   // Columns — director override wins; otherwise derived. In `auto` the
   // derivation reads the BOARD's shape as well as the court count
@@ -509,11 +518,8 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
       gridColsClass={gridColsClass}
       cardHeightPx={cardHeightPx}
       cardPadX={cardPadX}
-      courtNumSize={courtNumSize}
-      eventCodeSize={eventCodeSize}
-      playerSize={playerSize}
-      tvAccent={tvAccent}
       tvShowScores={tvShowScores}
+      showNext={board.showNext}
       isFullscreen={isFullscreen}
       playerNames={playerNames}
     />
@@ -545,43 +551,58 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
         }}
       />
       {/* ---------- Header ------------------------------------------------ */}
+      <BoardBanner bannerUrl={board.bannerUrl} />
       <div className="sticky top-0 z-hud border-b border-border bg-background/90 px-6 py-4 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
-            {/* Tournament name when set, else a generic "Live ops" label
-                so the header still anchors the page when the operator
-                hasn't named their tournament. */}
-            <div className="min-w-0 break-words text-3xl font-bold tracking-tight">
-              {config.tournamentName?.trim() || 'Tournament status'}
-            </div>
-            {formatTournamentDate(config.tournamentDate) && (
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+            {/* Board identity: the operator's logo and title (falling back
+                to the workspace name), and the tournament date. Freshness
+                and sync diagnostics are OPERATOR information and render
+                only in the preview (match-card §4.4 / state-and-formatting
+                §8) — the LIVE pill and the "Updated …" stamp are gone from
+                the wall. */}
+            <BoardMark
+              logoUrl={board.logoUrl}
+              title={
+                board.title?.trim() ||
+                config.tournamentName?.trim() ||
+                name?.trim() ||
+                // The header still has to anchor the page for an operator who
+                // has not named their workspace yet.
+                'Tournament status'
+              }
+            />
+            {formatTournamentDate(config.tournamentDate, timeZone ?? undefined) && (
               <div className="whitespace-nowrap text-base text-muted-foreground tabular-nums">
-                {formatTournamentDate(config.tournamentDate)}
+                {formatTournamentDate(config.tournamentDate, timeZone ?? undefined)}
               </div>
             )}
-            <LiveStatusPill status={freshness} />
-            <SyncHealthIndicator
-              lastSyncedAt={lastSyncedAt}
-              error={syncError}
-              terminal={linkDead}
-              nowMs={now.getTime()}
-            />
-            {lastSyncedAt ? (
-              // `datetime` (date + clock, tournament tz) rather than the
-              // bare time-of-day this used to render: V3-OC24.2's exact
-              // finding was "Updated 04:07 AM" with no date, unreadable
-              // across midnight on a board left running overnight. The
-              // machine-readable `diagnostic` ISO value goes on `<time>`
-              // per state-and-formatting §7.1.
-              <time
-                data-testid="display-last-updated"
-                dateTime={formatDateTime(new Date(lastSyncedAt).toISOString(), 'diagnostic') ?? undefined}
-                className="whitespace-nowrap text-xs text-muted-foreground"
-                title={`Last updated ${formatDateTime(new Date(lastSyncedAt).toISOString(), 'deadline', BOARD_TIME_ZONE)}`}
-              >
-                Updated{' '}
-                {formatDateTime(new Date(lastSyncedAt).toISOString(), 'datetime', BOARD_TIME_ZONE)}
-              </time>
+            {preview ? (
+              <>
+                <LiveStatusPill status={freshness} />
+                <SyncHealthIndicator
+                  lastSyncedAt={lastSyncedAt}
+                  error={syncError}
+                  terminal={linkDead}
+                  nowMs={now.getTime()}
+                />
+                {lastSyncedAt ? (
+                  <time
+                    data-testid="display-last-updated"
+                    dateTime={
+                      formatDateTime(new Date(lastSyncedAt).toISOString(), 'diagnostic') ?? undefined
+                    }
+                    className="whitespace-nowrap text-xs text-muted-foreground"
+                  >
+                    Updated{' '}
+                    {formatDateTime(
+                      new Date(lastSyncedAt).toISOString(),
+                      'datetime',
+                      timeZone ?? undefined,
+                    )}
+                  </time>
+                ) : null}
+              </>
             ) : null}
           </div>
           {/* Venue render keeps the clock and nothing else (TV-8): nobody is
@@ -618,12 +639,9 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
                   they showed. */}
               {hybrid ? <BoardSwitch to="bracket" /> : null}
             </div>
-            {/* Signage clock floor: >= 40px (match-card contract §4.4,
-                initial target pending package 27's physical validation).
-                `text-5xl` is 48px, comfortably clearing it. */}
-            <time dateTime={now.toISOString()} className="tabular-nums text-5xl text-muted-foreground">
-              {currentTime}
-            </time>
+            {/* Secondary clock, tournament zone, NO zone abbreviation —
+                and omitted entirely when there is no usable zone (§4.4). */}
+            <BoardClock now={now} timeZone={timeZone} />
             {preview ? <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} /> : null}
           </div>
         </div>
@@ -665,16 +683,22 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
           <>
             {view === 'courts' && (
               <>
-                {freshness === 'stale' && (
+                {/* An unusable snapshot SUPPRESSES the untrustworthy match
+                    content on the wall rather than publishing a diagnostic
+                    banner over it (match-card §4.4). The caption and the
+                    dimmed content are operator information and ride the
+                    preview only; `lastSyncedAt` is non-null whenever
+                    freshness is 'stale'. */}
+                {freshness === 'stale' && preview && (
                   <div className="mb-4 text-center text-base text-muted-foreground">
-                    {/* V3-OC24.2: says HOW old, not a fixed "a few minutes"
-                        regardless of actual age. `lastSyncedAt` is non-null
-                        whenever freshness is 'stale' (useDisplaySync only
-                        derives 'stale' from an aged successful sync). */}
                     {staleCaption(lastSyncedAt ? now.getTime() - lastSyncedAt : STALE_MS)}
                   </div>
                 )}
-                <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>{courtsViewNode}</div>
+                {contentSuppressed ? null : (
+                  <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>
+                    {courtsViewNode}
+                  </div>
+                )}
               </>
             )}
 

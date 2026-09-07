@@ -137,22 +137,23 @@ describe('the Hub row keeps its name at a narrow container width', () => {
     expect(workspaceRow).toMatch(/className="flex min-w-\[12rem\] flex-1 items-center gap-2\.5"/);
   });
 
-  it('the Modules glyphs yield first — priority 3, hides soonest', () => {
-    expect(workspaceRow).toMatch(/COL_PRIORITY_CLASS_FLEX\[3\]/);
+  it('the module glyphs yield first — priority 3, hides soonest', () => {
+    expect(workspaceRow).toMatch(/COL_PRIORITY_CLASS\[3\]/);
   });
 
-  it('the Date cell yields next — priority 2, both branches (dated and undated)', () => {
-    // DateCell has two `return`s (the undated spacer, the dated label); both
-    // must carry the priority class, or the 64px column reserves its width
-    // whenever ANY row in the list happens to be undated.
-    const hits = workspaceRow.match(/COL_PRIORITY_CLASS\[2\]/g) ?? [];
-    expect(hits.length).toBeGreaterThanOrEqual(2);
+  it('the date rides the name cell rather than reserving its own column', () => {
+    // The date moved to the LEFT, beside the name it belongs to, so there is
+    // no fixed-width date column to yield: it is inside the one flexible cell
+    // and wraps with it. Nothing else may claim priority 2 either — a second
+    // yielding column would take width from the name at the same breakpoint.
+    expect(workspaceRow).toMatch(/data-testid="row-date"/);
+    expect(workspaceRow).not.toMatch(/COL_PRIORITY_CLASS\[2\]/);
   });
 
-  it('the Hub column header shares the row\'s container and the same two priorities', () => {
+  it('the Hub column header shares the row\'s container and its one priority', () => {
     expect(hubPage).toMatch(/@container\/table/);
     expect(hubPage).toMatch(/COL_PRIORITY_CLASS\[3\]/);
-    expect(hubPage).toMatch(/COL_PRIORITY_CLASS\[2\]/);
+    expect(hubPage).not.toMatch(/COL_PRIORITY_CLASS\[2\]/);
   });
 });
 

@@ -8,20 +8,20 @@ const mod = (
 ): WorkspaceModuleDTO => ({ moduleId, status, config: null });
 
 describe('landingRoute', () => {
-  it('opens the in-workspace Overview when a module is enabled (meet)', () => {
+  it('lands on Setup · Details when a module is enabled (meet)', () => {
     expect(landingRoute({ id: 'w1', kind: 'meet', modules: [mod('meet', 'enabled'), mod('display', 'enabled')] }))
-      .toBe('/tournaments/w1/overview');
+      .toBe('/tournaments/w1/setup/details');
   });
-  it('opens Overview for a bracket workspace too', () => {
+  it('lands on Setup · Details for a bracket workspace too', () => {
     expect(landingRoute({ id: 'w2', kind: 'bracket', modules: [mod('bracket', 'enabled'), mod('meet', 'available')] }))
-      .toBe('/tournaments/w2/overview');
+      .toBe('/tournaments/w2/setup/details');
   });
   it('lands on the Modules admin when NOTHING is enabled (blank/custom)', () => {
     expect(landingRoute({ id: 'w3', kind: 'meet', modules: [mod('meet', 'available'), mod('bracket', 'available'), mod('display', 'disabled')] }))
       .toBe('/tournaments/w3/administration/modules');
   });
-  it('falls back to kind-derived modules when modules absent → Overview', () => {
+  it('falls back to kind-derived modules when modules absent → Setup', () => {
     expect(landingRoute({ id: 'w4', kind: 'meet', modules: undefined }))
-      .toBe('/tournaments/w4/overview');
+      .toBe('/tournaments/w4/setup/details');
   });
 });

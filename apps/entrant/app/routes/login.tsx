@@ -86,10 +86,6 @@ const DEFAULT_NEXT = '/e/login/signed-in';
 
 /** Keep the account creation handoff in the same tournament context. */
 function signupHrefFor(next: string): string {
-  const entry = next.match(/^\/e\/([^/]+)\/enter(?:\/(?:created|signed-in))?$/);
-  if (entry) return `/e/signup/${encodeURIComponent(entry[1])}`;
-  const partner = next.match(/^\/e\/partner\/([^/]+)$/);
-  if (partner) return `/e/signup/partner/${encodeURIComponent(partner[1])}`;
   return `/e/signup?next=${encodeURIComponent(next)}`;
 }
 

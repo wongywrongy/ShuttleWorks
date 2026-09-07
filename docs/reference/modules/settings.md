@@ -35,7 +35,7 @@ browser-scoped, not workspace-scoped, and is out of scope here.
 
 `platform/product-shell/workspaceNav.ts` is the canonical route and label
 model. `SetupProduct` owns `/setup` and `/setup/*`; `PublishProduct` owns
-`/publish/*`; `WorkspaceShellSurface` composes Overview and Administration.
+`display/board`; `WorkspaceShellSurface` composes Overview, Display and Administration.
 Legacy `ws-*` segments remain internal compatibility keys and are not
 user-facing route vocabulary.
 
@@ -43,13 +43,19 @@ user-facing route vocabulary.
 | --- | --- | --- | --- |
 | **Overview** | `overview` | `WorkspaceOverview` | phase summary and next actions |
 | **Setup checklist and sections** | `setup`, `setup/*` | `SetupProduct` | one master readiness checklist; section editors or read-only domain summaries |
-| **Site** | `publish/site` | `PublishProduct` → `SharingTab` | single owner of entrant, draw, and result publication flags |
-| **Links and embeds** | `publish/links` | `PublishProduct` → `SharingTab` | capability links, embeds, and token rotation |
+| **Public site** | `setup/public-site` | `SetupProduct` → `PublicationSettings` | single owner of entrant, draw, and result publication flags, beside the content they govern |
+| **Board settings** | `display/board` | `DisplayBoardSettings` → `DisplayConfig` + `SharingTab` | venue-board configuration, capability link, and token rotation |
 | **Team** | `administration/team` | `PeopleAccessTab` | members, real identities, roles, and invites |
 | **Modules** | `administration/modules` | `ModulesSettingsTab` | module enablement and dependency guards |
-| **Backups** | `administration/backups` | `SyncBackupsTab` | state-snapshot list, create, and restore |
-| **Activity** | `administration/activity` | `ActivityTab` | workspace activity history |
-| **Workspace settings** | `administration/lifecycle` | `GeneralSettingsTab` + `DangerZoneTab` | lifecycle summary, archive and unarchive, and destructive actions |
+| **Workspace** | `administration/lifecycle` | `WorkspaceAdminPage` → `GeneralSettingsTab` + `DangerZoneTab` | lifecycle summary, archive and unarchive, and destructive actions |
+| **Workspace › Backups** | `administration/backups` | `WorkspaceAdminPage` → `SyncBackupsTab` | state-snapshot list, create, and restore |
+| **Workspace › Activity log** | `administration/activity` | `WorkspaceAdminPage` → `ActivityTab` | workspace activity history |
+
+The rail lists **three** Administration destinations — Team, Modules,
+Workspace. Backups and the activity log are tabs inside Workspace (they are
+facts *about* the workspace, not separate administrations); their URLs are
+unchanged, so an old bookmark opens the tab it named and the rail keeps
+Workspace active on it.
 
 (`display-config` is also a shell-rendered surface, but it belongs to the
 [Display module](/reference/modules/display), not to the admin block.)

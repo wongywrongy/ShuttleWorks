@@ -2273,6 +2273,24 @@ class LocalRepository:
         )
         return self.tournaments.get_by_id(row.tournament_id) if row else None
 
+    def get_board_settings(self, tournament_id: uuid.UUID) -> Optional[dict]:
+        """The workspace's stored venue-board settings, or None when never set."""
+        row = self.tournaments.get_by_id(tournament_id)
+        return row.board_settings if row is not None else None
+
+    def set_board_settings(
+        self,
+        tournament_id: uuid.UUID,
+        settings: dict,
+    ) -> Optional[dict]:
+        """Replace the venue-board settings wholesale (the DTO is the schema)."""
+        row = self.tournaments.get_by_id(tournament_id)
+        if row is None:
+            return None
+        row.board_settings = settings
+        _commit_transaction(self.session)
+        return row.board_settings
+
     def get_workspace_module_statuses(
         self,
         tournament_id: uuid.UUID,

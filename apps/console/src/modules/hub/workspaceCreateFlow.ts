@@ -5,18 +5,21 @@ import { modulesFromDto, modulesForWorkspace } from '../../platform/domain/modul
 
 type CreatedLike = Pick<TournamentSummaryDTO, 'id' | 'kind' | 'modules'>;
 
-/** Where to land after creating a workspace. Opens on the in-workspace Overview
- *  (the readiness landing — same as the Hub's "Open"), so the entry point is
- *  consistent however you arrive. A workspace with no enabled module (Blank / a
- *  fully-available Custom build) opens on the Modules admin instead, so the
- *  operator can enable one before there's anything to be ready for.
+/** Where to land after creating a workspace: **Setup → Details**, where the
+ *  venue, courts and the rest of the event definition are completed. Creation
+ *  asks for a name, a date and the modules; Details is the next thing to do,
+ *  and Overview (which reports readiness) has nothing to report yet.
+ *
+ *  A workspace with no enabled module at all opens on the Modules admin
+ *  instead, so the operator can enable one before there's anything to set up.
  *
  *  Precondition: the blank/available-only guarantee holds only when `created.modules`
  *  is present. If it's absent (legacy pre-modules payload), we fall back to
- *  kind-derived modules — which always has one enabled module — so it lands on Overview. */
+ *  kind-derived modules — which always has one enabled module — so it lands on
+ *  Setup. */
 export function landingRoute(created: CreatedLike): string {
   const mods = created.modules ? modulesFromDto(created.modules) : modulesForWorkspace(created.kind);
   const anyEnabled = mods.some((m) => m.status === 'enabled');
   if (!anyEnabled) return `/tournaments/${created.id}/administration/modules`;
-  return `/tournaments/${created.id}/overview`;
+  return `/tournaments/${created.id}/setup/details`;
 }

@@ -45,6 +45,7 @@ from identity import members as members_service
 from identity.auth import ensure_user_personal_org_id
 from operations import conflict_metrics
 from bracket import response_cache
+from shared.court_occupancy import find_planned_clashes
 from workspaces.config_lock import changed_scheduling_fields
 from meet.standings import compute_meet_standings
 from identity.invites import (
@@ -1289,6 +1290,44 @@ class PlanFinalizedDTO(StrictModel):
     finalized: bool
 
 
+def _planned_placements(data: dict) -> list[dict]:
+    """Every court+slot placement the stored plan makes, both engines.
+
+    Meet's committed schedule (``data["schedule"]["assignments"]``:
+    matchId/slotId/courtId/durationSlots) and the bracket session's
+    assignments (``play_unit_id``/``slot_id``/``court_id``/``duration_slots``)
+    place matches on the SAME physical courts (ADR 0006 keeps the records
+    separate, not the venue), so a readiness check that looked at one engine
+    would miss half the ways a court can be double-booked.
+    """
+    placements: list[dict] = []
+    schedule = data.get("schedule") or {}
+    for a in schedule.get("assignments") or []:
+        if not isinstance(a, dict):
+            continue
+        placements.append(
+            {
+                "key": f"meet:{a.get('matchId')}",
+                "court_id": a.get("courtId"),
+                "slot_id": a.get("slotId"),
+                "span": a.get("durationSlots") or 1,
+            }
+        )
+    session = data.get("bracket_session") or {}
+    for a in session.get("assignments") or []:
+        if not isinstance(a, dict):
+            continue
+        placements.append(
+            {
+                "key": f"bracket:{a.get('play_unit_id')}",
+                "court_id": a.get("court_id"),
+                "slot_id": a.get("slot_id"),
+                "span": a.get("duration_slots") or 1,
+            }
+        )
+    return placements
+
+
 @router.post(
     "/{tournament_id}/plan-finalized",
     dependencies=[Depends(require_tournament_access("operator"))],
@@ -1308,6 +1347,30 @@ def set_plan_finalized(
     """
     row = _resolve_tournament(tournament_id, repo)  # 404 if missing
     data = dict(row.data or {})
+    if body.finalized:
+        # The console disables "Mark plan ready" while the plan double-books a
+        # court; this is the same rule at the WRITE boundary, judged against
+        # the stored plan rather than the caller's view of it — which is what
+        # holds when the screen is stale or a second desk submits at the same
+        # moment. Un-readying is never refused: a bad plan must not be able to
+        # trap the day in the ready state.
+        clashes = find_planned_clashes(_planned_placements(data))
+        if clashes:
+            courts = sorted({c.court_id for c in clashes})
+            raise http_error(
+                409,
+                ErrorCode.PLAN_DOUBLE_BOOKED,
+                (
+                    "Two matches share "
+                    + (
+                        f"Court {courts[0]}"
+                        if len(courts) == 1
+                        else "Courts " + ", ".join(str(c) for c in courts)
+                    )
+                    + ". Fix the overlap before marking the plan ready."
+                ),
+                {"courts": courts},
+            )
     data["planFinalized"] = bool(body.finalized)
     updated = repo.tournaments.upsert_data(tournament_id, data)
     if response is not None:

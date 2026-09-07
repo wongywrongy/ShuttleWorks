@@ -214,7 +214,7 @@ def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: st
             body=(
                 f"{inviter} has entered you as their doubles partner at "
                 f"{tournament_name}.\n\n"
-                f"See the invitation: {origin}/e/partner?token={token}\n\n"
+                f"See the invitation: {origin}/e/partner/{quote(token, safe='')}\n\n"
                 f"You will need a {PRODUCT_NAME} entrant account to accept - the "
                 "page will walk you through it. Nothing is entered in your "
                 "name until you do.\n\n"

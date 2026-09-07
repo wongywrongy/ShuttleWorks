@@ -17,6 +17,26 @@ It builds directly on [State, identity, time and formatting](/reference/contract
 (package 02). That page fixes *meanings*; this page fixes the *anatomy* that renders them. Any
 conflict is resolved in favour of the state-and-formatting contract.
 
+::: danger Amended 2026-09-07 — operator visual fixes, package P0
+`operator-visual-fixes.md` is approved product direction and **supersedes** the rules below wherever
+they disagree. The four changes it makes to this page, each applied in place and marked *(P0)*:
+
+1. **No per-game emphasis, ever.** §2.7 rule 3 and §3.4 previously bolded the winner of each
+   completed game. Match-list scores are now one centred lane of paired games — `18–21, 21–15,
+   21–13` — with the **first number always the first-listed side** and **no bolding of any
+   individual game score**. Only the winning side's *name* is bold, from the authoritative recorded
+   outcome; the match winner is still never inferred from game totals.
+2. **Court-first signage.** §4.4's `48 px` names / `28 px` court is inverted: the **court number is
+   the largest element on a board card**, names next, live scores readable, clock secondary.
+3. **A "Next" preview is off by default.** It is a persisted board setting defaulting to **off**
+   across Meet, Bracket and hybrid boards. When on, an unresolved side reads `TBD` or is omitted —
+   never `Winner of …`, a feeder reference or a UUID.
+4. **Public tiles carry no diagnostics prose.** The fixed strings "Court assignment unavailable."
+   and "No next match assigned" are **deleted from public signage**: an empty, unavailable or
+   ambiguous court renders **the court number alone**. Conflict diagnostics, freshness and recovery
+   stay entirely with the operator.
+:::
+
 [[toc]]
 
 ---
@@ -267,10 +287,15 @@ Four rules, all from state-and-formatting §5.1, all of which the mockup violate
 2. **Game completion comes from the configured rules** (`scoringFormat`, `pointsPerSet`,
    `deuceEnabled`, `setsToWin`), computed by the score authority — never by a component and never
    by "which number is larger".
-3. **Per-game emphasis is independent of the match winner.** A losing side can win games, and does
-   in fixture MC-08. The mockup keyed the per-game cell off the *match* winner; that is deleted.
+3. **No per-game emphasis at all** *(P0, 2026-09-07)*. The mockup keyed the per-game cell off the
+   *match* winner; the earlier correction here keyed it off `game.winner` instead. Both are now
+   deleted. Every game score in the ledger renders in one weight, in one centred lane between the
+   opponents, read as a comma-separated pair sequence — `18–21, 21–15, 21–13` — where the **first
+   number of every pair belongs to the first-listed side**. A losing side can win games (fixture
+   MC-08) and that stays legible from the numbers, not from ink.
 4. **The match winner comes from `outcome`, never from the ledger.** Retirement and walkover
-   contradict the point totals by construction.
+   contradict the point totals by construction. The winning side's **name** carries the weight
+   (§3.0), which is the only winner emphasis this contract now permits.
 
 The match-winner mark (§3.5) is **absent while `outcome.kind === 'in_play'`**, and carries the text
 equivalent "Winner" when present.
@@ -364,8 +389,9 @@ The per-game scores for both sides, aligned in columns.
 | --- | --- |
 | **collapse** | when `games` is empty **and** no outcome word is needed, the ledger renders **nothing at all**: no cell, no reserved width, no padding, no separating rule, no invisible winner mark. Plan §3, "Collapse empty score cells" — *adopt fully*. The current entrant card emits an `aria-hidden` empty `span` per game column; that is deleted. |
 | padding | never padded to the configured game count. Three columns are rendered when three games exist, one when one does. |
-| alignment | both sides' game *n* occupy the same column, so a reader compares vertically (V3-OC17.1). Tabular figures; the column is wide enough for a two-digit pair without changing width between cards on the same screen. |
-| emphasis | per game, from `game.winner`, which exists only for a `complete` game. An `in_progress` game emphasises neither side. |
+| alignment | *(P0, 2026-09-07)* one **centred lane between the opponents**, reading `18–21, 21–15, 21–13`; the first number of each pair is the first-listed side. Tabular figures; the lane is wide enough for a two-digit pair without changing width between cards on the same screen. A renderer that instead columns both sides' game *n* vertically (the earlier V3-OC17.1 treatment) stays valid only where the surface has no single lane to give — never on a match list. |
+| emphasis | **none** *(P0, 2026-09-07)*. No game score is ever bolded, coloured or otherwise emphasised, for a `complete` game or an `in_progress` one. `game.winner` no longer drives any ink. |
+| live game | the current game's running score sits in the **same lane** as the completed games, in the same weight. Missing scores are never fabricated to fill it. |
 | special outcomes | a partial ledger from a retirement or walkover renders **with** the outcome word; the outcome, not the ledger, decides the winner mark. |
 | accessible text | each game identifies side and game — "Game 2, Ana Silva 21, Ben Ito 19" (plan §4, Accessibility text). |
 | withheld scores | no ledger; the accessible summary says "Score not published". |
@@ -474,27 +500,44 @@ sides. 200% zoom: nodes grow; the canvas scrolls; names stay whole.
 
 Owner: package 17. Primary defects: V3-OC24.1, V3-OC24.2, and state-and-formatting §9.
 
-**Must show.** The court, at **≥ 28 px**; both sides' names at **≥ 48 px** with an **explicit
-visible side separator** (the "Next" line especially); the match reference (§3.6); the time in the
-**tournament timezone with the zone stated**, and a distinctly labelled last-updated value that
-stays unambiguous across midnight; the state word from the shared vocabulary; **authorized recorded
-scores only**; a clock at **≥ 40 px**.
+*(Rewritten by P0, 2026-09-07. The venue board is a court-finding surface for spectators and
+players standing at a distance — not an operator diagnostic panel.)*
 
-**Must never show.** A staff-action claim. The board's conflict copy is exactly:
+**Must show.** The **court number as the largest element on the card** — larger than the names,
+which are the next largest, which are larger than the live score, which is readable at the intended
+distance. The tournament name and a **secondary** clock in the tournament's local timezone.
+**Authorized recorded scores only.**
 
-> **Court assignment unavailable.**
+**Must never show.** Anything internal or diagnostic:
 
-with an announcement instruction added **only** if that is a confirmed venue process, and never a
-claim that anyone is already resolving it. Also never: a synthesised score where none is published
-(absent scores are not zero); `called` published as on-court; a bare clock with no date or zone; a
-blank placeholder panel where a court has no next match — that says **"No next match assigned"**.
+- **No placeholder or error prose on a tile.** An empty court, an unavailable assignment, or an
+  ambiguous one renders **the court number and nothing else**. The strings "Court assignment
+  unavailable.", "No next match assigned" and every equivalent are deleted from public signage.
+- **No alerts, error colours, LIVE pill, or "Updated …" timestamp.** Connection and freshness
+  diagnostics belong to operator controls (state-and-formatting §8).
+- **No opaque references.** Never a UUID, a feeder reference, a slot index, or `Winner of …`.
+- **No timezone abbreviation** beside the signage clock — a venue reader is standing in the venue.
+- **No arbitrary choice between conflicting claims.** A disputed court suppresses its match content
+  on the board, keeps the dispute and its recovery visible to the operator, and is **not** marked
+  free in operational data.
+- A synthesised score where none is published (absent scores are not zero), or `called` published
+  as on-court.
 
-**Stale state is truthful.** When the board's data is older than its freshness budget it says so in
-words, keeps rendering the last known values, and does not present them as current.
+**The "Next" preview is a persisted board setting, default off** *(P0)*, on Meet, Bracket and
+hybrid boards alike. When it is on, only **resolved** names render; an unresolved side reads
+**TBD** or is omitted.
+
+**Stale state is silent, not explanatory.** On an unusable or expired snapshot the board
+**suppresses the untrustworthy match content** rather than adding a public diagnostic banner. The
+operator surface is where the staleness is reported.
+
+**Timezone is data, not a constant.** The real tournament timezone is carried through the board
+data contract; the hardcoded UTC behaviour is deleted. If no timezone is available the board
+**omits the clock** and the problem is surfaced to the operator.
 
 **Envelope.** The board is judged **physically** — at the intended screen size and viewing
-distance. The 48/28/40 px figures are *initial targets* to validate, not a conclusion; the mockup
-remains a desk-scale example and its 30 px names are rejected as validation.
+distance. The court/name/score/clock *ordering* above is the contract; the earlier 48/28/40 px
+figures are withdrawn as targets, because they inverted that ordering.
 
 ### 4.5 The compact chip (a degenerate renderer)
 
@@ -590,7 +633,8 @@ New: `apps/entrant/tests/matchCard.contract.render.test.ts`, driving every MC fi
 | **no element** is emitted for a game that does not exist — assert the ledger container is absent, not that it is empty | MC-01, MC-06, MC-09, MC-12 |
 | the winner mark is absent | MC-01, MC-05, MC-06, MC-07, MC-12 |
 | the winner mark carries the accessible word "Winner" | MC-08, MC-09, MC-10 |
-| game 2 of MC-07 emphasises neither side; game 2 of MC-08 emphasises the **losing** side | MC-07, MC-08 |
+| **no game score is emphasised** on any fixture — assert the absence of a winner-weighted game cell, not which side carries it *(P0, 2026-09-07; replaces "game 2 of MC-08 emphasises the losing side")* | MC-07, MC-08 |
+| the recorded games render as one centred pair sequence whose first number is the first-listed side | MC-02, MC-03, MC-08 |
 | the state word is "On court", never "Live" | MC-07 |
 | the public schedule word is "Scheduled" or "Time to be confirmed" and nothing else | MC-01, MC-05, MC-06 |
 | no placeholder footer text: `/Date to be confirmed/`, `/Time not assigned/`, `/Court information unavailable/` never appear on a card | MC-06 |
@@ -609,7 +653,9 @@ per-module cases in the Bracket and Meet match tests.
 | --- | --- |
 | **game completion is computed by the score authority**, with a table-driven case set: 21–19 complete, 20–19 not complete under `deuceEnabled`, 21–20 not complete, 30–29 complete where a cap exists, 15–3 complete under a 15-point format | this is the replacement for "which score is larger" |
 | `setsWinner()`-style inference is not called on any render path | assert `outcome.winner` drives the mark; MC-09/MC-10 fail loudly under a counting implementation |
-| both sides' game *n* share one column index in the rendered row | MC-02, MC-03, MC-08 |
+| the match list renders one centred score lane between the opponents, first number = first-listed side, with **no per-game emphasis** *(P0; replaces the two-sides-share-a-column-index assertion)* | MC-02, MC-03, MC-08 |
+| the match list has no standalone **Issues** or **Status** text column; an exceptional LIVE/PENDING state renders as a leading mark and issue detail lives in the inspector *(P0)* | MC-06, MC-07 |
+| a doubles side stacks one partner per line, two lines per side, at a consistent standard row height with the full name reachable and no clipping at 200% text zoom; a singles side is one line *(P0)* | MC-02, MC-03 |
 | the row exposes a *minimum* height and no maximum: assert the computed `min-height` intent via the component's declared density prop, **never a measured `offsetHeight` equality** | plan §6 |
 | the same fixture rendered by the table row and by `MatchCard` produces the **same** winner, the same game count, the same state word and the same accessible summary — a *semantic* equality across two different DOM shapes | the corrected version of "identical DOM everywhere" |
 | no rendered string matches `/slot \d+/` | V3-OC16.1 |
@@ -619,15 +665,21 @@ per-module cases in the Bracket and Meet match tests.
 
 New cases in the existing display tests, plus board projection cases.
 
+*(Table rewritten by P0, 2026-09-07 — the board is a court-finding surface, so every assertion
+that pinned diagnostic prose onto a public tile is inverted.)*
+
 | Assertion |
 | --- |
-| the conflict tile's text is exactly "Court assignment unavailable." and contains no staff-action or "being resolved" claim |
+| the court number is the **largest** rendered element on a board card — larger than the names, which are larger than the score, which is larger than the clock |
+| a disputed, empty or unavailable court renders **the court number and nothing else**: no "Court assignment unavailable.", no "No next match assigned", no error colour, no alert |
+| a disputed court never renders one of the competing matches, and is not reported as free in operational data |
+| no board tile renders a LIVE pill or an "Updated …" timestamp |
 | a `called` match is never rendered with the on-court treatment or word |
 | the board renders no score when `scoresPublished` is false, and never a zero |
-| the clock and last-updated values carry the tournament zone and remain distinguishable across a midnight boundary (a fixture at 23:59 and 00:01) |
-| the "Next" line renders an explicit visible side separator |
-| every board tile carries the match reference |
-| a court with no next match renders "No next match assigned" |
+| the header clock renders in the **tournament** timezone with **no zone abbreviation**, and is omitted entirely when the tournament timezone is unavailable |
+| the "Next" preview is absent by default; enabling the persisted setting renders it, and an unresolved side then reads `TBD` or is omitted — never `Winner of …`, a feeder reference or a UUID |
+| no rendered board string matches a UUID, `/slot \d+/`, or `/^S\d+$/` |
+| an expired or unusable snapshot suppresses match content and adds **no** public diagnostic banner |
 
 ### 6.4 Overlap and legibility — measured without a fixed `offsetHeight`
 
@@ -697,7 +749,7 @@ No assertion anywhere compares a height to a constant. A row minimum is expresse
 | Public bracket names at 12 px | Reject as final target | **§3.0** (≥ 14 px bracket floor) and **§4.3** (enlarge the canvas; mobile defaults to Round view). |
 | Board names at 30 px, "signage scale" | Reject as validation | **§3.0** and **§4.4** — 48/28/40 px initial targets, verdict is physical (**§6.5**). |
 | Board scores always present | Conditional | **§2.3** and **§4.4** — authorized recorded scores only; absent scores are not zero. Publication and data availability are verified first. |
-| Board conflict copy says "wait for next announcement" | Adapt | **§4.4** — exactly "Court assignment unavailable."; asserted §6.3. |
+| Board conflict copy says "wait for next announcement" | Adapt | **§4.4** — *(P0, 2026-09-07)* superseded: a disputed court renders the **court number alone**, with no conflict copy of any kind; asserted §6.3. |
 | Replace Deuce with "Setting … cap 30" | Adapt | **§2.7** tip — "Win by 2" with no cap claim until `pointCap` exists (ruling C3). |
 | Remove the tiny board preview instead of widening it | Adopt | Out of this contract's scope — a board *configuration* surface, package 17. Recorded here only so the row is not lost. |
 | Entire-row links; menus only on hover | Adapt | **§3.1** — the same principle applied to names: no essential access is hover-only. |
@@ -733,7 +785,7 @@ These are not resolvable inside a documentation package.
 | P1 | **`pointCap`** — the configuration has `deuceEnabled` but no cap field (ruling C3). | Add a nullable `pointCap` in package 13; until then no cap is printed. Already ruled; restated so package 10/11 do not re-open it. **Ruled 2026-09-06: as restated (C3).** |
 | P2 | **Is match duration actually available**, and on which matches? §2.5 renders it only when known. | Confirm the field exists on the result record before package 10 renders it at all; if it does not, the element is simply never present and MC-08's duration assertion is dropped. **Ruled 2026-09-06: package 10 verifies the field on the result record first; absent field → element never present, MC-08 duration assertion dropped.** |
 | P3 | **Are board scores publishable for the demo fixture?** Plan §3 marks this Conditional. | Verify publication settings and data availability on the package 01 fixture before package 17 renders any board score. Do not infer scoring capability from the mockup. **Ruled 2026-09-06: verify on the package 01 fixture; no board score until publication + data are confirmed.** |
-| P4 | **Venue announcement process** — may the board add "Please wait for the next court announcement" after "Court assignment unavailable."? | Only if the organiser confirms that announcements actually happen. Default: the four words alone. **Ruled 2026-09-06: the four words alone; no announcement sentence.** |
+| P4 | **Venue announcement process** — may the board add "Please wait for the next court announcement" after "Court assignment unavailable."? | ~~Ruled 2026-09-06: the four words alone; no announcement sentence.~~ **Superseded 2026-09-07 (P0):** the sentence itself is deleted. A disputed or unavailable court shows the court number and nothing else; the dispute is an operator-owned diagnostic. |
 | P5 | **Mobile default = Round view** (V3-PE10.2) changes a default destination, which is a product decision, not a rendering one. | Adopt as specified in §4.3, with the explicitly chosen view preserved in navigation. Confirm before package 11. **Ruled 2026-09-06: adopt — mobile defaults to Round view; an explicitly chosen view is preserved in navigation.** |
 | P6 | **Club on `Side`** — §2.1 marks it optional. Public exposure of a club is an audience question, not a layout one. | Operator-only unless the public person allowlist (ADR 0018) already carries it. Confirm before package 11. **Ruled 2026-09-06: operator-only unless the ADR 0018 public allowlist already carries club.** |
 | P7 | **Signage physical validation** — the 48/28/40 px targets need a real screen and distance. | Schedule the physical check in package 17; until then they are targets, and no test asserts them as passing criteria. **Ruled 2026-09-06: targets only; physical check scheduled in package 17.** |

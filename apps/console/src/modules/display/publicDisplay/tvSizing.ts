@@ -59,24 +59,45 @@ export function resolveCardSizeClasses(cardHeightPx: number): CardSizeClasses {
 }
 
 /**
- * The on-court match's PARTICIPANT NAMES, at the match-card contract's
- * signage floor (§3.0 / §4.4, plan §3 "Board names at 30 px" — Reject as
- * validation): >= 48px at the board's default density. This is
- * deliberately a SEPARATE scale from `resolveCardSizeClasses().playerSize`
- * — that function's `player` tier also feeds `BracketResultsView`'s
- * historical results rows and the idle "Court free"/"Court closed" labels,
- * none of which this floor is about, and naively raising the shared tier
- * inverted `BracketResultsView`'s intentional hierarchy (a normal result
- * row became bigger than the champion headline above it). `text-5xl`
- * (48px) is the FLOOR tier, not a target to shrink toward. Still an
- * initial target pending package 27's physical validation — see
- * docs/audits/v3-consolidated/reports/17-signage.md.
+ * The SIGNAGE HIERARCHY (match-card contract §4.4, rewritten by the P0
+ * operator-visual-fixes pass): on a venue board the **court number is the
+ * largest element on the card**, the participant names are next, and the
+ * live score is readable at the intended distance — in that order.
+ *
+ * This inverts what the board used to do: `resolveSignageNameSize` returned
+ * `text-5xl`–`text-7xl` for the names while the court number sat in the
+ * card's header band at `text-xs`–`text-base`, so the one thing a player
+ * crosses a hall to find was the smallest thing on the tile.
+ *
+ * Three separate scales rather than one, because the card's other text
+ * (`resolveCardSizeClasses().playerSize`) also feeds `BracketResultsView`'s
+ * historical results rows, where this hierarchy does not apply.
+ *
+ * The board is judged PHYSICALLY (§4.4 "Envelope") — at the real screen size
+ * and viewing distance. The ORDERING is the contract; these tiers are its
+ * current expression, not a pixel target.
  */
+export function resolveSignageCourtSize(cardHeightPx: number): string {
+  if (cardHeightPx >= 160) return 'text-9xl';
+  if (cardHeightPx >= 120) return 'text-8xl';
+  if (cardHeightPx >= 96) return 'text-7xl';
+  return 'text-6xl';
+}
+
+/** Participant names — one step below the court number, one above the score. */
 export function resolveSignageNameSize(cardHeightPx: number): string {
-  if (cardHeightPx >= 160) return 'text-7xl';
-  if (cardHeightPx >= 120) return 'text-6xl';
-  if (cardHeightPx >= 96) return 'text-6xl';
-  return 'text-5xl';
+  if (cardHeightPx >= 160) return 'text-5xl';
+  if (cardHeightPx >= 120) return 'text-4xl';
+  if (cardHeightPx >= 96) return 'text-3xl';
+  return 'text-2xl';
+}
+
+/** The live score lane — readable, and deliberately below the names. */
+export function resolveSignageScoreSize(cardHeightPx: number): string {
+  if (cardHeightPx >= 160) return 'text-4xl';
+  if (cardHeightPx >= 120) return 'text-3xl';
+  if (cardHeightPx >= 96) return 'text-2xl';
+  return 'text-xl';
 }
 
 // Tailwind safelist won't pick up dynamic class names so we keep the

@@ -90,12 +90,15 @@ export function RunSummaryBand({ summary, scope }: Props) {
        * "playing" (which would read as a confident total the court cards
        * contradict) and never counted as free. Only rendered when non-zero
        * so an ordinary quiet day does not carry a permanent zero tile. */}
+      {/* `-ink` is the ink for the SOLID overdue fill; on the band's own
+       * surface it is near-white, and the count read pale (P6).
+       * `status-overdue` is the gated on-surface foreground. */}
       {disputedCourts > 0 ? (
         <StatItem
           testId="run-band-disputed"
           label="court conflicts"
           value={String(disputedCourts)}
-          tone="text-status-overdue-ink"
+          tone="text-status-overdue"
           topBar="border-t-status-overdue-solid/60"
         />
       ) : null}

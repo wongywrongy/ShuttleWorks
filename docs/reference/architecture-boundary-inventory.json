@@ -67,6 +67,7 @@
     {"path":"sync/recovery.py","module":"sync","useCase":"lost-node-recovery-service","owner":"sync-module-owner","repoSession":0,"commitCalls":1,"sqlalchemyImports":2,"tournamentDataReferences":0},
     {"path":"sync/service.py","module":"sync","useCase":"authority-and-operation-service","owner":"sync-module-owner","repoSession":0,"commitCalls":20,"sqlalchemyImports":2,"tournamentDataReferences":0},
     {"path":"worker.py","module":"worker","useCase":"worker-composition-root","owner":"worker-owner","repoSession":0,"commitCalls":0,"sqlalchemyImports":1,"tournamentDataReferences":0},
+    {"path":"workspaces/setup.py","module":"workspaces","useCase":"setup-http-adapter","owner":"workspace-module-owner","repoSession":0,"commitCalls":0,"sqlalchemyImports":1,"tournamentDataReferences":0},
     {"path":"workspaces/tournaments.py","module":"workspaces","useCase":"tournament-state-api","owner":"workspace-module-owner","repoSession":0,"commitCalls":0,"sqlalchemyImports":0,"tournamentDataReferences":0}
   ]
 }

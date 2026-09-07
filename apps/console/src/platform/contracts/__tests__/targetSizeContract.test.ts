@@ -173,6 +173,16 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
     why: 'inline text link ("+ Add unavailable period") — no padding box, WCAG 2.2 AA\'s inline-text-link exception.',
   },
   {
+    file: 'apps/console/src/components/PublicationSettings.tsx',
+    line: 77,
+    why: 'inline text link inside a sentence ("Set up the entry page") — no padding box, WCAG 2.2 AA\'s inline-text-link exception.',
+  },
+  {
+    file: 'apps/console/src/components/PublicationSettings.tsx',
+    line: 121,
+    why: 'inline text link beside the row it reviews — no padding box, WCAG 2.2 AA\'s inline-text-link exception.',
+  },
+  {
     file: 'apps/console/src/components/ConfirmDeleteButton.tsx',
     line: 44,
     why:
@@ -215,16 +225,7 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/modules/operations/run/RunCourtGrid.tsx',
-    line: 195,
-    why:
-      'a conflict-list row button (px-2 py-1 text-xs = 8+16=24px) whose ' +
-      'className the scan reads correctly, but a line-comment sits between ' +
-      'the opening tag and the className attribute, shifting the reported ' +
-      'line off by a few lines from the literal this test already verified by hand.',
-  },
-  {
-    file: 'apps/console/src/modules/operations/run/RunCourtGrid.tsx',
-    line: 248,
+    line: 211,
     why:
       'the court card is a multi-line `[...].join(" ")` className array — ' +
       'the card itself is always well over 24px (a bordered card containing ' +

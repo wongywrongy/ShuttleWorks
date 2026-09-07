@@ -52,7 +52,7 @@ export function buildRailRows(
     label: 'Event date',
     value: date ?? 'Not set',
     tone: date ? undefined : 'warning',
-    path: 'setup/dates',
+    path: 'setup/details',
     actionLabel: date ? undefined : 'Set date',
   });
 
@@ -66,7 +66,7 @@ export function buildRailRows(
     value:
       displayShared === null ? '–' : displayShared ? 'Active' : 'Not shared',
     tone: displayShared ? undefined : 'muted',
-    path: 'publish/displays',
+    path: 'display/board',
   });
 
   const collab = summary.signals?.collaboration;

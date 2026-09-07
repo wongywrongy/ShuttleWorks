@@ -26,6 +26,11 @@ interface AlertsActivityPanelProps {
    *  show; auto-expands when the first entry arrives (until the operator
    *  has toggled it themselves, which then wins). */
   collapseWhenEmpty?: boolean;
+  /** P2: render NOTHING while there is nothing to say. Live day has no
+   *  standing banner zone — a permanently-present header for an empty feed
+   *  is exactly that. Diagnostics still reach the operator the moment there
+   *  is one; they just don't reserve a strip of the surface beforehand. */
+  hideWhenEmpty?: boolean;
 }
 
 function relativeTime(ts: string, nowMs: number): string {
@@ -96,6 +101,7 @@ export function AlertsActivityPanel({
   onReview,
   className = '',
   collapseWhenEmpty = false,
+  hideWhenEmpty = false,
 }: AlertsActivityPanelProps) {
   const conditions = useAlertStore((s) => s.conditions);
   const activity = useAlertStore((s) => s.activity);
@@ -113,6 +119,8 @@ export function AlertsActivityPanel({
   const entries = sortPanel([...Object.values(conditions), ...activity]);
   const warningCount = Object.values(conditions).filter((e) => e.severity === 'warning').length;
   const collapsed = collapsedChoice ?? (collapseWhenEmpty && entries.length === 0);
+
+  if (hideWhenEmpty && entries.length === 0) return null;
 
   return (
     <div className={`flex min-h-0 flex-col border-b border-border ${className}`}>

@@ -1,14 +1,18 @@
 /**
  * The workspace left-sidebar navigation model — the single source of truth for
- * the workflow-first IA: Setup, Participants, Competition, Operations,
- * Publish, and Administration. Enabled modules adapt the tools within those
- * stable categories. Module identity is shown in the catalog and in
+ * the workflow-first IA: Setup, Participants, Meet, Bracket, Operations,
+ * Display, and Administration, with Overview as the workspace landing.
+ * Enabled modules adapt the tools within those stable categories.
+ *
+ * Competition and Publish are gone as visible categories: a match belongs to
+ * the engine that produced it (Meet or Bracket), and publication belongs
+ * beside the public content it governs (Setup · Public site) or beside the
+ * board it drives (Display). Module identity is shown in the catalog and in
  * operational data where provenance matters; the workflow rail stays focused
  * on the operator's task rather than repeating implementation badges.
  *
- * Canonical workflow URLs stay separate from the legacy AppTab render keys.
- * That separation lets surfaces move without breaking old bookmarks or module
- * guards.
+ * Canonical workflow URLs stay separate from the AppTab render keys. That
+ * separation lets surfaces move without coupling the URL to renderer names.
  */
 import type { AppTab } from "../../store/uiStore";
 import { MODULE_LABELS, type ModuleId } from "./types";
@@ -27,6 +31,11 @@ export interface WsNavItem {
   /** Canonical organizer-facing path. Omitted by the legacy module-contract
    * model; required by the workflow navigation model. */
   path?: string;
+  /** Extra paths this item OWNS in the rail. A destination that carries its
+   * own internal tabs (Administration · Workspace: settings, backups, the
+   * activity log) is one rail item over several URLs; without this the rail
+   * would show no active item on two of its own tabs. */
+  matchPaths?: readonly string[];
 }
 export interface WsSection {
   id: "entries" | "meet" | "bracket" | "operations" | "display";
@@ -59,9 +68,10 @@ export type WorkflowSection =
   | "overview"
   | "setup"
   | "participants"
-  | "competition"
+  | "meet"
+  | "bracket"
   | "operations"
-  | "publish"
+  | "display"
   | "administration";
 
 export interface WorkflowRoute {
@@ -78,24 +88,20 @@ export interface WorkflowRoute {
 
 /**
  * Canonical paths are intentionally data, not scattered strings in buttons.
- * Several paths currently share a legacy renderer (for example Setup rules
- * and General both open the existing configuration surface); this is a safe
- * migration seam and makes the eventual section-specific pages additive.
+ * This list is the SURFACE inventory: one entry per destination an operator
+ * can actually land on. This is the sole source of truth for workspace URLs.
+ *
+ * Several paths share a legacy renderer (the four Setup pages all mount
+ * `SetupProduct`, which selects its own consolidated page from the URL).
  */
 export const WORKFLOW_ROUTES: readonly WorkflowRoute[] = [
   { path: "overview", section: "overview", tab: "overview" },
-  // Bare /setup is a real destination, not a redirect: the readiness
-  // checklist renders ONCE, on this landing (SP-OPCON-1 RDY-3); section
-  // pages carry a one-line strip linking back to it.
-  { path: "setup", section: "setup", tab: "setup" },
-  { path: "setup/general", section: "setup", tab: "setup" },
-  { path: "setup/dates", section: "setup", tab: "setup" },
-  { path: "setup/venue", section: "setup", tab: "setup" },
-  { path: "setup/events", section: "setup", tab: "setup" },
-  { path: "setup/rules", section: "setup", tab: "setup" },
+  // Four Setup destinations, one per job. The readiness checklist is NOT one
+  // of them: Overview owns it, once.
+  { path: "setup/details", section: "setup", tab: "setup" },
   { path: "setup/entries", section: "setup", tab: "setup" },
-  { path: "setup/people", section: "setup", tab: "setup" },
-  { path: "setup/public-info", section: "setup", tab: "setup" },
+  { path: "setup/scoring", section: "setup", tab: "setup" },
+  { path: "setup/public-site", section: "setup", tab: "setup" },
   { path: "participants/entries", section: "participants", tab: "entries" },
   {
     path: "participants/people",
@@ -103,51 +109,43 @@ export const WORKFLOW_ROUTES: readonly WorkflowRoute[] = [
     tab: "roster",
     bracketTab: "bracket-roster",
   },
+  // Meet-specific destinations. A Meet workspace must never reach its own
+  // matches through a Bracket-guarded route.
+  { path: "meet/matches", section: "meet", tab: "matches", kind: "meet" },
   {
-    path: "participants/pairs",
-    section: "participants",
+    path: "meet/team-structure",
+    section: "meet",
     tab: "roster",
-    bracketTab: "bracket-roster",
+    kind: "meet",
   },
   {
-    path: "participants/teams",
-    section: "participants",
-    tab: "roster",
-    bracketTab: "bracket-roster",
-  },
-  { path: "participants/review", section: "participants", tab: "entries" },
-  {
-    path: "competition/draws",
-    section: "competition",
+    path: "bracket/draws",
+    section: "bracket",
     tab: "bracket-draws",
     kind: "bracket",
   },
   // The selected draw is opened from the Draws table, so it does not need a
   // second rail item. It does need a canonical workflow route: otherwise the
-  // canvas falls back to the legacy module URL and Competition loses context.
+  // canvas falls back to the legacy module URL and Bracket loses context.
   {
-    path: "competition/draw",
-    section: "competition",
+    path: "bracket/draw",
+    section: "bracket",
     tab: "bracket-draw",
     kind: "bracket",
   },
   {
-    path: "competition/team-structure",
-    section: "competition",
-    tab: "roster",
-    kind: "meet",
+    path: "bracket/matches",
+    section: "bracket",
+    tab: "bracket-matches",
+    kind: "bracket",
   },
+  // Event definitions, draw format and draw size live here (moved out of
+  // Setup): they are structural properties of the draws this section owns.
   {
-    path: "competition/matches",
-    section: "competition",
-    tab: "matches",
-    bracketTab: "bracket-matches",
-  },
-  {
-    path: "competition/results",
-    section: "competition",
-    tab: "matches",
-    bracketTab: "bracket-matches",
+    path: "bracket/settings",
+    section: "bracket",
+    tab: "bracket-setup",
+    kind: "bracket",
   },
   {
     path: "operations/plan",
@@ -161,10 +159,9 @@ export const WORKFLOW_ROUTES: readonly WorkflowRoute[] = [
     tab: "live",
     bracketTab: "bracket-live",
   },
-  { path: "publish/site", section: "publish", tab: "ws-sharing" },
-  { path: "publish/draws-results", section: "publish", tab: "ws-sharing" },
-  { path: "publish/displays", section: "publish", tab: "display-config" },
-  { path: "publish/links", section: "publish", tab: "ws-sharing" },
+  // Venue-board configuration and its links (moved out of Publish).
+  { path: "display/board", section: "display", tab: "display-config" },
+  { path: "display/preview", section: "display", tab: "tv" },
   { path: "administration/team", section: "administration", tab: "ws-members" },
   {
     path: "administration/modules",
@@ -206,50 +203,22 @@ export function workflowRouteForPath(
 /** Organizer-facing URL for a nav destination. The AppTab is not exposed in
  * links, so internal renderer renames do not invalidate operator bookmarks. */
 export function workflowPathForSegment(segment: AppTab): string {
-  switch (segment) {
-    case "overview":
-      return "overview";
-    case "entries":
-      return "participants/entries";
-    case "roster":
-    case "bracket-roster":
-      return "participants/people";
-    case "matches":
-    case "bracket-matches":
-      return "competition/matches";
-    case "bracket-draws":
-      return "competition/draws";
-    case "bracket-draw":
-      return "competition/draw";
-    case "bracket-events":
-      return "competition/team-structure";
-    case "setup":
-    case "bracket-setup":
-      return "setup/general";
-    case "schedule":
-    case "bracket-schedule":
-      return "operations/plan";
-    case "live":
-    case "bracket-live":
-      return "operations/live";
-    case "tv":
-    case "display-config":
-      return "publish/displays";
-    case "ws-venue":
-      return "setup/venue";
-    case "ws-members":
-      return "administration/team";
-    case "ws-sharing":
-      return "publish/site";
-    case "ws-modules":
-      return "administration/modules";
-    case "ws-sync":
-      return "administration/backups";
-    case "ws-settings":
-      return "administration/lifecycle";
-    default:
-      return "overview";
-  }
+  const route = WORKFLOW_ROUTES.find(
+    (candidate) => candidate.tab === segment || candidate.bracketTab === segment,
+  );
+  if (route) return route.path;
+
+  // These renderer keys are deliberate aliases inside shared products, not
+  // additional URLs. They have no standalone WorkflowRoute because they are
+  // rendered by an existing canonical destination.
+  const rendererDefaults: Partial<Record<AppTab, string>> = {
+    "bracket-events": "bracket/draws",
+    "ws-venue": "setup/details",
+    "ws-sharing": "setup/public-site",
+  };
+  const fallback = rendererDefaults[segment];
+  if (fallback) return fallback;
+  throw new Error(`No canonical workflow route for renderer tab: ${segment}`);
 }
 
 export function workflowHref(tid: string, segment: AppTab): string {
@@ -264,10 +233,12 @@ const item = (
   path: string,
   segment: AppTab,
   label: string,
+  matchPaths?: readonly string[],
 ): WsNavItem => ({
   path,
   segment,
   label,
+  ...(matchPaths ? { matchPaths } : {}),
 });
 
 /** Stable operator navigation. Capabilities change the tools listed inside a
@@ -281,78 +252,92 @@ export function buildWorkflowNavigation(
   const bracketPrimary =
     kind === "bracket" || (!enabled.has("meet") && enabled.has("bracket"));
   const peopleTab: AppTab = bracketPrimary ? "bracket-roster" : "roster";
-  const matchesTab: AppTab = bracketPrimary ? "bracket-matches" : "matches";
-  const planTab: AppTab = bracketPrimary ? "bracket-schedule" : "schedule";
-  const liveTab: AppTab = bracketPrimary ? "bracket-live" : "live";
   const participants: WsNavItem[] = [];
   if (enabled.has("entries")) {
-    participants.push(item("participants/entries", "entries", MODULE_LABELS.entries));
+    participants.push(
+      item("participants/entries", "entries", MODULE_LABELS.entries),
+    );
   }
   // One link per distinct surface. Pairs, teams, eligibility, and payments
   // remain tools inside Roster / Entries until they own an actual view;
   // separate labels that render the same page create false destinations.
-  participants.push(
-    item("participants/people", peopleTab, "Roster"),
-  );
+  participants.push(item("participants/people", peopleTab, "Roster"));
 
-  const competition: WsNavItem[] = [];
-  if (enabled.has("bracket")) {
-    competition.push(
-      item("competition/draws", "bracket-draws", "Draws"),
-    );
+  const sections: WorkflowNavSection[] = [
+    {
+      id: "setup",
+      label: "Setup",
+      items: [
+        item("setup/details", "setup", "Details"),
+        item("setup/entries", "setup", "Entries"),
+        item("setup/scoring", "setup", "Scoring"),
+        item("setup/public-site", "setup", "Public site"),
+      ],
+    },
+    { id: "participants", label: "Participants", items: participants },
+  ];
+
+  // Each engine lists its OWN destinations. A hybrid workspace gets both, so
+  // Meet-only work is never reachable only through a Bracket-guarded route.
+  if (enabled.has("meet")) {
+    sections.push({
+      id: "meet",
+      label: MODULE_LABELS.meet,
+      items: [
+        item("meet/matches", "matches", "Matches"),
+        item("meet/team-structure", "roster", "Team structure"),
+      ],
+    });
   }
-  competition.push(
-    item("competition/matches", matchesTab, "Matches"),
-  );
+  if (enabled.has("bracket")) {
+    sections.push({
+      id: "bracket",
+      label: MODULE_LABELS.bracket,
+      items: [
+        item("bracket/draws", "bracket-draws", "Draws"),
+        item("bracket/matches", "bracket-matches", "Matches"),
+        item("bracket/settings", "bracket-setup", "Draw settings"),
+      ],
+    });
+  }
 
-  const publishing: WsNavItem[] = [item("publish/site", "ws-sharing", "Site")];
+  sections.push({
+    id: "operations",
+    label: MODULE_LABELS.operations,
+    items: [
+      item("operations/plan", bracketPrimary ? "bracket-schedule" : "schedule", "Plan"),
+      item("operations/live", bracketPrimary ? "bracket-live" : "live", "Live day"),
+    ],
+  });
+
   if (enabled.has("display")) {
-    publishing.push(
-      item("publish/displays", "display-config", "Displays"),
-    );
+    sections.push({
+      id: "display",
+      label: MODULE_LABELS.display,
+      items: [
+        item("display/board", "display-config", "Board"),
+        item("display/preview", "tv", "Preview"),
+      ],
+    });
   }
 
   return {
     overview: item("overview", "overview", "Overview"),
-    sections: [
-      {
-        id: "setup",
-        label: "Setup",
-        items: [
-          item("setup", "setup", "Checklist"),
-          item("setup/general", "setup", "General"),
-          item("setup/dates", "setup", "Dates"),
-          item("setup/venue", "setup", "Venue"),
-          item("setup/events", "setup", "Events"),
-          item("setup/rules", "setup", "Rules"),
-          item("setup/entries", "setup", "Entry rules"),
-          item("setup/people", "setup", "Staff"),
-          item("setup/public-info", "setup", "Public info"),
-        ],
-      },
-      { id: "participants", label: "Participants", items: participants },
-      { id: "competition", label: "Competition", items: competition },
-      {
-        id: "operations",
-        label: MODULE_LABELS.operations,
-        items: [
-          item("operations/plan", planTab, "Plan"),
-          item("operations/live", liveTab, "Live day"),
-        ],
-      },
-      { id: "publish", label: "Publish", items: publishing },
-    ],
+    sections,
     admin: {
       label: "Administration",
+      // Three destinations: Team · Modules · Workspace. Backups and the
+      // activity log are not separate administrations — they are things you
+      // look at ABOUT this workspace, so they are tabs inside Workspace
+      // (which also owns archive/delete). Their URLs are unchanged, so old
+      // bookmarks land on exactly the tab they named.
       items: [
         item("administration/team", "ws-members", "Team"),
         item("administration/modules", "ws-modules", "Modules"),
-        item("administration/backups", "ws-sync", "Backups"),
-        item("administration/activity", "ws-sync", "Activity"),
-        // SP-OPCON-1 SWP-7: same name in nav and H1 ("Workspace settings",
-        // `GeneralSettingsTab`'s heading). "Lifecycle" described one row of
-        // the page. The URL segment stays — bookmarks outlive labels.
-        item("administration/lifecycle", "ws-settings", "Workspace settings"),
+        item("administration/lifecycle", "ws-settings", "Workspace", [
+          "administration/backups",
+          "administration/activity",
+        ]),
       ],
     },
   };

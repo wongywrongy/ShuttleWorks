@@ -46,9 +46,15 @@ export interface Match {
   /** Duration in slots (>= 1). */
   span: number;
   status: MatchStatus;
-  /** Resolved display names for each side (TBD / feeder / Bye already applied). */
+  /** Resolved display names for each side (unresolved / feeder / Bye labels
+   *  already applied). DISPLAY COPY — never compared to decide behaviour. */
   sideA: string;
   sideB: string;
+  /** True when a side has no known participants yet. The structural twin of the
+   *  labels above, so eligibility never depends on display copy. Meet fills it
+   *  from the stored sides; bracket leaves it undefined because its own
+   *  resolved-feeder set is the authority there. */
+  sidesUnresolved?: boolean;
   /** Every person physically on court for this match — meet player ids, or a
    *  bracket participant expanded into its `members` (a doubles pair is two
    *  people, and both are busy). Deduped; order carries no meaning.

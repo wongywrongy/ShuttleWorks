@@ -12,10 +12,8 @@ import {
   EventPicker,
   PickerPopover,
   ResultSides,
-  setsWinner,
   type EventPickerOption,
   type MatchListStatus,
-  type SetPair,
 } from '../../../components/control-plane';
 import { Row } from '../../../platform/engine-config/SettingsControls';
 import { SchoolChip } from '../../../components/SchoolChip';
@@ -27,6 +25,7 @@ import {
 import type { MatchDTO, PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { isDoublesRank } from '../roster/positionGrid/helpers';
 import { MatchSideSection, PlayerCard } from './MatchSideSection';
+import type { MatchIssue } from './validateMatch';
 
 export type MeetMatchControlsSlot = 'players' | 'summary' | 'result';
 
@@ -35,7 +34,14 @@ export interface MeetMatchControlsProps {
   match: MatchDTO;
   status: MatchListStatus;
   eventCode: string;
-  resultSets: SetPair[];
+  /** The AUTHORITATIVE recorded winner (match-card §3.5), derived once by the
+   *  caller from the persisted aggregate result — never recounted from
+   *  `resultSets` here. `null` until a result exists. */
+  winner: 'A' | 'B' | null;
+  /** This match's disruption findings. The LIST shows only a leading mark
+   *  (match-card §6.2, P3); the readable detail belongs here, in the surface
+   *  the row click opens. */
+  issues?: MatchIssue[];
   players: PlayerDTO[];
   groups: RosterGroupDTO[];
   rankCounts?: Record<string, number>;
@@ -53,7 +59,8 @@ export function MeetMatchControls({
   match,
   status,
   eventCode,
-  resultSets,
+  winner,
+  issues = [],
   players,
   groups,
   rankCounts,
@@ -100,7 +107,33 @@ export function MeetMatchControls({
 
   if (slot === 'summary') {
     return (
-      <DetailPanel.Section eyebrow="Event">
+      <>
+        {issues.length > 0 ? (
+          <DetailPanel.Section eyebrow="Issues">
+            {/* A real list with CSS markers, not a text glyph standing in
+                for one (separator contract): the marker takes the severity
+                colour, and colour is never the only carrier — an error and a
+                warning both read as list items either way. */}
+            <ul
+              data-testid="match-issue-detail"
+              className="list-disc space-y-1 py-1 pl-5 text-xs text-foreground"
+            >
+              {issues.map((issue, i) => (
+                <li
+                  key={i}
+                  className={
+                    issue.severity === 'error'
+                      ? 'marker:text-destructive'
+                      : 'marker:text-status-warning'
+                  }
+                >
+                  {issue.message}
+                </li>
+              ))}
+            </ul>
+          </DetailPanel.Section>
+        ) : null}
+        <DetailPanel.Section eyebrow="Event">
         <Row
           pane
           label="Event"
@@ -115,7 +148,8 @@ export function MeetMatchControls({
             />
           }
         />
-      </DetailPanel.Section>
+        </DetailPanel.Section>
+      </>
     );
   }
 
@@ -126,7 +160,7 @@ export function MeetMatchControls({
           match={match}
           players={players}
           groupsById={groupsById}
-          winner={setsWinner(resultSets)}
+          winner={winner}
           testId="match-finished-players"
         />
       );
@@ -162,7 +196,7 @@ export function MeetMatchControls({
       match={match}
       players={players}
       groupsById={groupsById}
-      winner={setsWinner(resultSets)}
+      winner={winner}
       testId="match-result-card"
     />
   );

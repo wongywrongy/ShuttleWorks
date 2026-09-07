@@ -83,7 +83,7 @@ interface Finding {
 const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   {
     file: 'apps/console/src/modules/display/MeetDisplayPage.tsx',
-    line: 702,
+    line: 726,
     why:
       'the operator-diagnostics "N active" row: the literal text "active" ' +
       '(rendered as a sibling text node right after the decorative dot) ' +
@@ -92,18 +92,18 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/modules/display/MeetDisplayPage.tsx',
-    line: 703,
-    why: 'the decorative dot on the same "N active" row as line 702 — same text-names-it evidence.',
+    line: 727,
+    why: 'the decorative dot on the same "N active" row as line 726 — same text-names-it evidence.',
   },
   {
     file: 'apps/console/src/modules/display/MeetDisplayPage.tsx',
-    line: 706,
-    why: 'same pattern as line 702, the "N called" row (text "called" names the state).',
+    line: 730,
+    why: 'same pattern as line 726, the "N called" row (text "called" names the state).',
   },
   {
     file: 'apps/console/src/modules/display/MeetDisplayPage.tsx',
-    line: 707,
-    why: 'the decorative dot on the same "N called" row as line 706 — same text-names-it evidence.',
+    line: 731,
+    why: 'the decorative dot on the same "N called" row as line 730 — same text-names-it evidence.',
   },
   {
     file: 'apps/console/src/modules/display/publicDisplay/StandingsView.tsx',
@@ -115,7 +115,7 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/modules/operations/run/AlertsActivityPanel.tsx',
-    line: 60,
+    line: 65,
     why:
       'severity is doubly redundant already: the icon COMPONENT itself ' +
       'differs by severity (Warning triangle vs. Info circle, a shape ' +

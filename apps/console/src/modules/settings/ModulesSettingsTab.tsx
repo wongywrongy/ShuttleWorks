@@ -1,5 +1,4 @@
 import { PAGE_BODY_WIDTH } from '../../components/control-plane';
-import { useNavigate } from 'react-router-dom';
 import { useWorkspaceModules } from '../../platform/domain/useWorkspaceModules';
 import { ModuleCatalogRow } from './ModuleCatalogRow';
 
@@ -10,7 +9,6 @@ import { ModuleCatalogRow } from './ModuleCatalogRow';
 const OPERATIONAL_IDS = new Set(['meet', 'bracket']);
 
 export function ModulesSettingsTab({ tid }: { tid: string }) {
-  const navigate = useNavigate();
   const { modules, enable, disable } = useWorkspaceModules(tid);
 
   // Every disable rule now surfaces BEFORE the click. Two were always
@@ -19,20 +17,18 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
   const enabledOps = (modules ?? []).filter(
     (m) => OPERATIONAL_IDS.has(m.id) && m.status === 'enabled',
   ).length;
+  // One short reason per stuck switch. The has-data rule is stated by the row
+  // itself (it is a property of the module, not of the catalog's arithmetic).
   const blockedReason = (m: {
     id: string;
     status: string;
     hasData?: boolean;
   }): string | undefined => {
-    // A module that has data is blocked by the server (409 MODULE_HAS_DATA)
-    // and the row already states that consequence via its impact line and
-    // "Review impact" action — no separate reason line here, and never an
-    // instruction to delete data in order to disable.
     if (m.status === 'enabled' && OPERATIONAL_IDS.has(m.id) && enabledOps <= 1) {
-      return 'A workspace keeps at least one operational module enabled.';
+      return 'Last operational module: can\'t turn off.';
     }
     if (m.id === 'display' && m.status !== 'enabled' && enabledOps === 0) {
-      return 'Needs Meet or Bracket enabled.';
+      return 'Needs Meet or Bracket on.';
     }
     return undefined;
   };
@@ -48,7 +44,7 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
             conditions in their head to read a list that will tell them
             anyway. Kept: what a module IS, which no row says. */}
         <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
-          Choose what this workspace can run, then finish its setup in the linked surface.
+          Choose what this workspace runs.
         </p>
       </div>
       <ul className="divide-y divide-border rounded border border-border">
@@ -62,16 +58,6 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
               onEnable={() => enable(m.id)}
               onDisable={() => disable(m.id)}
               hasData={m.hasData}
-              onConfigure={() =>
-                navigate(
-                  {
-                    meet: `/tournaments/${tid}/setup/general`,
-                    bracket: `/tournaments/${tid}/competition/draws`,
-                    display: `/tournaments/${tid}/publish/displays`,
-                    entries: `/tournaments/${tid}/participants/entries`,
-                  }[m.id],
-                )
-              }
               blockedReason={blockedReason(m)}
             />
           ))

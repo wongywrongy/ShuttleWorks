@@ -20,6 +20,33 @@ Deployed accessibility evidence is [the snapshot](evidence/logs/deployed-accessi
 
 ## Document index
 
+## Canonical route closeout - 2026-09-07
+
+The canonical route cleanup was verified against the current route registries
+and deployed Tailscale services. Operator capture is complete at 37/37 state
+sheets across 28 canonical destinations. Public capture is complete at 40/40
+state sheets across 29 canonical destinations; the optional player-detail
+state is omitted because the selected fixture has no routable published person
+identity. No compatibility aliases or duplicate public index tabs are included
+in these books. Expected behavior includes the local operator `/login` landing
+continuation, public discovery pagination clamping, and not-found responses for
+retired routes. Expected capture errors are the invalid operator invite (422)
+and protected public receipt (401).
+
+- [canonical operator surface book](../../screenshots/ui-review/canonical-routes-2026-09-07/operator-console-surface-book.pdf)
+- [canonical public surface book](../../screenshots/ui-review/canonical-routes-2026-09-07/public-entrant-surface-book.pdf)
+- [operator canonical manifest](../../screenshots/ui-review/canonical-routes-2026-09-07/operator-console-surface-book.manifest.json)
+- [public canonical manifest](../../screenshots/ui-review/canonical-routes-2026-09-07/public-entrant-surface-book.manifest.json)
+
+The final current gates recorded by the orchestrator are console 2,346 tests
+across 263 files, entrant 1,074 tests across 54 files, backend partner-host
+coverage 26 passed, browser route checks 8 passed, and console accessibility
+checks 23 passed. Services are healthy at [operator](http://100.68.168.126:8090),
+[public entrant](http://100.68.168.126:8091/e/), and API port 8092. The verified
+backup is `20260907T185511Z`. External email/payment delivery, cloud reconnect,
+full assistive-technology review, and physical-distance viewing remain outside
+the evidence boundary.
+
 - [findings register](findings.json), [implementation register](register.md), [route map](route-map.md), and [design contract](design-contract.md).
 - [Runtime findings](runtime-findings.md) records RT-12–RT-14 separately from the historical 74-row register.
 - [operator review](operator-implementation-review.md) and [public review](public-implementation-review.md).

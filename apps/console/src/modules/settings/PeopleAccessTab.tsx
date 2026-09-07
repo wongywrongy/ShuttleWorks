@@ -4,7 +4,7 @@ import { apiClient } from '../../api/client';
 import type { TournamentMemberDTO, TournamentSummaryDTO } from '../../api/dto';
 import { useAuth } from '../../context/AuthContext';
 import { OverflowMenu, type OverflowItem } from '../../components/control-plane/OverflowMenu';
-import { shortId, initialFor } from './memberIdentity';
+import { shortId, initialFor, presentIdentity } from './memberIdentity';
 import {
   LAST_OWNER_REASON,
   memberActionsFor,
@@ -13,12 +13,6 @@ import {
 } from './memberActions';
 import { SharingTab } from './SharingTab';
 import { TEXT_EMPHASIS, TEXT_TITLE } from '../../lib/utils'
-
-const ROLE_LEGEND: { role: string; desc: string }[] = [
-  { role: 'Owner', desc: 'Full control: modules, sharing, delete.' },
-  { role: 'Operator', desc: 'Run event operations.' },
-  { role: 'Viewer', desc: 'Read-only / display support.' },
-];
 
 /** Same date grammar as the workspace header ("Oct 1, 2026") — one format
  *  everywhere, never the locale-default numeric soup. */
@@ -33,11 +27,13 @@ function displayNameFor(
   m: TournamentMemberDTO,
   summary: TournamentSummaryDTO | null,
 ): string | null {
-  return (
+  const raw =
     m.displayName?.trim() ||
     m.email ||
-    (m.role === 'owner' && summary?.ownerName ? summary.ownerName : null)
-  );
+    (m.role === 'owner' && summary?.ownerName ? summary.ownerName : null);
+  // `local@dev` is the local-mode bootstrap placeholder, not an address a
+  // person reads (or writes to).
+  return raw ? (presentIdentity(raw) as string) : null;
 }
 
 /** What a confirmation dialog is currently asking about. */
@@ -207,33 +203,22 @@ export function PeopleAccessTab({
 
   return (
     <div className="space-y-5">
+      {/* ONE heading for this page. It used to carry "Members and roles", then
+          a "What the roles mean" disclosure, then "Members", then (from
+          SharingTab) "Team access" and "INVITATIONS" — five labels over one
+          list and one invite control. Each member row states its own role,
+          and the invite dropdown names the role it grants, so the separate
+          role-meaning disclosure explained words already on the screen. */}
       <div>
-        <h2 className="text-base font-semibold tracking-tight text-foreground">Members and roles</h2>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">Team</h2>
         {summary?.ownerName && (
-          <p className="mt-1 text-xs text-muted-foreground">Owner: {summary.ownerName}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Owner: {presentIdentity(summary.ownerName)}
+          </p>
         )}
       </div>
 
-      {/* Onboarding copy, not page furniture (WSM-2): after the first visit
-          the three definitions never change, and they were permanently
-          occupying the top of a page whose actual content is the member
-          list. Native disclosure — closed by default, one click away. */}
-      <details data-testid="role-legend" className="text-xs">
-        <summary className="cursor-pointer select-none text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground">
-          What the roles mean
-        </summary>
-        <ul className="mt-1.5 space-y-1.5 pl-1">
-          {ROLE_LEGEND.map((r) => (
-            <li key={r.role} className="flex gap-2 text-xs">
-              <span className="w-16 shrink-0 font-medium text-foreground">{r.role}</span>
-              <span className="text-muted-foreground">{r.desc}</span>
-            </li>
-          ))}
-        </ul>
-      </details>
-
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-foreground">Members</h3>
 
         {/* Errors sit with the list that produced them, not in a toast
             detached from the row the user was acting on. */}

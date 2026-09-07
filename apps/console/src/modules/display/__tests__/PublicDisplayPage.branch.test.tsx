@@ -6,7 +6,31 @@ import { PublicDisplayPage } from '../PublicDisplayPage';
 // Stub the kind resolver + the two heavy display pages so the test focuses on
 // the routing decision only.
 const mockKind = vi.fn();
-vi.mock('../useDisplayKind', () => ({ useDisplayKind: () => mockKind() }));
+vi.mock('../useDisplayKind', () => ({
+  DEFAULT_BOARD_SETTINGS: {
+    title: null,
+    logoUrl: null,
+    bannerUrl: null,
+    accent: null,
+    showNext: false,
+    showScores: true,
+  },
+  // The router now reads kind, name, timezone and the board settings in one
+  // hook and threads them to whichever board it renders.
+  useBoardContext: () => ({
+    kind: mockKind(),
+    name: null,
+    timeZone: null,
+    board: {
+      title: null,
+      logoUrl: null,
+      bannerUrl: null,
+      accent: null,
+      showNext: false,
+      showScores: true,
+    },
+  }),
+}));
 vi.mock('../MeetDisplayPage', () => ({
   MeetDisplayPage: () => <div data-testid="meet-display" />,
 }));

@@ -1,148 +1,165 @@
 /**
- * Facets for the Hub workspace dashboard: All / Setup / Ready / Live /
- * Complete / Shared / Needs attention / Archived.
+ * Hub views: **Upcoming · Live · Past**.
  *
- * These are **facets, not a partition** — a workspace can match several at
- * once (a Live workspace that is also Shared and Needs attention), so the
- * counts overlap and only "All" is exhaustive. The strip narrows *which* rows
- * show; `sortBy` (hubSort) fixes their order.
+ * The strip used to hold eight overlapping lifecycle/status facets (All,
+ * Active, Entries, Setup, Ready, Live, Complete, Shared, Needs attention,
+ * Archived). A director opening the Hub is asking a much smaller question —
+ * *which of my events is running, which is coming, which is done* — and every
+ * finer distinction (readiness, entries state, attention) is a fact about ONE
+ * workspace that the workspace itself states in full. So the Hub now partitions
+ * on TIME only, and operational readiness stays inside the workspace.
  *
- * ## Why these filter on the derived phase (SP-UI-1 follow-up)
+ * The three views are derived from the event's date RANGE versus today **in the
+ * event's own timezone** (`tournamentDate` … `tournamentEndDate`):
+ *   - **Live** — today falls inside the range.
+ *   - **Upcoming** — the range starts after today.
+ *   - **Past** — the range ended before today.
+ *   - **Date not set** — no start date. Not a view: a compact group carried
+ *     inside the default view (and reachable from search), because it is an
+ *     edge case, not a fourth thing a director thinks about.
  *
- * The strip used to split on the operator-managed `status` column
- * (Active / Draft), which the director sets by hand in Settings → General.
- * That was defensible in isolation but produced a control plane that
- * contradicted itself: a 43%-played tournament filed under **Draft** while the
- * Overview stepper, the shell badge and the row action all said **Live**. On a
- * real database it degenerated further — nothing had ever been marked Active,
- * so the strip read `Active 0 / Draft 14` and one bucket held everything,
- * including the three events that were mid-play. A filter that cannot separate
- * a running tournament from an empty one is not narrowing anything.
+ * The default view is the COMBINED `Live + Upcoming` — the operationally
+ * relevant half of the list. Past is the archive view.
  *
- * So the lifecycle facets now read `signals.phase`, the same server-computed
- * value every other surface keys on. `status` keeps the two jobs it is
- * genuinely good at: driving `health` (and therefore the row dot), and marking
- * a workspace **Archived**.
- *
- * ## Archived outranks the phase
- *
- * Match rows persist forever, so an archived tournament keeps
- * `phase: 'live' | 'complete'` for good. Without a precedence rule an archived
- * event would sit in **Live** alongside the ones actually being played. This
- * module applies the SAME order as `platform/domain/lifecycle.ts`
- * (archived > phase): an archived workspace matches `archived` and no
- * lifecycle facet.
- *
- * Pure + derived entirely from the summary DTO (`status`, `role`, `signals`).
+ * Pure + `now`-injected so it is unit-testable.
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
-import type { WorkspacePhase } from '../../platform/domain/lifecycle';
-import { resolvePhase } from '../../platform/domain/overviewPhase';
-import { MODULE_LABELS } from '../../platform/product-shell/types';
-import { needsAttention } from './hubSignals';
 
-export type HubFacetId =
-  | 'all'
-  | 'active'
-  // E4: ONE facet for all three entries phases, not three.
-  //
-  // A director filtering the Hub is asking "which of my events are in the
-  // entries stage" — announced vs open vs review is the state of one
-  // workspace, which its own card already says, and three more chips on a
-  // strip that already holds eight would cost more attention than the
-  // distinction is worth from the outside. The phase model keeps all three;
-  // this is a filter over it, not a mirror of it.
-  | 'entries'
-  | 'setup'
-  | 'ready'
-  | 'live'
-  | 'complete'
-  | 'shared'
-  | 'attention'
-  | 'archived';
+/** The three named views, plus the combined default. */
+export type HubViewId = 'current' | 'upcoming' | 'live' | 'past';
 
-export interface HubFacet {
-  id: HubFacetId;
+export interface HubView {
+  id: Exclude<HubViewId, 'current'>;
   label: string;
 }
 
-/** Fixed facet order for the filter strip: the lifecycle left-to-right in the
- *  order an event actually travels, then the cross-cutting facets. */
-export const HUB_FACETS: HubFacet[] = [
-  { id: 'all', label: 'All' },
-  { id: 'active', label: 'Active' },
-  { id: 'entries', label: MODULE_LABELS.entries },
-  { id: 'setup', label: 'Setup' },
-  { id: 'ready', label: 'Ready' },
+/** The chips, left to right, in the order an event travels. */
+export const HUB_VIEWS: HubView[] = [
+  { id: 'upcoming', label: 'Upcoming' },
   { id: 'live', label: 'Live' },
-  { id: 'complete', label: 'Complete' },
-  { id: 'shared', label: 'Shared' },
-  { id: 'attention', label: 'Needs attention' },
-  { id: 'archived', label: 'Archived' },
+  { id: 'past', label: 'Past' },
 ];
 
-/** The facet ids that name a lifecycle phase, keyed by phase. */
-const PHASE_FACET: Record<WorkspacePhase, HubFacetId> = {
-  announced: 'entries',
-  entries_open: 'entries',
-  entries_review: 'entries',
-  setup: 'setup',
-  ready: 'ready',
-  live: 'live',
-  complete: 'complete',
-};
+export const HUB_VIEW_IDS: ReadonlySet<string> = new Set([
+  'current',
+  ...HUB_VIEWS.map((v) => v.id),
+]);
 
-/** Shared = collaborating: either I'm on someone else's workspace
- *  (role operator/viewer), or I own it but have added/invited others. */
-export function isShared(t: TournamentSummaryDTO): boolean {
-  if (t.role && t.role !== 'owner') return true;
-  const c = t.signals?.collaboration;
-  return !!c && (c.memberCount > 1 || c.activeInviteCount > 0);
-}
+/** The default view: Live and Upcoming together (plus the undated group). */
+export const DEFAULT_HUB_VIEW: HubViewId = 'current';
 
-/** The single lifecycle facet a workspace belongs to, or `archived`. Exported
- *  so callers can label a row without re-deriving the precedence. */
-export function lifecycleFacetOf(t: TournamentSummaryDTO): HubFacetId {
-  if (t.status === 'archived') return 'archived';
-  return PHASE_FACET[resolvePhase(t)];
-}
+/** Where a workspace sits in time. `undated` is not a view — see the module
+ *  docstring. */
+export type HubTimeBucket = 'live' | 'upcoming' | 'past' | 'undated';
 
-/** Whether a workspace matches a facet. `all` matches everything. */
-export function matchesFacet(t: TournamentSummaryDTO, facet: HubFacetId): boolean {
-  switch (facet) {
-    case 'all':
-      return true;
-    case 'active':
-      return t.status !== 'archived' && resolvePhase(t) !== 'complete';
-    case 'shared':
-      return isShared(t);
-    case 'attention':
-      return needsAttention(t);
-    default:
-      // Lifecycle facets (incl. archived) are mutually exclusive.
-      return lifecycleFacetOf(t) === facet;
-  }
-}
-
-/** Per-facet counts over a list (the strip's badges). The lifecycle facets
- *  partition the list; `shared` / `attention` overlap them by design. */
-export function facetCounts(list: TournamentSummaryDTO[]): Record<HubFacetId, number> {
-  const counts = {
-    all: 0,
-    active: 0,
-    entries: 0,
-    setup: 0,
-    ready: 0,
-    live: 0,
-    complete: 0,
-    shared: 0,
-    attention: 0,
-    archived: 0,
-  } satisfies Record<HubFacetId, number>;
-  for (const t of list) {
-    for (const f of HUB_FACETS) {
-      if (matchesFacet(t, f.id)) counts[f.id] += 1;
+/**
+ * Today's YYYY-MM-DD in `timeZone`. An event's day boundary is the venue's,
+ * not the laptop's: a Sydney tournament is live on the morning its Californian
+ * director's browser still calls yesterday. Falls back to the browser's local
+ * day when the zone is absent or unusable.
+ */
+export function todayKeyIn(timeZone: string | undefined, now: Date = new Date()): string {
+  if (timeZone) {
+    try {
+      // en-CA renders ISO-shaped YYYY-MM-DD.
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(now);
+    } catch {
+      /* fall through to the local day */
     }
   }
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** The event's date range as YYYY-MM-DD keys; `null` when it has no start. */
+export function eventRangeOf(
+  t: TournamentSummaryDTO,
+): { start: string; end: string } | null {
+  if (!t.tournamentDate) return null;
+  const start = t.tournamentDate.slice(0, 10);
+  const end = (t.tournamentEndDate ?? t.tournamentDate).slice(0, 10);
+  // A stored end before the start is bad data, not a zero-length event: treat
+  // the start as authoritative rather than making the row permanently "past".
+  return { start, end: end < start ? start : end };
+}
+
+/** Which time bucket a workspace falls in, in ITS OWN timezone. */
+export function timeBucketOf(
+  t: TournamentSummaryDTO,
+  now: Date = new Date(),
+): HubTimeBucket {
+  const range = eventRangeOf(t);
+  if (!range) return 'undated';
+  const today = todayKeyIn(t.timeZone, now);
+  if (today < range.start) return 'upcoming';
+  if (today > range.end) return 'past';
+  return 'live';
+}
+
+/** Whether a workspace belongs in a view. `current` = Live + Upcoming, and
+ *  carries the undated group so those workspaces stay reachable. */
+export function matchesView(
+  t: TournamentSummaryDTO,
+  view: HubViewId,
+  now: Date = new Date(),
+): boolean {
+  const bucket = timeBucketOf(t, now);
+  if (view === 'current') return bucket !== 'past';
+  return bucket === view;
+}
+
+/** Per-view counts over a list (the chips' badges). The undated workspaces
+ *  belong to no chip; the default view's group header counts them. */
+export function viewCounts(
+  list: TournamentSummaryDTO[],
+  now: Date = new Date(),
+): Record<HubTimeBucket, number> {
+  const counts: Record<HubTimeBucket, number> = {
+    live: 0,
+    upcoming: 0,
+    past: 0,
+    undated: 0,
+  };
+  for (const t of list) counts[timeBucketOf(t, now)] += 1;
   return counts;
+}
+
+const BUCKET_RANK: Record<HubTimeBucket, number> = {
+  live: 0,
+  upcoming: 1,
+  undated: 2,
+  past: 3,
+};
+
+/**
+ * The Hub's one ordering: **Live first, Upcoming ascending, undated, then Past
+ * descending** — the same order in every view, so narrowing to one view never
+ * reshuffles what the director just read. Ties break on id for determinism.
+ */
+export function sortForHub(
+  list: TournamentSummaryDTO[],
+  now: Date = new Date(),
+): TournamentSummaryDTO[] {
+  return [...list].sort((a, b) => {
+    const ba = timeBucketOf(a, now);
+    const bb = timeBucketOf(b, now);
+    if (ba !== bb) return BUCKET_RANK[ba] - BUCKET_RANK[bb];
+    if (ba === 'undated') {
+      return (
+        (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.id.localeCompare(b.id)
+      );
+    }
+    const sa = eventRangeOf(a)!.start;
+    const sb = eventRangeOf(b)!.start;
+    // Past reads newest-first (an archive); live/upcoming read soonest-first.
+    const cmp = ba === 'past' ? sb.localeCompare(sa) : sa.localeCompare(sb);
+    return cmp || a.id.localeCompare(b.id);
+  });
 }

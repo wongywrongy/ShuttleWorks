@@ -46,6 +46,8 @@ import type {
   CommandConflictDTO,
   UserDTO,
   DisplayTokenDTO,
+  BoardSettingsDTO,
+  DisplaySummaryDTO,
   EntryPageDTO,
   EntryPagePublicationPatchDTO,
   LineupDTO,
@@ -552,6 +554,30 @@ class ApiClient {
     return r.data;
   }
 
+  // ---- Venue-board settings (branding + board switches) ----------------
+
+  /** The workspace's board settings; the server answers its defaults for a
+   *  workspace that has never opened the appearance controls. Viewer-gated. */
+  async getBoardSettings(tid: string): Promise<BoardSettingsDTO> {
+    const r = await this.client.get<BoardSettingsDTO>(
+      `/tournaments/${tid}/board-settings`,
+    );
+    return r.data;
+  }
+
+  /** Replace the board settings wholesale — the document is small and a
+   *  merge would need an "unset" sentinel to clear a logo. Operator-gated. */
+  async updateBoardSettings(
+    tid: string,
+    body: BoardSettingsDTO,
+  ): Promise<BoardSettingsDTO> {
+    const r = await this.client.put<BoardSettingsDTO>(
+      `/tournaments/${tid}/board-settings`,
+      body,
+    );
+    return r.data;
+  }
+
   // ---- Public-site publication (SP-P7) ---------------------------------
 
   /** The stored entry page — 404 (ENTRY_PAGE_NOT_FOUND) when the workspace
@@ -580,10 +606,8 @@ class ApiClient {
   // The ONLY unauthenticated data plane: `/display/{token}/*` serves the
   // spectator board a projection, never the raw state blob.
 
-  async getDisplaySummary(
-    token: string,
-  ): Promise<{ kind: string; name: string | null }> {
-    const r = await this.client.get(
+  async getDisplaySummary(token: string): Promise<DisplaySummaryDTO> {
+    const r = await this.client.get<DisplaySummaryDTO>(
       `/display/${encodeURIComponent(token)}/summary`,
     );
     return r.data;

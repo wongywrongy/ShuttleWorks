@@ -164,15 +164,18 @@ describe('Bracket Configuration — one merged surface', () => {
 
   it('there is ONE save path: the merged surface writes engine fields and nothing else', async () => {
     // The merge hazard. `EngineConfigForm` spreads the WHOLE config on
-    // submit, so a second form on the page that did the same would silently
-    // overwrite this one's fields with its own stale copy. Events is a
-    // read-only slot, so exactly one Save exists and the write it produces
-    // carries the edited engine field.
+    // submit, so a second writer of `TournamentConfig` on the page would
+    // silently overwrite this one's fields with its own stale copy. Events is
+    // a read-only slot; Draw defaults writes the SETUP document, never the
+    // engine config, so it carries its own Save without reintroducing the
+    // hazard — exactly one Save writes `TournamentConfig`.
     const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
     renderBracketTab();
     expandConfigSections();
 
-    expect(screen.getAllByRole('button', { name: /^Save/i })).toHaveLength(1);
+    expect(
+      screen.getAllByRole('button', { name: /^Save engine settings/i }),
+    ).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('radio', { name: 'Game scores' }));
     expect(setConfig).not.toHaveBeenCalled();

@@ -68,7 +68,9 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
   // Slot formatter for the diff view's "From / To" columns.
   const formatSlot = (slotId: number | null | undefined): string => {
     if (slotId === null || slotId === undefined) return '–';
-    if (!config) return `slot ${slotId}`;
+    // A raw slot index is storage, never operator copy (§3.1): with no
+    // configured clock there is no time to name.
+    if (!config) return '–';
     return formatSlotTime(slotId, config);
   };
 

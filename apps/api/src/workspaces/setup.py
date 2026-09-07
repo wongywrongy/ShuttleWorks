@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Any, Literal, Optional, Union
@@ -16,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, Path, Response
 from pydantic import Field, TypeAdapter, ValidationError, field_validator
+from sqlalchemy import select
 
 from core.dependencies import (
     AuthUser,
@@ -339,11 +341,11 @@ _IMPACT: dict[SetupKey, list[str]] = {
     "general": ["Overview", "the public site", "exports"],
     "dates": ["registration", "draw publication", "scheduling"],
     "venue": ["court availability", "Plan", "Live Day"],
-    "events": ["Participants", "Competition", "publishing"],
+    "events": ["Participants", "the draws", "publishing"],
     "rules": ["draw generation", "match duration", "results"],
     "entries": ["registration", "payment review", "eligibility"],
     "people": ["operator contacts"],
-    "public-info": ["public site", "links", "venue displays"],
+    "public-info": ["public site", "regulations", "links"],
 }
 
 
@@ -443,35 +445,14 @@ def _domain_events(row, repo: LocalRepository) -> Optional[list[dict]]:
     return [{"id": code, "code": code, "name": code, "status": "open"} for code in sorted(rank_counts)]
 
 
-def _schedule_assignments(row) -> list[dict]:
-    """Return the canonical assignment list for either tournament engine.
-
-    A configured court list remains Setup-owned until a plan actually refers
-    to it. Once assignments exist, changing or re-numbering courts from Setup
-    would invalidate the plan, so Venue becomes the read-only projection
-    selected by ruling R-N A. This deliberately reads the same two blob seams
-    as workspace signals: Meet ``schedule.assignments`` and Bracket
-    ``bracket_session.assignments``.
-    """
-    data = row.data if isinstance(row.data, dict) else {}
-    container = data.get("bracket_session") if row.kind == "bracket" else data.get("schedule")
-    if not isinstance(container, dict):
-        return []
-    assignments = container.get("assignments")
-    if not isinstance(assignments, list):
-        return []
-    return [assignment for assignment in assignments if isinstance(assignment, dict)]
-
-
-def _domain_venue(row) -> Optional[dict]:
-    """The scheduled venue projection, or ``None`` before a plan exists."""
-    if not _schedule_assignments(row):
-        return None
-    # Court names and venue metadata are still stored in the canonical Setup
-    # configuration. ``authority=domain`` means that configuration can no
-    # longer be edited here because the schedule now depends on it; it does
-    # not manufacture a second court representation from assignment indexes.
-    return _section_data(row, "venue")
+# Venue used to become READ-ONLY the moment a plan referred to its courts, on
+# the argument that editing them would invalidate the plan. It does not: a
+# venue's name, address, accessibility notes and court list are descriptive
+# information a director corrects on the day, and locking the whole page
+# because a schedule exists is a worse failure than a schedule that needs
+# revalidating. The information edit is accepted and the affected plan is
+# marked for revalidation in Plan — where schedule reconciliation belongs and
+# where recorded results are safe.
 
 
 def _parse_instant(value: Optional[str], zone_name: Optional[str] = None) -> Optional[datetime]:
@@ -556,14 +537,10 @@ def _state_for(
     key: SetupKey,
     counts: RowCounts,
     domain_events: Optional[list[dict]],
-    domain_venue: Optional[dict],
 ) -> SetupSectionState:
     authority: Literal["setup", "domain"] = "setup"
     if key == "events" and domain_events is not None:
         data: dict = {"events": domain_events}
-        authority = "domain"
-    elif key == "venue" and domain_venue is not None:
-        data = domain_venue
         authority = "domain"
     else:
         data = _section_data(row, key)
@@ -650,22 +627,106 @@ def _state_for(
     )
 
 
+# A sentinel distinguishing "the client did not send this field" from "the
+# client sent null" — clearing the regulations must be possible.
+_UNSET = object()
+
+# Same alphabet as the entry-page route enforces (lowercase, digits, hyphen,
+# 3-60). Restated rather than imported: `workspaces` may not name `entries`
+# (import-linter, workspaces-independence), and a public address is a
+# contract worth stating where it is written.
+_PUBLIC_SLUG_RE = re.compile(r"^[a-z0-9-]{3,60}$")
+# Path segments the entrant app claims ahead of its `:slug` route.
+_RESERVED_PUBLIC_SLUGS = frozenset(
+    {"api", "account", "login", "signup", "verify", "reset", "partner", "me", "assets"}
+)
+
+
+def _regulations_row(session, tid: uuid.UUID, text: Optional[str], slug: Optional[str]):
+    """Write the regulations document, creating the page row if needed.
+
+    ``regulations_version`` bumps only when the text actually changes — every
+    entry records the version it accepted, so a bump on an unrelated save
+    would silently invalidate every acknowledgment on file.
+    """
+    row = session.get(EntryPage, tid)
+    if row is None:
+        row = EntryPage(tournament_id=tid, slug=slug, regulations_version=1)
+        session.add(row)
+    elif (row.regulations_text or "") == (text or ""):
+        return row
+    if (row.regulations_text or "") != (text or ""):
+        row.regulations_version = (row.regulations_version or 1) + 1
+        row.regulations_updated_at = datetime.now(timezone.utc)
+    row.regulations_text = text or None
+    session.flush()
+    return row
+
+
+def _write_regulations(
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
+    *,
+    text: Optional[str],
+    slug: Optional[str],
+) -> None:
+    """Publish the regulations through the page the public tier reads.
+
+    A workspace with no entry page yet gets one created here, using the public
+    page address the same save carries — otherwise "write regulations" would
+    be an operator-visible control that silently does nothing on most
+    workspaces. Refusing is the honest answer only when there is no address to
+    create it with.
+    """
+    existing = repo.execute_query(
+        lambda session, tid: session.get(EntryPage, tid), tournament_id
+    )
+    if existing is None:
+        if not text:
+            return
+        candidate = (slug or "").strip().lower()
+        if not _PUBLIC_SLUG_RE.match(candidate) or candidate in _RESERVED_PUBLIC_SLUGS:
+            raise http_error(
+                409,
+                ErrorCode.INVALID_INPUT,
+                "Set the tournament page address before publishing regulations: "
+                "3-60 characters of lowercase letters, digits and hyphens.",
+            )
+        taken = repo.execute_query(
+            lambda session, statement: session.execute(statement).first(),
+            select(EntryPage.tournament_id).where(
+                EntryPage.slug == candidate,
+                EntryPage.tournament_id != tournament_id,
+            ),
+        )
+        if taken is not None:
+            raise http_error(
+                409,
+                ErrorCode.ENTRY_PAGE_SLUG_TAKEN,
+                f"the page address {candidate!r} is already in use",
+            )
+        repo.execute_transaction(_regulations_row, tournament_id, text, candidate)
+        return
+    repo.execute_transaction(_regulations_row, tournament_id, text, existing.slug)
+
+
 def _response(row, repo: LocalRepository) -> TournamentSetup:
     counts = _counts_for([row.id], repo)[row.id]
     domain_events = _domain_events(row, repo)
-    domain_venue = _domain_venue(row)
-    sections = [
-        _state_for(row, key, counts, domain_events, domain_venue)
-        for key in _KEYS
-    ]
-    # Audience is owned by EntryPage/publication, but keep the legacy Setup
-    # read useful for old clients and deep links.
+    sections = [_state_for(row, key, counts, domain_events) for key in _KEYS]
+    # Audience and the regulations DOCUMENT live on the entry page, which is
+    # what the public tier reads. Setup is where an operator writes them, so
+    # the section carries both: audience read-only (the publication card owns
+    # the write), regulations text writable through the PATCH below.
     page = repo.execute_query(lambda session, tid: session.get(EntryPage, tid), row.id)
-    if page is not None:
-        for section in sections:
-            if section.key == "public-info":
+    for section in sections:
+        if section.key == "public-info":
+            if page is not None:
                 section.data["visibility"] = page.audience
-                break
+            section.data["regulationsText"] = (
+                page.regulations_text if page is not None else None
+            ) or ""
+            break
     blockers = sum(1 for section in sections for issue in section.issues if issue.severity == "blocking")
     started = any(section.status != "not_started" for section in sections)
     required_ready = all(section.status == "ready" for section in sections if section.key in _REQUIRED)
@@ -738,26 +799,30 @@ def patch_setup_section(
             ErrorCode.SETUP_SECTION_DOMAIN_OWNED,
             "Public audience is managed from Publish · Site; this Setup value is read-only.",
         )
-    domain_owner = (
-        "Competition" if section == "events" and _domain_events(row, repo) is not None
-        else "Operations · Plan" if section == "venue" and _domain_venue(row) is not None
-        else None
-    )
-    if domain_owner is not None:
-        # Ruling R-N (A): once real events exist the events section is a
-        # read-only projection; edits belong on the owning surface. Refusing
-        # here keeps the setup document from becoming a diverging shadow copy.
+    if section == "events" and _domain_events(row, repo) is not None:
+        # Structural locks are retained where they are real: once draws or
+        # divisions exist, the event list is a projection of them and edits
+        # belong to the engine that owns the structure. Venue and dates are
+        # deliberately NOT locked this way — descriptive information stays
+        # editable, and the plan it affects is revalidated in Plan.
+        owner = "Bracket · Draws" if row.kind == "bracket" else "the Roster"
         raise http_error(
             409,
             ErrorCode.SETUP_SECTION_DOMAIN_OWNED,
-            f"{section.replace('-', ' ').title()} already has downstream data. Manage it from {domain_owner} — this page shows a read-only summary.",
+            f"This draw has been generated. Regenerate it to change format or size. Manage events from {owner}.",
         )
     seen = _parse_version(if_match)
     current = row.state_version or 0
     if seen != current:
         raise http_error(409, ErrorCode.STATE_VERSION_CONFLICT, "Setup changed since it was loaded. Reload before saving.", extra={"seenVersion": seen, "currentVersion": current})
+    payload = dict(body.data)
+    # The regulations document is stored on the entry page (that is the row
+    # the public reader reads), never duplicated into the setup blob.
+    regulations_text = (
+        payload.pop("regulationsText", _UNSET) if section == "public-info" else _UNSET
+    )
     try:
-        validated = _SECTION_ADAPTER.validate_python({"section": section, **body.data})
+        validated = _SECTION_ADAPTER.validate_python({"section": section, **payload})
     except ValidationError as exc:
         # A handler-raised pydantic error is a 500 to the client unless it is
         # translated here — the request *body* parsed fine (SetupPatch.data is
@@ -812,6 +877,13 @@ def patch_setup_section(
                 config[target] = dumped[source]
     if config:
         document["config"] = config
+    if regulations_text is not _UNSET:
+        _write_regulations(
+            repo,
+            tournament_id,
+            text=None if regulations_text is None else str(regulations_text),
+            slug=dumped.get("publicSlug"),
+        )
     try:
         updated = repo.commit_tournament_state(tournament_id, document, expected_version=seen)
     except ConflictError:

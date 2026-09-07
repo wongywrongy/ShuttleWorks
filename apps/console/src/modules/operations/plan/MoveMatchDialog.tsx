@@ -86,7 +86,8 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
 
   const formatSlotForDiff = (slotId: number | null | undefined): string => {
     if (slotId === null || slotId === undefined) return '–';
-    if (!config) return `slot ${slotId}`;
+    // A raw slot index is storage, never operator copy (§3.1).
+    if (!config) return '–';
     return formatSlotTime(slotId, config);
   };
 

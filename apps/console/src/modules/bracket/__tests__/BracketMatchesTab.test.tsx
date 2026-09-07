@@ -143,10 +143,10 @@ const renderWithRouter = (component: React.ReactElement) =>
   render(<MemoryRouter>{component}</MemoryRouter>);
 
 describe('<BracketMatchesTab />', () => {
-  it('shows the "N matches · from draws" bar readout', () => {
+  it('shows the "N matches" bar readout with no provenance aside', () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     expect(screen.getByText('6 matches')).toBeInTheDocument();
-    expect(screen.getByText('· from draws')).toBeInTheDocument();
+    expect(screen.queryByText('· from draws')).toBeNull();
   });
 
   it('renders one band per event with its count, and all rows', () => {
@@ -174,26 +174,33 @@ describe('<BracketMatchesTab />', () => {
     expect(msSf1.querySelector('.w-28')).toHaveAttribute('title', 'pu-ms-1');
   });
 
-  it('joins doubles sides with a slash while preserving canonical names', () => {
+  it('stacks doubles partners one per line, preserving canonical names', () => {
+    // P3 / match-card §3.1: one participant per line, two lines per doubles
+    // side. The ` / ` join is gone from the row.
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    expect(screen.getAllByText('Elle Kim / Fay Wu').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Gia Lopez / Hana Sato').length).toBeGreaterThan(0);
+    for (const name of ['Elle Kim', 'Fay Wu', 'Gia Lopez', 'Hana Sato']) {
+      expect(screen.getAllByText(name).length).toBeGreaterThan(0);
+    }
+    expect(screen.queryByText('Elle Kim / Fay Wu')).toBeNull();
   });
 
-  it('renders the status column per the X6 ink budget — only LIVE chips', () => {
+  it('has no Status or Issues column — the row carries names and a score', () => {
+    // P3 / match-card §6.2: the standalone text columns are gone. The filter
+    // strip above the list still counts every state (its chips are named
+    // `bracket-matches-…`), but no ROW paints a state word.
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
-    // LIVE is the one routine container; READY/PENDING are muted text.
-    expect(screen.getByText('Live').className).toContain('bg-status-live-bg');
-    for (const el of [
-      ...screen.getAllByText('Ready'),
-      ...screen.getAllByText('Pending'),
-    ]) {
-      expect(el.className).not.toContain('bg-status-');
-      expect(el.className).toContain('text-muted-foreground');
+    expect(
+      screen.queryByRole('columnheader', { name: 'Status' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('columnheader', { name: 'Issues' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: 'Score' }),
+    ).toBeInTheDocument();
+    for (const row of screen.getAllByTestId(/^bracket-match-row-/)) {
+      expect(row).not.toHaveTextContent(/\b(Ready|Pending|Waiting on draw)\b/);
     }
-    // The done row has a result but no recorded sets, so it takes the text
-    // fallback — never a chip (X6-D: with sets it would render the lane).
-    expect(screen.getByText('Done').className).not.toContain('bg-status-');
   });
 
   it('renders unresolved sides as a muted-italic placeholder in the fixed §2.1 vocabulary', () => {
@@ -450,28 +457,21 @@ describe('<BracketMatchesTab /> — score ledger and winner mark', () => {
     return data;
   }
 
-  it('emphasises each game from its own score, not from the match winner', () => {
+  it('renders one centred paired lane with NO emphasis on any game', () => {
+    // P3 / match-card §3.4: the games read "15–21, 21–18, 21–19" in one lane
+    // between the opponents, first number = the first-listed side, and no
+    // game score is ever bolded — for a completed game or a live one. The
+    // winning side's NAME carries the outcome, from `winner_side` alone.
     renderWithRouter(<BracketMatchesTab data={dataWithScoredResult()} />);
-    const gameA1 = screen.getByLabelText('Game 1 score', {
-      selector: '[data-testid="bracket-match-row-score-a-pu-ms-1"] span',
-    });
-    const gameB1 = screen.getByLabelText('Game 1 score', {
-      selector: '[data-testid="bracket-match-row-score-b-pu-ms-1"] span',
-    });
-    // Game 1: B scored higher (21 > 15) — B's number is bold, A's is not,
-    // even though A is the recorded match winner.
-    expect(gameA1.className).not.toContain('font-semibold');
-    expect(gameB1.className).toContain('font-semibold');
-
-    const gameA2 = screen.getAllByLabelText('Game 2 score', {
-      selector: '[data-testid="bracket-match-row-score-a-pu-ms-1"] span',
-    })[0];
-    const gameB2 = screen.getAllByLabelText('Game 2 score', {
-      selector: '[data-testid="bracket-match-row-score-b-pu-ms-1"] span',
-    })[0];
-    // Game 2: A scored higher (21 > 18) — A's number is bold this time.
-    expect(gameA2.className).toContain('font-semibold');
-    expect(gameB2.className).not.toContain('font-semibold');
+    const lane = screen.getByTestId('bracket-match-score-pu-ms-1');
+    expect(lane).toHaveTextContent('15–21, 21–18, 21–19');
+    for (const cell of lane.querySelectorAll('span')) {
+      expect(cell.className).not.toContain('font-semibold');
+    }
+    // Per-game accessible text still names both sides and the game (§3.4).
+    expect(
+      within(lane).getByLabelText(/^Game 1, .* 15, .* 21$/),
+    ).toBeInTheDocument();
   });
 
   it('carries a text-equivalent winner mark on the recorded winner only', () => {

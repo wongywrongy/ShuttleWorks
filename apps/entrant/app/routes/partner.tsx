@@ -1,5 +1,5 @@
 /**
- * `GET /e/partner` — the doubles invitation, and its two outcomes (E3).
+ * `GET /e/partner/:token` — the doubles invitation, and its two outcomes (E3).
  *
  * **This page is the argument for invites over capability links, rendered.**
  * A stranger arrives holding a URL somebody mailed them. What the URL buys
@@ -67,7 +67,7 @@ export async function loader({
 }) {
   const csrf = mintFormCsrf();
   const url = new URL(request.url);
-  const raw = params?.token ?? url.searchParams.get('token') ?? '';
+  const raw = params?.token ?? '';
   const token = raw.length > MAX_TOKEN ? '' : raw;
   const accepted = url.pathname.endsWith(ACCEPTED_SUFFIX);
   const failed = url.pathname.endsWith(FAILED_SUFFIX);
@@ -307,7 +307,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
             or{' '}
             <a
               className="text-accent underline underline-offset-4"
-              href={`/e/signup/partner/${encodeURIComponent(token)}`}
+              href={`/e/signup?next=${encodeURIComponent(`/e/partner/${token}`)}`}
             >
               create one
             </a>{' '}

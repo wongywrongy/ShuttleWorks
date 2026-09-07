@@ -431,16 +431,9 @@ describe("the Draws panel (§3.4, ADR 0028)", () => {
     expect(html).not.toContain("No draws yet.");
   });
 
-  // ADR 0028: Seeded entries and Winners are no longer tabs. Seeds ride the
-  // draw page as `[n]`; the champion rides the Draws row. Their bookmarks
-  // land on the Draws panel rather than on Overview.
-  it.each(["seeds", "winners"])("folds the retired %s bookmark onto Draws", async (legacy) => {
-    stubApi({ "/draws": DRAWS_INDEX });
-    const html = await render(`/e/spring-open?tab=${legacy}`);
-    const nav =
-      html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? "";
-    expect(nav).toMatch(/aria-current="page"[^>]*>Draws<\/a>/);
-    expect(html).toContain('href="/e/spring-open/draws/MS"');
+  it.each(["seeds", "winners"])("returns 404 for removed %s tab URLs", async (removed) => {
+    const html = await render(`/e/spring-open?tab=${removed}`);
+    expect(html).toContain('This entry page is not available');
   });
 });
 

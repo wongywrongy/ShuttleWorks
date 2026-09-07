@@ -18,11 +18,11 @@ import { useBracketResultQueue } from "../../hooks/useBracketResultQueue";
 import { INTERACTIVE_BASE } from "../../lib/utils";
 import {
   REASON_BADGE,
+  ScoreLane,
   WinnerDot,
 } from "../../components/control-plane";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { PanZoomCanvas } from "./PanZoomCanvas";
-import { drawProgress } from "./drawProgress";
 import { BracketScoreEntry } from "./BracketScoreEntry";
 import { BracketInlineNotice } from "./BracketInlineNotice";
 import { applyOptimisticResult } from "./optimisticResult";
@@ -57,7 +57,7 @@ export function DrawView({
 }: Props) {
   const tid = useTournamentId();
   const navigate = useNavigate();
-  const goToDraws = () => navigate(`/tournaments/${tid}/competition/draws`);
+  const goToDraws = () => navigate(`/tournaments/${tid}/bracket/draws`);
   const event = data.events.find((e) => e.id === eventId);
   if (!event) {
     return (
@@ -243,12 +243,23 @@ function BracketView({
     shortRoundLabel(ri, event.rounds.length),
   );
 
+  // Node height is DERIVED from this draw's own content (match-card §4.3),
+  // not from a constant sized for the worst case any draw could produce.
+  const cardHeight = useMemo(() => {
+    const m = measureBracketNodes(
+      event.rounds.flat().flatMap((id) => (idMap[id] ? [idMap[id]] : [])),
+      nameById,
+      resultByPu,
+    );
+    return bracketCardHeight(m.maxNameLines, m.hasScoreLane, m.hasControl);
+  }, [event.rounds, idMap, nameById, resultByPu]);
+
   const layout = useMemo(
     () =>
       layoutMode === "mirrored"
-        ? computeMirroredBracketLayout(event.rounds)
-        : computeOneSidedBracketLayout(event.rounds),
-    [event.rounds, layoutMode],
+        ? computeMirroredBracketLayout(event.rounds, cardHeight)
+        : computeOneSidedBracketLayout(event.rounds, cardHeight),
+    [event.rounds, layoutMode, cardHeight],
   );
 
   const recordResultFor = (
@@ -310,10 +321,13 @@ function BracketView({
       ) : null}
       <div className="min-h-0 flex-1">
         <div className="hidden h-full min-h-0 lg:block">
-          <PanZoomCanvas
-            roundLabels={roundLabels}
-            overlayTrailing={<DrawTally progress={drawProgress(data, event.id)} />}
-          >
+          {/* The round-jump chips stay; the done/live/ready/pending tally
+              that used to ride the toolbar's right end is GONE (P3). It
+              restated, in four uncounted words over a canvas nobody reads
+              during a live day, exactly what the Draws index's Progress cell
+              and the Bracket view header both already say — and the canvas
+              itself shows which matches are played. */}
+          <PanZoomCanvas roundLabels={roundLabels}>
             {/* Bracket canvas: one-sided (default) reads left-to-right with the
               Final as the rightmost column; mirrored fans two wings out from
               a centered Final. Positions and feeder paths use the same pure
@@ -360,7 +374,7 @@ function BracketView({
                           style={{
                             top: `${m.top}px`,
                             width: `${BRACKET_CARD_WIDTH}px`,
-                            height: `${BRACKET_CARD_HEIGHT}px`,
+                            height: `${layout.cardHeight}px`,
                           }}
                         >
                           <BracketCell
@@ -403,16 +417,6 @@ function BracketView({
         </div>
       </div>
     </div>
-  );
-}
-
-function DrawTally({ progress }: { progress: Record<string, number> }) {
-  return (
-    <span className="flex items-center gap-2 text-2xs sw-num text-muted-foreground">
-      {([['done', progress.done], ['live', progress.live], ['ready', progress.ready], ['pending', progress.pending]] as const).map(([label, count]) => (
-        <span key={label}>{label} {count}</span>
-      ))}
-    </span>
   );
 }
 
@@ -644,16 +648,117 @@ function mobileScore(result: ResultDTO | undefined, side: "A" | "B"): string {
 //     subtree).
 
 const BRACKET_CARD_WIDTH = 256; // matches the old w-64 card.
-// 160, was 88: a doubles PAIR ("Hugo Marchetti-Silva / Tao Ming Zhu") wraps
-// each side to two 13px lines, and at 88 the card's content overlapped the
-// card below. The fixed height exists for deterministic feeder midpoints, so
-// it must budget the worst case its own data produces: p-3 (24) + header
-// (14) + two 2-line sides (52 each) + the space-y-2 gaps (16) ≈ 158. The
-// canvas auto-fit absorbs the extra height; truncation and overlap may not.
-const BRACKET_CARD_HEIGHT = 160;
+// 16, was 28 (P3, "tighten first-round node spacing"). The gap existed to
+// absorb a card whose content outgrew a card height chosen for a typical
+// name; the height is DERIVED from the draw's own content now, so the gap
+// only has to separate two cards.
 const BRACKET_COL_GAP = 56;
-const BRACKET_ROW_GAP = 28;
+const BRACKET_ROW_GAP = 16;
 const BRACKET_LABEL_HEIGHT = 28; // room for the round label above the cards.
+
+// ── Node height, derived rather than constant ───────────────────────────
+// The card height has to be a number the layout knows BEFORE the browser
+// lays anything out: feeder midpoints, the canvas box and `fit()` are all
+// computed from it, and jsdom does no layout at all. It used to be one
+// constant — 160px, budgeted for the worst case ANY draw could produce (a
+// two-line doubles pair on both sides) — which meant a 32-player SINGLES
+// draw, whose sides are one line each, carried ~35px of dead space per node
+// and the same again in the row gap: over a first round, half a screen of
+// nothing.
+//
+// So it is derived from the tallest node this draw actually renders
+// (match-card contract §4.3: "node geometry is derived from the tallest
+// rendered side, not from a constant chosen for a typical name"). The
+// components below are the card's own box model, one per rendered element,
+// so a change to the card's padding or type scale has exactly one place to
+// be reflected.
+const CARD_PAD_Y = 24; // Card `p-3`, top + bottom.
+const CARD_CAPTION = 18; // identity + time/court caption line.
+const CARD_GAP = 8; // one `space-y-2` gap.
+const SIDE_PAD_Y = 14; // a side row's `py-1.5` plus its hairline.
+const NAME_LINE = 20; // one name at `text-2sm leading-snug`.
+const SCORE_LANE = 20; // the centred paired-game lane between the sides.
+const CARD_CONTROL = 34; // the single score-entry control.
+
+/**
+ * The uniform node height for one draw, from what that draw renders.
+ *
+ * `maxNameLines` is the largest number of NAME LINES any single side in the
+ * draw renders (1 for singles, 2 for a doubles pair, 2 for a pair one member
+ * short — the "partner to be confirmed" line is a line). `hasScoreLane` and
+ * `hasControl` are draw-wide: every node is the same height, because uneven
+ * node heights inside one round are exactly what makes a bracket read as
+ * broken, and because the feeder-midpoint recursion assumes a uniform pitch.
+ */
+export function bracketCardHeight(
+  maxNameLines: number,
+  hasScoreLane: boolean,
+  hasControl: boolean,
+): number {
+  const lines = Math.max(1, maxNameLines);
+  const sides = 2 * (SIDE_PAD_Y + lines * NAME_LINE);
+  const lane = hasScoreLane ? SCORE_LANE + CARD_GAP : 0;
+  const control = hasControl ? CARD_CONTROL + CARD_GAP : 0;
+  return CARD_PAD_Y + CARD_CAPTION + CARD_GAP * 2 + sides + lane + control;
+}
+
+/**
+ * A side's rendered NAME LINES — one per person, `null` where the side is a
+ * feeder/bye placeholder and the card renders its single `labelFor` string.
+ *
+ * v3 package 29 (V3-10-1): the wire's structured `sides` carries a doubles
+ * pair as TWO persons resolved from `member_ids` against the bracket roster,
+ * so the last ` / `-split in the draw card is GONE — a name containing a
+ * slash no longer breaks into two players, and a pair one member short
+ * renders "partner to be confirmed" on its own line instead of passing as
+ * singles. The legacy split survives only as the fallback for a payload
+ * minted before `sides` existed.
+ */
+function sideNameLines(
+  wire: SideDTO | undefined,
+  ids: string[] | null,
+  nameById: Record<string, string>,
+): string[] | null {
+  if (wire) {
+    const built = sideFromWire(wire);
+    return built.persons.length > 0 ? formatSideLines(built) : null;
+  }
+  return ids?.flatMap((id) => (nameById[id] ?? id).split(" / ")) ?? null;
+}
+
+/**
+ * Measure one draw so `bracketCardHeight` can size its nodes from the
+ * content they will actually hold, rather than from a constant.
+ */
+export function measureBracketNodes(
+  units: PlayUnitDTO[],
+  nameById: Record<string, string>,
+  resultByPu: Record<string, ResultDTO>,
+): { maxNameLines: number; hasScoreLane: boolean; hasControl: boolean } {
+  let maxNameLines = 1;
+  let hasScoreLane = false;
+  let hasControl = false;
+  for (const pu of units) {
+    for (const [wire, ids] of [
+      [pu.sides?.[0], pu.side_a] as const,
+      [pu.sides?.[1], pu.side_b] as const,
+    ]) {
+      const lines = sideNameLines(wire, ids, nameById);
+      if (lines) maxNameLines = Math.max(maxNameLines, lines.length);
+    }
+    const result = resultByPu[pu.id];
+    if (Array.isArray(result?.score?.sets) && result.score.sets.length > 0) {
+      hasScoreLane = true;
+    }
+    if (!result && !!pu.side_a && !!pu.side_b) hasControl = true;
+  }
+  return { maxNameLines, hasScoreLane, hasControl };
+}
+
+/** The height a draw with nothing loaded yet would use — also the default
+ *  every exported layout helper falls back to, so a caller that has no
+ *  content to measure still gets a coherent (if generous) canvas. */
+const BRACKET_CARD_HEIGHT = bracketCardHeight(2, true, true);
 
 interface BracketColumnMatch {
   puId: string;
@@ -673,6 +778,11 @@ interface BracketColumn {
 export interface BracketLayout {
   contentWidth: number;
   contentHeight: number;
+  /** The uniform node height this layout was computed with. Carried on the
+   *  layout so the connector geometry (and any consumer) reads the SAME
+   *  number the columns were positioned with — it is no longer a module
+   *  constant either of them can read independently and disagree about. */
+  cardHeight: number;
   columns: BracketColumn[];
 }
 
@@ -723,12 +833,12 @@ export function computeBracketConnectorPaths(
       const targetX = targetIsRight
         ? targetGeometry.left
         : targetGeometry.left + BRACKET_CARD_WIDTH;
-      const sourceY = feederGeometry.top + BRACKET_CARD_HEIGHT / 2;
+      const sourceY = feederGeometry.top + layout.cardHeight / 2;
       // Land beside the owning side instead of the card midpoint so two
       // feeders remain visually distinct when they converge on one match.
       const targetY =
         targetGeometry.top +
-        BRACKET_CARD_HEIGHT * (slot.side === "A" ? 0.32 : 0.68);
+        layout.cardHeight * (slot.side === "A" ? 0.32 : 0.68);
       const elbowX = (sourceX + targetX) / 2;
 
       paths.push({
@@ -796,17 +906,18 @@ function BracketConnectors({
  */
 export function computeOneSidedBracketLayout(
   rounds: string[][],
+  cardHeight: number = BRACKET_CARD_HEIGHT,
 ): BracketLayout {
   const n = rounds.length;
   const pitchX = BRACKET_CARD_WIDTH + BRACKET_COL_GAP;
-  const pitchY = BRACKET_CARD_HEIGHT + BRACKET_ROW_GAP;
+  const pitchY = cardHeight + BRACKET_ROW_GAP;
 
   const base = rounds[0]?.length ?? 0;
   // Tall enough for the WIDEST round — a plain knockout peaks at round 0,
   // but a DE losers bracket alternates equal-size drop-in rounds.
   const maxCount = Math.max(base, ...rounds.map((r) => r.length), 1);
   const fullHeight =
-    maxCount * BRACKET_CARD_HEIGHT + (maxCount - 1) * BRACKET_ROW_GAP;
+    maxCount * cardHeight + (maxCount - 1) * BRACKET_ROW_GAP;
 
   // Vertical center of each match, by [roundIndex][matchIndex].
   const centers: number[][] = [];
@@ -815,7 +926,7 @@ export function computeOneSidedBracketLayout(
     if (r === 0) {
       centers[0] = Array.from(
         { length: base },
-        (_, j) => j * pitchY + BRACKET_CARD_HEIGHT / 2,
+        (_, j) => j * pitchY + cardHeight / 2,
       );
     } else {
       const prev = centers[r - 1];
@@ -831,7 +942,7 @@ export function computeOneSidedBracketLayout(
         // space uniformly like round 0 instead of collapsing to NaN.
         centers[r] = Array.from(
           { length: count },
-          (_, j) => j * pitchY + BRACKET_CARD_HEIGHT / 2,
+          (_, j) => j * pitchY + cardHeight / 2,
         );
       }
     }
@@ -848,7 +959,7 @@ export function computeOneSidedBracketLayout(
               puId,
               matchIndex: mi,
               top:
-                BRACKET_LABEL_HEIGHT + centers[r][mi] - BRACKET_CARD_HEIGHT / 2,
+                BRACKET_LABEL_HEIGHT + centers[r][mi] - cardHeight / 2,
             },
           ]
         : [],
@@ -859,7 +970,7 @@ export function computeOneSidedBracketLayout(
     Math.max(n, 1) * BRACKET_CARD_WIDTH + Math.max(n - 1, 0) * BRACKET_COL_GAP;
   const contentHeight = BRACKET_LABEL_HEIGHT + fullHeight;
 
-  return { contentWidth, contentHeight, columns };
+  return { contentWidth, contentHeight, cardHeight, columns };
 }
 
 /**
@@ -876,18 +987,19 @@ export function computeOneSidedBracketLayout(
  */
 export function computeMirroredBracketLayout(
   rounds: string[][],
+  cardHeight: number = BRACKET_CARD_HEIGHT,
 ): BracketLayout {
   const n = rounds.length;
   const pitchX = BRACKET_CARD_WIDTH + BRACKET_COL_GAP;
-  const pitchY = BRACKET_CARD_HEIGHT + BRACKET_ROW_GAP;
+  const pitchY = cardHeight + BRACKET_ROW_GAP;
 
   // Round-0 matches per wing (half of the first round). For a degenerate
   // single-match draw (N === 1) there are no wings — just the Final.
   const wingBase = n >= 2 ? rounds[0].length / 2 : 0;
   const fullHeight =
     n >= 2
-      ? wingBase * BRACKET_CARD_HEIGHT + (wingBase - 1) * BRACKET_ROW_GAP
-      : BRACKET_CARD_HEIGHT;
+      ? wingBase * cardHeight + (wingBase - 1) * BRACKET_ROW_GAP
+      : cardHeight;
 
   // Per-wing vertical center of each match, by [roundIndex][localIndex].
   const wingCenters: number[][] = [];
@@ -895,7 +1007,7 @@ export function computeMirroredBracketLayout(
     if (r === 0) {
       wingCenters[0] = Array.from(
         { length: wingBase },
-        (_, j) => j * pitchY + BRACKET_CARD_HEIGHT / 2,
+        (_, j) => j * pitchY + cardHeight / 2,
       );
     } else {
       const prev = wingCenters[r - 1];
@@ -942,7 +1054,7 @@ export function computeMirroredBracketLayout(
           top:
             BRACKET_LABEL_HEIGHT +
             centerY(roundIndex, 0) -
-            BRACKET_CARD_HEIGHT / 2,
+            cardHeight / 2,
         });
       }
     } else {
@@ -959,7 +1071,7 @@ export function computeMirroredBracketLayout(
           top:
             BRACKET_LABEL_HEIGHT +
             centerY(roundIndex, localIndex) -
-            BRACKET_CARD_HEIGHT / 2,
+            cardHeight / 2,
         });
       }
     }
@@ -971,7 +1083,7 @@ export function computeMirroredBracketLayout(
     totalColumns * BRACKET_CARD_WIDTH + (totalColumns - 1) * BRACKET_COL_GAP;
   const contentHeight = BRACKET_LABEL_HEIGHT + fullHeight;
 
-  return { contentWidth, contentHeight, columns };
+  return { contentWidth, contentHeight, cardHeight, columns };
 }
 
 // ── Segmented bracket geometry (DE / Monrad / compass) ──────────────────
@@ -1082,11 +1194,12 @@ function flowSegmentsIntoRows(
  */
 export function computeSegmentedLayout(
   segments: SegmentDTO[],
+  cardHeight: number = BRACKET_CARD_HEIGHT,
 ): SegmentedBracketLayout {
   const measured: MeasuredSegment[] = [...segments]
     .sort((a, b) => a.order - b.order)
     .map((segment) => {
-      const layout = computeOneSidedBracketLayout(segment.rounds);
+      const layout = computeOneSidedBracketLayout(segment.rounds, cardHeight);
       return {
         segment,
         layout,
@@ -1168,7 +1281,18 @@ function SegmentedBracketView({
     onConflict: (_kind, message) => setResultConflict(message),
   });
 
-  const layout = useMemo(() => computeSegmentedLayout(segments), [segments]);
+  // Same derivation as BracketView — one uniform node height for the whole
+  // segmented canvas, so every block's pitch matches and blocks stay
+  // comparable (match-card §4.3).
+  const cardHeight = useMemo(() => {
+    const m = measureBracketNodes(Object.values(idMap), nameById, resultByPu);
+    return bracketCardHeight(m.maxNameLines, m.hasScoreLane, m.hasControl);
+  }, [idMap, nameById, resultByPu]);
+
+  const layout = useMemo(
+    () => computeSegmentedLayout(segments, cardHeight),
+    [segments, cardHeight],
+  );
 
   // Older backend payloads may lack `segments` for a segments-renderer
   // format — degrade to the classic one-sided bracket over the global
@@ -1305,7 +1429,7 @@ function SegmentedBracketView({
                               style={{
                                 top: `${m.top}px`,
                                 width: `${BRACKET_CARD_WIDTH}px`,
-                                height: `${BRACKET_CARD_HEIGHT}px`,
+                                height: `${block.layout.cardHeight}px`,
                               }}
                             >
                               <BracketCell
@@ -1380,48 +1504,24 @@ function BracketCell({
   const winner = result?.winner_side;
   const aName = labelFor(pu.side_a, pu.slot_a, nameById, feederLabels);
   const bName = labelFor(pu.side_b, pu.slot_b, nameById, feederLabels);
-  // Stacked members for RESOLVED pair sides (owner ruling, P4 review): the
-  // card gives each player their own line.
-  //
-  // v3 package 29 (V3-10-1): the wire's structured `sides` now carries a
-  // doubles pair as TWO persons resolved from `member_ids` against the
-  // bracket roster, so this reads them off `sideFromWire` and the last
-  // ` / `-split in the draw card is GONE — a name containing a slash no
-  // longer breaks into two players, and a pair one member short renders
-  // "partner to be confirmed" on its own line instead of passing as
-  // singles. The legacy split survives only as the fallback for a payload
-  // minted before `sides` existed (it splits the participant's OWN stored
-  // display name to line-break the card; nothing is persisted and no member
-  // id is recovered — the decode that DID recover identity,
-  // `bracketMigration.ts`'s split-and-zip, is gone).
-  const membersOf = (wire: SideDTO | undefined, ids: string[] | null) => {
-    if (wire) {
-      const built = sideFromWire(wire);
-      // Only a RESOLVED side stacks; a bye/feeder placeholder keeps the
-      // single `labelFor` string the card already renders.
-      return built.persons.length > 0 ? formatSideLines(built) : null;
-    }
-    return ids?.flatMap((id) => (nameById[id] ?? id).split(" / ")) ?? null;
-  };
-  const aMembers = membersOf(pu.sides?.[0], pu.side_a);
-  const bMembers = membersOf(pu.sides?.[1], pu.side_b);
+  const aMembers = sideNameLines(pu.sides?.[0], pu.side_a, nameById);
+  const bMembers = sideNameLines(pu.sides?.[1], pu.side_b, nameById);
   const canRecord = !!pu.side_a && !!pu.side_b && !result && !seeding;
   const posA = pu.match_index * 2;
   const posB = posA + 1;
   const setsMode = scoringFormat === "badminton";
-  const [scoring, setScoring] = useState(false);
+  const [recording, setRecording] = useState(false);
   // The score blob is opaque server-side (RecordResultIn.score: dict), so a
   // non-frontend writer (import, sync restore, API client) can hand us any
   // shape — guard every level and fall back to winner-only rather than
   // rendering "undefined-undefined" or throwing on `.map` of a non-array.
-  // Each side renders ITS OWN set values in the fixed column lane (G6), so
-  // set numbers align vertically across every card on the canvas.
   const validSets = Array.isArray(result?.score?.sets)
     ? result.score.sets.filter(
         (s): s is BracketSetScore =>
           !!s && typeof s.sideA === "number" && typeof s.sideB === "number",
       )
     : [];
+  const reason = result?.walkover ? ("walkover" as const) : null;
 
   return (
     <Card
@@ -1435,14 +1535,13 @@ function BracketCell({
         <span>{identityLabel}</span>
         <span>
           {/* V3-OC16.1: the slot index is never user-facing — never
-              "slot 52", and never `formatBracketSlot`'s "Slot N" fallback
-              either (that fallback is for schedule-setup chrome with no
-              start time at all; showing it here would just relabel the
-              same raw index). A real tournament-timezone time when the
-              bracket has a start time to derive one from; the court alone
-              when it does not; "Not scheduled" with no assignment at all.
-              The match reference stays the caption's other half, unchanged
-              (secondary identity, never removed). */}
+              "slot 52". `formatBracketSlot` now returns null rather than a
+              "Slot N" fallback (P6 extended this rule to every caller), so
+              a real tournament-timezone time when the bracket has a start
+              time to derive one from; the court alone when it does not;
+              "Not scheduled" with no assignment at all. The match reference
+              stays the caption's other half, unchanged (secondary identity,
+              never removed). */}
           {assignment
             ? (() => {
                 const time =
@@ -1461,48 +1560,88 @@ function BracketCell({
         label={aName}
         members={aMembers}
         winning={winner === "A"}
-        loser={result && winner === "B"}
-        sets={validSets}
-        walkover={result?.walkover ?? false}
         bye={pu.side_a === null}
+        walkover={result?.walkover ?? false}
         seeding={seeding}
         selected={seeding && selectedPos === posA}
         onSlotClick={seeding ? () => onSlotClick?.(posA) : undefined}
-        // In Sets mode the winner is derived from the score, not a direct
-        // click — the win shortcut stays for Simple mode only.
-        onWin={canRecord && !setsMode ? () => onResult("A") : undefined}
       />
+      {/* The shared grammar's ONE centred paired lane, between the two sides
+          (match-card §3.4). It replaces the per-side score rails the node
+          used to carry — two columns of single numbers the reader had to
+          align across a name to read one game — and it carries no emphasis:
+          the winning side's NAME does, from `winner_side`. */}
+      {validSets.length > 0 || reason ? (
+        <div className="flex justify-center">
+          <ScoreLane
+            sets={validSets}
+            reason={reason}
+            sideALabel={aName}
+            sideBLabel={bName}
+            data-testid={`bracket-node-score-${pu.id}`}
+          />
+        </div>
+      ) : null}
       <Side
         side="B"
         label={bName}
         members={bMembers}
         winning={winner === "B"}
-        loser={result && winner === "A"}
-        sets={validSets}
-        walkover={result?.walkover ?? false}
         bye={pu.side_b === null}
+        walkover={result?.walkover ?? false}
         seeding={seeding}
         selected={seeding && selectedPos === posB}
         onSlotClick={seeding ? () => onSlotClick?.(posB) : undefined}
-        onWin={canRecord && !setsMode ? () => onResult("B") : undefined}
       />
-      {canRecord && setsMode ? (
-        scoring ? (
-          <BracketScoreEntry
-            setsToWin={setsToWin}
-            labelA={aName}
-            labelB={bName}
-            onRecord={async (w, sets) => {
-              await onResult(w, sets);
-              setScoring(false);
-            }}
-            onCancel={() => setScoring(false)}
-          />
+      {/* ONE interaction per node (P3). The node used to offer three
+          overlapping ways in: a click on either side row ("↵ wins"), a
+          separate "Enter score" strip, and — in Sets mode — a side row that
+          looked identical but did nothing. Now a recordable node has exactly
+          one control, and it opens the same score entry in both scoring
+          modes; only the panel it opens differs, because Simple mode records
+          a winner and Sets mode records a score. */}
+      {canRecord ? (
+        recording ? (
+          setsMode ? (
+            <BracketScoreEntry
+              setsToWin={setsToWin}
+              labelA={aName}
+              labelB={bName}
+              onRecord={async (w, sets) => {
+                await onResult(w, sets);
+                setRecording(false);
+              }}
+              onCancel={() => setRecording(false)}
+            />
+          ) : (
+            <div className="flex items-center gap-1">
+              {(["A", "B"] as const).map((sideKey) => (
+                <button
+                  key={sideKey}
+                  type="button"
+                  onClick={() => {
+                    void onResult(sideKey);
+                    setRecording(false);
+                  }}
+                  className={`${INTERACTIVE_BASE} min-w-0 flex-1 break-words rounded-sm border border-border bg-bg-elev px-2 py-1 text-xs font-medium text-foreground hover:border-accent`}
+                >
+                  {sideKey === "A" ? aName : bName} won
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setRecording(false)}
+                className={`${INTERACTIVE_BASE} shrink-0 rounded-sm px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground`}
+              >
+                Cancel
+              </button>
+            </div>
+          )
         ) : (
           <button
             type="button"
-            onClick={() => setScoring(true)}
-            className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1 text-xs font-medium text-muted-foreground hover:border-accent hover:text-foreground"
+            onClick={() => setRecording(true)}
+            className={`${INTERACTIVE_BASE} w-full rounded-sm border border-border bg-bg-elev px-2 py-1 text-xs font-medium text-muted-foreground hover:border-accent hover:text-foreground`}
           >
             Enter score
           </button>
@@ -1512,19 +1651,38 @@ function BracketCell({
   );
 }
 
+/**
+ * One side of a draw node — names and, when the recorded outcome says so, the
+ * winner mark. Nothing else.
+ *
+ * What it used to carry, and why each is gone (P3, match-card §3.0/§3.4/§3.5):
+ *
+ *   * a saturated/tinted WINNER BAR with a 3px status rule — an independent
+ *     visual language nothing else in the product spoke, on the surface least
+ *     watched during a live day. The winner reads the same way here as it
+ *     does in a match row, a court card and an inspector: weight on the name
+ *     plus the shared `WinnerDot`.
+ *   * the per-side SCORE RAIL — moved to the one centred paired lane between
+ *     the sides, where a game is one cell instead of two aligned columns.
+ *   * the "↵ wins" affordance — a second, competing way to record a result
+ *     that existed only in Simple mode and looked identical in Sets mode,
+ *     where it did nothing.
+ *
+ * The side is a BUTTON only while seeding, where clicking it means something
+ * (swap these two slots). Outside seeding it is text, so the node has exactly
+ * one control and a keyboard user tabs through one stop per node instead of
+ * two dead ones.
+ */
 function Side({
   side,
   label,
   members = null,
   winning,
-  loser,
   bye,
-  sets = [],
   walkover = false,
   seeding = false,
   selected = false,
   onSlotClick,
-  onWin,
 }: {
   side: "A" | "B";
   label: string;
@@ -1533,90 +1691,74 @@ function Side({
    *  placeholders, which render `label` as one string. */
   members?: string[] | null;
   winning?: boolean;
-  loser?: boolean;
   bye?: boolean;
-  /** Recorded sets — each side renders its OWN values in the fixed w-9
-   *  column lane (G6), so sets align vertically across the canvas. */
-  sets?: BracketSetScore[];
   walkover?: boolean;
   seeding?: boolean;
   selected?: boolean;
   onSlotClick?: () => void;
-  onWin?: () => void;
 }) {
-  const onClick = seeding ? onSlotClick : onWin;
-  const disabled = seeding ? !!bye : !onWin || bye;
-  const decided = winning || loser;
+  /* A draw slot IS the participant's name — ellipsising it cut exactly the
+     surname that tells two entrants apart. It wraps; the node's derived
+     height already budgets the lines this draw produces. */
+  const names = (
+    <span className="min-w-0 flex-1 break-words text-left">
+      {members && members.length > 0
+        ? members.map((n, i) => (
+            <span key={i} className="block">
+              {n}
+            </span>
+          ))
+        : label}
+    </span>
+  );
+  const trailing = (
+    <span className="flex shrink-0 items-center gap-1">
+      {winning && walkover ? (
+        <span className="rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {REASON_BADGE.walkover}
+        </span>
+      ) : null}
+      {winning ? <WinnerDot /> : null}
+    </span>
+  );
+
+  if (seeding) {
+    return (
+      <button
+        type="button"
+        onClick={onSlotClick}
+        disabled={!!bye}
+        data-side={side}
+        className={
+          "w-full flex items-center justify-between gap-1.5 rounded-sm border px-2 py-1.5 text-2sm transition-colors duration-standard ease-brand " +
+          (selected
+            ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
+            : bye
+              ? "bg-muted border-border text-muted-foreground italic"
+              : "bg-bg-elev border-border cursor-pointer hover:border-accent")
+        }
+      >
+        {names}
+        <span className="text-xs text-muted-foreground">⇄</span>
+      </button>
+    );
+  }
 
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
+    <div
+      data-side={side}
       className={
-        // A posted result recolours this row; loser names remain readable.
-        // It is an occasional action, so it fades at the 200ms standard band
-        // (MOTION.md §4) instead of snapping.
-        "w-full flex items-center justify-between gap-1.5 rounded-sm px-2 py-1.5 text-2sm transition-colors duration-standard ease-brand " +
-        (selected
-          ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
+        "w-full flex items-center justify-between gap-1.5 rounded-sm border border-border px-2 py-1.5 text-2sm " +
+        (bye
+          ? "bg-muted text-muted-foreground italic"
           : winning
-            ? // Subtle tint + a 3px left rule + weight, not the saturated solid
-              // fill this used to carry (DRAW-1). A won first-round match is the
-              // least operational thing in the console, and it was the loudest
-              // element in the app — a wall of solid green on a surface nobody
-              // watches during a live day.
-              "bg-bg-elev border border-border border-l-[3px] border-l-status-live text-foreground font-semibold"
-            : loser
-              ? "bg-bg-elev border border-border text-foreground"
-              : bye
-                ? "bg-muted text-muted-foreground italic"
-                : seeding
-                  ? "bg-bg-elev border border-border cursor-pointer hover:border-accent"
-                  : "bg-bg-elev border border-border hover:bg-accent")
+            ? "bg-bg-elev text-foreground font-semibold"
+            : "bg-bg-elev text-foreground")
       }
     >
-      {/* A draw slot IS the participant's name — ellipsising it cut exactly
-          the surname that tells two entrants apart. It wraps; the card grows
-          into the 28px row gap rather than hiding characters. */}
-      <span className="min-w-0 flex-1 break-words text-left">
-        {members && members.length > 0
-          ? members.map((n, i) => (
-              <span key={i} className="block">
-                {n}
-              </span>
-            ))
-          : label}
-      </span>
-      {seeding && !bye ? (
-        <span className="text-xs text-muted-foreground">⇄</span>
-      ) : decided ? (
-        <span className="flex shrink-0 items-center gap-1">
-          {winning && walkover && sets.length === 0 ? (
-            <span className="rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {REASON_BADGE.walkover}
-            </span>
-          ) : null}
-          {winning ? <WinnerDot /> : <span className="w-1.5" aria-hidden />}
-          {/* w-6, not the lane's w-9: a side shows its OWN value (1-2
-              digits), and the narrower column keeps the name from wrapping
-              into the fixed-height card below. */}
-          {sets.map((s, i) => (
-            <span
-              key={i}
-              className={`w-6 text-right text-2xs sw-num ${
-                (side === "A" ? s.sideA > s.sideB : s.sideB > s.sideA)
-                  ? "font-semibold"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {side === "A" ? s.sideA : s.sideB}
-            </span>
-          ))}
-        </span>
-      ) : onWin && !bye ? (
-        <span className="text-xs text-muted-foreground">↵ wins</span>
-      ) : null}
-    </button>
+      {names}
+      {trailing}
+    </div>
   );
 }
 

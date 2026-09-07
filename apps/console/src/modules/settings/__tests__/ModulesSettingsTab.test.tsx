@@ -1,18 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ModulesSettingsTab } from '../ModulesSettingsTab';
 import { useWorkspaceModules } from '../../../platform/domain/useWorkspaceModules';
 
 vi.mock('../../../platform/domain/useWorkspaceModules', () => ({ useWorkspaceModules: vi.fn() }));
 
-function LocationProbe() {
-  const location = useLocation();
-  return <output data-testid="location">{location.pathname}</output>;
-}
+const enable = vi.fn();
+const disable = vi.fn();
 
 describe('ModulesSettingsTab', () => {
   beforeEach(() => {
+    enable.mockReset();
+    disable.mockReset();
     vi.mocked(useWorkspaceModules).mockReturnValue({
       modules: [
         { id: 'meet', label: 'Meet', status: 'enabled', hasData: false },
@@ -20,21 +19,32 @@ describe('ModulesSettingsTab', () => {
       ],
       loading: false,
       error: false,
-      enable: vi.fn(),
-      disable: vi.fn(),
+      enable,
+      disable,
       refetch: vi.fn(),
     });
   });
 
-  it('links each module to its canonical configuration surface', () => {
-    render(
-      <MemoryRouter initialEntries={['/tournaments/t1/administration/modules']}>
-        <Routes>
-          <Route path="*" element={<><ModulesSettingsTab tid="t1" /><LocationProbe /></>} />
-        </Routes>
-      </MemoryRouter>,
+  it('renders each module as one switch and turns one on', () => {
+    render(<ModulesSettingsTab tid="t1" />);
+    const display = screen.getByRole('radiogroup', { name: 'Display' });
+    fireEvent.click(within(display).getByRole('radio', { name: 'On' }));
+    expect(enable).toHaveBeenCalledWith('display');
+  });
+
+  it('keeps the last operational module on, with one reason', () => {
+    render(<ModulesSettingsTab tid="t1" />);
+    expect(screen.getByTestId('module-reason-meet')).toHaveTextContent(
+      "Last operational module: can't turn off.",
     );
-    fireEvent.click(screen.getByTestId('settings-module-display').querySelector('button')!);
-    expect(screen.getByTestId('location')).toHaveTextContent('/tournaments/t1/publish/displays');
+    fireEvent.click(
+      within(screen.getByRole('radiogroup', { name: 'Meet' })).getByRole('radio', { name: 'Off' }),
+    );
+    expect(disable).not.toHaveBeenCalled();
+  });
+
+  it('no longer offers a per-module Configure link', () => {
+    render(<ModulesSettingsTab tid="t1" />);
+    expect(screen.queryByRole('button', { name: 'Configure' })).toBeNull();
   });
 });

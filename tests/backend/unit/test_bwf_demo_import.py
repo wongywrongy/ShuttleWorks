@@ -206,3 +206,89 @@ def test_demo_operational_overlays_are_scheduled_and_have_expected_results():
         }
         for key, data in sections.items():
             _SECTION_ADAPTER.validate_python({"section": key, **data})
+
+
+def _court_conflicts(assignments) -> list[str]:
+    """Every court must run its matches strictly one after another."""
+    by_court: dict[int, list] = {}
+    for item in assignments:
+        by_court.setdefault(item.court_id, []).append(item)
+    conflicts = []
+    for court_id, items in sorted(by_court.items()):
+        items.sort(key=lambda item: (item.slot_id, item.play_unit_id))
+        for earlier, later in zip(items, items[1:]):
+            if later.slot_id < earlier.slot_id + earlier.duration_slots:
+                conflicts.append(
+                    f"court {court_id}: {earlier.play_unit_id} occupies slots "
+                    f"{earlier.slot_id}..{earlier.slot_id + earlier.duration_slots} "
+                    f"but {later.play_unit_id} starts at {later.slot_id}"
+                )
+    return conflicts
+
+
+def test_every_seeded_demo_plan_runs_each_court_sequentially():
+    """A court hosts one match at a time, in every seeded workspace.
+
+    The old plan folded the source court label with ``% court_count``, which on
+    the six-court live floor stacked source courts 7 and 8 onto 1 and 2 in the
+    same slot. That is not a cosmetic defect: it claims a physical court is
+    hosting two or three simultaneous matches, so the demo cannot be read as a
+    real tournament. This pins the invariant for the whole dataset, not one
+    workspace.
+    """
+    fixtures = Path(__file__).resolve().parents[3] / "simulator" / "fixtures"
+    dataset = parse_text((fixtures / "bwf-recent-completed.txt").read_text(encoding="utf-8"))
+    attach_historical_sources(dataset, source_map_path=fixtures / "bwf-full-match-sources.json")
+    complete_demo_historical_draws(dataset)
+
+    checked = 0
+    for tournament in dataset.tournaments:
+        rows = dataset.historical_by_tournament[tournament.id]
+        identities = _HistoricalIdentityRegistry(tournament.id)
+        events = [
+            _demo_operational_event(
+                _historical_event_payload(
+                    tournament,
+                    code,
+                    [row for row in rows if row.event == code],
+                    dataset.historical_coverage[tournament.id],
+                    identities,
+                ),
+                tournament.id,
+            )
+            for code in _EVENTS
+        ]
+        start_time, total_slots, assignments, live_ids = _demo_plan(tournament, rows, events)
+        court_count = _demo_court_count(tournament.id)
+        session = parse_json_payload(
+            ImportTournamentIn.model_validate(
+                {
+                    "courts": court_count,
+                    "total_slots": total_slots,
+                    "start_time": start_time,
+                    "roster": identities.roster,
+                    "events": events,
+                    "assignments": assignments,
+                }
+            )
+        )
+        placed = list(session.state.assignments.values())
+
+        conflicts = _court_conflicts(placed)
+        assert not conflicts, f"{tournament.id} double-books a court:\n" + "\n".join(conflicts)
+
+        # Every court is real and used, and none is invented beyond the floor.
+        assert {item.court_id for item in placed} == set(range(1, court_count + 1))
+
+        # At most one match is physically on any court at the frozen instant:
+        # the live wave is pinned one-per-court and nothing else shares it.
+        live_courts = [
+            item.court_id for item in placed if item.play_unit_id in set(live_ids)
+        ]
+        assert len(live_courts) == len(set(live_courts)), (
+            f"{tournament.id} starts more than one match on a court"
+        )
+        assert len(live_courts) <= court_count
+        checked += 1
+
+    assert checked == 30

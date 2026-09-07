@@ -34,6 +34,27 @@ export const INTERACTIVE_BASE =
   "select-none"
 
 /**
+ * The ONE neutral workspace utility button (P6).
+ *
+ * Setup, Bracket, Operations and Administration had each grown their own
+ * near-copy of the same secondary control — `h-7` here and `min-h-7` there,
+ * `border-border` beside `border-border-control`, `hover:bg-muted/40` beside
+ * `hover:bg-surface-hover` — so a control with identical meaning changed
+ * shape as the operator moved between surfaces. This is that treatment,
+ * spelled once, and it mirrors the design system's
+ * `Button variant="outline" size="xs"` for the places that must stay a bare
+ * `<button>` (an anchor, a popover trigger, a control inside a dense bar).
+ *
+ * It is NEUTRAL: the accent/destructive/armed variants are deliberately not
+ * derived from it, and dense in-row controls (score pads, per-cell nudges)
+ * keep their own tighter geometry.
+ */
+export const UTILITY_BUTTON =
+  `${INTERACTIVE_BASE} inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap ` +
+  "rounded-sm border border-border-control bg-card px-2.5 text-xs font-medium text-text-primary " +
+  "hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+
+/**
  * The micro-label treatment. Definition moved to the design system
  * (`packages/design-system/components/textStyles.ts`, ADR 0020) so both
  * apps draw one type step; re-exported here so the ~30 console consumers

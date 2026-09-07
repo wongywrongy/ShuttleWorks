@@ -31,8 +31,6 @@ export interface RunMatch {
   score?: OpsBlock['score'];
 }
 
-const TBD = 'TBD';
-
 export function toRunMatches(
   blocks: OpsBlock[],
   opts: { calledBracketIds?: ReadonlySet<string>; eligibleBracketIds?: ReadonlySet<string> },
@@ -44,11 +42,12 @@ export function toRunMatches(
     if (status === 'scheduled' && b.source === 'bracket' && calledBracketIds?.has(b.id)) {
       status = 'called';
     }
-    // Eligible = playable now. Meet: both sides known. Bracket: parent supplies
-    // the resolved-feeders set (reuse schedulableCount's predicate).
+    // Eligible = playable now. Meet: both sides known (the adapter's structural
+    // flag, never the display label). Bracket: parent supplies the
+    // resolved-feeders set (reuse schedulableCount's predicate).
     const eligible =
       b.source === 'meet'
-        ? b.sideA !== TBD && b.sideB !== TBD
+        ? !b.sidesUnresolved
         : (eligibleBracketIds?.has(b.id) ?? false);
     return {
       key: b.key, id: b.id, source: b.source, identity: b.identity, colorKey: b.colorKey,
@@ -202,7 +201,7 @@ export function isPlayerBusy(m: RunMatch, busy: ReadonlySet<string>): boolean {
 /** The assignable head — first eligible+assignable match in queue order whose
  *  players are all off court.
  *
- *  Skips waiting (TBD-vs-TBD / unresolved-feeder) matches, non-assignable
+ *  Skips waiting (unresolved-side / unresolved-feeder) matches, non-assignable
  *  statuses (e.g. `called`) so auto-pull and "Assign next" never strand a court
  *  on a match that cannot accept an assign action, AND matches whose player is
  *  mid-rally elsewhere.

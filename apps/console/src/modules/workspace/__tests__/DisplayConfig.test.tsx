@@ -1,8 +1,12 @@
 /**
- * Publish → Displays: module-owned board sources, board layout controls, and
- * an explicit "Preview fullscreen" action that opens the real published
- * board — no inline iframe, no sample-data swatch (package 16; supersedes
- * V3-OC22.1's "widen the tiny preview" treatment).
+ * Display · Board — the settings the page answers, in order: is the board
+ * ON, what is its LINK, which courts does it show, does it show Next, then
+ * appearance, then an explicit "Preview fullscreen" action that opens the
+ * real published board (no inline iframe, no sample-data swatch).
+ *
+ * The "Board sources" catalog is GONE (operator-visual-fixes P4): it was a
+ * second, read-only rendering of module state. Board availability is the
+ * Display module's own switch, driven by the one module command.
  */
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -22,6 +26,14 @@ const MEET_OFF: WorkspaceModule[] = [
   { id: 'meet', label: 'Meet', status: 'disabled' },
   { id: 'bracket', label: 'Bracket', status: 'available' },
 ];
+const BOARD_SETTINGS = {
+  title: null,
+  logoUrl: null,
+  bannerUrl: null,
+  accent: null,
+  showNext: false,
+  showScores: true,
+};
 
 // The public link is minted server-side (`/tournaments/{id}/display-token`),
 // the same seam Sharing (scope="links") uses — so every render here needs it
@@ -34,6 +46,8 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.spyOn(apiClient, 'getDisplayToken').mockResolvedValue(TOKEN_DTO);
+  vi.spyOn(apiClient, 'getBoardSettings').mockResolvedValue(BOARD_SETTINGS);
+  vi.spyOn(apiClient, 'getWorkspaceModules').mockResolvedValue([]);
   useTournamentStore.setState({
     config: {
       intervalMinutes: 30,
@@ -70,18 +84,36 @@ describe('<DisplayConfig /> — Board sources + Preview fullscreen + Board layou
     expect(link).toHaveAttribute('href', `${window.location.origin}/display?token=cap-tok`);
   });
 
-  it('renders Board sources with explicit module state', () => {
+  it('answers board on/off with one switch and no second module catalog', () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
-    expect(screen.getByRole('heading', { name: 'Board sources' })).toBeInTheDocument();
-    expect(screen.getByText('Enabled')).toBeInTheDocument();
-    expect(screen.getByText('Available')).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Show this board' })).toBeInTheDocument();
+    // The read-only Meet/Bracket source list and its "Modules →" links are
+    // gone: they duplicated a state this page does not own.
+    expect(screen.queryByRole('heading', { name: 'Board sources' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Modules →' })).toBeNull();
   });
 
-  it('distinguishes a disabled source from one that is available to enable', () => {
+  it('states the one reason the board switch cannot move', () => {
     render(<DisplayConfig tid="t1" modules={MEET_OFF} />, { wrapper: MemoryRouter });
-    expect(screen.getByText('Off')).toBeInTheDocument();
-    expect(screen.getByText('Available')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Modules →' })).toHaveLength(2);
+    expect(screen.getByText('Needs Meet or Bracket on.')).toBeInTheDocument();
+  });
+
+  it('renders the board content and appearance controls for a bracket-only workspace too', async () => {
+    render(<DisplayConfig tid="t1" modules={BRACKET_ONLY} />, { wrapper: MemoryRouter });
+    // Show next / Show scores and the branding apply to every board, so they
+    // are NOT behind the Meet-only layout editor.
+    expect(await screen.findByRole('switch', { name: 'Show next' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Show scores' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Appearance' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Board layout' })).toBeNull();
+  });
+
+  it('renders the composed link controls directly under the on/off switch', () => {
+    render(
+      <DisplayConfig tid="t1" modules={MEET_ON} linkSlot={<div data-testid="link-slot" />} />,
+      { wrapper: MemoryRouter },
+    );
+    expect(screen.getByTestId('link-slot')).toBeInTheDocument();
   });
 
   // The preview action targets the minted ?token= capability link, never the
@@ -103,7 +135,7 @@ describe('<DisplayConfig /> — Board sources + Preview fullscreen + Board layou
   it('leaves the configuration page state untouched after the preview action is present', async () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     await screen.findByRole('link', { name: /preview fullscreen/i });
-    expect(screen.getByRole('heading', { name: 'Board sources' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Board' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Board layout' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Display mode' })).toBeInTheDocument();
   });

@@ -1,107 +1,95 @@
 /**
- * A single workspace row in the Hub's dense list — the handoff prototype's
- * "Hub — workspace dashboard" table grammar: the workspace NAME leads (health
- * dot secondary), then modules, a tabular DATE as trailing metadata, and one
- * plain-language NEXT ACTION as the row's call to action. Nothing else rides
- * the row —
- * the old stacked calendar block, per-row module chips and per-row action
- * buttons were extraneous chrome (2026-07-02 redesign); modules/metrics/
- * buttons live in the inspector. Destructive actions stay in an overflow
- * menu that reveals on hover/focus — never inline on the row surface.
+ * A single workspace row in the Hub's dense list.
+ *
+ * The row reads left → right as **who / when**, then **what it runs / what to
+ * do next**:
+ *
+ *   [•] Name  2026-07-28 → 08-03            M B D   Open live day   ⋯
+ *
+ * Left: an attention DOT (only when something is wrong) and the workspace
+ * name, followed by the numeric event date. The dot replaced a column of
+ * multi-line attention prose — a paragraph per row, wrapping, on the one
+ * surface whose job is to say *which* workspace needs the director. The dot
+ * says THAT; the inspector says what, in full. It is a real button with an
+ * accessible label, so touch and keyboard reach it (a bare tinted span reached
+ * neither).
+ *
+ * Right: module glyphs (each with an accessible name), the plain-language next
+ * action, and the overflow menu. Destructive actions never sit inline.
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
 import {
-  HealthDot,
   OverflowMenu,
   COL_PRIORITY_CLASS,
-  COL_PRIORITY_CLASS_FLEX,
   type OverflowItem,
 } from '../../components/control-plane';
 import { lifecycleChip } from '../../platform/domain/lifecycle';
-import { HEALTH_WORD } from '../../components/control-plane/HealthDot';
+import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
 import { attentionReasons, workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
-import { eventDate, type HubGroupId } from './hubGrouping';
+import { type HubGroupId } from './hubGrouping';
+import { displayWorkspaceName, formatEventRange } from './workspaceLabel';
 
-/** The row's Attention column.
- *
- *  This slot used to hold module glyphs (M / B / D). Modules are static
- *  configuration: the same three letters on every row of a season, repeating
- *  what the inspector states in full, on the one surface whose job is to say
- *  which workspace needs the director NOW (HUB-3).
- *
- *  It carries the workspace's first attention reason instead. The row already
- *  renders a HealthDot from the same signals, so a second glyph would have
- *  been the same fact twice; a dot can say THAT something is wrong and never
- *  WHAT, which is the half the operator is missing. Silent when nothing is
- *  wrong — a calm list is the point.
- */
-function AttentionCell({ tournament }: { tournament: TournamentSummaryDTO }) {
+/** The attention dot. Silent when nothing is wrong — a calm list is the point.
+ *  When something is, it is a focusable control whose accessible name states
+ *  the leading reason and how many more there are; activating it opens the
+ *  inspector, where every reason is listed. */
+function AttentionDot({
+  tournament,
+  onOpenDetails,
+}: {
+  tournament: TournamentSummaryDTO;
+  onOpenDetails: () => void;
+}) {
   const reasons = attentionReasons(tournament);
+  if (workspaceHealth(tournament) !== 'attention') return null;
   const first = reasons[0];
+  const extra = Math.max(0, reasons.length - 1);
+  const label = first
+    ? `Needs attention: ${first.label}${extra > 0 ? ` and ${extra} more issue${extra === 1 ? '' : 's'}` : ''}. Open details.`
+    : 'Needs attention. Open details.';
   return (
-    <span
+    <button
+      type="button"
       data-testid="row-attention"
-      // Priority 3 (yields soonest), as the modules cell was: the row's
-      // health dot survives the narrowest widths and still flags the row.
-      className={['w-[132px] shrink-0 items-center gap-1', COL_PRIORITY_CLASS_FLEX[3]].join(' ')}
+      aria-label={label}
+      title={reasons.map((r) => r.label).join(' · ') || 'Needs attention'}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpenDetails();
+      }}
+      // 24px hit area around a 8px dot: a touch target, not a decoration.
+      className="-m-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
     >
-      {first ? (
-        <span
-          className="min-w-0 break-words text-xs text-status-warning"
-          title={reasons.map((r) => r.label).join(' · ')}
-        >
-          {first.label}
-          {/* V3-OC02.2: "+1" required decoding what the count meant. Naming
-              it ("1 more issue") is readable without opening anything; the
-              row itself already opens the inspector's full list (below) on
-              click, so no separate control is needed here. */}
-          {reasons.length > 1 ? (
-            <span className="text-muted-foreground">
-              {' '}
-              · {reasons.length - 1} more issue{reasons.length - 1 === 1 ? '' : 's'}
-            </span>
-          ) : null}
-        </span>
-      ) : null}
-    </span>
+      <span aria-hidden className="h-2 w-2 rounded-full bg-status-warning" />
+    </button>
   );
 }
 
-/** Tabular date cell — "Jul 12" (year only when it isn't this year). Trailing
- *  METADATA since SP-UI-1: it used to lead the row, which anchored a dense
- *  list on its most often-empty field. Right-aligned so the numerals form a
- *  clean rail.
- *
- *  An undated row renders an EMPTY cell, not an em-dash: the column-level
- *  `showDate` hide only fires when NO visible row has a date, so on a mixed
- *  list the placeholder produced a rail of dashes — visual noise standing in
- *  for the absence of a fact nobody asked for. The width is kept so the dated
- *  rows still align. */
-function DateCell({ iso }: { iso: string | null }) {
-  // Priority 2: yields after Modules but before the name, same `@container/
-  // table` on the row (T4, 390px, 2026-08-12).
-  if (!iso) {
-    return <span aria-hidden className={['w-16 shrink-0', COL_PRIORITY_CLASS[2]].join(' ')} />;
-  }
-  const d = eventDate(iso);
-  const valid = !Number.isNaN(d.getTime());
-  const sameYear = valid && d.getFullYear() === new Date().getFullYear();
-  const label = valid
-    ? d.toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        ...(sameYear ? {} : { year: '2-digit' }),
-      })
-    : iso.slice(0, 10);
+/** Enabled-module glyphs. One letter each, every one with an accessible name —
+ *  a lone "M" is meaningless to a screen reader and to a new operator. */
+function ModuleGlyphs({ tournament }: { tournament: TournamentSummaryDTO }) {
+  const modules = (
+    tournament.modules ? modulesFromDto(tournament.modules) : modulesForWorkspace(tournament.kind)
+  ).filter((m) => m.status === 'enabled');
+  if (modules.length === 0) return null;
   return (
     <span
-      className={[
-        'w-16 shrink-0 text-right text-2xs sw-num text-muted-foreground',
-        COL_PRIORITY_CLASS[2],
-      ].join(' ')}
+      data-testid="row-modules"
+      aria-label="Enabled modules"
+      className={['flex shrink-0 items-center gap-1', COL_PRIORITY_CLASS[3]].join(' ')}
     >
-      {label}
+      {modules.map((m) => (
+        <span
+          key={m.id}
+          role="img"
+          aria-label={m.label}
+          title={m.label}
+          className="flex h-4 w-4 items-center justify-center rounded-xs bg-surface-chip text-2xs font-semibold uppercase text-muted-foreground"
+        >
+          {m.label.slice(0, 1)}
+        </span>
+      ))}
     </span>
   );
 }
@@ -109,14 +97,12 @@ function DateCell({ iso }: { iso: string | null }) {
 interface RowProps {
   tournament: TournamentSummaryDTO;
   group: HubGroupId;
-  /** False when NO visible row has a date — the whole column is hidden
+  /** False when NO visible row has a date — the whole date slot is hidden
    *  instead of rendering a rail of muted em-dashes (2026-07 cleanup). */
   showDate?: boolean;
   selected: boolean;
   /** False when every visible row would carry the SAME lifecycle chip — the
-   *  facet strip already states it once ("Complete · 30"), so repeating it
-   *  per row is decoration (X6 never-varies). The health dot and Attention
-   *  column keep carrying per-row signal. SP-OPCON-1 SWP-2. */
+   *  view already states it once, so repeating it per row is decoration. */
   showLifecycleBadge?: boolean;
   onSelect: () => void;
   onOpen: (segment?: string) => void;
@@ -137,26 +123,11 @@ export function WorkspaceRow({
   onSettings,
   onDelete,
 }: RowProps) {
-  const health = workspaceHealth(tournament);
-  // X16/V3-OC02.1 (v3 consolidated, package 07): 'complete' used to render
-  // here as "Completed" AND again as the lifecycle badge's "Complete" a few
-  // pixels away — the same fact twice. The badge (or, when it is
-  // suppressed, the facet strip's "Complete · N") already carries it, so
-  // this label now only covers phases the badge never does.
-  const phaseLabel = tournament.signals?.phase === 'live'
-    ? 'Live now'
-    : tournament.signals?.phase === 'ready'
-      ? 'Ready'
-      : null;
   const action = rowActionFor(tournament, group);
-  // Console-mock adoption (2026-08-13): the row states its lifecycle where
-  // the operator scans, not just in the inspector. Shared precedence
-  // (Archived > Live > Complete); resting setup/ready rows stay unbadged —
-  // the facet strip and next action already say it — and LIVE is
-  // suppressed since R-D (the HealthDot and next action already say it).
   const badge = showLifecycleBadge
     ? lifecycleChip(tournament.signals?.phase, tournament.status)
     : null;
+  const dateLabel = formatEventRange(tournament);
   // "Set date" (and any reason-coded setup step) is the attention-y next
   // action — it warms to amber; Open/View results stay quiet.
   const attention = action.kind === 'set-date';
@@ -180,16 +151,6 @@ export function WorkspaceRow({
     <div
       onClick={onSelect}
       className={[
-        // `@container/table`: the row is its own sizing context for the
-        // Modules/Date priority-hide below — T4 found this row's NAME
-        // resolving to 0px at 390 (`min-w-0 flex-1` against fixed-width
-        // siblings with nothing yielding). Same mechanism as BandedTable's
-        // `@container/table` columns, scoped to one row instead of a table.
-        // `flex-wrap`: wrapping the NAME is only half a fix — at 390px the
-        // fixed-width siblings (w-40 action + Modules + Date + overflow) left
-        // the name column ~63px, so `break-words` broke it MID-WORD
-        // ("Invitatio/nal"). The columns now wrap to a second line instead of
-        // strangling the name; see the `min-w-[12rem]` floor below.
         'group flex min-h-[40px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-2sm @container/table',
         'transition-colors duration-fast ease-brand',
         selected
@@ -197,29 +158,20 @@ export function WorkspaceRow({
           : 'hover:bg-muted/40',
       ].join(' ')}
     >
-      {/* NAME leads — the row's anchor, and the only thing on it at full
-          weight. Everything to its right is metadata or an affordance. */}
+      {/* NAME + DATE lead: the two facts the director scans a Hub for. */}
       <span className="flex min-w-[12rem] flex-1 items-center gap-2.5">
-        {/* R4 (v3 consolidated, package 07): a routine health state ("No
-            issues reported", "Not started yet", "Archived") is reassurance,
-            not signal — it repeated on every row (V3-OC02.1) and the dot
-            never carried meaning on its own anyway. Only the exception
-            (`attention`) earns a dot, and it always ships with the words
-            that say what is wrong, never the dot alone. */}
-        {health === 'attention' ? (
-          <>
-            <HealthDot health={health} />
-            <span className="text-xs text-status-warning-fg">{HEALTH_WORD[health]}</span>
-          </>
-        ) : null}
-        {phaseLabel ? <span className="shrink-0 text-xs font-medium text-foreground">{phaseLabel}</span> : null}
-        {/* Wraps, never ellipsises: the name is the row's only identifying
-            fact, and the row's `flex-wrap` + the 12rem floor above give it the
-            width to wrap at WORD boundaries — wrapping is necessary, not
-            sufficient; the box still has to have room. */}
+        <AttentionDot tournament={tournament} onOpenDetails={onSelect} />
         <span className="min-w-0 break-words text-2sm font-semibold text-foreground">
-          {tournament.name || 'Untitled'}
+          {displayWorkspaceName(tournament)}
         </span>
+        {showDate && dateLabel ? (
+          <span
+            data-testid="row-date"
+            className="shrink-0 text-2xs sw-num text-muted-foreground"
+          >
+            {dateLabel}
+          </span>
+        ) : null}
         {badge ? (
           <span data-testid="row-lifecycle" className="shrink-0 text-xs text-muted-foreground">
             {badge.text}
@@ -227,16 +179,10 @@ export function WorkspaceRow({
         ) : null}
       </span>
 
-      <AttentionCell tournament={tournament} />
+      <ModuleGlyphs tournament={tournament} />
 
-      {showDate ? <DateCell iso={tournament.tournamentDate} /> : null}
-
-      {/* NEXT ACTION — the point of the control-plane model, so it has to read
-          as the row's call to action rather than as another metadata column.
-          It was already a real button; SP-UI-1 makes that VISIBLE: a hover
-          wash + revealed chevron, and a focus ring that was previously
-          invisible even though the control was always keyboard-reachable.
-          Same accessible name and click behavior as before. */}
+      {/* NEXT ACTION — the point of the control-plane model, so it reads as
+          the row's call to action rather than as another metadata column. */}
       <button
         type="button"
         data-testid="row-next-action"
@@ -249,10 +195,6 @@ export function WorkspaceRow({
           'flex w-40 shrink-0 items-center justify-between gap-1 rounded-sm px-2 py-1 text-left text-xs',
           'transition-colors duration-fast ease-brand',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-          // Accent AT REST, not only on hover (HUB-1): in muted ink this
-          // read as one more metadata column, indistinguishable from the
-          // date cell beside it, and a hover state is not an affordance on
-          // a touch device or to an eye scanning the list.
           attention
             ? 'text-status-warning group-hover:bg-status-warning/10'
             : 'text-accent group-hover:bg-action-selected-bg group-hover:text-action-selected-foreground',
@@ -267,11 +209,7 @@ export function WorkspaceRow({
         </span>
       </button>
 
-      {/* Quiet at rest, not absent. `opacity-0` + `group-hover` made the only
-          route to Settings and Delete a hover — and `:hover` never fires on a
-          touch device, so on the tablet the owner runs this menu was
-          unreachable at every width. Keyboard always reached it (opacity
-          doesn't leave the tab order); touch had nothing. */}
+      {/* Quiet at rest, not absent: `:hover` never fires on a touch device. */}
       <span className="opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <OverflowMenu items={overflowItems} />
       </span>

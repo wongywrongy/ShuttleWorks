@@ -7,9 +7,11 @@
 # frozen clock, the canonical T029 (Taipei, live)/T030 (Korea, upcoming)
 # seed, a viewer invite, a structural row-count check, the console preview
 # server, AND — new here — the entrant SSR server pointed at the same API,
-# plus an idempotent post-seed "defects" pass that reconstructs a handful of
-# known-messy operational states so both tiers can be reviewed against
-# something closer to a live event than a pristine demo.
+# plus — in FIXTURE_MODE=failure only — an idempotent post-seed "defects"
+# pass that reconstructs a handful of deliberately corrupted and conflicting
+# operational states for failure/recovery testing. The default mode is
+# "normal": a clean, believable event, which is what a surface book must be
+# captured from.
 #
 # Usage:
 #   tools/fixture-up.sh                    # start everything, block until Ctrl-C, tear down
@@ -25,7 +27,16 @@
 #   FIXTURE_CONSOLE_PORT       default 4173
 #   FIXTURE_ENTRANT_PORT       default 5174
 #   FIXTURE_SEED_KEY           default "shared-fixture"
-#   FIXTURE_APPLY_DEFECTS      default 1 — run tools/fixture-defects.py + its check
+#   FIXTURE_MODE               default "normal" — "normal" | "failure".
+#                              "normal" is the CLEAN visual-review dataset: a believable event
+#                              with no deliberately corrupted or conflicting state. "failure"
+#                              additionally applies the operational-defects passes
+#                              (tools/fixture-defects.py + tools/fixture-defects-db.py), which
+#                              reconstruct double-booked courts, an unresolved-predecessor draw
+#                              and an incomplete doubles pair. Those states are for failure and
+#                              recovery testing ONLY and must never contaminate a surface book.
+#   FIXTURE_APPLY_DEFECTS      explicit override of the mode's defects decision (0 | 1). Unset
+#                              means "whatever FIXTURE_MODE says".
 #   FIXTURE_SKIP_CONSOLE_BUILD default 0 — skip `npm run build` (reuse a prior build)
 #   FIXTURE_SKIP_ENTRANT       default 0 — skip starting the entrant SSR server entirely
 #   FIXTURE_CHECK_ACCOUNT_JOURNEYS default 1 — run tests/e2e/check-account-journeys.py
@@ -53,7 +64,15 @@ API_PORT="${FIXTURE_API_PORT:-8600}"
 CONSOLE_PORT="${FIXTURE_CONSOLE_PORT:-4173}"
 ENTRANT_PORT="${FIXTURE_ENTRANT_PORT:-5174}"
 SEED_KEY="${FIXTURE_SEED_KEY:-shared-fixture}"
-APPLY_DEFECTS="${FIXTURE_APPLY_DEFECTS:-1}"
+FIXTURE_MODE="${FIXTURE_MODE:-normal}"
+case "${FIXTURE_MODE}" in
+  normal) MODE_DEFECTS=0 ;;
+  failure) MODE_DEFECTS=1 ;;
+  *) echo "FIXTURE_MODE must be 'normal' or 'failure' (got '${FIXTURE_MODE}')" >&2; exit 2 ;;
+esac
+# An explicit FIXTURE_APPLY_DEFECTS still wins — tests/e2e/run-console-contracts.sh sets it to 0
+# and must keep behaving identically.
+APPLY_DEFECTS="${FIXTURE_APPLY_DEFECTS:-${MODE_DEFECTS}}"
 SKIP_CONSOLE_BUILD="${FIXTURE_SKIP_CONSOLE_BUILD:-0}"
 SKIP_ENTRANT="${FIXTURE_SKIP_ENTRANT:-0}"
 CHECK_ACCOUNT_JOURNEYS="${FIXTURE_CHECK_ACCOUNT_JOURNEYS:-1}"
@@ -95,6 +114,7 @@ export ENVIRONMENT="local"
 export AUTH_MODE="local"
 export SHUTTLEWORKS_DEMO_NOW="2026-07-31T05:15:00+00:00"
 
+echo "Fixture mode: ${FIXTURE_MODE} (defects pass: $([[ "${APPLY_DEFECTS}" == "1" ]] && echo on || echo off))"
 echo "Creating disposable migrated database: ${DATABASE_PATH}"
 (
   cd "${REPO_ROOT}/apps/api"
@@ -181,6 +201,9 @@ if [[ "${CHECK_ACCOUNT_JOURNEYS}" == "1" ]]; then
 fi
 
 if [[ "${APPLY_DEFECTS}" == "1" ]]; then
+  # Failure mode only. See FIXTURE_MODE above: these two passes deliberately
+  # reconstruct corrupted and conflicting state, so the normal (default)
+  # dataset — the one the surface book is captured from — never runs them.
   echo "Applying the post-seed operational-defects pass (idempotent)"
   PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" \
     "${REPO_ROOT}/tools/fixture-defects.py" \
@@ -235,12 +258,13 @@ fi
 # handle producer wrote above, so one file is the single source of truth
 # for every id, credential and base URL a consumer (surface-books-fixture,
 # a developer's browser tab, a follow-up script) needs.
-"${PYTHON_BIN}" - "${FIXTURE_JSON}" "${CONSOLE_URL}" "${ENTRANT_URL}" "${API_URL}" "${SKIP_ENTRANT}" <<'PYEOF'
+"${PYTHON_BIN}" - "${FIXTURE_JSON}" "${CONSOLE_URL}" "${ENTRANT_URL}" "${API_URL}" "${SKIP_ENTRANT}" "${FIXTURE_MODE}" <<'PYEOF'
 import json
 import sys
 
-path, console_url, entrant_url, api_url, skip_entrant = sys.argv[1:6]
+path, console_url, entrant_url, api_url, skip_entrant, fixture_mode = sys.argv[1:7]
 data = json.loads(open(path, encoding="utf-8").read())
+data["fixtureMode"] = fixture_mode
 data["consoleBaseUrl"] = console_url
 data["apiBaseUrl"] = api_url
 data["entrantBaseUrl"] = None if skip_entrant == "1" else entrant_url
@@ -273,6 +297,7 @@ fi
 cat <<INFO
 
 Fixture ready.
+  mode      ${FIXTURE_MODE}
   console   ${CONSOLE_URL}
   entrant   $( [[ "${SKIP_ENTRANT}" == "1" ]] && echo "(skipped)" || echo "${ENTRANT_URL}/e/" )
   api       ${API_URL}

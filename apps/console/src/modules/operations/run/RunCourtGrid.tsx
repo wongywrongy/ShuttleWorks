@@ -10,6 +10,11 @@
  * (same `run-card-${key}` contract as the old board); a free card offers
  * "Assign next" — the queue head to THIS court.
  *
+ * There is exactly ONE card shape (P2): the red conflict variant is gone. A
+ * disputed court is described once, by the resolution card RunSurface renders
+ * above the board — the same dispute stated in two zones was the duplication
+ * the operator had to reconcile.
+ *
  * Purity: reads no clock. `currentSlot` is injected; elapsed/late figures are
  * slot arithmetic against the blocks' actual-timing facts.
  */
@@ -72,7 +77,7 @@ function bandFor(now: RunMatch | undefined): {
  *  ("NAKAMURA Kei") — the mock's card anatomy. Doubles stack two 13px
  *  lines inside the side's 34px block; singles center one. */
 function SideRow({ name }: { name: string }) {
-  const lines = sideNameLines(name || 'TBD');
+  const lines = sideNameLines(name || 'To be decided');
   return (
     <div className="flex min-h-[34px] flex-col justify-center gap-px">
       {lines.map((line, i) => (
@@ -152,7 +157,6 @@ export function RunCourtGrid({
     >
       {lanes.map((lane) => {
         const now = lane.now;
-        const conflict = lane.conflict;
         const identityLabel = now ? formatMatchIdentity(now.identity, now.id) : '';
         const band = bandFor(now);
         const figure = bandFigure(now);
@@ -172,47 +176,6 @@ export function RunCourtGrid({
             </span>
           </div>
         );
-
-        if (conflict && conflict.length > 1) {
-          return (
-            <div
-              key={lane.court}
-              data-testid={`run-court-conflict-${lane.court}`}
-              className="flex flex-col overflow-hidden rounded border border-status-overdue-solid bg-status-overdue-bg/20"
-            >
-              <div className="flex items-center justify-between gap-2 bg-status-overdue-solid px-2.5 py-1.5 text-xs font-extrabold uppercase tracking-[0.06em] text-status-overdue-ink">
-                <span>Court {lane.court}</span>
-                {/* V3-OC19.1: never "Resolve this in Operations" while
-                 * Operations IS the current surface. */}
-                <span>Needs resolution</span>
-              </div>
-              <div className="space-y-2 px-2.5 py-3">
-                <p className="text-xs font-semibold text-foreground">
-                  Two matches are assigned to this court.
-                </p>
-                <div className="space-y-1">
-                  {conflict.map((match) => (
-                    <button
-                      key={match.key}
-                      type="button"
-                      data-testid={`run-conflict-match-${match.key}`}
-                      onClick={() => onSelect(match.key)}
-                      // V3-OC19.1: a direct, equally-named route to EACH
-                      // affected assignment — the same "Open ›" affordance an
-                      // ordinary occupied card offers, not a bare row.
-                      className="flex w-full items-center justify-between gap-2 rounded border border-border bg-card px-2 py-1 text-left text-xs font-semibold text-foreground hover:border-accent"
-                    >
-                      <span className="min-w-0 break-words">
-                        {formatMatchIdentity(match.identity, match.id)} · {match.sideA} vs {match.sideB}
-                      </span>
-                      <span className="shrink-0 text-accent">Open ›</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          );
-        }
 
         if (!now) {
           return (
@@ -252,7 +215,7 @@ export function RunCourtGrid({
             data-source={now.source}
             aria-pressed={selected}
             onClick={() => onSelect(now.key)}
-            title={`${MODULE_LABELS[now.source]} · ${identityLabel} [${now.late ? 'late' : now.status}]`}
+            title={`${MODULE_LABELS[now.source]} · ${identityLabel} · ${now.sideA} versus ${now.sideB} [${now.late ? 'late' : now.status}]`}
             className={[
               'flex flex-col overflow-hidden rounded border bg-card text-left shadow-card transition-shadow duration-fast ease-brand',
               selected
@@ -262,11 +225,13 @@ export function RunCourtGrid({
           >
             {head}
             <div className="flex flex-col gap-[5px] px-2.5 py-[7px]">
+              {/* match-card §3.2: the "vs" is OMITTED where the two sides
+                  are stacked — the hairline already says they oppose each
+                  other, and the word was the loudest text on the card. It
+                  survives in the card's `title` and in the accessible
+                  summary, which is where an inline reading needs it. */}
               <SideRow name={now.sideA} />
               <div className="border-t border-rule-soft pt-1.5">
-                <span className="mb-0.5 block text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
-                  VS
-                </span>
                 <SideRow name={now.sideB} />
               </div>
             </div>

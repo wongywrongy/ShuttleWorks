@@ -74,11 +74,9 @@ const RULES: readonly Rule[] = Object.freeze([
 
 /** Deliberate, reasoned exceptions. */
 const ALLOWED: readonly { file: string; rule: string; why: string }[] = Object.freeze([
-  {
-    file: 'apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx',
-    rule: 'bullet-separator',
-    why: 'a native tooltip multi-issue list ("• message" per line joined by \\n) — a list marker, not an inline separator between two facts.',
-  },
+  // Empty since P3: the one entry covered a native-tooltip issue list on the
+  // meet match row, which is now a real <ul> in the match inspector with CSS
+  // markers — no text glyph to allow.
 ]);
 
 function isAllowed(file: string, rule: string): boolean {

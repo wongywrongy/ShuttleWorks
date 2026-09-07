@@ -78,19 +78,19 @@ describe("WorkspaceShell", () => {
 
   it("uses real destination links and a separate disclosure control", async () => {
     renderShell();
-    // SP-OPCON-1 RDY-3: the section header lands on the readiness-checklist
-    // landing (the first item, "Checklist"), not on a section page.
+    // The section header lands on its first real destination. Setup has no
+    // checklist landing any more — Overview owns the checklist, once.
     expect(screen.getByRole("link", { name: "Setup" })).toHaveAttribute(
       "href",
-      "/tournaments/t1/setup",
+      "/tournaments/t1/setup/details",
     );
 
     const disclosure = screen.getByRole("button", { name: "Show Setup links" });
     await userEvent.click(disclosure);
     expect(disclosure).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("link", { name: "Dates" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Public site" })).toHaveAttribute(
       "href",
-      "/tournaments/t1/setup/dates",
+      "/tournaments/t1/setup/public-site",
     );
   });
 
@@ -102,16 +102,16 @@ describe("WorkspaceShell", () => {
         modules: modulesForWorkspace("bracket"),
         activeTab: "bracket-draw",
       },
-      ["/tournaments/spring%20finals/competition/draw?event=MS"],
+      ["/tournaments/spring%20finals/bracket/draw?event=MS"],
     );
 
-    const section = screen.getByTestId("ws-section-competition");
+    const section = screen.getByTestId("ws-section-bracket");
     expect(section).toHaveAttribute("data-active", "true");
-    expect(screen.getByRole("link", { name: "Competition" })).toHaveClass(
+    expect(screen.getByRole("link", { name: "Bracket" })).toHaveClass(
       "text-foreground",
     );
     expect(
-      screen.getByRole("button", { name: "Hide Competition links" }),
+      screen.getByRole("button", { name: "Hide Bracket links" }),
     ).toHaveAttribute("aria-expanded", "true");
   });
 
@@ -122,20 +122,20 @@ describe("WorkspaceShell", () => {
         modules: modulesForWorkspace("bracket"),
         activeTab: "bracket-draws",
       },
-      ["/tournaments/t1/competition/draws"],
+      ["/tournaments/t1/bracket/draws"],
     );
-    const sectionLink = screen.getByRole("link", { name: "Competition" });
+    const sectionLink = screen.getByRole("link", { name: "Bracket" });
     const disclosure = screen.getByRole("button", {
-      name: "Hide Competition links",
+      name: "Hide Bracket links",
     });
-    const sectionRow = screen.getByTestId("ws-section-competition");
-    const activeChild = screen.getByTestId("ws-nav-competition-draws");
+    const sectionRow = screen.getByTestId("ws-section-bracket");
+    const activeChild = screen.getByTestId("ws-nav-bracket-draws");
     expect(sectionRow).toHaveClass("h-8", "items-center");
     expect(sectionLink).toHaveClass("h-8");
     expect(disclosure).toHaveClass("size-8");
     expect(disclosure).toHaveAttribute(
       "aria-controls",
-      "ws-section-competition-links",
+      "ws-section-bracket-links",
     );
     expect(activeChild.tagName).toBe("A");
     expect(activeChild).toHaveClass(

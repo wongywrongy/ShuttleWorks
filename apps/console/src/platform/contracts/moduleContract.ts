@@ -150,6 +150,11 @@ export interface ModuleContract {
 export const meetContract: ModuleContract = {
   id: 'meet',
   enableable: true,
+  // `setup` remains a Meet-owned RENDER segment in the legacy nav model, but
+  // the four consolidated Setup pages (`setup/details|entries|scoring|
+  // public-site`) are workspace-level configuration: `AppShell` opens them in
+  // every workspace, including a Bracket-only one with no Meet module, and
+  // navigation lists them under Setup rather than under Meet.
   ownedSegments: ['roster', 'matches', 'setup'],
   ownedEndpoints: [
     apiClient.submitSolveJob,
@@ -261,6 +266,11 @@ export const displayContract: ModuleContract = {
     apiClient.getDisplayState,
     apiClient.getDisplayMatchStates,
     apiClient.getDisplayBracket,
+    // Venue-board settings: branding + the Show next / Show scores switches.
+    // Display's own persistence — read by both boards and by the board
+    // configuration surface.
+    apiClient.getBoardSettings,
+    apiClient.updateBoardSettings,
   ],
   consumedEndpoints: [
     apiClient.getTournamentState,

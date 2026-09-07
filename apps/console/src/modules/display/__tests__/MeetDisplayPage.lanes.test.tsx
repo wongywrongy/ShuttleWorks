@@ -1,16 +1,14 @@
 /**
- * Integration coverage for task 8: the public board renders relative
- * Now/Next/Later lanes (not a drifting wall-clock) on the real
- * MeetDisplayPage — not just the pure `assignLanes` helper in
- * courtLanes.test.ts. Store setup mirrors
- * `MeetDisplayPage.courtLayout.test.tsx` (direct `setState`, no `?id=` so
- * `useLiveTracking`/`useDisplaySync` short-circuit before any network call).
+ * The board's Next lane, under the operator-visual-fixes P4 contract
+ * (match-card §4.4): the board defaults to the CURRENT match only, "Next"
+ * is a persisted board setting defaulting to OFF, and when it is on the
+ * preview renders resolved names — never a planned "~09:00" clock, a match
+ * code, or an unresolved side.
  *
- * Decisive assertions:
- *   - An idle court (nothing started/called) shows BOTH a "Next" and a
- *     "Later" preview, each carrying its own de-emphasized planned clock.
- *   - The live "Now" court (active match) never shows a planned clock at
- *     all — the wall-clock-drift bug this task retires.
+ * Store setup mirrors `MeetDisplayPage.courtLayout.test.tsx` (direct
+ * `setState`, no `?id=` so `useLiveTracking`/`useDisplaySync` short-circuit
+ * before any network call). The lane DERIVATION itself is unit-tested in
+ * `publicDisplay/__tests__/courtLanes.test.ts`.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -62,10 +60,19 @@ function matchStates(): Record<string, MatchStateDTO> {
   };
 }
 
-function renderBoard() {
+const BOARD = {
+  title: null,
+  logoUrl: null,
+  bannerUrl: null,
+  accent: null,
+  showNext: false,
+  showScores: true,
+};
+
+function renderBoard(props: Parameters<typeof MeetDisplayPage>[0] = {}) {
   return render(
     <MemoryRouter initialEntries={['/display']}>
-      <MeetDisplayPage />
+      <MeetDisplayPage {...props} />
     </MemoryRouter>,
   );
 }
@@ -75,45 +82,55 @@ afterEach(() => {
   useMatchStateStore.getState().reset();
 });
 
-describe('MeetDisplayPage — Now/Next/Later lanes (task 8)', () => {
-  it('an idle court shows both a Next and a Later preview, each with a de-emphasized planned clock', () => {
+describe('MeetDisplayPage — the Next lane is an opt-in board setting', () => {
+  it('shows no Next preview at all by default (match-card §4.4)', () => {
     useTournamentStore.setState({ config: CONFIG, schedule: SCHEDULE, matches: MATCHES });
     useMatchStateStore.getState().setMatchStates(matchStates());
 
     renderBoard();
 
-    // Next = m1 (slot 0 -> 09:00), Later = m2 (slot 1 -> 09:30).
-    expect(screen.getByText('Next')).toBeInTheDocument();
-    expect(screen.getByText('Later')).toBeInTheDocument();
-    expect(screen.getByText('~09:00')).toBeInTheDocument();
-    expect(screen.getByText('~09:30')).toBeInTheDocument();
-    // m3 (slot 2) is a third-deep item on court 1 — beyond the two
-    // previews the board shows, so its code never renders.
-    expect(screen.queryByText('C3')).toBeNull();
+    // The board defaults to the current match only — no Next lane, and none
+    // of the planned "~09:00" clocks the lane used to carry onto the wall.
+    expect(screen.queryByText('Next')).toBeNull();
+    expect(screen.queryByText(/^~\d{2}:\d{2}$/)).toBeNull();
   });
 
-  it('the live Now court never shows a planned clock — no "~time" anywhere near it', () => {
-    useTournamentStore.setState({ config: CONFIG, schedule: SCHEDULE, matches: MATCHES });
+  it('shows the Next lane on an idle court once the setting is on', () => {
+    useTournamentStore.setState({ config: CONFIG, schedule: SCHEDULE, matches: MATCHES, players: [] });
     useMatchStateStore.getState().setMatchStates(matchStates());
 
-    renderBoard();
+    renderBoard({ board: { ...BOARD, showNext: true } });
 
-    // Court 2's live match (m4) renders via PlayerStack — no Next/Later
-    // labels, no "~time" clock, anywhere on that card. m5 (the future
-    // match queued behind it) is not previewed on a busy court.
-    expect(screen.getByText('C4')).toBeInTheDocument();
-    expect(screen.queryByText('C5')).toBeNull();
-    // Only one clock renders on the whole board: court 1's Later preview.
-    // (Next's own "~09:00" is also present — assert both are the ONLY
-    // clocks, i.e. none leaked onto court 2's live card.)
-    expect(screen.getAllByText(/^~\d{2}:\d{2}$/)).toHaveLength(2);
+    // Court 1 is idle with m1 next. Its sides carry no roster names in this
+    // fixture, so the preview is OMITTED rather than printing an id — which
+    // is exactly the rule (§4.4: resolved names or nothing).
+    expect(screen.queryByTestId('court-next-1')).toBeNull();
   });
 
-  it('a disputed court (two started matches on one court) withholds Now and shows the public dispute label — D1/C2, V3-OC24.1', () => {
+  it('renders resolved Next names and never a planned clock or a match code', () => {
+    useTournamentStore.setState({
+      config: CONFIG,
+      schedule: SCHEDULE,
+      matches: MATCHES,
+      players: [
+        { id: 'p1a', name: 'Ana Silva', groupId: 'g1', availability: [] },
+        { id: 'p1b', name: 'Ben Ito', groupId: 'g2', availability: [] },
+      ],
+    });
+    useMatchStateStore.getState().setMatchStates(matchStates());
+
+    const { container } = renderBoard({ board: { ...BOARD, showNext: true } });
+
+    expect(screen.getByTestId('court-next-1').textContent).toContain('Ana Silva');
+    expect(container.textContent).not.toMatch(/~\d{2}:\d{2}/);
+    expect(container.textContent).not.toMatch(/\bC[1-5]\b/);
+  });
+
+  it('a disputed court renders the court number alone — the board never picks a claim', () => {
     // Both m4 and m5 claim court 2 as currently playing. `matchesByCourt`
     // (redirected to `platform/domain/courtOccupancy`, D1) must call this a
-    // dispute, not a coin-flip winner — and the board's Now/Next/Later
-    // lanes (D19) must never manufacture a "now" for it either.
+    // dispute, not a coin-flip winner — and the venue board must publish
+    // neither claim, nor any prose about the dispute (§4.4).
     useTournamentStore.setState({ config: CONFIG, schedule: SCHEDULE, matches: MATCHES });
     useMatchStateStore.getState().setMatchStates({
       m4: { matchId: 'm4', status: 'started', actualStartTime: new Date().toISOString() } as MatchStateDTO,
@@ -122,11 +139,9 @@ describe('MeetDisplayPage — Now/Next/Later lanes (task 8)', () => {
 
     renderBoard();
 
-    // Exactly the public label (contract §4.1) — never "Conflict", never an
-    // announcement instruction.
-    expect(screen.getByText('Court assignment unavailable.')).toBeInTheDocument();
-    // Neither claiming match's court renders a Now/On-court card, and no
-    // stray "Now" lane label leaks from the dispute.
+    expect(screen.getByTestId('court-number-2')).toBeInTheDocument();
+    expect(screen.queryByText(/court assignment unavailable/i)).toBeNull();
+    expect(screen.queryByTestId('court-score-2')).toBeNull();
     expect(screen.queryByText('C4')).toBeNull();
     expect(screen.queryByText('C5')).toBeNull();
   });

@@ -50,13 +50,13 @@ describe('FormActions', () => {
       <FormActions
         dirty={false}
         locked
-        lockedReason="Locked — real draws or divisions already exist."
+        lockedReason="This draw has been generated. Regenerate it to change format or size."
         onSave={vi.fn()}
       />,
     );
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Discard' })).not.toBeInTheDocument();
-    expect(screen.getByText('Locked — real draws or divisions already exist.')).toBeInTheDocument();
+    expect(screen.getByText('This draw has been generated. Regenerate it to change format or size.')).toBeInTheDocument();
   });
 
   it('calls onSave / onDiscard directly (type="button") unless asFormSubmit is set', () => {

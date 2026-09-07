@@ -79,14 +79,17 @@ describe('MeetDisplayPage — court order + hide (task 7)', () => {
 
     renderBoard();
 
-    // Hidden court's content never renders, even though its match is live —
+    // Hidden court never renders at all, even though its match is live —
     // hide is presentation-only, it doesn't touch match state.
-    expect(screen.queryByText('C2')).toBeNull();
+    expect(screen.queryByTestId('court-card-2')).toBeNull();
 
     // Manual order [3,1] first, then unlisted (4) ascending — court 2
-    // would have landed between 1 and 4 by default, but it's hidden.
-    const codes = screen.getAllByText(/^C\d$/).map((el) => el.textContent);
-    expect(codes).toEqual(['C3', 'C1', 'C4']);
+    // would have landed between 1 and 4 by default, but it's hidden. The
+    // card IS its court number now (match-card §4.4).
+    const numbers = screen
+      .getAllByTestId(/^court-number-\d$/)
+      .map((el) => el.textContent);
+    expect(numbers).toEqual(['3', '1', '4']);
   });
 
   it('does not auto-restore a hidden court even though its match is actively live (Q9)', () => {
@@ -105,11 +108,11 @@ describe('MeetDisplayPage — court order + hide (task 7)', () => {
 
     renderBoard();
 
-    expect(screen.queryByText('C2')).toBeNull();
+    expect(screen.queryByTestId('court-card-2')).toBeNull();
     // The 3 remaining visible courts still render fine.
-    expect(screen.getByText('C1')).toBeInTheDocument();
-    expect(screen.getByText('C3')).toBeInTheDocument();
-    expect(screen.getByText('C4')).toBeInTheDocument();
+    for (const court of [1, 3, 4]) {
+      expect(screen.getByTestId(`court-card-${court}`)).toBeInTheDocument();
+    }
   });
 
   it('derives a responsive column default from the VISIBLE court count, not the raw courtCount', () => {

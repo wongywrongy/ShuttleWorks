@@ -135,10 +135,58 @@ them:
 | `FIXTURE_CONSOLE_PORT` | `4173` | Console preview port |
 | `FIXTURE_ENTRANT_PORT` | `5174` | Entrant SSR port |
 | `FIXTURE_SEED_KEY` | `shared-fixture` | Import-run manifest key |
-| `FIXTURE_APPLY_DEFECTS` | `1` | Run the post-seed defects pass |
+| `FIXTURE_MODE` | `normal` | `normal` = the clean visual-review dataset; `failure` = additionally apply the deliberately corrupted/conflicting defects passes (see below) |
+| `FIXTURE_APPLY_DEFECTS` | *(from `FIXTURE_MODE`)* | Explicit `0`/`1` override of the mode's defects decision |
 | `FIXTURE_SKIP_ENTRANT` | `0` | Skip starting the entrant server entirely |
 | `FIXTURE_SKIP_CONSOLE_BUILD` | `0` | Reuse a prior `apps/console` build instead of rebuilding |
 | `FIXTURE_KEEP` | `0` | Keep the temp directory (database, logs) after teardown |
+
+## Fixture modes: normal vs failure
+
+`FIXTURE_MODE` picks which of two datasets the fixture presents.
+
+**`normal` (default) — the clean visual-review dataset.** The canonical T029/T030 seed and nothing
+else: a believable event with venue-local dates and times, one current match per court, varied
+match progress and resolved current participants. **This is the only mode a surface book may be
+captured from.**
+
+**`failure` — deliberately corrupted and conflicting state.** Runs `tools/fixture-defects.py` (an
+incomplete doubles pair awaiting a partner, a partially open publication boundary, a deciding-game
+result) and `tools/fixture-defects-db.py` (two double-booked courts, an approved slot with no
+court, a court with no time, an R16 unit scheduled while its R32 feeder is unresolved). These
+states exist so failure and recovery behaviour can be tested; they are **not** deleted, and they
+must never contaminate a normal capture. Capture them separately and label the artefact as a
+failure-mode capture.
+
+The mode is written into `fixture.json` as `fixtureMode`, and `tools/surface-capture.mjs` records
+it in the capture manifest, so no review book is ambiguous about which dataset it shows.
+
+## Keeping the capture dataset clean
+
+The shared fixture is disposable and always starts from the canonical seed, so it is clean by
+construction. The **long-lived Tailscale demo** is not: an interaction or smoke run against it
+leaves its throwaway workspaces behind, and they then appear on the Hub in every surface book.
+
+Remove them with `tools/demo-prune-workspaces.py`, which takes **workspace ids and nothing else** —
+no name pattern, no "delete all drafts" heuristic — so a user-created production workspace can
+never be caught by it:
+
+```bash
+make demo-backup            # deletion cascades; back up first
+demo_ip="$(bash tools/demo-compose.sh ip)"
+.venv/bin/python tools/demo-prune-workspaces.py --base-url "http://$demo_ip:8092" \
+  --workspace <uuid> --workspace <uuid>     # dry run: prints name, kind, status, dates
+.venv/bin/python tools/demo-prune-workspaces.py --base-url "http://$demo_ip:8092" \
+  --workspace <uuid> --workspace <uuid> --confirm
+```
+
+Known test-only rows on the demo as of 2026-09-07 (both owned by the bootstrap `local@dev`
+operator, `meet`/`draft`, no entries, four synthetic matches each):
+
+| Workspace | Id |
+| --- | --- |
+| `Interaction smoke` | `ddf6b4b1-dae8-49e5-8a36-aea01f594958` |
+| `Interaction smoke (viewer)` | `9144fecb-30cf-459e-9697-ab93f245de1d` |
 
 ## Relationship to the console-browser-contracts CI job
 

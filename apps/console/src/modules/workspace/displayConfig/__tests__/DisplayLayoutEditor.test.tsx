@@ -44,12 +44,14 @@ afterEach(() => {
 });
 
 describe('<DisplayLayoutEditor />', () => {
-  it('renders controls for display mode, columns, card size, show scores, standings mode', () => {
+  it('renders controls for display mode, columns, card size, standings mode', () => {
     render(<DisplayLayoutEditor />);
     expect(screen.getByRole('radiogroup', { name: 'Display mode' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Grid columns' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Card size' })).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Show scores' })).toBeInTheDocument();
+    // "Show scores" moved to Board content (`BoardAppearance`): it applies
+    // to the bracket board too, and this editor is Meet-only.
+    expect(screen.queryByRole('switch', { name: 'Show scores' })).toBeNull();
     expect(screen.getByRole('radiogroup', { name: 'Standings' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Slide dwell' })).toBeInTheDocument();
   });
@@ -64,7 +66,6 @@ describe('<DisplayLayoutEditor />', () => {
       'true',
     );
     expect(within(modeGroup).queryByRole('radio', { name: 'Strip' })).toBeNull();
-    expect(screen.getByRole('switch', { name: 'Show scores' })).toHaveAttribute('aria-checked', 'true');
     const gridGroup = screen.getByRole('radiogroup', { name: 'Grid columns' });
     expect(within(gridGroup).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
     // Side/Rotate are gone: rotation subsumes them, so the only question
@@ -124,14 +125,6 @@ describe('<DisplayLayoutEditor />', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
     const last = setConfig.mock.calls.at(-1)![0];
     expect(last.tvCardSize).toBe('large');
-  });
-
-  it('writes tvShowScores to the store when toggled off', () => {
-    const setConfig = vi.spyOn(useTournamentStore.getState(), 'setConfig');
-    render(<DisplayLayoutEditor />);
-    fireEvent.click(screen.getByRole('switch', { name: 'Show scores' }));
-    const last = setConfig.mock.calls.at(-1)![0];
-    expect(last.tvShowScores).toBe(false);
   });
 
   it('writes standingsMode off, and back to null for on', () => {

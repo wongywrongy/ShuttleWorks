@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { TournamentPage } from "../TournamentPage";
 import { useUiStore } from "../../store/uiStore";
-import { buildWorkspaceNav } from "../../platform/product-shell/workspaceNav";
-import type { ModuleId } from "../../platform/product-shell/types";
+import { WORKFLOW_ROUTES } from "../../platform/product-shell/workspaceNav";
 
 // Stub the heavy AppShell + the kind fetch so we test only TournamentPage's
 // URL→store syncing (no network, no product mount). AppShell renders a marker
@@ -33,28 +32,15 @@ beforeEach(() => {
 });
 
 describe("TournamentPage URL→activeTab sync (no kind-snap)", () => {
-  it("single-module: the segment becomes activeTab", async () => {
-    renderAt("roster");
-    await waitFor(() => expect(useUiStore.getState().activeTab).toBe("roster"));
-  });
-  it("a cross-module tab is PRESERVED when the resolved kind disagrees", async () => {
-    // URL is a bracket tab; the layout effect sets the optimistic kind to
-    // 'bracket'. activeTab lands on the segment.
-    renderAt("bracket-setup");
+  it("canonical workflow paths select their renderer", async () => {
+    renderAt("participants/people");
     await waitFor(() =>
-      expect(useUiStore.getState().activeTab).toBe("bracket-setup"),
+      expect(useUiStore.getState().activeTab).toBe("roster"),
     );
-    // Simulate useTournamentKind resolving the REAL kind to meet (the URL
-    // "lied"). The old kind-snap effect would snap bracket-setup → setup here;
-    // with the snap removed, the tab is preserved so the guard can show the panel.
-    act(() => {
-      useUiStore.getState().setActiveTournamentKind("meet");
-    });
-    expect(useUiStore.getState().activeTab).toBe("bracket-setup");
   });
 
   it("resolves workflow-first setup paths to the existing shell surface", async () => {
-    renderAt("setup/venue");
+    renderAt("setup/details");
     await waitFor(() => expect(useUiStore.getState().activeTab).toBe("setup"));
   });
 
@@ -66,12 +52,9 @@ describe("TournamentPage URL→activeTab sync (no kind-snap)", () => {
     );
   });
 
-  it("redirects workflow section roots to a real child surface", async () => {
-    renderAt("publish");
-    await waitFor(() => {
-      expect(screen.getByTestId("app-shell")).toBeTruthy();
-      expect(useUiStore.getState().activeTab).toBe("ws-sharing");
-    });
+  it("does not resurrect retired aliases", async () => {
+    renderAt("publish/site");
+    await waitFor(() => expect(screen.getByTestId("workspace-not-found")).toBeTruthy());
   });
 });
 
@@ -99,7 +82,7 @@ describe("an unrecognised segment is an honest not-found", () => {
    */
   it("renders not-found for a workspace the account cannot see", async () => {
     kind.notFound = true;
-    renderAt("setup");
+    renderAt("setup/details");
     await waitFor(() =>
       expect(screen.getByTestId("workspace-not-found")).toBeTruthy(),
     );
@@ -108,29 +91,17 @@ describe("an unrecognised segment is an honest not-found", () => {
   });
 
   it("NEGATIVE CONTROL: a workspace we CAN see still renders the shell", () => {
-    renderAt("setup");
+    renderAt("setup/details");
     expect(screen.getByTestId("app-shell")).toBeTruthy();
     expect(screen.queryByTestId("workspace-not-found")).toBeNull();
   });
 
-  it("accepts EVERY segment the workspace nav can route to", () => {
-    // The not-found guard must never swallow a real destination. Derived from
-    // the nav model itself (both kinds, every module enabled) so a new nav
-    // segment that forgets the routable list fails here, not in a browser.
-    const every: ModuleId[] = ["meet", "bracket", "display", "entries"];
-    const segments = new Set<string>();
-    for (const kind of ["meet", "bracket"] as const) {
-      const nav = buildWorkspaceNav(kind, new Set(every));
-      segments.add(nav.overview.segment);
-      for (const s of nav.sections)
-        for (const it of s.items) segments.add(it.segment);
-      for (const it of nav.admin.items) segments.add(it.segment);
-    }
-    for (const seg of segments) {
-      const { unmount } = renderAt(seg);
+  it("accepts every canonical route", () => {
+    for (const route of WORKFLOW_ROUTES) {
+      const { unmount } = renderAt(route.path);
       expect(
         screen.queryByTestId("workspace-not-found"),
-        `segment ${seg}`,
+        `route ${route.path}`,
       ).toBeNull();
       unmount();
     }

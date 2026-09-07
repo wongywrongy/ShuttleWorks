@@ -433,7 +433,7 @@ describe('signing in says so on the page the browser lands on', () => {
     // return URL from it under the same allowlist.
     const html = await render();
 
-    expect(html).toContain('href="/e/signup/spring-open"');
+    expect(html).toContain('href="/e/signup?next=%2Fe%2Fspring-open%2Fenter%2Fcreated"');
   });
 
   it('confirms a completed sign-up on the /created variant and nowhere else', async () => {

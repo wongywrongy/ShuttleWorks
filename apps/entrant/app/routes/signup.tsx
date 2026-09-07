@@ -34,13 +34,6 @@
  * `tests/signup.test.ts` compares the rendered documents for a fresh
  * and an already-registered address byte for byte.
  *
- * E3 added a second route to this module, `/e/signup/{slug}`, and the
- * component reads that one path segment to compose its return URL. The
- * loader is unchanged and still takes nothing. Nor is the segment a way in
- * for an address: it is percent-encoded and matched against `safeNext`,
- * whose charset has no `@` and no `%`, so anything shaped like an address
- * fails the match and the fallback constant is what reaches the markup.
- *
  * **CSRF on a page with no session.** There is no session yet — obtaining one
  * is what this page is for — which is exactly what the `sw_play_csrf` nonce
  * exists for. `mintFormCsrf()` mints it, the digest goes into `_csrf`, the
@@ -87,7 +80,7 @@ export interface SignupLoaderData {
   next: string;
   /**
    * The human tournament name (V3-PE24.1), when this signup was reached
-   * from a tournament's entry page (`/e/signup/{slug}`). `null` on the
+   * from a tournament's entry page. `null` on the
    * bare `/e/signup` route — there is no slug to name — and also `null` on
    * a lookup failure, in which case the heading falls back to generic
    * wording rather than block the page on a read the entry page itself
@@ -108,10 +101,8 @@ export interface SignupLoaderData {
  */
 export async function loader({
   request,
-  params,
 }: {
   request: Request;
-  params: { slug?: string };
 }) {
   // The sitekey is fetched rather than duplicated into a node env var: its
   // pair, the secret, is validated only in the backend, and a sitekey that
@@ -127,11 +118,17 @@ export async function loader({
   // tournament, race with deletion) falls back to the generic heading
   // rather than turning a signup page into a 404 the entry page itself
   // has not raised.
+  const requestedNextRaw = safeNext(new URL(request.url).searchParams.get('next'), ACCOUNT_READY_PAGE);
+  // `/login/signed-in` is the login page's generic completion state. Signup
+  // has its own completion state, so do not carry that presentation URL into
+  // the signup POST as if it were a destination.
+  const requestedNext = requestedNextRaw === '/e/login/signed-in' ? ACCOUNT_READY_PAGE : requestedNextRaw;
+  const contextMatch = requestedNext.match(/^\/e\/([^/]+)\/enter(?:\/created|\/signed-in)?$/);
   let tournamentName: string | null = null;
-  if (params.slug) {
+  if (contextMatch) {
     try {
       const page = await apiGet<EntryPageDTO>(
-        `/e/api/page/${encodeURIComponent(params.slug)}`,
+        `/e/api/page/${encodeURIComponent(contextMatch[1])}`,
       );
       tournamentName = page?.tournament?.name ?? null;
     } catch {
@@ -143,11 +140,10 @@ export async function loader({
   }
 
   const csrf = mintFormCsrf();
-  const url = new URL(request.url);
   const payload: SignupLoaderData = {
     turnstileSiteKey: config.turnstileSiteKey,
     formCsrf: csrf.token,
-    next: safeNext(url.searchParams.get('next'), ACCOUNT_READY_PAGE),
+    next: requestedNext,
     tournamentName,
   };
   return data(payload, csrf.responseInit);
@@ -192,42 +188,13 @@ export const meta: Route.MetaFunction = () => [
  */
 const ACCOUNT_READY_PAGE = '/e/login/created';
 
-/**
- * The entry page this sign-up came from, or `''` (E3).
- *
- * **Composed from one path segment, never taken as a destination.** The link
- * that brings an entrant here carries a slug, not a URL, so there is no
- * free-form `next` for a crafted link to smuggle in; the slug is
- * percent-encoded and the result is then matched against `safeNext` — the
- * same allowlist `login.tsx` validates its own `next` with, and the
- * byte-identical twin of `_SAFE_NEXT`, which `next_target` applies again when
- * the form posts. Anything that is not slug-shaped stops being a path this
- * tier owns and falls back, so the destination cannot carry an
- * attacker-chosen value — the property the hard-coded constant existed for.
- *
- * It is derived in the COMPONENT, from route params, so the loader keeps its
- * zero-arity signature: the cheapest possible proof that no email address can
- * reach it, and the control `tests/signup.test.ts` pins.
- */
-function entryPathFor(slug: string | undefined): string {
-  return slug ? safeNext(`/e/${encodeURIComponent(slug)}/enter`, '') : '';
-}
-
-function invitationPathFor(token: string | undefined): string {
-  return token ? safeNext(`/e/partner/${encodeURIComponent(token)}`, '') : '';
-}
-
-export default function SignupPage({ loaderData, params }: Route.ComponentProps) {
+export default function SignupPage({ loaderData }: Route.ComponentProps) {
   const { turnstileSiteKey, formCsrf, tournamentName } = loaderData;
-  const contextParams = params as { slug?: string; token?: string };
-  // Both suffixes are literals from this file, appended to an already
-  // validated path, so composing them cannot invalidate it.
-  const entryPath = entryPathFor(contextParams.slug);
-  const invitationPath = invitationPathFor(contextParams.token);
-  const next =
-    invitationPath || (entryPath === '' ? loaderData.next : `${entryPath}/created`);
-  const signInDestination =
-    invitationPath || (entryPath ? `${entryPath}/signed-in` : loaderData.next === ACCOUNT_READY_PAGE ? '' : loaderData.next);
+  const next = loaderData.next;
+  const entryPath = next.match(/^\/e\/([^/]+)\/enter(?:\/created|\/signed-in)?$/);
+  const invitationPath = next.match(/^\/e\/partner\/[^/]+$/);
+  const formNext = entryPath ? `/e/${entryPath[1]}/enter/created` : next;
+  const signInDestination = entryPath ? `/e/${entryPath[1]}/enter/signed-in` : invitationPath ? next : next === ACCOUNT_READY_PAGE ? '' : next;
   const signInHref = signInDestination
     ? `/e/login?next=${signInDestination}`
     : '/e/login';
@@ -288,13 +255,9 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
                 Landing on the bare page said nothing, so a completed sign-up
                 and a silently failed one rendered the same document.
 
-                **And now the tournament, when there is one (E3).** The value
-                is composed above from a route param and validated against
-                `safeNext`; without one it is still the constant. Either way
-                it names a node-owned GET, which is what keeps the 303 off a
-                405 — `tests/signup.test.ts` derives that from the route
-                table rather than listing the URL. */}
-            <input type="hidden" name="next" value={next} />
+                The value is a validated node-owned GET, which keeps the 303
+                off a 405. */}
+            <input type="hidden" name="next" value={formNext} />
 
             <TextField
               id="signup-email"

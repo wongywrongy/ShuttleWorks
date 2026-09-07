@@ -1,15 +1,17 @@
 /**
  * MatchCard — the shared BWF-style match-presentation atom (SP-CONSOLE-REFINE
  * G6). One anatomy reused everywhere a match is shown as a card: sides
- * stacked vertically, a winner marker on the winning side, set scores as
- * right-aligned COLUMN LANES (fixed-width per set, so set numbers align
- * vertically across every card on the page), inline RET/W.O. badges next to
- * the affected side, and an optional footer meta strip (round · event ·
- * court · time).
+ * stacked vertically, a winner marker on the winning side, the recorded games
+ * as ONE CENTRED PAIRED LANE BETWEEN the two sides ("18–21, 21–15, 21–13" —
+ * match-card contract §3.4 as amended by the P0 operator-visual-fixes pass),
+ * inline RET/W.O. badges next to the affected side, and an optional footer
+ * meta strip (round · event · court · time).
  *
- * List rows stay table rows; they adopt the same score lane via `ScoreLane`
- * in their Status cell (scores + winner dot = done, so the DONE pill retires
- * where a score can say it).
+ * List rows stay table rows; they adopt the SAME `ScoreLane` in their own
+ * centred score column between Side A and Side B, so a game reads identically
+ * on a row, a card, a bracket node and a court card. No game score carries
+ * emphasis anywhere: the winning side's NAME does, from the recorded outcome
+ * (`recordedWinner` / the engine's `winner_side`), never from counting games.
  *
  * Presentation-only: both engines' set shapes are `{sideA, sideB}` (ADR 0006
  * keeps the score JSON shared), so this file needs no per-engine adapter.
@@ -30,81 +32,140 @@ export const REASON_BADGE: Record<MatchReason, string> = {
   forfeit: 'FF',
 };
 
-/** Which side a completed set list says won — null while it says nothing
- *  (no sets, or a tie, which real data should not produce). */
-export function setsWinner(sets: SetPair[] | undefined | null): 'A' | 'B' | null {
-  if (!sets || sets.length === 0) return null;
-  let a = 0;
-  let b = 0;
-  for (const s of sets) {
-    if (s.sideA > s.sideB) a += 1;
-    else if (s.sideB > s.sideA) b += 1;
-  }
-  return a === b ? null : a > b ? 'A' : 'B';
+/**
+ * The winner of a match from its AUTHORITATIVE RECORDED OUTCOME.
+ *
+ * match-card contract §2.7 rule 4 / §3.5: the match winner is never inferred
+ * from per-game totals — retirement and walkover contradict them by
+ * construction. The Bracket engine records `winner_side` directly; the Meet
+ * engine records an aggregate `score` (games won per side, written by the Run
+ * surface's `ScoreEditor`), and THAT aggregate — not a count over the
+ * per-game `sets` — is the meet's recorded outcome. `null` whenever nothing
+ * has been recorded.
+ *
+ * The former `setsWinner(sets)` helper, which counted games, is deleted: it
+ * was exactly the inference §3.5 forbids on a render path.
+ */
+export function recordedWinner(
+  score: SetPair | null | undefined,
+): 'A' | 'B' | null {
+  if (!score) return null;
+  if (score.sideA === score.sideB) return null;
+  return score.sideA > score.sideB ? 'A' : 'B';
 }
 
 /** The winner marker — a small filled dot, the BWF/tournamentsoftware cue. */
 export function WinnerDot({ className = '' }: { className?: string }) {
   return (
     <span
-      aria-label="winner"
+      aria-label="Winner"
       className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-status-success-fg ${className}`}
     />
   );
 }
 
-/** Per-set fixed column width — the lane's alignment guarantee. `w-9` holds
- *  "21-19" (5ch tabular at 12px) with a breath of air either side. */
-const SET_COL = 'w-9 text-right';
+/** En dash between the two numbers of one game (match-card §3.4), comma
+ *  between games. The FIRST number always belongs to the FIRST-LISTED side. */
+const EN_DASH = '–';
+
+/** The plain-text form of a paired ledger: `18–21, 21–15, 21–13`. Exported
+ *  so exports and accessible summaries spell it exactly once. */
+export function formatGamePairs(sets: SetPair[] | null | undefined): string {
+  if (!sets || sets.length === 0) return '';
+  return sets.map((s) => `${s.sideA}${EN_DASH}${s.sideB}`).join(', ');
+}
 
 /**
- * ScoreLane — the compact one-line lane for LIST ROWS' status cells:
- * each set a fixed-width right-aligned "a-b" pair, so pairs align
- * vertically down the list. Optional reason badge leads the lane.
+ * ScoreLane — the ONE centred lane of paired games that sits BETWEEN the two
+ * opponents on every match surface (match-card contract §3.4, as amended by
+ * the P0 operator-visual-fixes pass).
+ *
+ *   18–21, 21–15, 21–13
+ *
+ * Three rules it enforces structurally, so no caller can reintroduce them:
+ *
+ *  1. **Paired, not per-side.** A game is one cell holding both numbers, so
+ *     the reader never has to align two distant columns to read a game. The
+ *     first number is the first-listed side's, always.
+ *  2. **No emphasis of any kind.** Not for a completed game, not for a live
+ *     one. `game.winner` drives no ink; the winning side's NAME carries the
+ *     match outcome (§3.0), and only from the recorded outcome.
+ *  3. **The live game shares the lane.** A running score is just the last
+ *     pair, in the same weight — nothing is fabricated to fill it.
+ *
+ * The lane collapses to nothing when there are no games AND no reason badge
+ * (§3.4 "collapse"): no cell, no reserved width, no invisible marker.
  */
 export function ScoreLane({
   sets,
   reason,
+  sideALabel,
+  sideBLabel,
+  size = 'text-2sm',
+  className = '',
   'data-testid': testId,
 }: {
   sets: SetPair[];
   reason?: MatchReason | null;
+  /** Side names, for the per-game accessible text §3.4 requires
+   *  ("Game 2, Ana Silva 21, Ben Ito 19"). Omitted where the surface has no
+   *  names to give (the compact chip). */
+  sideALabel?: string;
+  sideBLabel?: string;
+  /** The lane's type scale. A separate prop rather than something a caller
+   *  passes through `className`, because two `text-*` utilities on one
+   *  element resolve by stylesheet order, not by the order they were
+   *  written — which made "just override it" silently unreliable. The
+   *  venue board is the one surface that needs a different one (its score
+   *  is read across a hall); everywhere else takes the default. */
+  size?: string;
+  className?: string;
   'data-testid'?: string;
 }) {
+  if (sets.length === 0 && !reason) return null;
   return (
     <span
       data-testid={testId}
-      className="inline-flex items-center justify-end gap-0.5 text-xs tabular-nums text-foreground"
+      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap ${size} tabular-nums text-foreground ${className}`}
     >
       {reason ? (
-        <span className="mr-1 rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {REASON_BADGE[reason]}
         </span>
       ) : null}
       {sets.map((s, i) => (
-        <span key={i} className={`${SET_COL} inline-block`}>
-          {s.sideA}-{s.sideB}
+        <span
+          key={i}
+          aria-label={
+            sideALabel && sideBLabel
+              ? `Game ${i + 1}, ${sideALabel} ${s.sideA}, ${sideBLabel} ${s.sideB}`
+              : undefined
+          }
+        >
+          {s.sideA}
+          {EN_DASH}
+          {s.sideB}
+          {i < sets.length - 1 ? ', ' : ''}
         </span>
       ))}
     </span>
   );
 }
 
-/** One stacked side inside a MatchCard: chip slot · names · winner dot ·
- *  that side's set-score cells. */
+/** One stacked side inside a MatchCard: chip slot · names · winner dot.
+ *  The SCORES are not here — they live once, in the centred lane between the
+ *  two sides (match-card §3.4). */
 function CardSide({
   side,
   names,
   chip,
   won,
-  sets,
   reason,
 }: {
   side: 'A' | 'B';
   names: ReactNode;
   chip?: ReactNode;
   won: boolean;
-  sets: SetPair[];
   reason?: MatchReason | null;
 }) {
   return (
@@ -124,26 +185,6 @@ function CardSide({
         ) : null}
       </span>
       <span className="w-3 shrink-0 text-center">{won ? <WinnerDot /> : null}</span>
-      {sets.length > 0 ? (
-        <span className="flex shrink-0 items-center text-2sm tabular-nums">
-          {sets.map((s, i) => {
-            const mine = side === 'A' ? s.sideA : s.sideB;
-            const theirs = side === 'A' ? s.sideB : s.sideA;
-            return (
-              <span
-                key={i}
-                className={[
-                  SET_COL,
-                  'inline-block',
-                  mine > theirs ? 'font-semibold text-foreground' : 'text-muted-foreground',
-                ].join(' ')}
-              >
-                {mine}
-              </span>
-            );
-          })}
-        </span>
-      ) : null}
     </div>
   );
 }
@@ -156,19 +197,17 @@ function CardSide({
  */
 /** One side of a ResultSides block (RES-1): the caller's stack of
  *  interactive player rows beside the side RAIL — the side's identity
- *  chip (once per side, never per player row), the contingency badge,
- *  and the side's score in the fixed-width tabular slot. The rail is
- *  vertically centered against the block, and the slot holds a games
- *  tally ("2") or set scores ("21 21") without layout change: both are
- *  `SetPair[]`, one `SET_COL` column per pair. Winner reads by WEIGHT
- *  (bolder score here, bolder names in the caller's rows) — no dot, no
- *  fill; `WinnerDot` stays a list/card cue (MAT-3/BMAT-2 stand). */
+ *  chip (once per side, never per player row) and the contingency badge.
+ *
+ *  The SCORE is not a per-side element any more: it renders once, in the
+ *  centred paired lane between the two blocks (match-card §3.4). Winner
+ *  reads by weight on the caller's NAME rows plus the mark — never by ink on
+ *  a game score. */
 function ResultSideBlock({
   side,
   rows,
   rail,
   won,
-  sets,
   reason,
 }: {
   side: 'A' | 'B';
@@ -176,31 +215,16 @@ function ResultSideBlock({
   /** Side-level identity — Meet school chip, Bracket event badge. */
   rail?: ReactNode;
   won: boolean;
-  sets: SetPair[];
   reason?: MatchReason | null;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 py-1.5" data-side={side}>
       <div className="min-w-0 flex-1">{rows}</div>
+      {won ? <WinnerDot className="shrink-0" /> : null}
       {rail ? <span className="shrink-0">{rail}</span> : null}
       {reason ? (
         <span className="shrink-0 rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {REASON_BADGE[reason]}
-        </span>
-      ) : null}
-      {sets.length > 0 ? (
-        <span
-          data-testid={`result-score-${side}`}
-          className={[
-            'flex shrink-0 items-center text-2sm tabular-nums',
-            won ? 'font-semibold text-foreground' : 'text-muted-foreground',
-          ].join(' ')}
-        >
-          {sets.map((s, i) => (
-            <span key={i} className={`${SET_COL} inline-block`}>
-              {side === 'A' ? s.sideA : s.sideB}
-            </span>
-          ))}
         </span>
       ) : null}
     </div>
@@ -257,15 +281,18 @@ export function ResultSides({
           rows={sideA}
           rail={railA}
           won={won === 'A'}
-          sets={sets}
           reason={reasonSide === 'A' ? reason : null}
         />
+        {sets.length > 0 ? (
+          <div className="flex justify-center py-1">
+            <ScoreLane sets={sets} data-testid="result-score-lane" />
+          </div>
+        ) : null}
         <ResultSideBlock
           side="B"
           rows={sideB}
           rail={railB}
           won={won === 'B'}
-          sets={sets}
           reason={reasonSide === 'B' ? reason : null}
         />
       </div>
@@ -317,15 +344,18 @@ export function MatchCard({
         names={sideA}
         chip={chipA}
         won={won === 'A'}
-        sets={sets}
         reason={reasonSide === 'A' ? reason : null}
       />
+      {sets.length > 0 ? (
+        <div className="flex justify-center py-0.5">
+          <ScoreLane sets={sets} data-testid="match-card-score-lane" />
+        </div>
+      ) : null}
       <CardSide
         side="B"
         names={sideB}
         chip={chipB}
         won={won === 'B'}
-        sets={sets}
         reason={reasonSide === 'B' ? reason : null}
       />
       {meta ? (

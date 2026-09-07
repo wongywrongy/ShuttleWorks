@@ -19,7 +19,7 @@ import { Modal } from '../../components/common/Modal';
 import type { BracketApi } from '../../api/bracketClient';
 import type { BracketScheduleCandidate } from '../../api/bracketDto';
 import { useUiStore } from '../../store/uiStore';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { INTERACTIVE_BASE, UTILITY_BUTTON } from '../../lib/utils';
 
 type Phase = 'solving' | 'choosing' | 'committing';
 
@@ -154,7 +154,7 @@ export function BracketScheduleModal({ api, onClose, onCommitted }: Props) {
             type="button"
             onClick={onClose}
             disabled={phase === 'committing'}
-            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground hover:bg-muted/40 disabled:opacity-50`}
+            className={UTILITY_BUTTON}
           >
             {phase === 'choosing' ? 'Cancel' : 'Close'}
           </button>

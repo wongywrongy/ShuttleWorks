@@ -48,6 +48,28 @@ _DEMO_GENERATOR_VERSION = 5
 _DEMO_DEFAULT_COURT_COUNT = 8
 _DEMO_LIVE_COURT_COUNT = 6
 _DEMO_INTERVAL_MINUTES = 30
+# Branding assets for the demo/visual-review dataset. These used to be
+# `https://example.test/<slug>/logo.svg` links, which resolve to nothing and —
+# because the app's CSP is `img-src 'self' data: blob:` — were blocked before
+# the request even left the browser, so every Setup page carrying a preview
+# logged a console error and rendered a broken image. Inline `data:` SVGs are
+# valid assets under that exact CSP, need no network, and keep the fixture
+# reproducible offline (operator-visual-fixes.md, package P0).
+_DEMO_LOGO_DATA_URI = (
+    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3"
+    "g9IjAgMCAxMjggMTI4Ij48cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgcng9IjI0IiBmaWxsPSIjMEYyQT"
+    "RBIi8+PGNpcmNsZSBjeD0iNjQiIGN5PSI0NCIgcj0iMTYiIGZpbGw9IiNGNEY3RkIiLz48cGF0aCBkPSJNNDggNT"
+    "AgTDM2IDEwMCBoNTYgTDgwIDUwIFoiIGZpbGw9IiNGNEY3RkIiIG9wYWNpdHk9Ii44NSIvPjwvc3ZnPg=="
+)
+_DEMO_BANNER_DATA_URI = (
+    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3"
+    "g9IjAgMCAxMjAwIDMwMCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIi"
+    "B5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMEYyQTRBIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG"
+    "9wLWNvbG9yPSIjMkM2QkIwIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaW"
+    "dodD0iMzAwIiBmaWxsPSJ1cmwoI2cpIi8+PGcgZmlsbD0iI0ZGRkZGRiIgb3BhY2l0eT0iLjE2Ij48Y2lyY2xlIG"
+    "N4PSIxMDIwIiBjeT0iODYiIHI9IjEyMCIvPjxjaXJjbGUgY3g9IjE4MCIgY3k9IjI0NCIgcj0iOTIiLz48L2c+PC"
+    "9zdmc+"
+)
 _DEMO_LIVE_TOURNAMENT = "T029"
 _DEMO_UPCOMING_TOURNAMENT = "T030"
 # Clean, deterministic surnames used only when a custom/demo historical
@@ -1764,8 +1786,8 @@ def _demo_setup_sections(
             "publicSlug": slug,
             "description": f"Fictional, badminton-plausible demo of the {tournament.level} {tournament.name} at {tournament.venue}.",
             "regulationsUrl": f"https://example.test/{safe_slug}/regulations.pdf",
-            "logoUrl": f"https://example.test/{safe_slug}/logo.svg",
-            "bannerUrl": f"https://example.test/{safe_slug}/banner.jpg",
+            "logoUrl": _DEMO_LOGO_DATA_URI,
+            "bannerUrl": _DEMO_BANNER_DATA_URI,
         },
     }
 
@@ -1805,6 +1827,47 @@ def _parse_demo_time(value: str | None) -> time:
     return time(9, 0)
 
 
+def _place_on_courts(requests: list[dict], court_count: int) -> list[dict]:
+    """Turn desired ``(slot, duration)`` wishes into a real per-court schedule.
+
+    A court is a physical thing: it is occupied for ``duration_slots`` from the
+    moment a match starts on it, so the next match there cannot begin before
+    that block ends. This walks the requests in time order and gives each one
+    the court that frees up soonest at or after the slot it wanted, so on every
+    court the matches are strictly sequential — an overlap is unrepresentable
+    rather than merely unlikely.
+
+    A request carrying ``fixed_court`` (the live wave, one match per court) is
+    pinned exactly where it is; it still occupies its court for the rest of the
+    placement, so nothing else is laid on top of it.
+
+    Day boundaries need no special case: ``desired_slot`` already encodes the
+    day, and the overnight gap is far wider than any block, so a court is
+    always free again by the next morning's first slot.
+    """
+    free = dict.fromkeys(range(1, court_count + 1), 0)
+    placed: list[dict] = []
+    for request in sorted(requests, key=lambda item: (item["desired_slot"], item["order"])):
+        desired = request["desired_slot"]
+        duration = request["duration_slots"]
+        court_id = request.get("fixed_court")
+        if court_id is None:
+            court_id = min(free, key=lambda court: (max(free[court], desired), court))
+            slot_id = max(free[court_id], desired)
+        else:
+            slot_id = desired
+        free[court_id] = max(free[court_id], slot_id + duration)
+        placed.append(
+            {
+                "play_unit_id": request["play_unit_id"],
+                "slot_id": slot_id,
+                "court_id": court_id,
+                "duration_slots": duration,
+            }
+        )
+    return placed
+
+
 def _demo_plan(
     tournament: Tournament,
     rows: list[HistoricalMatch],
@@ -1814,7 +1877,7 @@ def _demo_plan(
     zone = ZoneInfo(_demo_timezone(tournament))
     start_at = datetime.combine(start, time(9, 0), tzinfo=zone)
     court_count = _demo_court_count(tournament.id)
-    assignments: list[dict] = []
+    requests: list[dict] = []
     live_candidates: list[str] = []
     if tournament.id == _DEMO_LIVE_TOURNAMENT:
         by_event = [
@@ -1851,19 +1914,22 @@ def _demo_plan(
                     + local.minute
                     - 9 * 60,
                 )
-                court_match = re.search(r"(\d+)", unit.get("court_label") or "")
-                # Scheduler courts are operator-facing and one-based. Keep the
-                # imported plan in the same 1..court_count domain so no surface
-                # ever renders a synthetic "Court 0".
-                court_id = (
-                    ((int(court_match.group(1)) - 1) if court_match else index)
-                    % court_count
-                ) + 1
+                # The source court label lives in a fixed 1..8 domain (see
+                # ``complete_demo_historical_draws``) and is only a *wish*: it
+                # is not a placement on this floor, which may have fewer
+                # courts. Folding it with ``% court_count`` kept the slot and
+                # silently stacked source courts 7 and 8 onto 1 and 2, so two
+                # matches shared one court at one instant. Courts are assigned
+                # by ``_place_on_courts`` below, which runs each court
+                # sequentially and can never overlap.
+                court_id: int | None = None
                 slot_id = minute_offset // _DEMO_INTERVAL_MINUTES
                 if tournament.id == _DEMO_LIVE_TOURNAMENT and unit.get("result") is None:
                     if unit["id"] in live_position:
                         position = live_position[unit["id"]]
                         slot_id = 152  # 2026-07-31 13:00 Asia/Taipei
+                        # The live wave is what is physically on court right
+                        # now: one match per court, pinned, never more.
                         court_id = position + 1
                     else:
                         position = pending_round_index.get(round_code, 0)
@@ -1878,7 +1944,6 @@ def _demo_plan(
                             slot_id = 240 + 2 * (position // court_count)
                         else:  # Finals
                             slot_id = 246 + 2 * (position // court_count)
-                        court_id = (position % court_count) + 1
                     # Keep the remaining concrete R32 wave in the live-day
                     # queue. Its source row still carries the planned court
                     # and local time (and every later round stays on Plan), but
@@ -1887,14 +1952,16 @@ def _demo_plan(
                     # the queue empty while six matches are playing.
                     if round_code == "R32" and unit["id"] not in live_position:
                         continue
-                assignments.append(
+                requests.append(
                     {
                         "play_unit_id": unit["id"],
-                        "slot_id": slot_id,
-                        "court_id": court_id,
+                        "desired_slot": slot_id,
+                        "fixed_court": court_id,
                         "duration_slots": int(unit.get("duration_slots") or 2),
+                        "order": len(requests),
                     }
                 )
+    assignments = _place_on_courts(requests, court_count)
     total_slots = max(
         (end - start).days * 48 + 48,
         max((item["slot_id"] + item["duration_slots"] for item in assignments), default=1),

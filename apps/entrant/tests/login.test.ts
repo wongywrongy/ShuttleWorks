@@ -186,7 +186,7 @@ describe('the account pages are reachable by link', () => {
     // on a generic page. The slug travels as a path segment (no free-form
     // destination for a crafted link to carry) and `signup.tsx` composes the
     // return URL from it under the same allowlist.
-    expect(hrefs(html)).toContain('/e/signup/spring-open');
+    expect(hrefs(html)).toContain('/e/signup?next=%2Fe%2Fspring-open%2Fenter%2Fcreated');
   });
 
   it.each([['login'], ['signup'], ['entry']] as const)(
@@ -381,7 +381,7 @@ describe('next is a same-origin entrant path or it is discarded', () => {
 
   it('preserves the validated tournament context when creating an account', async () => {
     const html = await render('/e/login?next=/e/spring-open/enter');
-    expect(html).toContain('href="/e/signup/spring-open"');
+    expect(html).toContain('href="/e/signup?next=%2Fe%2Fspring-open%2Fenter"');
   });
 
   it('preserves a receipt continuation when creating an account', async () => {

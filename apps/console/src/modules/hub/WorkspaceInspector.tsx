@@ -317,7 +317,7 @@ export function WorkspaceInspector({
           />
           <button
             type="button"
-            onClick={() => onOpen(tournament.id, 'competition/matches')}
+            onClick={() => onOpen(tournament.id, 'operations/live')}
             className="mt-2 text-sm text-accent underline underline-offset-2 hover:no-underline"
           >
             View all matches →

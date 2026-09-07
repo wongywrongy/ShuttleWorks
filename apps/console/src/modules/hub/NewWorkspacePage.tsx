@@ -1,23 +1,17 @@
 /**
- * "New workspace" (route `/new`) — the director states what they are running.
+ * "New workspace" (route `/new`) — ONE form, six controls:
+ * name, date, Meet, Bracket, Display, Create.
  *
- * NO PRESETS. This used to lead with four template cards (Meet Day / Bracket
- * Tournament / Hybrid Event / Blank) plus a Custom escape hatch, so the first
- * decision was "which of our bundles is closest to my event?" — a question
- * about ShuttleWorks' packaging, answerable only by someone who already knows
- * what the bundles contain. A tournament director knows what they are running.
- * They pick the modules and say how many courts they have.
+ * It used to be a four-step wizard (Type → Identity → Venue → Review) whose
+ * first question — "team meet, draw tournament, or both?" — was answered again
+ * two rows below by the module switches it drove, and whose last two steps
+ * asked for a court count that Setup owns and then read the four answers back
+ * to the person who had just given them. Creating a workspace is not a
+ * decision tree; it is a name and what the event runs.
  *
- * The tri-state module picker that used to hide behind "Custom" IS the form
- * now. Courts moved here because it is the one venue fact needed before
- * anything can be scheduled, and it was previously buried in Venue & schedule
- * after creation.
- *
- * Built on the shared settings grammar (`Section` + `Row` + `FieldRow`) so
- * creating a workspace and configuring one look like the same product.
- *
- * Creation is one atomic request: identity, module seed, and the essential
- * venue scale are committed together before the Setup checklist opens.
+ * Everything else about the event — venue, courts, sessions, scoring, the
+ * public site — is completed in Setup, which is where creation now lands
+ * (Setup → Details). The workspace is still created in ONE atomic request.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -28,7 +22,6 @@ import {
   FieldRow,
   Row,
   Section,
-  NumberWithSuffix,
   Seg,
 } from '../../platform/engine-config/SettingsControls';
 import { landingRoute } from './workspaceCreateFlow';
@@ -40,106 +33,71 @@ import {
   type CustomState,
   type ModuleState,
 } from './customModules';
-import { TEXT_MUTED_SM, TEXT_MUTED_XS } from '../../lib/utils'
+import { TEXT_MUTED_SM } from '../../lib/utils'
 
 const MODULE_IDS: (keyof CustomState)[] = ['meet', 'bracket', 'display'];
 
-/** What each module actually does, in the director's terms — the one thing
- *  the preset cards did carry that a bare module name does not. */
+/** What each module actually does, in the director's terms. */
 const MODULE_HINT: Record<keyof CustomState, string> = {
   meet: 'Roster and a court schedule',
   bracket: 'Draws, seeding, and progression',
   display: 'A public board for the venue',
 };
 
-type TournamentType = 'meet' | 'bracket' | 'hybrid';
-
-// V3-OC03.1: name the outcome, not the architecture — a director choosing
-// among these should not need to already know what "Bracket" means as a
-// ShuttleWorks module.
-const TOURNAMENT_TYPES: { value: TournamentType; label: string }[] = [
-  { value: 'meet', label: 'Team meet' },
-  { value: 'bracket', label: 'Draw tournament' },
-  { value: 'hybrid', label: 'Both' },
+const ON_OFF = [
+  { value: 'enabled' as ModuleState, label: 'On' },
+  { value: 'off' as ModuleState, label: 'Off' },
 ];
-
-const TYPE_HINT: Record<TournamentType, string> = {
-  meet: 'Court-based event with a planned day',
-  bracket: 'Draws, seeding, and bracket advancement',
-  hybrid: 'Run a meet and bracket in one workspace',
-};
 
 export function NewWorkspacePage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
-  const [tournamentType, setTournamentType] = useState<TournamentType>('meet');
   const [modules, setModules] = useState<CustomState>(DEFAULT_CUSTOM);
-  const [courts, setCourts] = useState(4);
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nothingOn = MODULE_IDS.every((m) => modules[m] !== 'enabled');
-  const displayOrphaned =
-    modules.display !== 'off' &&
-    modules.meet !== 'enabled' &&
-    modules.bracket !== 'enabled';
+  // Display is meaningless without something to show. The dependency is the
+  // same rule the backend enforces and the Modules catalog states; here it
+  // simply disables the switch rather than letting the operator arm an
+  // invalid combination and be refused after the fact.
+  const hasEngine = modules.meet === 'enabled' || modules.bracket === 'enabled';
+  const nameMissing = name.trim().length === 0;
 
   function setModule(id: keyof CustomState, value: ModuleState) {
-    const next = { ...modules, [id]: value };
-    setModules(next);
-    if (id === 'meet' || id === 'bracket') {
-      setTournamentType(
-        next.meet === 'enabled' && next.bracket === 'enabled'
-          ? 'hybrid'
-          : next.bracket === 'enabled'
-            ? 'bracket'
-            : 'meet',
-      );
-    }
+    setModules((prev) => {
+      const next = { ...prev, [id]: value };
+      // Turning off the last engine turns Display off with it, so the form
+      // never holds a state the server would reject.
+      if (
+        (id === 'meet' || id === 'bracket') &&
+        next.meet !== 'enabled' &&
+        next.bracket !== 'enabled'
+      ) {
+        next.display = 'off';
+      }
+      return next;
+    });
     // The configuration just changed, so a prior failure may no longer apply.
     setError(null);
   }
 
-  function setType(value: TournamentType) {
-    setTournamentType(value);
-    setModules((prev) => ({
-      ...prev,
-      meet: value === 'bracket' ? 'off' : 'enabled',
-      bracket: value === 'meet' ? 'off' : 'enabled',
-    }));
-    setError(null);
-  }
-
-  function handleContinue() {
-    if (step === 1 && displayOrphaned) {
-      setError('Turn on Meet or Bracket before enabling Display.');
+  async function handleCreate() {
+    if (nameMissing) {
+      setError('Give the workspace a name.');
       return;
     }
-    setError(null);
-    setStep((current) => Math.min(4, current + 1));
-  }
-
-  function handleBack() {
-    setError(null);
-    setStep((current) => Math.max(1, current - 1));
-  }
-
-  async function handleCreate() {
     setCreating(true);
     setError(null);
     try {
       const created = await apiClient.createTournament({
-        name: name.trim() || null,
+        name: name.trim(),
         kind: kindForSeed(modules),
         tournamentDate: date || null,
-        courtCount: courts,
         modules: customSeed(modules),
       });
-
-      // Open via the RETURNED module state. `landingRoute` sends a workspace
-      // with nothing enabled to Modules setup, else to its primary module.
+      // Open via the RETURNED module state: Setup → Details, unless nothing
+      // is enabled at all, in which case Modules is the only useful place.
       navigate(landingRoute(created));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create workspace');
@@ -154,22 +112,13 @@ export function NewWorkspacePage() {
         <ShuttleWorksMark />
       </header>
 
-      <div className="sw-float-in mx-auto max-w-3xl space-y-2 px-6 py-10">
+      <div className="sw-float-in mx-auto max-w-3xl space-y-4 px-6 py-10">
         <div className="space-y-1 pb-2">
           <h1 className="type-display text-2xl text-foreground">New workspace</h1>
-          <p className={TEXT_MUTED_SM}>Set up the essentials now. You can complete the rest from Setup.</p>
+          <p className={TEXT_MUTED_SM}>
+            Name it and choose what it runs. Venue, courts and scoring are set up next.
+          </p>
         </div>
-
-        <ol aria-label="Workspace creation steps" className="mb-6 grid grid-cols-4 gap-2 border-y border-border py-3">
-          {['Type', 'Identity', 'Venue', 'Review'].map((label, index) => {
-            const number = index + 1;
-            return (
-              <li key={label} className={number === step ? 'text-sm font-semibold text-accent' : number < step ? 'text-sm text-foreground' : 'text-sm text-muted-foreground'}>
-                <span aria-current={number === step ? 'step' : undefined}>{number}. {label}</span>
-              </li>
-            );
-          })}
-        </ol>
 
         {error && (
           <div
@@ -180,75 +129,62 @@ export function NewWorkspacePage() {
           </div>
         )}
 
-        {step === 1 ? (
-          <div className="space-y-4">
-            <Section title="Tournament type">
-              <Row
-                last
-                label={<span>{TOURNAMENT_TYPES.find((item) => item.value === tournamentType)?.label}<span className="ml-2 text-xs font-normal text-muted-foreground">{TYPE_HINT[tournamentType]}</span></span>}
-                control={<Seg options={TOURNAMENT_TYPES} value={tournamentType} onChange={setType} ariaLabel="Tournament type" />}
-              />
-            </Section>
-            <Section title="Included tools">
-              {MODULE_IDS.map((id, i) => (
-                <Row
-                  key={id}
-                  last={i === MODULE_IDS.length - 1}
-                  label={<span className="inline-flex items-baseline gap-2">{MODULE_LABELS[id]}<span className="text-xs font-normal text-muted-foreground">{MODULE_HINT[id]}</span></span>}
-                  control={id === 'display' ? (
-                    <Seg options={[{ value: 'enabled', label: 'On' }, { value: 'off', label: 'Off' }]} value={modules[id]} onChange={(v) => setModule(id, v)} ariaLabel={MODULE_LABELS[id]} />
-                  ) : (
-                    <span className={TEXT_MUTED_SM}>{modules[id] === 'enabled' ? 'On' : 'Off'}</span>
-                  )}
+        <Section title="Workspace">
+          <FieldRow
+            label="Name"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setError(null);
+            }}
+            placeholder="e.g. Spring Invitational"
+            disabled={creating}
+            required
+          />
+          <FieldRow
+            last
+            label="Date"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            disabled={creating}
+            hint="Optional. You can set or change it in Setup."
+          />
+        </Section>
+
+        <Section title="What it runs">
+          {MODULE_IDS.map((id, i) => (
+            <Row
+              key={id}
+              last={i === MODULE_IDS.length - 1}
+              label={
+                <span className="inline-flex items-baseline gap-2">
+                  {MODULE_LABELS[id]}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {MODULE_HINT[id]}
+                    {id === 'display' && !hasEngine ? ' · needs Meet or Bracket' : ''}
+                  </span>
+                </span>
+              }
+              control={
+                <Seg
+                  options={ON_OFF}
+                  value={modules[id]}
+                  onChange={(v) => setModule(id, v)}
+                  ariaLabel={MODULE_LABELS[id]}
+                  disabled={id === 'display' && !hasEngine}
                 />
-              ))}
-            </Section>
-            {/* One sentence, stated once, rather than repeated per row
-                (V3-OC03.1: remove duplicated inclusion statements). */}
-            <p className={TEXT_MUTED_XS}>Meet and Bracket follow the tournament type above; Display can be turned on independently.</p>
-            {displayOrphaned || nothingOn ? (
-              <p data-testid="modules-hint" className="pt-1 text-xs text-status-warning">
-                {nothingOn ? 'Nothing is on yet, so this workspace opens on Included tools.' : 'Display needs Meet or Bracket on to show anything.'}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {step === 2 ? (
-          <Section title="Essential identity">
-            <FieldRow label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Spring Invitational" disabled={creating} hint="Optional. You can name it later." />
-            <FieldRow last label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={creating} hint="The tournament date can be changed later in Setup." />
-          </Section>
-        ) : null}
-
-        {step === 3 ? (
-          <div className="space-y-3">
-            <Section title="Venue scale">
-              <Row last label="Courts" control={<NumberWithSuffix value={courts} onChange={setCourts} suffix="courts" min={1} max={64} ariaLabel="Courts" />} />
-            </Section>
-            <p className={TEXT_MUTED_XS}>This seeds the first schedule shape. Slot length and daily hours default to 30 minutes and 9:00 AM–6:00 PM and can be refined in Setup.</p>
-          </div>
-        ) : null}
-
-        {step === 4 ? (
-          <div className="space-y-4">
-            <Section title="Review">
-              <Row label="Tournament type" control={<span className={TEXT_MUTED_SM}>{TOURNAMENT_TYPES.find((item) => item.value === tournamentType)?.label ?? tournamentType}</span>} />
-              <Row label="Included tools" control={<span className={TEXT_MUTED_SM}>{MODULE_IDS.filter((id) => modules[id] === 'enabled').map((id) => MODULE_LABELS[id]).join(', ') || 'None yet'}</span>} />
-              <Row label="Name" control={<span className={TEXT_MUTED_SM}>{name.trim() || 'Untitled'}</span>} />
-              <Row label="Date" control={<span className={TEXT_MUTED_SM}>{date || 'Not set'}</span>} />
-              <Row last label="Venue scale" control={<span className={TEXT_MUTED_SM}>{courts} courts</span>} />
-            </Section>
-            <p className={TEXT_MUTED_XS}>Creating saves these essentials together. Afterward, Overview will point you to the remaining Setup checklist.</p>
-          </div>
-        ) : null}
+              }
+            />
+          ))}
+        </Section>
 
         <div className="flex justify-between border-t border-border pt-4">
-          <Button variant="ghost" onClick={step === 1 ? () => navigate('/') : handleBack} disabled={creating}>
-            {step === 1 ? 'Cancel' : 'Back'}
+          <Button variant="ghost" onClick={() => navigate('/')} disabled={creating}>
+            Cancel
           </Button>
-          <Button onClick={step === 4 ? handleCreate : handleContinue} disabled={creating || (step === 1 && displayOrphaned)}>
-            {step === 4 ? (creating ? 'Creating…' : 'Create workspace') : 'Continue'}
+          <Button onClick={handleCreate} disabled={creating || nameMissing}>
+            {creating ? 'Creating…' : 'Create workspace'}
           </Button>
         </div>
       </div>

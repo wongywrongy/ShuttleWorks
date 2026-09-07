@@ -63,13 +63,15 @@ describe('GeneralSettingsTab — lifecycle is display-only', () => {
     expect(screen.getByTestId('general-lifecycle')).toHaveTextContent(/archived/i);
   });
 
-  it('links to canonical Setup editors without a competing save', () => {
+  it('does not restate the event identity it cannot edit, nor link twice to Setup', () => {
     render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
     expect(screen.queryByLabelText('Workspace name')).toBeNull();
-    expect(screen.getByText('Spring Meet')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Edit tournament properties' })).toHaveAttribute('href', '/tournaments/t1/setup/general');
-    expect(screen.getByRole('link', { name: 'Edit dates' })).toHaveAttribute('href', '/tournaments/t1/setup/dates');
+    // The name and date are Setup's, and the shell header already carries the
+    // name on every page: no read-only copy, and no "Edit properties" link.
+    expect(screen.queryByText('Spring Meet')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Edit tournament properties' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Edit dates' })).toBeNull();
     expect(apiClient.updateTournament).not.toHaveBeenCalled();
   });
 });
@@ -79,12 +81,6 @@ describe('V3-OC29.1: same conventions as Overview', () => {
     render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
     expect(screen.getByText('Tournament status')).toBeInTheDocument();
     expect(screen.queryByText('Lifecycle')).toBeNull();
-  });
-
-  it('formats the tournament date with the shared human-readable formatter, not raw ISO', () => {
-    render(<GeneralSettingsTab tid="t1" summary={summaryWith({ tournamentDate: '2026-05-15' })} onSaved={noop} />);
-    expect(screen.queryByText('2026-05-15')).toBeNull();
-    expect(screen.getByText('Fri, May 15, 2026')).toBeInTheDocument();
   });
 
   it('points to Archive, not "use Archive below" retirement jargon', () => {

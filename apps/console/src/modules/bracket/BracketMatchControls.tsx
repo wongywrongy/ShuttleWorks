@@ -92,8 +92,11 @@ export function BracketMatchPlayerControls({
     : null;
   const reason: MatchReason | null = result.reason ?? (result.walkover ? 'walkover' : null);
   const assignment = data.assignments.find((candidate) => candidate.play_unit_id === pu.id);
+  const assignedTime = assignment ? formatBracketSlot(assignment.slot_id, data) : null;
   const meta = assignment
-    ? `Court ${assignment.court_id} · ${formatBracketSlot(assignment.slot_id, data)}`
+    ? assignedTime
+      ? `Court ${assignment.court_id} · ${assignedTime}`
+      : `Court ${assignment.court_id}`
     : null;
 
   const railBadge = (side: string[] | null, slot: PlayUnitDTO['slot_a']) => {

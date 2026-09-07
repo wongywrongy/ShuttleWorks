@@ -1,9 +1,8 @@
 /**
- * Hub navigation + the control plane. Open and the post-Create handler must
- * target /bracket-setup for bracket tournaments (was /bracket pre-Bundle-3).
- * The Hub filters workspaces by lifecycle facet (All / Setup / Ready / Live /
- * Complete / Shared / Needs attention / Archived — derived phase, not the
- * operator-set status) and shows them as one time-sorted flat list.
+ * Hub navigation + the control plane. The Hub narrows workspaces by TIME
+ * (Upcoming · Live · Past, derived from the event date range in the event's
+ * timezone), defaults to the combined Live + Upcoming view, and shows them as
+ * one flat list ordered live → upcoming → undated → past.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -99,40 +98,42 @@ describe('HubPage navigation', () => {
 });
 
 describe('HubPage time-oriented control plane', () => {
-  it('keeps implicit Active distinct from explicit facet intent in the URL', async () => {
+  it('keeps the chosen view in the URL and returns to the default on a second click', async () => {
     const loc = { current: '' };
     const search = { current: '' };
-    const view = mount(loc, search);
+    mount(loc, search);
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /^Active\b/ })).toHaveAttribute('aria-pressed', 'true');
+    // The default view is Live + Upcoming: both chips read as selected, and
+    // the URL carries no `view` at all.
+    expect(screen.getByRole('button', { name: /^Upcoming\b/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Live\b/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Past\b/ })).toHaveAttribute('aria-pressed', 'false');
     expect(search.current).toBe('');
 
-    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: 'Meet' } });
-    expect(search.current).toContain('q=Meet');
-    expect(search.current).toContain('facet=all');
-    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Past\b/ }));
+    expect(search.current).toContain('view=past');
+    fireEvent.click(screen.getByRole('button', { name: /^Past\b/ }));
     expect(search.current).toBe('');
-
-    fireEvent.click(screen.getByRole('button', { name: /^Active\b/ }));
-    expect(search.current).toContain('facet=active');
-    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: 'Bracket' } });
-    expect(search.current).toContain('facet=active');
-    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: '' } });
-    expect(search.current).toContain('facet=active');
-    view.unmount();
-    mount(loc, undefined, '/?q=Bracket&facet=active');
-    await waitFor(() => expect(screen.getByDisplayValue('Bracket')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /^Active\b/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('restores the implicit search scope after reloading a promoted query', async () => {
-    const search = { current: '' };
-    const view = mount({ current: '' }, search, '/?q=Meet&facet=all&scope=search');
-    await waitFor(() => expect(screen.getByDisplayValue('Meet')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /^All\b/ })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: '' } });
-    expect(search.current).toBe('');
-    view.unmount();
+  it('search reaches every workspace, past and undated included', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      { id: 'p1', name: 'Old Cup', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: '2025-01-01', status: 'active' as const },
+      { id: 'n1', name: 'Old Notebook', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: null, status: 'active' as const },
+      { id: 'u1', name: 'Spring Open', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: '2099-05-01', status: 'active' as const },
+    ] as never);
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Spring Open')).toBeInTheDocument());
+    // The past workspace is NOT in the default view…
+    expect(screen.queryByText('Old Cup')).toBeNull();
+    // …but a search finds it anyway, without changing the view.
+    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: 'Old' } });
+    expect(screen.getByText('Old Cup')).toBeInTheDocument();
+    expect(screen.getByText('Old Notebook')).toBeInTheDocument();
+    expect(screen.queryByText('Spring Open')).toBeNull();
   });
 
   it('keeps a deep-linked page through the initial loading pass', async () => {
@@ -146,7 +147,7 @@ describe('HubPage time-oriented control plane', () => {
         status: 'draft' as const,
       })) as never,
     );
-    mount({ current: '' }, undefined, '/?facet=all&page=2');
+    mount({ current: '' }, undefined, '/?page=2');
     await waitFor(() => expect(screen.getByText('Deep 21')).toBeInTheDocument());
     expect(screen.queryByText('Deep 01')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page');
@@ -159,7 +160,7 @@ describe('HubPage time-oriented control plane', () => {
         name: `Workspace ${String(index + 1).padStart(2, '0')}`,
         kind: 'meet' as const,
         role: 'owner' as const,
-        tournamentDate: `2026-12-${String((index % 9) + 1).padStart(2, '0')}`,
+        tournamentDate: `2026-12-${String(index + 1).padStart(2, '0')}`,
         status: 'draft' as const,
       })) as never,
     );
@@ -201,29 +202,44 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.queryByRole('button', { name: /new event/i })).not.toBeInTheDocument();
   });
 
-  it('hides zero-count facet chips — only All and the facets with content render (H1.1)', async () => {
+  it('offers exactly the three time views and nothing else', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    // Both seeded workspaces are un-started drafts: All + Setup carry counts,
-    // every other facet is zero and must stay off the strip — eight "0" chips
-    // above two rows is a big dashboard's clothes on an empty one.
-    // The two drafts flag "Needs attention", so that chip has a count too.
-    expect(screen.getByRole('button', { name: /^All\b/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Setup\b/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Needs attention/ })).toBeInTheDocument();
-    for (const name of [/^Ready\b/, /^Live\b/, /^Shared\b/]) {
-      expect(screen.queryByRole('button', { name })).toBeNull();
+    const strip = screen.getByTestId('hub-facet-strip');
+    expect(within(strip).getAllByRole('button').map((b) => b.textContent?.trim().split(' ')[0]))
+      .toEqual(['Upcoming', 'Live', 'Past']);
+    // The lifecycle/status facets are gone, not relabelled.
+    for (const name of [/^All\b/, /^Active\b/, /^Setup\b/, /^Ready\b/, /^Complete\b/, /Needs attention/, /^Shared\b/, /^Archived\b/]) {
+      expect(within(strip).queryByRole('button', { name })).toBeNull();
     }
-    expect(screen.getByRole('button', { name: /^Active\b/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Complete\b/ })).toBeInTheDocument();
+    // Sorting is not a control any more: one operational order.
+    expect(screen.queryByLabelText('Sort workspaces')).toBeNull();
   });
 
-  it('a lifecycle facet filters the flat list (Setup shows the un-started pair)', async () => {
+  it('narrowing to Past shows only finished events', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      { id: 'p1', name: 'Last Season', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: '2025-03-01', status: 'active' as const },
+      { id: 'u1', name: 'Next Season', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: '2099-03-01', status: 'active' as const },
+    ] as never);
     mount({ current: '' });
-    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /^Setup\b/ }));
-    expect(screen.getByText('Bracket A')).toBeInTheDocument();
-    expect(screen.getByText('Meet A')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Next Season')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /^Past\b/ }));
+    expect(screen.getByText('Last Season')).toBeInTheDocument();
+    expect(screen.queryByText('Next Season')).toBeNull();
+  });
+
+  it('keeps undated workspaces reachable in a compact group in the default view', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      { id: 'n1', name: 'No Date Yet', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: null, status: 'active' as const },
+      { id: 'u1', name: 'Next Season', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: '2099-03-01', status: 'active' as const },
+    ] as never);
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('No Date Yet')).toBeInTheDocument());
+    expect(screen.getByTestId('hub-undated-group')).toHaveTextContent('Date not set');
   });
 
   it('offers the quiet create affordance while the list is short (H1.2)', async () => {
@@ -251,13 +267,35 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByText('MODULES')).toBeInTheDocument();
   });
 
-  it('rows carry an Attention column, not a Modules one (HUB-3)', async () => {
+  it('rows carry module glyphs with accessible names, and no attention prose', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      {
+        id: 'x1', name: 'Glyph Cup', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: '2099-12-01', status: 'active' as const,
+        modules: [
+          { moduleId: 'meet', status: 'enabled', config: null },
+          { moduleId: 'display', status: 'enabled', config: null },
+        ],
+      },
+    ] as never);
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText(/Glyph Cup/i)).toBeInTheDocument());
+    const glyphs = screen.getByTestId('row-modules');
+    expect(within(glyphs).getByRole('img', { name: 'Meet' })).toBeInTheDocument();
+    expect(within(glyphs).getByRole('img', { name: 'Display' })).toBeInTheDocument();
+    // Nothing is wrong with this workspace, so no attention dot at all.
+    expect(screen.queryByTestId('row-attention')).toBeNull();
+  });
+
+  it('states attention as one labelled dot that opens the inspector', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    expect(screen.getAllByTestId('row-attention')).toHaveLength(2);
-    // Modules are static config and belong to the inspector, not to the
-    // surface whose job is naming which workspace needs the director now.
-    expect(screen.queryByTestId('row-modules')).toBeNull();
+    // Both seeded workspaces are owner-drafts → both need attention.
+    const dots = screen.getAllByTestId('row-attention');
+    expect(dots).toHaveLength(2);
+    expect(dots[0]).toHaveAccessibleName(/needs attention/i);
+    fireEvent.click(dots[0]);
+    expect(screen.getByTestId('workspace-inspector')).toBeInTheDocument();
   });
 
   it('shows a footer summary bar with workspace + attention counts', async () => {
@@ -275,9 +313,7 @@ describe('HubPage time-oriented control plane', () => {
         tournamentDate: null, status: 'archived' as const },
     ] as never);
     mount({ current: '' });
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Archived\b/ })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /^Archived\b/ }));
-    expect(screen.getByText('Done Cup')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Done Cup')).toBeInTheDocument());
     expect(screen.getByTestId('hub-footer')).toHaveTextContent('1 archived');
   });
 
@@ -297,12 +333,11 @@ describe('HubPage time-oriented control plane', () => {
         tournamentDate: '2026-07-02', status: 'active' as const, signals: completeSignals },
     ] as never);
     mount({ current: '' });
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Complete\b/ })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /^Complete\b/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Past\b/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /^Past\b/ }));
     expect(screen.getByText('Complete One')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Complete\b/ })).toHaveTextContent('2');
+    expect(screen.getByRole('button', { name: /^Past\b/ })).toHaveTextContent('2');
     expect(screen.queryByTestId('row-lifecycle')).not.toBeInTheDocument();
-    expect(screen.getAllByTestId('row-attention')).toHaveLength(2);
   });
 
   it('"New workspace" navigates to the dedicated /new surface', async () => {
@@ -338,26 +373,23 @@ describe('HubPage time-oriented control plane', () => {
 });
 
 /**
- * At 390px the last two chips — "Needs attention" among them, the one an
- * operator scans for — sat at x=390.75 and x=460 with `overflow-x: visible`
- * clipped by an ancestor's `overflow-hidden`: no scrollbar, no swipe, no way
- * to reach them (2026-08-11 design audit, T4).
+ * At 390px the last chips sat past the edge with `overflow-x: visible` clipped
+ * by an ancestor's `overflow-hidden`: no scrollbar, no swipe, no way to reach
+ * them (2026-08-11 design audit, T4).
  */
-describe('HubPage — the facet strip is reachable at any width', () => {
-  it('holds every facet in one horizontally scrollable strip', async () => {
+describe('HubPage — the view strip is reachable at any width', () => {
+  it('holds every view in one horizontally scrollable strip', async () => {
     mount({ current: '' });
     const strip = await screen.findByTestId('hub-facet-strip');
     // Overflowing content gets a scrollbar instead of being clipped away.
     expect(strip.className).toMatch(/\boverflow-x-auto\b/);
-    // Every VISIBLE facet is INSIDE that strip (zero-count chips are hidden
-    // since H1.1) — including "Needs attention", the one that used to fall
-    // off the end — so scrolling reaches all of them.
+    // Every view chip is INSIDE that strip, so scrolling reaches all of them.
     for (const chip of within(strip).getAllByRole('button')) {
       expect(strip.contains(chip)).toBe(true);
     }
-    const attention = within(strip).getByRole('button', { name: /needs attention/i });
-    fireEvent.click(attention);
-    expect(attention).toHaveAttribute('aria-pressed', 'true');
+    const past = within(strip).getByRole('button', { name: /^Past\b/ });
+    fireEvent.click(past);
+    expect(past).toHaveAttribute('aria-pressed', 'true');
   });
 });
 

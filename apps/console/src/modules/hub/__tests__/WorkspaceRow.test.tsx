@@ -54,44 +54,87 @@ describe('WorkspaceRow', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'View draws' }));
-    expect(onOpen).toHaveBeenCalledWith('competition/draws');
+    expect(onOpen).toHaveBeenCalledWith('bracket/draws');
   });
 
-  it('names what needs attention where the module glyphs used to sit (HUB-3)', () => {
+  it('states attention as ONE labelled dot, not a column of prose', () => {
     render(
       <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
     );
-    // The fixture's first attention reason, verbatim — a dot can say THAT
-    // something is wrong and never WHAT.
-    const cell = screen.getByTestId('row-attention');
-    expect(cell).toHaveTextContent(t.signals!.attention[0].label);
+    const dot = screen.getByTestId('row-attention');
+    expect(dot.tagName).toBe('BUTTON');
+    // The reason is in the accessible name, not rendered as row text: the
+    // details belong to the inspector.
+    expect(dot).toHaveAccessibleName(
+      `Needs attention: ${t.signals!.attention[0].label}. Open details.`,
+    );
+    expect(screen.queryByText(t.signals!.attention[0].label)).toBeNull();
   });
 
-  it('leaves the attention cell empty when nothing is wrong', () => {
+  it('names the additional issues in the dot label', () => {
+    render(
+      <WorkspaceRow
+        tournament={{
+          ...t,
+          signals: {
+            ...t.signals!,
+            attention: [
+              { code: 'NO_ROSTER', label: 'No players added yet' },
+              { code: 'ENTRIES_NOT_COMMITTED', label: 'Confirmed entries not on the roster' },
+            ],
+          },
+        }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('row-attention')).toHaveAccessibleName(
+      /No players added yet and 1 more issue/,
+    );
+  });
+
+  it('the dot is keyboard-reachable and opens the details', () => {
+    const onSelect = vi.fn();
+    render(
+      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={onSelect} onOpen={noop} onSetDate={noop} onSettings={noop} />,
+    );
+    const dot = screen.getByTestId('row-attention');
+    dot.focus();
+    expect(dot).toHaveFocus();
+    fireEvent.click(dot);
+    expect(onSelect).toHaveBeenCalled();
+  });
+
+  it('renders no dot at all when nothing is wrong', () => {
     render(
       <WorkspaceRow
         tournament={{ ...t, signals: { ...t.signals!, health: 'good', attention: [] } }}
         group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
       />,
     );
-    expect(screen.getByTestId('row-attention')).toBeEmptyDOMElement();
-  });
-
-  it('says "needs attention" for a workspace that does — the dot is aria-hidden', () => {
-    const { rerender } = render(
-      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
-    );
-    expect(screen.getByText('Needs attention')).toBeInTheDocument();
-    // NEGATIVE CONTROL: a healthy row stays quiet.
-    rerender(
-      <WorkspaceRow
-        tournament={{ ...t, signals: { ...t.signals!, health: 'good', attention: [] } }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
+    expect(screen.queryByTestId('row-attention')).toBeNull();
     expect(screen.queryByText('Needs attention')).toBeNull();
   });
 
+  it('shows enabled modules as glyphs with accessible names, on the right', () => {
+    render(
+      <WorkspaceRow
+        tournament={{
+          ...t,
+          modules: [
+            { moduleId: 'meet', status: 'enabled', config: null },
+            { moduleId: 'bracket', status: 'available', config: null },
+            { moduleId: 'display', status: 'enabled', config: null },
+          ],
+        }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    const glyphs = screen.getByTestId('row-modules');
+    expect(glyphs.querySelectorAll('[role="img"]')).toHaveLength(2);
+    expect(screen.getByRole('img', { name: 'Meet' })).toHaveTextContent('M');
+    expect(screen.getByRole('img', { name: 'Display' })).toHaveTextContent('D');
+    expect(screen.queryByRole('img', { name: 'Bracket' })).toBeNull();
+  });
 
 
   // SP-UI-1: the next action is the row's call to action, not a metadata
@@ -146,15 +189,46 @@ describe('WorkspaceRow', () => {
     expect(screen.getByTestId('row-lifecycle')).toHaveTextContent('Archived');
   });
 
-  it('name leads the row — the date is trailing metadata, not the first cell', () => {
+  it('puts the name and its numeric date on the left, in that order', () => {
     const { container } = render(
       <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
     );
     const row = container.firstElementChild!;
-    // First cell carries the name; the date lives after the Modules column.
     expect(row.firstElementChild).toHaveTextContent('Spring');
+    expect(screen.getByTestId('row-date')).toHaveTextContent('2026-07-01');
     const text = row.textContent ?? '';
-    expect(text.indexOf('Spring')).toBeLessThan(text.indexOf('Jul 1'));
+    expect(text.indexOf('Spring')).toBeLessThan(text.indexOf('2026-07-01'));
+  });
+
+  it('shows a multi-day event as a date range', () => {
+    render(
+      <WorkspaceRow
+        tournament={{ ...t, tournamentDate: '2026-07-28', tournamentEndDate: '2026-08-03' }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByTestId('row-date')).toHaveTextContent('2026-07-28 → 08-03');
+  });
+
+  it('drops a year the date already supplies from the displayed name', () => {
+    render(
+      <WorkspaceRow
+        tournament={{ ...t, name: 'Yunavero Club Open 2026', tournamentDate: '2026-07-01' }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByText('Yunavero Club Open')).toBeInTheDocument();
+    expect(screen.queryByText('Yunavero Club Open 2026')).toBeNull();
+  });
+
+  it('keeps a year the date does NOT supply', () => {
+    render(
+      <WorkspaceRow
+        tournament={{ ...t, name: 'Yunavero Club Open 2025', tournamentDate: '2026-07-01' }}
+        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
+      />,
+    );
+    expect(screen.getByText('Yunavero Club Open 2025')).toBeInTheDocument();
   });
 
   // 2026-08-11 design audit, T4: the menu was revealed only by
@@ -189,30 +263,6 @@ describe('WorkspaceRow', () => {
     );
     fireEvent.click(screen.getByTestId('overflow-delete'));
     expect(onDelete).toHaveBeenCalled();
-  });
-
-  // V3-OC02.2: "+1" required decoding; the count now names what it is.
-  it('names an additional issue instead of a bare "+1"', () => {
-    render(
-      <MemoryRouter>
-        <WorkspaceRow
-          tournament={{
-            ...t,
-            signals: {
-              ...t.signals!,
-              attention: [
-                { code: 'NO_ROSTER', label: 'No players added yet' },
-                { code: 'ENTRIES_NOT_COMMITTED', label: 'Confirmed entries not on the roster' },
-              ],
-            },
-          }}
-          group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-        />
-      </MemoryRouter>,
-    );
-    const cell = screen.getByTestId('row-attention');
-    expect(cell).toHaveTextContent('1 more issue');
-    expect(cell).not.toHaveTextContent('+1');
   });
 
   // V3-OC02.2: a completed bracket workspace with an unresolved entries

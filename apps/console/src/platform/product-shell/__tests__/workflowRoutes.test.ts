@@ -16,15 +16,16 @@ describe("workflow-first workspace route registry", () => {
       "overview",
       "setup",
       "participants",
-      "competition",
+      "meet",
+      "bracket",
       "operations",
-      "publish",
+      "display",
       "administration",
     ]);
   });
 
   it("keeps shared paths adaptive to the tournament engine", () => {
-    expect(workflowRouteForPath("setup/venue", "bracket")?.tab).toBe("setup");
+    expect(workflowRouteForPath("setup/details", "bracket")?.tab).toBe("setup");
     expect(workflowRouteForPath("participants/people", "meet")?.tab).toBe(
       "roster",
     );
@@ -35,38 +36,45 @@ describe("workflow-first workspace route registry", () => {
     expect(workflowRouteForPath("operations/live", "bracket")?.tab).toBe(
       "bracket-live",
     );
-    expect(workflowRouteForPath("competition/draws", "meet")?.tab).toBe(
-      "bracket-draws",
-    );
+  });
+
+  it("gives each engine its own matches destination", () => {
+    expect(workflowRouteForPath("meet/matches")?.tab).toBe("matches");
+    expect(workflowRouteForPath("bracket/matches")?.tab).toBe("bracket-matches");
+    expect(workflowPathForSegment("matches")).toBe("meet/matches");
+    expect(workflowPathForSegment("bracket-matches")).toBe("bracket/matches");
   });
 
   it("maps existing destinations to stable organizer-facing URLs", () => {
-    expect(workflowPathForSegment("bracket-setup")).toBe("setup/general");
-    expect(workflowPathForSegment("bracket-draw")).toBe("competition/draw");
+    expect(workflowPathForSegment("setup")).toBe("setup/details");
+    expect(workflowPathForSegment("bracket-setup")).toBe("bracket/settings");
+    expect(workflowPathForSegment("bracket-draw")).toBe("bracket/draw");
     expect(workflowPathForSegment("ws-modules")).toBe("administration/modules");
+    expect(workflowPathForSegment("ws-sharing")).toBe("setup/public-site");
+    expect(workflowPathForSegment("display-config")).toBe("display/board");
     expect(workflowHref("spring finals", "schedule")).toBe(
       "/tournaments/spring%20finals/operations/plan",
     );
   });
 
-  it("keeps the selected draw inside Competition without adding a duplicate rail item", () => {
+  it("keeps the selected draw inside Bracket without adding a duplicate rail item", () => {
     const nav = buildWorkflowNavigation("bracket", new Set(["bracket"]));
-    expect(workflowRouteForPath("competition/draw", "bracket")?.tab).toBe(
+    expect(workflowRouteForPath("bracket/draw", "bracket")?.tab).toBe(
       "bracket-draw",
     );
-    expect(workflowSectionOfPath(nav, "competition/draw")).toBe("competition");
+    expect(workflowSectionOfPath(nav, "bracket/draw")).toBe("bracket");
     expect(
       nav.sections
-        .find((section) => section.id === "competition")
+        .find((section) => section.id === "bracket")
         ?.items.map((row) => row.label),
-    ).toEqual(["Draws", "Matches"]);
+    ).toEqual(["Draws", "Matches", "Draw settings"]);
   });
 
   it("returns null for paths outside the canonical registry", () => {
     expect(workflowRouteForPath("unknown/thing")).toBeNull();
   });
 
-  it("uses the stable operator workflow in the visible rail", () => {
+  it("uses the requested section vocabulary in the visible rail", () => {
     const nav = buildWorkflowNavigation(
       "meet",
       new Set(["meet", "entries", "display"]),
@@ -74,39 +82,55 @@ describe("workflow-first workspace route registry", () => {
     expect(nav.sections.map((section) => section.label)).toEqual([
       "Setup",
       "Participants",
-      "Competition",
+      "Meet",
       "Operations",
-      "Publish",
+      "Display",
     ]);
     expect(nav.admin.label).toBe("Administration");
-    expect(
-      nav.sections
-        .find((section) => section.id === "operations")
-        ?.items.map((row) => row.label),
-    ).toEqual(["Plan", "Live day"]);
+    expect(nav.sections.map((section) => section.label)).not.toContain(
+      "Competition",
+    );
+    expect(nav.sections.map((section) => section.label)).not.toContain(
+      "Publish",
+    );
   });
 
-  it("adapts tools inside workflows without changing the workflow labels", () => {
+  it("consolidates Setup into four destinations and no checklist page", () => {
+    const nav = buildWorkflowNavigation("meet", new Set(["meet"]));
+    const setup = nav.sections.find((section) => section.id === "setup");
+    expect(setup?.items.map((row) => row.label)).toEqual([
+      "Details",
+      "Entries",
+      "Scoring",
+      "Public site",
+    ]);
+    expect(setup?.items.map((row) => row.path)).toEqual([
+      "setup/details",
+      "setup/entries",
+      "setup/scoring",
+      "setup/public-site",
+    ]);
+    // Overview owns the readiness checklist, once.
+    expect(workflowRouteForPath("setup")).toBeNull();
+  });
+
+  it("does not strand a Meet workspace behind a Bracket-only section", () => {
     const meet = buildWorkflowNavigation("meet", new Set(["meet"]));
-    const bracket = buildWorkflowNavigation("bracket", new Set(["bracket"]));
-    expect(meet.sections.map((section) => section.label)).toEqual(
-      bracket.sections.map((section) => section.label),
+    expect(meet.sections.map((section) => section.id)).toContain("meet");
+    expect(meet.sections.map((section) => section.id)).not.toContain("bracket");
+    const hybrid = buildWorkflowNavigation(
+      "meet",
+      new Set(["meet", "bracket"]),
     );
-    expect(
-      meet.sections
-        .find((section) => section.id === "participants")
-        ?.items.map((row) => row.label),
-    ).toEqual(["Roster"]);
-    expect(
-      bracket.sections
-        .find((section) => section.id === "participants")
-        ?.items.map((row) => row.label),
-    ).toEqual(["Roster"]);
-    expect(
-      bracket.sections
-        .find((section) => section.id === "competition")
-        ?.items.map((row) => row.label),
-    ).toEqual(["Draws", "Matches"]);
+    expect(hybrid.sections.map((section) => section.id)).toEqual(
+      expect.arrayContaining(["meet", "bracket"]),
+    );
+  });
+
+  it("has no compatibility aliases outside the canonical route registry", () => {
+    for (const legacy of ["setup/general", "competition/matches", "publish/site", "bracket"]) {
+      expect(workflowRouteForPath(legacy)).toBeNull();
+    }
   });
 
   it("uses workflow ownership instead of per-item module badges", () => {
@@ -148,5 +172,6 @@ describe("workflow-first workspace route registry", () => {
     expect(labels).not.toContain("Partners and pairs");
     expect(labels).not.toContain("Eligibility and payment");
     expect(labels).not.toContain("Results and corrections");
+    expect(labels).not.toContain("Checklist");
   });
 });

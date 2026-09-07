@@ -5,7 +5,8 @@
  * `start_time` is the wall clock at slot 0; `interval_minutes` is the
  * duration of one slot. The helper formats `slot_id + start_time +
  * interval * slot_id` minutes as `HH:MM`. When `start_time` is null
- * the helper returns the absolute-slot fallback `"Slot {n}"`.
+ * the helper returns `null` — a raw slot index is storage, never operator
+ * copy (§3.1), so the caller omits the fact instead (P6).
  */
 import { describe, expect, it } from 'vitest';
 import { formatBracketSlot } from '../formatBracketSlot';
@@ -23,16 +24,16 @@ describe('formatBracketSlot', () => {
     expect(formatBracketSlot(3, { start_time: '09:00', interval_minutes: 25 })).toBe('10:15');
   });
 
-  it('falls back to "Slot N" when start_time is null', () => {
-    expect(formatBracketSlot(5, { start_time: null, interval_minutes: 30 })).toBe('Slot 5');
+  it('returns null when start_time is null', () => {
+    expect(formatBracketSlot(5, { start_time: null, interval_minutes: 30 })).toBeNull();
   });
 
-  it('falls back to "Slot N" when start_time is an empty string', () => {
-    expect(formatBracketSlot(2, { start_time: '', interval_minutes: 30 })).toBe('Slot 2');
+  it('returns null when start_time is an empty string', () => {
+    expect(formatBracketSlot(2, { start_time: '', interval_minutes: 30 })).toBeNull();
   });
 
-  it('handles a non-HH:MM start_time by falling back', () => {
-    expect(formatBracketSlot(1, { start_time: 'noon', interval_minutes: 30 })).toBe('Slot 1');
+  it('returns null for a non-HH:MM start_time', () => {
+    expect(formatBracketSlot(1, { start_time: 'noon', interval_minutes: 30 })).toBeNull();
   });
 
   it('zero-pads single-digit hours', () => {

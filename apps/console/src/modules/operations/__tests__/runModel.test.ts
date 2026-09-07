@@ -116,10 +116,10 @@ describe('runModel', () => {
     ], {});
     expect(deriveQueue(ms).map((m) => m.id)).toEqual(['q1', 'q2']); // slot 2 before slot 5
   });
-  it('marks bracket eligibility and nextEligible skips TBD-vs-TBD', () => {
+  it('marks bracket eligibility and nextEligible skips unresolved sides', () => {
     const ms = toRunMatches(
       [
-        blk({ id: 'feeder', source: 'bracket', key: 'bracket:feeder', sideA: 'TBD', sideB: 'TBD', slot: 1 }),
+        blk({ id: 'feeder', source: 'bracket', key: 'bracket:feeder', sideA: 'To be decided', sideB: 'To be decided', slot: 1 }),
         blk({ id: 'ready', source: 'bracket', key: 'bracket:ready', sideA: 'Lin', sideB: 'Roy', slot: 2 }),
       ],
       { eligibleBracketIds: new Set(['ready']) },
@@ -151,7 +151,7 @@ describe('runModel', () => {
   it('meet match is eligible when both sides are known', () => {
     const [m] = toRunMatches([blk({ id: 'm', sideA: 'A', sideB: 'B' })], {});
     expect(m.eligible).toBe(true);
-    const [u] = toRunMatches([blk({ id: 'u', sideA: 'TBD', sideB: 'B' })], {});
+    const [u] = toRunMatches([blk({ id: 'u', sideA: 'To be decided', sideB: 'B', sidesUnresolved: true })], {});
     expect(u.eligible).toBe(false);
   });
   it('summary counts are all derived; late mirrors the live board (per-chip, running-gated)', () => {

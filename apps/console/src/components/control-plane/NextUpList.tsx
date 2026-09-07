@@ -55,9 +55,17 @@ export function NextUpList({
                 first replacement. So the slot has a MINIMUM and no maximum —
                 a long code takes the width it needs and wraps at its hyphens
                 if the row ever runs out. */}
+            {/* match-card §3.1/§3.2: the two sides are STACKED, one per
+                line, and the "vs" is omitted because the stack already says
+                they oppose each other. A side with no claim reads the fixed
+                §2.1 label — never "TBD", which the contract forbids
+                outright. */}
             <span className="min-w-0 flex-1 break-words text-sm font-medium text-foreground">
               {n.sideA || n.sideB ? (
-                <><span>{n.sideA || 'TBD'}</span><span className="px-1 text-muted-foreground">vs</span><span>{n.sideB || 'TBD'}</span></>
+                <>
+                  <span className="block">{n.sideA || 'To be decided'}</span>
+                  <span className="block">{n.sideB || 'To be decided'}</span>
+                </>
               ) : label}
             </span>
             <span className="min-w-9 shrink-0 break-words text-2xs sw-num text-muted-foreground">

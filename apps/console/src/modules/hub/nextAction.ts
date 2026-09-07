@@ -8,10 +8,10 @@ import { REASON_ACTION } from '../../platform/domain/setupChecklist';
 const REASON_DESTINATION: Record<string, string> = {
   NO_MODULES_ENABLED: 'administration/modules',
   NO_ROSTER: 'participants/people',
-  NO_BRACKET: 'competition/draws',
+  NO_BRACKET: 'bracket/draws',
   NOT_SCHEDULED: 'operations/plan',
   NO_DATE: 'setup/dates',
-  NO_VENUE: 'setup/venue',
+  NO_VENUE: 'setup/details',
   ENTRIES_CLOSING_SOON: 'participants/entries',
   UNRESOLVED_PAIRS: 'participants/entries',
   AT_CAP_WITH_WAITLIST: 'participants/entries',
@@ -83,8 +83,8 @@ export function rowActionFor(t: TournamentSummaryDTO, group: HubGroupId): RowAct
       return (
         entriesReviewAction(t) ??
         (br
-          ? { label: 'View draws', kind: 'results', segment: 'competition/draws' }
-          : { label: 'View results', kind: 'results', segment: 'competition/results' })
+          ? { label: 'View draws', kind: 'results', segment: 'bracket/draws' }
+          : { label: 'View results', kind: 'results', segment: 'meet/matches' })
       );
   }
   if (group === 'undated') return { label: 'Set date', kind: 'set-date' };
@@ -92,8 +92,8 @@ export function rowActionFor(t: TournamentSummaryDTO, group: HubGroupId): RowAct
     return (
       entriesReviewAction(t) ??
       (br
-        ? { label: 'View draws', kind: 'results', segment: 'competition/draws' }
-        : { label: 'View results', kind: 'results', segment: 'competition/results' })
+        ? { label: 'View draws', kind: 'results', segment: 'bracket/draws' }
+        : { label: 'View results', kind: 'results', segment: 'meet/matches' })
     );
   const next = nextActionFor(t);
   return {

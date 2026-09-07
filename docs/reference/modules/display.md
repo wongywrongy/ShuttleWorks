@@ -45,7 +45,7 @@ call no-ops and the page shows a "missing parameter" message rather than crashin
 | Kind | Owned |
 | --- | --- |
 | **Nav surfaces** | Preview (`tv`) · Configuration (`display-config`) — both declared in `displayContract.ownedSegments` and rendered by the workspace shell |
-| **Backend routes** | the public projection: `GET /display/{token}/{summary,state,match-states,bracket}` (`apps/api/src/display/display.py`) — every route `GET`, resolved by capability token only, serving a strict field allowlist (the meet projection omits operator material like `scheduleHistory`); plus the owner-side `GET·POST /tournaments/{id}/display-token(/rotate)` |
+| **Backend routes** | the public projection: `GET /display/{token}/{summary,state,match-states,bracket}` (`apps/api/src/display/display.py`) — every route `GET`, resolved by capability token only, serving a strict field allowlist (the meet projection omits operator material like `scheduleHistory`); plus the owner-side `GET·POST /tournaments/{id}/display-token(/rotate)` and the workspace-scoped `GET·PUT /tournaments/{id}/board-settings` |
 | **`apiClient` methods** | owned: `getDisplaySummary`, `getDisplayState`, `getDisplayMatchStates`, `getDisplayBracket` (`displayContract.ownedEndpoints`); it *consumes* `getTournamentState`, `getMatchStates`, `getBracket` (`displayContract.consumedEndpoints`) |
 | **Frontend code** | `modules/display/` — `DisplayProduct.tsx`, `PublicDisplayPage.tsx` (the kind-router), `MeetDisplayPage.tsx`, `bracketDisplay/`, the `publicDisplay/` view components + `useDisplaySync`, and the TV presets (`publicDisplay/displayPresets.ts`) |
 
@@ -110,17 +110,39 @@ when there is something to show: **enabling `display` requires ≥1 enabled oper
 (`apps/api/src/workspaces/workspace_modules.py`; covered by `tests/backend/unit/test_workspace_modules.py`). See
 [Enable a module](/how-to/enable-a-module).
 
-## Display configuration & TV presets
+## Board settings (both boards)
 
-What the TV renders is driven by **UI-only fields on `TournamentConfig`** (preserved across `/state`
-PUTs in `apps/api/src/core/schemas.py`), set from the `display-config` surface — there is no separate display store:
+Since the operator-visual-fixes P4 pass the board's own settings live on their **own column**,
+`tournaments.board_settings`, behind `GET·PUT /tournaments/{id}/board-settings` and published to the
+boards through `GET /display/{token}/summary`. They are **not** `TournamentConfig` fields, for two
+reasons: the bracket board never reads the meet config, and "Show next" has to mean the same thing on
+a meet, bracket and hybrid board; and a logo is a data URI measured in kilobytes, while the console
+PUTs the whole state blob back on every save.
+
+| Board setting | Effect |
+| --- | --- |
+| `title` | Board heading; falls back to the tournament name |
+| `logoUrl`, `bannerUrl` | Board mark and banner strip. Stored inline as `data:` URIs — the only image source the app's own CSP admits besides same-origin, and the one that works in a venue with no internet |
+| `accent` | Hex accent (`#RRGGBB`), overriding the legacy `config.tvAccent` |
+| `showNext` | The Next preview. **Defaults to off** (match-card contract §4.4); when on, only fully resolved names render |
+| `showScores` | Score visibility, on every board |
+
+The summary projection also carries the workspace's **IANA `timeZone`**, which is what the board's
+clock reads. Both boards used to hardcode `BOARD_TIME_ZONE = 'UTC'`; when no zone is available the
+clock is now **omitted** rather than guessed.
+
+## Meet grid layout & TV presets
+
+The meet board's grid is still driven by **UI-only fields on `TournamentConfig`** (preserved across
+`/state` PUTs in `apps/api/src/core/schemas.py`), set from the `display-config` surface:
 
 | Config field | Effect |
 | --- | --- |
 | `tvPreset` | Full color substrate (`displayPresets.ts`). Defaults to `court` (dark); light presets `paper` / `chalk` / `daylight` / `sand` exist for sun-lit screens |
-| `tvAccent` | Hex accent for the LIVE border / pill / progress bar (defaults to emerald) |
-| `tvDisplayMode` | Court layout: `strip` (default) / `grid` / `list` |
-| `tvGridColumns`, `tvCardSize`, `tvShowScores` | Grid density, card size + type scale, and score visibility |
+| `tvAccent` | Legacy hex accent, superseded by the board setting above |
+| `tvDisplayMode` | Court layout: `auto` (default) / `grid` / `list` |
+| `tvGridColumns`, `tvCardSize` | Grid density and card size |
+| `courtOrder`, `hiddenCourts` | Court order and visibility — meet-only, because the bracket board's court list comes from the bracket projection |
 
 The preset is applied as a `data-tv-preset` attribute that re-themes the subtree via CSS custom
 properties, and it is **independent of the operator's app theme** — a venue can run a light TV while
@@ -134,10 +156,12 @@ preset-driven, not theme-locked.
 
 ## Known architectural debt
 
-- **Thin backend surface.** Display's routes are pure projections of data other modules own —
+- **Thin backend surface.** Display's read routes are pure projections of data other modules own —
   `/display/{token}/state` allowlists fields from the shared blob, `…/bracket` re-serves the
-  bracket cache. Configuration rides on the shared `TournamentConfig` blob; a workspace-scoped
-  display-config persistence is a possible future.
+  bracket cache. The board's OWN settings are no longer a rider on the shared `TournamentConfig`
+  blob (`board-settings`, above); the meet grid layout still is.
+- **Court order and visibility are meet-only.** They live on `TournamentConfig`, which the bracket
+  board does not read, so a bracket-only board shows every court its assignments name.
 - **Triple independent polls, no push.** Tournament state (~10 s), match state (~5 s), and bracket
   (~10 s) each run on their own timer. This is simple and robust but makes freshness poll-bounded:
   the `matchStateChanged` seam is named without a push transport.

@@ -342,7 +342,7 @@ describe('signup is not an account-enumeration oracle', () => {
     // validates against and the byte-identical twin of the backend's
     // `_SAFE_NEXT`, so the destination is checked at both tiers exactly as
     // the sign-in path's already is.
-    const html = await render('/e/signup/spring-open');
+    const html = await render('/e/signup?next=%2Fe%2Fspring-open%2Fenter%2Fcreated');
     const next = /<input[^>]*name="next"[^>]*value="([^"]*)"/.exec(html)?.[1];
 
     expect(next).toBe('/e/spring-open/enter/created');
@@ -359,7 +359,7 @@ describe('signup is not an account-enumeration oracle', () => {
 
   it('returns account creation and sign-in to the same partner invitation', async () => {
     const token = 'invite_AbC-123';
-    const html = await render(`/e/signup/partner/${token}`);
+    const html = await render(`/e/signup?next=%2Fe%2Fpartner%2F${token}`);
     const next = /<input[^>]*name="next"[^>]*value="([^"]*)"/.exec(html)?.[1];
 
     expect(next).toBe(`/e/partner/${token}`);
@@ -368,19 +368,8 @@ describe('signup is not an account-enumeration oracle', () => {
   });
 
   it('discards a crafted destination for the constant (E3)', async () => {
-    // A slug is one path segment and is percent-encoded before it is
-    // composed, so anything that is not slug-shaped stops being a path this
-    // tier owns and `safeNext` hands back the fallback. The open-redirect
-    // property is the reason the destination was a hard-coded constant in the
-    // first place, and it is unchanged: nothing an attacker writes reaches
-    // the `next` field.
-    // A bare `..` is deliberately NOT in this list: a URL containing one is
-    // normalised away before the request is ever made (`/e/signup/..` is
-    // `/e/`), which is the same reason `safeNext` excludes it separately
-    // rather than trusting the pattern. The encoded form below is the one
-    // that can actually arrive.
-    for (const crafted of ['%2F%2Fevil.example', 'https:%2F%2Fevil.example', '%2e%2e%2fadmin']) {
-      const html = await render(`/e/signup/${crafted}`);
+    for (const crafted of ['https://evil.example', '//evil.example', '/e/../admin']) {
+      const html = await render(`/e/signup?next=${encodeURIComponent(crafted)}`);
       const next = /<input[^>]*name="next"[^>]*value="([^"]*)"/.exec(html)?.[1];
 
       expect(next).toBe('/e/login/created');
@@ -404,6 +393,15 @@ describe('signup is not an account-enumeration oracle', () => {
     const unsafe = await render('/e/signup?next=https%3A%2F%2Fevil.example');
     expect(unsafe).toContain('name="next" value="/e/login/created"');
     expect(unsafe).not.toContain('evil.example');
+  });
+
+  it.each([
+    ['/e/signup?next=%2Fe%2Fspring-open%2Fenter', '/e/spring-open/enter/created'],
+    ['/e/signup?next=%2Fe%2Fspring-open%2Fenter%2Fsigned-in', '/e/spring-open/enter/created'],
+    ['/e/signup?next=%2Fe%2Flogin%2Fsigned-in', '/e/login/created'],
+  ])('normalizes %s to the signup completion destination', async (path, expected) => {
+    const html = await render(path);
+    expect(html).toContain(`name="next" value="${expected}"`);
   });
 });
 
@@ -480,7 +478,7 @@ describe('a tournament-scoped signup names the tournament', () => {
 
   it('shows the human tournament name in the heading, not "this tournament"', async () => {
     stubConfigAndPage('Yunavero Club Open');
-    const html = await (await fetchSignup('/e/signup/spring-open')).text();
+  const html = await (await fetchSignup('/e/signup?next=%2Fe%2Fspring-open%2Fenter%2Fcreated')).text();
 
     expect(html).toMatch(/<h1[^>]*>Create your account to enter Yunavero Club Open<\/h1>/);
     expect(html).not.toContain('this tournament');
@@ -488,7 +486,7 @@ describe('a tournament-scoped signup names the tournament', () => {
 
   it('falls back to generic wording rather than failing when the lookup cannot name it', async () => {
     stubConfigAndPage(null);
-    const html = await (await fetchSignup('/e/signup/spring-open')).text();
+  const html = await (await fetchSignup('/e/signup?next=%2Fe%2Fspring-open%2Fenter%2Fcreated')).text();
 
     expect(html).toMatch(/<h1[^>]*>Create your account to enter this tournament<\/h1>/);
   });

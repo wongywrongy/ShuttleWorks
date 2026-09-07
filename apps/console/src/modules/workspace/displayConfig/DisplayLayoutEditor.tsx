@@ -77,7 +77,7 @@ import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { TournamentConfig } from '../../../api/dto';
-import { Row, Seg, Section, Toggle } from '../../../platform/engine-config/SettingsControls';
+import { Row, Seg, Section } from '../../../platform/engine-config/SettingsControls';
 import { orderCourts, courtsWithActiveMatch, reorderIds } from '../../display/publicDisplay/courtLayout';
 import { DEFAULT_DWELL_SECONDS } from '../../display/publicDisplay/rotation';
 
@@ -247,7 +247,6 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
   const tvDisplayMode = storedDisplayMode === 'strip' ? 'auto' : storedDisplayMode;
   const tvGridColumns = config?.tvGridColumns ?? 0;
   const tvCardSize = config?.tvCardSize ?? 'auto';
-  const tvShowScores = config?.tvShowScores !== false;
   // 'side' and 'rotate' both mean "on the board" now (DC-3).
   const storedStandings = config?.standingsMode ?? null;
   const standingsMode: 'auto' | 'off' = storedStandings === 'off' ? 'off' : 'auto';
@@ -356,16 +355,9 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
           />
         }
       />
-      <Row
-        label="Show scores"
-        control={
-          <Toggle
-            value={tvShowScores}
-            onChange={(v) => update({ tvShowScores: v })}
-            ariaLabel="Show scores"
-          />
-        }
-      />
+      {/* "Show scores" moved to Board content (`BoardAppearance`): score
+          visibility applies to the BRACKET board too, and this editor is
+          Meet-only because the tv* grid fields are. One owner, one switch. */}
       <Row
         label="Standings"
         control={
