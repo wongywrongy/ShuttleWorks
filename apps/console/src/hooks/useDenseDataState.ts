@@ -52,7 +52,7 @@ export function useDenseDataState(
     (next: DenseDataState | ((previous: DenseDataState) => DenseDataState)) => {
       const resolved = typeof next === 'function' ? next(state) : next;
       const currentParams = route?.location.search ?? (typeof window === 'undefined' ? '' : window.location.search);
-      const merged = mergeDenseDataStateParams(currentParams, resolved, prefix);
+      const merged = mergeDenseDataStateParams(currentParams, resolved, prefix, defaultsSnapshot);
       if (navigation && route) {
         navigation.navigator.replace({ ...route.location, search: merged.toString() ? `?${merged}` : '' }, route.location.state);
       } else if (typeof window !== 'undefined') {
@@ -61,7 +61,7 @@ export function useDenseDataState(
       }
       setLocalState(resolved);
     },
-    [prefix, state, route, navigation],
+    [prefix, state, route, navigation, defaultsSnapshot],
   );
 
   const setSearch = useCallback((search: string) => setState((previous) => ({ ...previous, search, page: 1 })), [setState]);

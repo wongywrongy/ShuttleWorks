@@ -79,4 +79,44 @@ describe('useStableInventory', () => {
     expect(result.current.rows[0].value).toBe('A filtered');
     expect(result.current.pending).toBe(false);
   });
+  it('adopts a locally added row immediately, appended in inventory order', () => {
+    const initial: Row[] = [{ id: 'a', value: 'A' }, { id: 'b', value: 'B' }];
+    const { result, rerender } = renderHook(
+      ({ matching, all }: { matching: Row[]; all: Row[] }) =>
+        useStableInventory(matching, all, rowId, 'page:1'),
+      { initialProps: { matching: initial, all: initial } },
+    );
+
+    const added: Row[] = [{ id: 'a', value: 'A' }, { id: 'c', value: 'C' }, { id: 'b', value: 'B' }];
+    rerender({ matching: added, all: added });
+    expect(result.current.rows.map((row) => row.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('re-seeds when a wholesale regeneration replaces every id', () => {
+    const initial: Row[] = [{ id: 'a', value: 'A' }, { id: 'b', value: 'B' }];
+    const { result, rerender } = renderHook(
+      ({ matching, all }: { matching: Row[]; all: Row[] }) =>
+        useStableInventory(matching, all, rowId, 'page:1'),
+      { initialProps: { matching: initial, all: initial } },
+    );
+
+    const regenerated: Row[] = [{ id: 'x', value: 'X' }, { id: 'y', value: 'Y' }];
+    rerender({ matching: regenerated, all: regenerated });
+    expect(result.current.rows.map((row) => row.id)).toEqual(['x', 'y']);
+    expect(result.current.pending).toBe(false);
+  });
+
+  it('keeps the snapshot order when the same ids are reordered', () => {
+    const initial: Row[] = [{ id: 'a', value: 'A' }, { id: 'b', value: 'B' }];
+    const { result, rerender } = renderHook(
+      ({ matching, all }: { matching: Row[]; all: Row[] }) =>
+        useStableInventory(matching, all, rowId, 'page:1'),
+      { initialProps: { matching: initial, all: initial } },
+    );
+
+    const reordered: Row[] = [{ id: 'b', value: 'B' }, { id: 'a', value: 'A' }];
+    rerender({ matching: reordered, all: reordered });
+    expect(result.current.rows.map((row) => row.id)).toEqual(['a', 'b']);
+    expect(result.current.pending).toBe(true);
+  });
 });

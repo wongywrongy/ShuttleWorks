@@ -110,6 +110,49 @@ describe("DenseDataTable", () => {
     expect(screen.getByText('Late Match Player')).toBeInTheDocument();
   });
 
+  it('holds a deep-linked page while the workspace data is still loading', async () => {
+    const onStateChange = vi.fn();
+    const { rerender } = render(
+      <DenseDataTable
+        rows={[]}
+        columns={columns}
+        state={{ ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const, page: 2 }}
+        onStateChange={onStateChange}
+        rowId={(row) => row.id}
+        ready={false}
+      />,
+    );
+    await waitFor(() => expect(onStateChange).not.toHaveBeenCalled());
+
+    const loaded = Array.from({ length: 101 }, (_, index) => ({
+      id: String(index + 1), name: `Player ${index + 1}`, status: 'Ready',
+    }));
+    rerender(
+      <DenseDataTable
+        rows={loaded}
+        columns={columns}
+        state={{ ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const, page: 2 }}
+        onStateChange={onStateChange}
+        rowId={(row) => row.id}
+        ready
+      />,
+    );
+    expect(onStateChange).not.toHaveBeenCalled();
+
+    // A page that is genuinely out of range once loaded still canonicalizes.
+    rerender(
+      <DenseDataTable
+        rows={loaded.slice(0, 10)}
+        columns={columns}
+        state={{ ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const, page: 2 }}
+        onStateChange={onStateChange}
+        rowId={(row) => row.id}
+        ready
+      />,
+    );
+    await waitFor(() => expect(onStateChange).toHaveBeenCalledWith(expect.objectContaining({ page: 1 })));
+  });
+
   it('searches the complete inventory beyond page one and selects only visible page rows', () => {
     const inventory = Array.from({ length: 101 }, (_, index) => ({
       id: `match-${index + 1}`,

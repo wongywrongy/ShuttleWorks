@@ -68,6 +68,12 @@ export interface DenseDataTableProps<T> {
   elasticColumnId?: string;
   /** Embedded record lists do not earn a pagination footer. */
   showPagination?: boolean;
+  /**
+   * False while the workspace's first data load is still in flight. An empty
+   * pre-load collection must not clamp a deep-linked `<prefix>.page=2` down to
+   * page one before the rows arrive.
+   */
+  ready?: boolean;
   /** Full source for refreshing values while a live inventory keeps its ordering. */
   liveSource?: readonly T[];
   liveScope?: string;
@@ -228,6 +234,7 @@ export function DenseDataTable<T>({
   showPagination = true,
   liveSource,
   liveScope = '',
+  ready = true,
   wrapIdentityOnMobile = false,
   className,
 }: DenseDataTableProps<T>) {
@@ -257,8 +264,9 @@ export function DenseDataTable<T>({
     ? getDenseDataPage(stable.rows, [], { ...state, search: '', filters: {}, sort: null })
     : getDenseDataPage(rows, columns, state, rowId);
   useEffect(() => {
+    if (!ready) return;
     if (state.page !== page.page) onStateChange({ ...state, page: page.page });
-  }, [state, page.page, onStateChange]);
+  }, [ready, state, page.page, onStateChange]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     () => new Set(),
   );

@@ -42,7 +42,15 @@ describe('useListScrollRestore', () => {
 
     const list = await screen.findByTestId('test-list');
     await waitFor(() => expect(list).toHaveAttribute('data-ready', 'true'));
-    Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: 240 });
+    // Model a real browser: a detached node reports scrollTop 0, so the value
+    // is only readable while the list is still connected.
+    let listScrollTop = 0;
+    Object.defineProperty(list, 'scrollTop', {
+      configurable: true,
+      get: () => (list.isConnected ? listScrollTop : 0),
+      set: (value: number) => { listScrollTop = value; },
+    });
+    list.scrollTop = 240;
     fireEvent.scroll(list);
     fireEvent.click(screen.getByRole('button', { name: 'Open row' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
@@ -51,6 +59,31 @@ describe('useListScrollRestore', () => {
     expect(restoredList).toHaveAttribute('data-ready', 'false');
     await waitFor(() => expect(restoredList).toHaveAttribute('data-ready', 'true'));
     await waitFor(() => expect(restoredList).toHaveProperty('scrollTop', 240));
+  });
+
+  it('keeps the last listener position when unmount reports a detached scrollTop', () => {
+    function PlainList() {
+      const ref = useListScrollRestore<HTMLDivElement>('detach-list');
+      return <div ref={ref} data-testid="detach-list" />;
+    }
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/list']}>
+        <PlainList />
+      </MemoryRouter>,
+    );
+    const list = screen.getByTestId('detach-list');
+    Object.defineProperty(list, 'scrollTop', {
+      configurable: true,
+      get: () => (list.isConnected ? 320 : 0),
+      set: () => {},
+    });
+    fireEvent.scroll(list);
+    const key = 'shuttleworks:list-scroll:detach-list:/list';
+    expect(sessionStorage.getItem(key)).toBe('320');
+
+    // Passive effect cleanup runs after React detaches the node.
+    unmount();
+    expect(sessionStorage.getItem(key)).toBe('320');
   });
 
   it('focuses and resets a list for explicit page navigation', () => {

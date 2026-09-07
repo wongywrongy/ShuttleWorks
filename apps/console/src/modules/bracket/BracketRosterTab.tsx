@@ -102,6 +102,7 @@ function BracketRosterTabCore({
   onCommitEvent: CommitEventFn | null;
 }) {
   const players = useTournamentStore((s) => s.bracketPlayers);
+  const hydrated = useTournamentStore((s) => s.hydrated);
   const listScrollRef = useListScrollRestore<HTMLDivElement>('bracket-roster', players.length > 0);
   const addPlayer = useTournamentStore((s) => s.addBracketPlayer);
   const updatePlayer = useTournamentStore((s) => s.updateBracketPlayer);
@@ -339,6 +340,7 @@ function BracketRosterTabCore({
             rows={filteredRows}
             liveSource={rosterRows}
             liveScope={JSON.stringify([eventFilter, issueFilter])}
+            ready={hydrated}
             state={denseState}
             onStateChange={setDenseState}
             rowId={(row) => row.player.id}

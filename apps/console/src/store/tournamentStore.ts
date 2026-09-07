@@ -87,6 +87,15 @@ interface TournamentState {
   planFinalized: boolean | undefined;
   setPlanFinalized: (finalized: boolean) => void;
 
+  /**
+   * False only while the first server load for the active workspace is in
+   * flight. Local/synthetic stores (tests, the display board) never run that
+   * cycle, so the flag defaults to true and readiness-gated UI paginates as
+   * before.
+   */
+  hydrated: boolean;
+  setHydrated: (hydrated: boolean) => void;
+
   // Data management
   reset: () => void;
   exportData: () => string;
@@ -121,6 +130,7 @@ const INITIAL = {
   scheduleVersion: 0,
   scheduleHistory: [] as ScheduleHistoryEntry[],
   planFinalized: undefined as boolean | undefined,
+  hydrated: true,
 };
 
 /** Config keys that never feed the solver — changing them must not mark
@@ -286,6 +296,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   setScheduleVersion: (scheduleVersion) => set({ scheduleVersion }),
   setScheduleHistory: (scheduleHistory) => set({ scheduleHistory }),
   setPlanFinalized: (planFinalized) => set({ planFinalized }),
+  setHydrated: (hydrated) => set({ hydrated }),
 
   // Reset is scoped to this store. Wiping match-state + UI on a full
   // "Clear all data" is the job of `useClearAllData` in hooks/, which

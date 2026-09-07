@@ -26,6 +26,7 @@ import { SeasonCalendar } from '../components/SeasonCalendar';
 import { SeasonControls } from '../components/SeasonControls';
 import { apiGet } from '../lib/apiFetch.server';
 import {
+  filtersToParams,
   parseFilters,
   paginateRows,
   rowMatches,
@@ -39,7 +40,14 @@ import type { Route } from './+types/discovery';
 export interface DiscoveryLoaderData {
   filters: Filters;
   rows: SeasonRow[];
-  /** The server's UNFILTERED segment counts (§2.3) — the labels never move. */
+  /**
+   * The segment counts (§2.3), over the rows the ACTIVE FILTERS match — the
+   * list-pagination contract's "counts refer to the full filtered
+   * collection". The VIEW is not one of those filters (`rowMatches` never
+   * reads it), so the labels answer "how much of what I searched for is in
+   * each segment" and do not move when the entrant switches segment; they do
+   * move as the search text and date range change.
+   */
   counts: { takingEntries: number; completed: number };
   listedCount: number;
   totalCount: number;
@@ -104,6 +112,11 @@ export async function loader({ request }: { request: Request }) {
     // links need it explicitly. Passing /e/ here would redirect to /e/e/.
     throw redirect(pageHref(filters, paged.page, false));
   }
+  // Counted over `matching`, not `season.tournaments`: the list-pagination
+  // contract puts counts on the full FILTERED collection. `matching` is
+  // pre-`viewRows`, so switching segment still does not move a label — only
+  // the search text and the date range do. (`season.counts` is still on the
+  // wire and still unfiltered; this page no longer labels with it.)
   const filteredCounts = {
     takingEntries: matching.filter((row) => row.status === 'entries_open').length,
     completed: matching.filter((row) => row.status === 'completed' || row.status === 'completed_winners').length,
@@ -127,14 +140,14 @@ export async function loader({ request }: { request: Request }) {
   return payload;
 }
 
+/**
+ * A page link for the CURRENT filters. The query is `filtersToParams`' — the
+ * single serialiser both this and `SeasonControls`' `queryHref` share, so a
+ * page link cannot promote an implicit search scope (`?q=Open`) into an
+ * explicit `view=all` the entrant never selected.
+ */
 function pageHref(filters: Filters, page: number, includeBasename = true): string {
-  const params = new URLSearchParams();
-  if (filters.view !== 'season' || filters.scopeExplicit) params.set('view', filters.view);
-  if (filters.q.trim() !== '') params.set('q', filters.q);
-  if (filters.preset !== null) params.set('preset', filters.preset);
-  if (filters.from !== null && filters.from !== '') params.set('from', filters.from);
-  if (filters.to !== null && filters.to !== '') params.set('to', filters.to);
-  if (filters.year !== null && filters.year !== undefined) params.set('year', String(filters.year));
+  const params = filtersToParams(filters);
   if (page > 1) params.set('page', String(page));
   const query = params.toString();
   const base = includeBasename ? '/e/' : '/';

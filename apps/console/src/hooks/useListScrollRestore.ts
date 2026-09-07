@@ -46,7 +46,11 @@ export function useListScrollRestore<T extends HTMLElement>(
     return () => {
       // A readiness transition re-runs this effect before restoration. Do not
       // overwrite the saved Back position with the pre-render scrollTop.
-      if (ready) writeScroll(key, node.scrollTop);
+      // Passive effect cleanup also runs AFTER React detaches the node on
+      // unmount, where a real browser reports scrollTop 0 — writing that would
+      // clobber the position the scroll listener already saved, which is the
+      // only value Back restoration has to work with.
+      if (ready && node.isConnected) writeScroll(key, node.scrollTop);
       node.removeEventListener('scroll', onScroll);
     };
   }, [key, ready]);

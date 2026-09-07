@@ -423,6 +423,9 @@ export function useTournamentState(): void {
     if (!tid) return;
     let cancelled = false;
     hydrationDoneRef.current = false;
+    // Readiness for list surfaces: a deep-linked page must not be clamped
+    // against the empty pre-hydration store.
+    useTournamentStore.getState().setHydrated(false);
     useUiStore.getState().setActiveTournamentId(tid);
     (async () => {
       try {
@@ -442,6 +445,7 @@ export function useTournamentState(): void {
         console.error('[useTournamentState] hydrate failed:', err);
       } finally {
         hydrationDoneRef.current = true;
+        if (!cancelled) useTournamentStore.getState().setHydrated(true);
       }
     })();
     return () => {

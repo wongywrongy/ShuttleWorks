@@ -75,6 +75,7 @@ export function MatchesSpreadsheet({
   onFocusConsumed?: () => void;
 } = {}) {
   const matches = useTournamentStore((s) => s.matches);
+  const hydrated = useTournamentStore((s) => s.hydrated);
   const listScrollRef = useListScrollRestore<HTMLDivElement>('meet-matches', matches.length > 0);
   const players = useTournamentStore((s) => s.players);
   const groups = useTournamentStore((s) => s.groups);
@@ -313,7 +314,7 @@ export function MatchesSpreadsheet({
   const orderedMatches = tableGroups.flatMap((group) => group.items.filter((m) => matchingIds.has(m.id)).sort((a, b) =>
     ((a.matchNumber ?? 0) - (b.matchNumber ?? 0)) * (sortParam === 'desc' ? -1 : 1) || a.id.localeCompare(b.id)));
   const inventory = useInventoryPage(orderedMatches, matches, (m) => m.id, 'meet-matches',
-    JSON.stringify([searchQuery, statusFilter, [...eventFilter], [...schoolFilter], [...typeFilter], sortParam]));
+    JSON.stringify([searchQuery, statusFilter, [...eventFilter], [...schoolFilter], [...typeFilter], sortParam]), hydrated);
   const pageIds = new Set(inventory.page.rows.map((m) => m.id));
   const pageGroups = tableGroups.map((group) => ({ ...group, items: inventory.page.rows.filter((m) =>
     group.items.some((item) => item.id === m.id) && pageIds.has(m.id)) })).filter((group) => group.items.length > 0);

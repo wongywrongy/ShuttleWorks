@@ -204,11 +204,26 @@ describe('the control row (§2.3)', () => {
     expect(html).not.toContain('data-active-filter-row');
   });
 
-  it("labels the segments with the server's unfiltered counts, verbatim", async () => {
-    const html = await render();
+  it('labels the segments with counts over the FILTERED collection', async () => {
+    // Unfiltered, the derived counts and the server's `counts` agree (1 / 2).
+    const unfiltered = await render();
+    expect(unfiltered).toContain('Entries open · 1');
+    expect(unfiltered).toContain('Completed · 2');
 
-    expect(html).toContain('Entries open · 1');
-    expect(html).toContain('Completed · 2');
+    // Under a search they must follow it: the list-pagination contract puts
+    // counts on the full filtered collection. `?q=Triangle` keeps exactly one
+    // completed row, so the server's unfiltered 1 / 2 would be a stale label.
+    const searched = await render('/e/?q=Triangle', NO_NOW);
+    expect(searched).toContain('Entries open · 0');
+    expect(searched).toContain('Completed · 1');
+  });
+
+  it('counts the segments BEFORE the view, so choosing one never moves a label', async () => {
+    // The view selects and orders; it is not one of the filters `rowMatches`
+    // reads. Switching segment must therefore leave the labels alone.
+    const completed = await render('/e/?view=completed', NO_NOW);
+    expect(completed).toContain('Entries open · 1');
+    expect(completed).toContain('Completed · 2');
   });
 
   it('maps a legacy ?status= link onto the equivalent view (§7 trap 5)', async () => {
@@ -341,11 +356,55 @@ describe('the two empty states', () => {
   });
 });
 
+describe('page links carry the scope the URL actually chose', () => {
+  /** Twelve searchable rows — two pages at the ten-row public page size. */
+  const MANY: SeasonList = {
+    tournaments: Array.from({ length: 12 }, (_, index) =>
+      row(`open-${index + 1}`, `Autumn Open ${index + 1}`, 'entries_open', {
+        date: `2026-09-${String(index + 1).padStart(2, '0')}`,
+      }),
+    ),
+    counts: { takingEntries: 12, completed: 0 },
+    now: null,
+  };
+
+  function pageTwoHref(html: string): string {
+    const match = /<a href="([^"]+)" aria-label="Page 2"/.exec(html);
+    expect(match, 'expected a Page 2 link').not.toBeNull();
+    return match![1].replaceAll('&amp;', '&');
+  }
+
+  it('leaves an IMPLIED all-results scope implicit', async () => {
+    // `?q=Open` parses to view `all` with `scopeExplicit: false` — the scope
+    // is implied by the query, not chosen. Writing `view=all` into the page
+    // link would make the next parse call it deliberate, the control row's
+    // hidden field would then post it, and clearing the search box would land
+    // the entrant on "All tournaments" instead of the calendar.
+    const href = pageTwoHref(await render('/e/?q=Open', MANY));
+
+    const params = new URL(href, 'http://entrant.test').searchParams;
+    expect(params.has('view')).toBe(false);
+    expect(params.get('q')).toBe('Open');
+    expect(params.get('page')).toBe('2');
+  });
+
+  it('keeps a DELIBERATE all-results scope on the link', async () => {
+    const href = pageTwoHref(await render('/e/?view=all&q=Open', MANY));
+
+    const params = new URL(href, 'http://entrant.test').searchParams;
+    expect(params.get('view')).toBe('all');
+    expect(params.get('q')).toBe('Open');
+    expect(params.get('page')).toBe('2');
+  });
+});
+
 describe('E5: empty filter fields never survive into a shareable URL', () => {
   it.each([
     ['/e/?page=2', '/e/#calendar'],
     ['/e/?view=completed&year=2026&page=999', '/e/?view=completed&year=2026#calendar'],
-    ['/e/?q=Gold&page=invalid', '/e/?view=all&q=Gold#calendar'],
+    // No `view=all`: `?q=Gold` only IMPLIES the all-results scope, and a
+    // clamp must not promote it to a deliberate one (see the page-link tests).
+    ['/e/?q=Gold&page=invalid', '/e/?q=Gold#calendar'],
   ])('clamps %s to a reachable URL with one basename', async (path, expected) => {
     const response = await respond(path);
     expect(response.status).toBe(302);

@@ -167,7 +167,13 @@ export interface SeasonRow {
 
 export interface SeasonList {
   tournaments: SeasonRow[];
-  /** Unfiltered, server-side segment counts (§2.3) — the labels never move. */
+  /**
+   * Unfiltered, server-side segment counts (§2.3). The discovery page no
+   * longer labels its segments with these: the list-pagination contract puts
+   * counts on the full FILTERED collection, so the loader derives them from
+   * the rows `rowMatches` kept. They stay on the wire as the platform-wide
+   * totals.
+   */
   counts: { takingEntries: number; completed: number };
   /** The happening-now strip, or null when nothing is in window. */
   now: { slug: string; moreCount: number } | null;
@@ -425,7 +431,9 @@ function presetDays(preset: DatePreset): number {
  * name, ORGANIZER and venue (D2 — there is no city on the wire). A custom
  * from/to wins over a preset; a row whose date is unparseable matches only
  * when no date filter is set. The VIEW is not applied here: it selects and
- * orders (`viewRows`), it does not filter the counts.
+ * orders (`viewRows`). That is what keeps the segment counts, which the
+ * discovery loader takes over the rows this kept, from moving when the
+ * entrant switches segment — they follow the search and the dates only.
  */
 export function rowMatches(row: SeasonRow, filters: Filters, now: Date): boolean {
   if (filters.year !== null && filters.year !== undefined) {
@@ -495,6 +503,37 @@ export function parseFilters(params: URLSearchParams): Filters {
     q: params.get('q') ?? '',
     scopeExplicit: explicitScope,
   };
+}
+
+/**
+ * The inverse of `parseFilters`: a `Filters` back to the query string that
+ * parses to it. One serialiser, because the `view` rule is subtle enough that
+ * a second copy of it drifts.
+ *
+ * **`view` is written only when the URL it came from named a scope.** A bare
+ * `?q=Open` parses to `{ view: 'all', scopeExplicit: false }` — the search
+ * scope is IMPLIED by the query, not chosen — so re-emitting `view=all` would
+ * promote it: the next parse sets `scopeExplicit`, the control row's hidden
+ * `view` field then posts it, and clearing the search box lands the entrant on
+ * "All tournaments" instead of the calendar they started from. `season` is
+ * likewise the parse of a URL that names no view, so it is never written
+ * unless it was deliberately selected. Every other view is a real selection
+ * and is always written.
+ *
+ * `page` is NOT included: a filter change starts from page one, so the caller
+ * that paginates appends it.
+ */
+export function filtersToParams(filters: Filters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.q.trim() !== '') params.set('q', filters.q);
+  if ((filters.view !== 'season' && filters.view !== 'all') || filters.scopeExplicit) {
+    params.set('view', filters.view);
+  }
+  if (filters.preset !== null) params.set('preset', filters.preset);
+  if (filters.from !== null && filters.from !== '') params.set('from', filters.from);
+  if (filters.to !== null && filters.to !== '') params.set('to', filters.to);
+  if (filters.year !== null && filters.year !== undefined) params.set('year', String(filters.year));
+  return params;
 }
 
 /** Is a DATE filter active? Drives the chips row and its badge, which say

@@ -40,6 +40,9 @@ const player = (id: string, name: string): PlayerDTO =>
   ({ id, name, groupId: 'g1', ranks: [], availability: [] }) as PlayerDTO;
 
 beforeEach(() => {
+  // URL-backed dense state is global: without this, one test's filter params
+  // leak into the next and the suite becomes order-dependent.
+  window.history.replaceState(null, '', '/');
   useUiStore.setState({ activeTournamentRole: 'operator' });
 });
 
@@ -118,5 +121,31 @@ describe('RosterTab — 100-row inventory contract', () => {
     fireEvent.change(search, { target: { value: 'Zzz Late Roster Player' } });
     expect(within(screen.getByTestId('player-list')).getByTestId('player-row-p-101')).toBeInTheDocument();
     expect(within(screen.getByTestId('player-list')).getAllByTestId(/^player-row-/)).toHaveLength(1);
+  });
+});
+describe('RosterTab — default school selection', () => {
+  it('shows the first school without writing a filter the operator never chose', () => {
+    useTournamentStore.setState({
+      config,
+      groups,
+      players: [player('p1', 'Alex Tan')],
+    });
+    render(<RosterTab />);
+
+    expect(screen.getByTestId('player-row-p1')).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+  });
+
+  it('clears a persisted school that no longer exists', () => {
+    window.history.replaceState(null, '', '/?meet-roster-filters.filter.school=gone');
+    useTournamentStore.setState({
+      config,
+      groups,
+      players: [player('p1', 'Alex Tan')],
+    });
+    render(<RosterTab />);
+
+    expect(screen.getByTestId('player-row-p1')).toBeInTheDocument();
+    expect(window.location.search).not.toContain('school');
   });
 });

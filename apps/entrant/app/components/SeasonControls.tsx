@@ -21,14 +21,17 @@
  * feedback. The search text is deliberately not a chip: it is visible in the
  * box it was typed into.
  *
- * The segment COUNTS are the server's, unfiltered: the labels answer "what is
- * on this platform", not "what survived my current query", so they do not
- * move as the entrant types.
+ * The segment COUNTS follow the ACTIVE FILTERS (the list-pagination contract:
+ * counts refer to the full filtered collection), so a search narrows them.
+ * They are counted before the view is applied, though, so switching segment
+ * never moves them — the labels answer "how much of what I searched for is in
+ * each segment".
  */
 import { Button } from '@scheduler/design-system/components';
 
 import {
   dateFilterActive,
+  filtersToParams,
   parseIsoDate,
   type DatePreset,
   type Filters,
@@ -66,18 +69,10 @@ const SEGMENTS: readonly View[] = Object.freeze(['season', 'open', 'completed'])
  * `parseFilters` answers for a URL that names no view.
  */
 function queryHref(filters: Filters, patch: Partial<Filters>): string {
-  const next = { ...filters, ...patch };
-  const params = new URLSearchParams();
-  if (next.q.trim() !== '') params.set('q', next.q);
-  // An implicit `all` is only a search result scope. Keep it implicit while
-  // removing another filter so clearing the query returns to the default
-  // calendar; deliberate status/all selections remain explicit.
-  if ((next.view !== 'season' && next.view !== 'all') || next.scopeExplicit) params.set('view', next.view);
-  if (next.preset !== null) params.set('preset', next.preset);
-  if (next.from !== null && next.from !== '') params.set('from', next.from);
-  if (next.to !== null && next.to !== '') params.set('to', next.to);
-  if (next.year !== null && next.year !== undefined) params.set('year', String(next.year));
-  // Any filter change starts from its first page.
+  // `filtersToParams` owns the rule that an implicit `all` (the scope a bare
+  // `?q=` implies) stays implicit while deliberate status/all selections stay
+  // explicit, and it omits `page` — any filter change starts from page one.
+  const params = filtersToParams({ ...filters, ...patch });
   const query = params.toString();
   return query === '' ? ACTION : `/e/?${query}#calendar`;
 }
@@ -141,8 +136,10 @@ export function SeasonControls({
     // below its content.
     <div className="grid min-w-0 gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* The segments: navigation, not a filter — which is why they carry no
-            "clear" and why the counts beside them never move. */}
+        {/* The segments: navigation, not a filter — which is why they carry
+            no "clear", and why the counts beside them do not move when one is
+            chosen (they are counted before the view is applied). They do
+            follow the search and the date range. */}
         <SegmentedNav
           label="Calendar view"
           currentAttr="true"

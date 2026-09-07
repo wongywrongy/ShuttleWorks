@@ -74,6 +74,7 @@ export function RosterTab() {
   useMatchStateSync(tid);
   const groups = useTournamentStore((s) => s.groups);
   const players = useTournamentStore((s) => s.players);
+  const hydrated = useTournamentStore((s) => s.hydrated);
   const config = useTournamentStore((s) => s.config);
   const addGroup = useTournamentStore((s) => s.addGroup);
   const addPlayer = useTournamentStore((s) => s.addPlayer);
@@ -85,7 +86,9 @@ export function RosterTab() {
   const [rosterState, rosterActions] = useDenseDataState({}, 'meet-roster-filters');
   const schoolParam = rosterState.filters.school?.[0] ?? '';
   const setSchoolParam = (id: string) => rosterActions.setState({ ...rosterState, filters: { ...rosterState.filters, school: id ? [id] : [] } });
-  const activeSchoolId = schoolParam || null;
+  // The first school is a read-time default, not a choice: writing it to the
+  // URL on mount would replaceState a school filter the operator never picked.
+  const activeSchoolId = groups.find((g) => g.id === schoolParam)?.id ?? groups[0]?.id ?? null;
   const setActiveSchoolId = (id: string | null) => setSchoolParam(id ?? '');
   // Detail drawer targets — a clicked grid position (rank) OR a clicked
   // list player. Only one is open at a time; opening one clears the other.
@@ -101,16 +104,13 @@ export function RosterTab() {
   // preview so a chip can leave the grid's overflow-auto without clipping.
   const [activeDragName, setActiveDragName] = useState<string | null>(null);
 
-  // Keep activeSchoolId valid as groups change.
+  // Only a persisted school that no longer exists is written back — clearing
+  // it returns the view to the read-time default above.
   useEffect(() => {
-    if (groups.length === 0) {
-      if (activeSchoolId !== null) setActiveSchoolId(null);
-      return;
+    if (schoolParam && groups.length > 0 && !groups.some((g) => g.id === schoolParam)) {
+      setSchoolParam('');
     }
-    if (!activeSchoolId || !groups.find((g) => g.id === activeSchoolId)) {
-      setActiveSchoolId(groups[0].id);
-    }
-  }, [groups, activeSchoolId]);
+  }, [groups, schoolParam]);
 
   // Singles-invariant cleanup. Singles ranks must have ≤1
   // player per school; existing demo/seed data and historic state
@@ -245,7 +245,7 @@ export function RosterTab() {
       return true;
     });
   }, [schoolPlayers, query, eventFilter, issueFilter, config?.rankCounts]);
-  const inventory = useInventoryPage(filteredPlayers, players, (p) => p.id, 'meet-roster', JSON.stringify([activeSchoolId, query, eventFilter, issueFilter, rosterState.sort]));
+  const inventory = useInventoryPage(filteredPlayers, players, (p) => p.id, 'meet-roster', JSON.stringify([activeSchoolId, query, eventFilter, issueFilter, rosterState.sort]), hydrated);
   const eventOptions = useMemo(() => {
     const codes = new Set<string>();
     for (const rank of Object.keys(config?.rankCounts ?? {})) {

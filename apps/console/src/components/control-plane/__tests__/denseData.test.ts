@@ -167,6 +167,27 @@ describe('dense data URL state', () => {
       expect(decodeDenseDataState(merged, undefined, 'roster').page).toBe(2);
     }
   });
+
+  it('writes pageSize only when it departs from the consumer default', () => {
+    const state = { ...DEFAULT_DENSE_DATA_STATE, pageSize: 50 as const };
+    // A paging inventory whose own default is 100: an explicit 50 must survive.
+    const explicit = mergeDenseDataStateParams('', state, 'meet-roster', { pageSize: 100 });
+    expect(explicit.get('meet-roster.pageSize')).toBe('50');
+    expect(decodeDenseDataState(explicit, { pageSize: 100 }, 'meet-roster').pageSize).toBe(50);
+
+    // A prefix that never pages must not pollute the URL with its own default.
+    const shared = mergeDenseDataStateParams('', state, 'meet-roster-filters');
+    expect(shared.has('meet-roster-filters.pageSize')).toBe(false);
+    const atDefault = mergeDenseDataStateParams('', { ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const }, 'meet-roster', { pageSize: 100 });
+    expect(atDefault.has('meet-roster.pageSize')).toBe(false);
+    expect(decodeDenseDataState(atDefault, { pageSize: 100 }, 'meet-roster').pageSize).toBe(100);
+  });
+
+  it('decodes an explicit deep-linked pageSize that equals the consumer default', () => {
+    const decoded = decodeDenseDataState('meet-roster.pageSize=100&meet-roster.page=3', { pageSize: 100 }, 'meet-roster');
+    expect(decoded.pageSize).toBe(100);
+    expect(decoded.page).toBe(3);
+  });
 });
 
 describe('dense data saved views', () => {

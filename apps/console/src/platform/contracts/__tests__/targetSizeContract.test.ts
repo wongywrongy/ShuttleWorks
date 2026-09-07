@@ -243,7 +243,7 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
-    line: 793,
+    line: 801,
     why:
       'Previous-page button: className is `${CONTROL} ...` where `CONTROL` ' +
       '(module-level const, this file) is literally `"min-h-9 ..."` = 36px — ' +
@@ -251,17 +251,17 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
-    line: 808,
+    line: 816,
     why: 'Next-page button — same `${CONTROL}` (min-h-9 = 36px) indirection as the previous-page control.',
   },
   {
     file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
-    line: 742,
+    line: 750,
     why: 'Refresh-results button uses the module-level CONTROL (min-h-9), which the static scan cannot resolve.',
   },
   {
     file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
-    line: 806,
+    line: 814,
     why: 'Numbered page button uses the module-level CONTROL (min-h-9), which the static scan cannot resolve.',
   },
   {

@@ -257,6 +257,7 @@ export function decodeDenseDataState(
 export function encodeDenseDataState(
   state: DenseDataState,
   prefix = 'table',
+  defaults: Partial<DenseDataState> = {},
 ): URLSearchParams {
   const params = new URLSearchParams();
   if (state.search) params.set(key(prefix, 'q'), state.search);
@@ -271,7 +272,12 @@ export function encodeDenseDataState(
   if (state.hiddenColumns.length) params.set(key(prefix, 'columns'), [...state.hiddenColumns].sort().join(','));
   if (state.density !== 'comfortable') params.set(key(prefix, 'density'), state.density);
   if (state.page !== 1) params.set(key(prefix, 'page'), String(state.page));
-  params.set(key(prefix, 'pageSize'), String(state.pageSize));
+  // Only an explicit departure from this consumer's own default belongs in the
+  // URL. A prefix that never pages would otherwise carry a meaningless
+  // `<prefix>.pageSize` alongside the inventory's real one.
+  if (state.pageSize !== (defaults.pageSize ?? DEFAULT_DENSE_DATA_STATE.pageSize)) {
+    params.set(key(prefix, 'pageSize'), String(state.pageSize));
+  }
   if (state.groupBy) params.set(key(prefix, 'group'), state.groupBy);
   return params;
 }
@@ -281,12 +287,13 @@ export function mergeDenseDataStateParams(
   existing: URLSearchParams | string,
   state: DenseDataState,
   prefix = 'table',
+  defaults: Partial<DenseDataState> = {},
 ): URLSearchParams {
   const params = typeof existing === 'string' ? new URLSearchParams(existing) : new URLSearchParams(existing);
   [...params.keys()]
     .filter((param) => param === prefix || param.startsWith(`${prefix}.`))
     .forEach((param) => params.delete(param));
-  encodeDenseDataState(state, prefix).forEach((value, param) => params.set(param, value));
+  encodeDenseDataState(state, prefix, defaults).forEach((value, param) => params.set(param, value));
   return params;
 }
 
