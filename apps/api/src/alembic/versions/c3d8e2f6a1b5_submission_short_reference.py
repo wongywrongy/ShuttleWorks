@@ -93,10 +93,16 @@ def upgrade() -> None:
 
     taken: set[str] = set()
     for tournament_id, submission_id in rows:
-        bind.exec_driver_sql(
-            "UPDATE submissions SET short_reference = ? "
-            "WHERE tournament_id = ? AND id = ?",
-            (_mint(taken), tournament_id, submission_id),
+        # sa.text() with named binds, not exec_driver_sql with ``?``: the
+        # qmark style is SQLite's paramstyle only — psycopg (Postgres, the
+        # demo and cloud dialect) rejects it with "0 placeholders but 3
+        # parameters", which is exactly how the first demo rebuild failed.
+        bind.execute(
+            sa.text(
+                "UPDATE submissions SET short_reference = :ref "
+                "WHERE tournament_id = :tid AND id = :sid"
+            ),
+            {"ref": _mint(taken), "tid": tournament_id, "sid": submission_id},
         )
     log.info("short reference: backfilled %d existing submission(s)", len(rows))
 
