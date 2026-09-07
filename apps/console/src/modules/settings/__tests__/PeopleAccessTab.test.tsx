@@ -245,7 +245,11 @@ describe('PeopleAccessTab — last-owner guard', () => {
       screen.queryByTestId('member-reason-00000000-0000-0000-0000-000000000000'),
     ).toBeNull();
 
-    await openMenu(user, 'local@dev');
+    // The local-mode bootstrap placeholder is presented as a person, never as
+    // the raw `local@dev` address.
+    expect(screen.getByText('Local operator')).toBeInTheDocument();
+    expect(screen.queryByText('local@dev')).toBeNull();
+    await openMenu(user, 'Local operator');
     // Nothing offered here can succeed, so nothing is left actionable.
     for (const t of ['leave', 'role-viewer', 'role-operator']) {
       const el = screen.queryByTestId(`${t}-00000000-0000-0000-0000-000000000000`);

@@ -7,7 +7,7 @@ import { apiClient } from '../../api/client';
 import type { InviteRole, InviteSummaryDTO } from '../../api/dto';
 import { useAuth } from '../../context/AuthContext';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
-import { PublicationSettings } from './PublicationSettings';
+import { PublicationSettings } from '../../components/PublicationSettings';
 import { TEXT_MUTED_XS } from '../../lib/utils'
 
 const ROLE_OPTIONS = [
@@ -27,7 +27,6 @@ function fmtExpiry(iso: string | null): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : `Expires ${d.toLocaleDateString()}`;
 }
-
 /** Writes `text` to the clipboard. Returns false (rather than throwing) when the
  *  Clipboard API is unavailable — non-secure context (no HTTPS/localhost) or a
  *  denied permission — so callers can no-op gracefully. */
@@ -212,7 +211,7 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
 
   const now = Date.now();
   // Package 16: one board name everywhere — "Venue board". The composed
-  // Displays page (`WorkspaceShellSurface`'s `publish/displays` pane) already
+  // Displays page (`WorkspaceShellSurface`'s `display/board` pane) already
   // titles itself once via `DisplayConfig`'s own heading directly above this
   // component, so this scope renders no second heading/intro for the same
   // page (V3-OC22.2 — no repeated "public display link" headings).
@@ -229,99 +228,8 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
 
   if (scope === 'site') return <PublicationSettings key={tid} tid={tid} />;
 
-  return (
-    <div>
-      {!online && <p role="status" className="mb-4 text-sm text-muted-foreground">Offline. Link and invitation changes require a connection and are not queued.</p>}
-      {actionError && <p role="alert" className="mb-4 text-sm text-destructive">{actionError}</p>}
-      {scope !== 'links' && (
-        <div className="pb-4">
-          <h2 className="text-base font-semibold tracking-tight text-foreground">{heading}</h2>
-          <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
-            {intro}
-          </p>
-        </div>
-      )}
-
-      {/* Public display link — read-only, separate from collaborator invites.
-          Hidden entirely when the caller isn't the owner (mint 404s). */}
-      {showDisplay && displayLoadError && <div role="alert" className="mb-4 text-sm"><p>The board link could not be loaded.</p><Button variant="outline" size="sm" onClick={() => setDisplayAttempt((value) => value + 1)}>Retry board link</Button></div>}
-      {showDisplay && !displayTokenDenied && !displayLoadError && (
-        <SectionCard eyebrow="BOARD LINK" testId="sharing-public">
-          <p className="mb-2 text-xs text-muted-foreground">
-            Anyone with this link can view the board.
-          </p>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <label htmlFor="public-display-link" className="basis-full text-xs font-medium text-foreground">Venue board link</label>
-            <input
-              id="public-display-link"
-              readOnly
-              value={displayLink ?? 'Loading…'}
-              aria-label="Venue board link"
-              className="min-w-0 flex-1 rounded border border-border bg-muted/30 px-2 py-1.5 font-mono text-xs text-foreground"
-            />
-            {/* xs (28px) matches the row's input + the app's control scale —
-                the default 40px Button towered over its neighbors. */}
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={!displayLink}
-              onClick={() => displayLink && copy(displayLink, 'display')}
-            >
-              {copied === 'display' ? 'Copied' : 'Copy'}
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              disabled={!displayLink}
-              onClick={() => displayLink && window.open(displayLink, '_blank', 'noopener,noreferrer')}
-            >
-              Open fullscreen
-            </Button>
-          </div>
-
-          {/* Below the rule, apart from the two safe controls above it. */}
-          <div className="mt-3 flex items-center gap-3 border-t border-border pt-3">
-            <Button
-              size="xs"
-              variant={confirmRotate.armed ? 'destructive' : 'outline'}
-              disabled={!displayLink || rotating || !online}
-              onClick={confirmRotate.press}
-              onBlur={confirmRotate.reset}
-              aria-label={
-                confirmRotate.armed
-                  ? 'Confirm replacing the venue board link'
-                  : 'Replace the venue board link'
-              }
-            >
-              {rotating
-                ? 'Replacing…'
-                : confirmRotate.armed
-                  ? 'Confirm: replace link'
-                  : 'Replace link'}
-            </Button>
-            {/* Package 16 (V3-OC22.2): the consequence next to the control is
-                the plan's exact sentence, always visible — not conditional
-                resting-state reassurance. The armed state adds only the
-                cancel affordance, never a second, different claim about what
-                Replace does. */}
-            <p className={TEXT_MUTED_XS}>
-              Replacing the link stops the old link from working.
-              {confirmRotate.armed ? ' Every venue display goes blank until you re-share the new one. Press Escape to cancel.' : ''}
-            </p>
-          </div>
-        </SectionCard>
-      )}
-
-      {showSite && <PublicationSettings key={tid} tid={tid} />}
-
-      {/* Invitations. V3-OC25.1: "Invitations" everywhere in this section
-          (not "COLLABORATOR INVITES" over a list described in terms of
-          links), and the delivery choice is only offered where the server
-          can act on it — see `canEmailInvite` above. */}
-      {showInvites && <SectionCard eyebrow="INVITATIONS" testId="sharing-invites">
-        <p className="mb-2 text-xs text-muted-foreground">
-          Invite people to view or operate this workspace with the selected role. Revoke a link any time.
-        </p>
+  const inviteControls = (
+    <>
         {canEmailInvite ? (
           <fieldset className="mb-4 space-y-2 text-sm">
             <legend className="mb-2 font-medium">Invitation delivery</legend>
@@ -424,7 +332,126 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
             })
           )}
         </ul>
-      </SectionCard>}
+    </>
+  );
+
+  return (
+    <div>
+      {!online && <p role="status" className="mb-4 text-sm text-muted-foreground">Offline. Link and invitation changes require a connection and are not queued.</p>}
+      {actionError && <p role="alert" className="mb-4 text-sm text-destructive">{actionError}</p>}
+      {scope !== 'links' && scope !== 'team' && (
+        <div className="pb-4">
+          <h2 className="text-base font-semibold tracking-tight text-foreground">{heading}</h2>
+          <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
+            {intro}
+          </p>
+        </div>
+      )}
+
+      {/* Public display link — read-only, separate from collaborator invites.
+          Hidden entirely when the caller isn't the owner (mint 404s). */}
+      {showDisplay && displayLoadError && <div role="alert" className="mb-4 text-sm"><p>The board link could not be loaded.</p><Button variant="outline" size="sm" onClick={() => setDisplayAttempt((value) => value + 1)}>Retry board link</Button></div>}
+      {showDisplay && !displayTokenDenied && !displayLoadError && (
+        <SectionCard eyebrow="BOARD LINK" testId="sharing-public">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Anyone with this link can view the board.
+          </p>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {/* A READABLE label, not the raw capability URL. The old field
+                printed `http://192.168.1.5:8080/display?token=<32 opaque
+                chars>` in monospace — nothing anyone reads, types or checks,
+                and the token is the one part that must not be read aloud.
+                The real URL is what Copy puts on the clipboard and what Open
+                fullscreen loads (no invented hostname: it is this origin, so
+                a local-network board keeps working); it stays available to
+                assistive tech and on hover via `title`. */}
+            <span
+              data-testid="display-link-label"
+              title={displayLink ?? undefined}
+              className="min-w-0 flex-1 break-words rounded border border-border bg-muted/30 px-2 py-1.5 text-xs text-foreground"
+            >
+              {displayLink ? (
+                <>
+                  <span className="font-medium">Venue board</span>
+                  <span className="text-muted-foreground"> · {origin.replace(/^https?:\/\//, '')}</span>
+                </>
+              ) : (
+                'Loading…'
+              )}
+            </span>
+            {/* xs (28px) matches the row's input + the app's control scale —
+                the default 40px Button towered over its neighbors. */}
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={!displayLink}
+              onClick={() => displayLink && copy(displayLink, 'display')}
+            >
+              {copied === 'display' ? 'Copied' : 'Copy'}
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={!displayLink}
+              onClick={() => displayLink && window.open(displayLink, '_blank', 'noopener,noreferrer')}
+            >
+              Open fullscreen
+            </Button>
+          </div>
+
+          {/* Below the rule, apart from the two safe controls above it. */}
+          <div className="mt-3 flex items-center gap-3 border-t border-border pt-3">
+            <Button
+              size="xs"
+              variant={confirmRotate.armed ? 'destructive' : 'outline'}
+              disabled={!displayLink || rotating || !online}
+              onClick={confirmRotate.press}
+              onBlur={confirmRotate.reset}
+              aria-label={
+                confirmRotate.armed
+                  ? 'Confirm replacing the venue board link'
+                  : 'Replace the venue board link'
+              }
+            >
+              {rotating
+                ? 'Replacing…'
+                : confirmRotate.armed
+                  ? 'Confirm: replace link'
+                  : 'Replace link'}
+            </Button>
+            {/* Package 16 (V3-OC22.2): the consequence next to the control is
+                the plan's exact sentence, always visible — not conditional
+                resting-state reassurance. The armed state adds only the
+                cancel affordance, never a second, different claim about what
+                Replace does. */}
+            <p className={TEXT_MUTED_XS}>
+              Replacing the link stops the old link from working.
+              {confirmRotate.armed ? ' Every venue display goes blank until you re-share the new one. Press Escape to cancel.' : ''}
+            </p>
+          </div>
+        </SectionCard>
+      )}
+
+      {showSite && <PublicationSettings key={tid} tid={tid} />}
+
+      {/* Invitations. Under Administration · Team this renders WITHOUT a
+          heading of its own: the page is already called Team, and it used to
+          carry "Team access" over "INVITATIONS" over a paragraph over a
+          fieldset legend — four labels above one role dropdown and a button.
+          The delivery choice is only offered where the server can act on it
+          (see `canEmailInvite` above). */}
+      {showInvites && (scope === 'team' ? (
+        <div data-testid="sharing-invites" className="pt-2">
+          {inviteControls}
+        </div>
+      ) : (
+      <SectionCard eyebrow="INVITATIONS" testId="sharing-invites">
+        <p className="mb-2 text-xs text-muted-foreground">
+          Invite people to view or operate this workspace with the selected role. Revoke a link any time.
+        </p>
+        {inviteControls}
+      </SectionCard>
+      ))}
     </div>
   );
 }

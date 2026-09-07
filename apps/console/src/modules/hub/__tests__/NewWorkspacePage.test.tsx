@@ -1,10 +1,9 @@
 /**
- * `/new` has NO PRESETS. The director picks modules and states the courts.
+ * `/new` is ONE form: name, date, three module switches, Create.
  *
- * These used to drive four template cards plus a Custom escape hatch. The
- * routing behaviour they pinned (land per the RETURNED modules, kind derived
- * from the seed, nothing-enabled goes to Modules) is unchanged and still
- * covered — it is only reached by choosing modules directly now.
+ * No presets, no tournament type, no venue step, no review step. The routing
+ * behaviour these tests pin (kind derived from the seed, land per the RETURNED
+ * modules) is unchanged; only the number of screens it takes to get there is.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -47,10 +46,13 @@ function setModule(label: string, state: 'On' | 'Off') {
   fireEvent.click(within(group).getByRole('radio', { name: state }));
 }
 
-function advanceToReview() {
-  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+/** The form requires a name before Create is enabled. */
+function fillName(value = 'Spring Invitational') {
+  fireEvent.change(screen.getByLabelText(/Name/), { target: { value } });
+}
+
+function create() {
+  fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
 }
 
 const m = (moduleId: string, status: string) => ({ moduleId, status, config: null });
@@ -79,37 +81,45 @@ describe('NewWorkspacePage', () => {
     vi.mocked(apiClient.putTournamentState).mockReset();
   });
 
-  it('starts with type and module choices, with no preset templates', () => {
+  it('is one form: name, date, three module switches, Create', () => {
     mount({ current: '' });
     expect(screen.getByRole('heading', { name: 'New workspace' })).toBeInTheDocument();
-    expect(screen.getAllByText('Meet').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Bracket').length).toBeGreaterThan(0);
-    expect(screen.getByRole('radiogroup', { name: 'Display' })).toBeInTheDocument();
-    expect(screen.getByRole('radiogroup', { name: 'Tournament type' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Name/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Date/)).toBeInTheDocument();
+    for (const label of ['Meet', 'Bracket', 'Display']) {
+      expect(screen.getByRole('radiogroup', { name: label })).toBeInTheDocument();
+    }
+    expect(screen.getByRole('button', { name: 'Create workspace' })).toBeInTheDocument();
+    // The wizard is gone, not merely relabelled.
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Tournament type' })).toBeNull();
     expect(screen.queryByLabelText('Courts')).toBeNull();
-    // The presets are gone, not merely relabelled.
+    expect(screen.queryByText(/Review/)).toBeNull();
+    expect(screen.queryByText(/Included tools/)).toBeNull();
     for (const gone of [/Meet Day/i, /Bracket Tournament/i, /Hybrid Event/i, /Blank Workspace/i]) {
       expect(screen.queryByText(gone)).toBeNull();
     }
   });
 
-  it('defaults to Team meet as the single engine choice', () => {
+  it('requires a name before it can create', () => {
     mount({ current: '' });
-    expect(within(screen.getByRole('radiogroup', { name: 'Tournament type' })).getByRole('radio', { name: 'Team meet' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Create workspace' })).toBeDisabled();
+    fillName();
+    expect(screen.getByRole('button', { name: 'Create workspace' })).toBeEnabled();
   });
 
   it('sends the chosen modules and derives kind=meet', async () => {
     returnCreated('w1', [m('meet', 'enabled'), m('bracket', 'available'), m('display', 'enabled')]);
     const loc = { current: '' };
     mount(loc);
+    fillName();
     setModule('Display', 'On');
-    advanceToReview();
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w1/overview'));
+    create();
+    await waitFor(() => expect(loc.current).toBe('/tournaments/w1/setup/details'));
     const body = vi.mocked(apiClient.createTournament).mock.calls[0][0];
     expect(body.kind).toBe('meet');
-    // Off seeds as `available`, not `disabled` (R-B): at creation the two
-    // said the same thing, so the form stopped asking.
+    expect(body.name).toBe('Spring Invitational');
+    // Off seeds as `available`, not `disabled` (R-B).
     expect(seedFor(body)).toMatchObject({
       meet: 'enabled',
       bracket: 'available',
@@ -118,52 +128,50 @@ describe('NewWorkspacePage', () => {
   });
 
   it('derives kind=bracket when bracket is the only engine on', async () => {
-    returnCreated('w2', [m('bracket', 'enabled'), m('meet', 'disabled'), m('display', 'disabled')]);
+    returnCreated('w2', [m('bracket', 'enabled'), m('meet', 'available'), m('display', 'available')]);
     const loc = { current: '' };
     mount(loc);
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Tournament type' })).getByRole('radio', { name: 'Draw tournament' }));
-    advanceToReview();
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w2/overview'));
+    fillName();
+    setModule('Bracket', 'On');
+    setModule('Meet', 'Off');
+    create();
+    await waitFor(() => expect(loc.current).toBe('/tournaments/w2/setup/details'));
     const body = vi.mocked(apiClient.createTournament).mock.calls[0][0];
     expect(body.kind).toBe('bracket');
     expect(seedFor(body)).toMatchObject({ bracket: 'enabled', meet: 'available' });
   });
 
-  it('always includes one engine because tournament type owns engine selection', () => {
-    mount({ current: '' });
-    expect(screen.queryByTestId('modules-hint')).toBeNull();
-    // V3-OC03.1: the fact is stated once (not repeated per module row).
-    expect(screen.getByText(/Meet and Bracket follow the tournament type above/i)).toBeInTheDocument();
-  });
-
-  it('allows Display to be turned on independently', () => {
-    mount({ current: '' });
-    setModule('Display', 'On');
-    expect(within(screen.getByRole('radiogroup', { name: 'Display' })).getByRole('radio', { name: 'On' })).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('seeds the court count in the atomic create request', async () => {
-    returnCreated('w5', [m('meet', 'enabled')]);
+  it('disables Display until an engine is on, and never seeds it orphaned', async () => {
+    returnCreated('w3', [m('meet', 'available')]);
     const loc = { current: '' };
     mount(loc);
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    fireEvent.change(screen.getByLabelText('Courts'), { target: { value: '9' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w5/overview'));
-    expect(vi.mocked(apiClient.createTournament).mock.calls[0][0].courtCount).toBe(9);
-    expect(apiClient.putTournamentState).not.toHaveBeenCalled();
+    fillName();
+    setModule('Display', 'On');
+    // Turning both engines off takes Display with it — the state the server
+    // would reject is never reachable.
+    setModule('Meet', 'Off');
+    expect(
+      within(screen.getByRole('radiogroup', { name: 'Display' })).getByRole('radio', { name: 'Off' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radiogroup', { name: 'Display' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    create();
+    await waitFor(() => expect(apiClient.createTournament).toHaveBeenCalled());
+    expect(seedFor(vi.mocked(apiClient.createTournament).mock.calls[0][0])).toMatchObject({
+      display: 'available',
+    });
   });
 
-  it('does not perform a follow-up state write after creation', async () => {
+  it('sends one atomic create with no follow-up state write', async () => {
     returnCreated('w6', [m('meet', 'enabled')]);
     const loc = { current: '' };
     mount(loc);
-    advanceToReview();
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w6/overview'));
+    fillName();
+    create();
+    await waitFor(() => expect(loc.current).toBe('/tournaments/w6/setup/details'));
+    expect(apiClient.createTournament).toHaveBeenCalledTimes(1);
     expect(apiClient.putTournamentState).not.toHaveBeenCalled();
   });
 
@@ -171,17 +179,17 @@ describe('NewWorkspacePage', () => {
     vi.mocked(apiClient.createTournament).mockResolvedValue({ id: 'w7', kind: 'meet' } as never);
     const loc = { current: '' };
     mount(loc);
-    advanceToReview();
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-    await waitFor(() => expect(loc.current).toBe('/tournaments/w7/overview'));
+    fillName();
+    create();
+    await waitFor(() => expect(loc.current).toBe('/tournaments/w7/setup/details'));
   });
 
   it('surfaces a create failure without navigating', async () => {
     vi.mocked(apiClient.createTournament).mockRejectedValue(new Error('server said no'));
     const loc = { current: '' };
     mount(loc);
-    advanceToReview();
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+    fillName();
+    create();
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('server said no'));
     expect(loc.current).toBe('/new');
   });

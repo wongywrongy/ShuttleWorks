@@ -2,21 +2,24 @@
  * Workspace Hub — the control-plane landing page at `/`.
  *
  * A full-width operational control plane: a top command bar (wordmark, search,
- * New workspace, account chip), a lifecycle filter strip (All / Setup / Ready
- * / Live / Complete / Shared / Needs attention / Archived — see hubFacets for
- * why these read the derived phase rather than the operator-set status), a
- * dense workspace list (see WorkspaceRow) sorted by operational time order,
- * and a right-side inspector for the selected workspace. "New workspace"
- * routes to the dedicated `/new` create surface.
+ * New workspace), a TIME view strip (Upcoming · Live · Past — see hubFacets
+ * for why the Hub partitions on the event's date range rather than on
+ * lifecycle/status facets), a dense workspace list (see WorkspaceRow) in one
+ * fixed operational order, and a right-side inspector for the selected
+ * workspace. "New workspace" routes to the dedicated `/new` create surface.
+ *
+ * The default view is Live + Upcoming, with undated workspaces kept reachable
+ * in a compact "Date not set" group at its foot. Search reaches EVERY
+ * workspace — past and undated included — because a director searching by
+ * name is not asking a question about time.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { Button, Modal } from '@scheduler/design-system';
 import {
-  HEALTH_LEGEND,
   EmptyState,
   Skeleton,
   Eyebrow,
@@ -24,9 +27,16 @@ import {
   COL_PRIORITY_CLASS,
 } from '../../components/control-plane';
 import { temporalGroupOf } from './hubGrouping';
-import { HUB_FACETS, facetCounts, matchesFacet, type HubFacetId } from './hubFacets';
-import { sortBy, type HubSortId } from './hubSort';
-import { SortControl } from './SortControl';
+import {
+  DEFAULT_HUB_VIEW,
+  HUB_VIEWS,
+  HUB_VIEW_IDS,
+  matchesView,
+  sortForHub,
+  timeBucketOf,
+  viewCounts,
+  type HubViewId,
+} from './hubFacets';
 import { needsAttention } from './hubSignals';
 import { lifecycleChip } from '../../platform/domain/lifecycle';
 import { WorkspaceRow } from './WorkspaceRow';
@@ -43,28 +53,16 @@ const IS_MAC =
   typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.userAgent);
 
 const HUB_PAGE_SIZE = 20;
-const HUB_FACET_IDS = new Set(HUB_FACETS.map((item) => item.id));
-const HUB_SORT_IDS = new Set(['recent', 'date', 'name']);
 
 function positivePage(value: string | null): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
 }
 
-/** Relative "updated" label for the footer (from a refresh timestamp vs now). */
-function sinceLabel(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  if (s < 45) return 'just now';
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m ago`;
-  return `${Math.round(m / 60)}h ago`;
-}
-
-/** One facet chip with its count. Prototype grammar: quiet text; the SELECTED
- *  facet is a raised pill (no border chrome — surface does the work).
- *  `emphasize` warms a non-zero count: amber for "Needs attention", live-green
- *  for "Live" — the two facets an operator scans for. A zero count stays quiet
- *  whatever the tone, so an empty facet never shouts. */
+/** One view chip with its count. Quiet text; the SELECTED view is a raised
+ *  pill (no border chrome — surface does the work). A non-zero LIVE count
+ *  warms; a zero count stays quiet whatever the tone, so an empty view never
+ *  shouts. */
 function FilterChip({
   label,
   count,
@@ -75,15 +73,11 @@ function FilterChip({
   label: string;
   count: number;
   active: boolean;
-  emphasize?: 'attention' | 'live';
+  emphasize?: 'live';
   onClick: () => void;
 }) {
   const countTone =
-    count > 0 && emphasize === 'attention'
-      ? 'text-status-warning'
-      : count > 0 && emphasize === 'live'
-        ? 'text-status-live'
-        : 'text-ink-faint';
+    count > 0 && emphasize === 'live' ? 'text-status-live' : 'text-ink-faint';
   return (
     <ActiveChoice
       active={active}
@@ -109,58 +103,32 @@ export function HubPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
-  const initialFacetParam = searchParams.get('facet');
-  const implicitQueryOrigin = useRef<HubFacetId | null>(
-    searchParams.get('q') && (!initialFacetParam || searchParams.get('scope') === 'search')
-      ? 'active'
-      : null,
-  );
-  const explicitActiveFacet = useRef(initialFacetParam === 'active');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Footer "Updated Nm ago": refresh stamp + a ticking `now` (both set only in
-  // effects/callbacks — never the render body — to stay purity-clean).
-  const [refreshedAt, setRefreshedAt] = useState<number | null>(null);
-  const [now, setNow] = useState<number | null>(null);
-  /** Status facet; 'all' shows everything (facets overlap — see hubFacets). */
-  const [facet, setFacet] = useState<HubFacetId>(() => {
-    const candidate = initialFacetParam;
-    return candidate && HUB_FACET_IDS.has(candidate as HubFacetId)
-      ? (candidate as HubFacetId)
-      : searchParams.get('q')
-        ? 'all'
-        : 'active';
-  });
-  /** List sort order (redesign); 'recent' = most-recently-updated first. */
-  const [sort, setSort] = useState<HubSortId>(() => {
-    const candidate = searchParams.get('sort');
-    return candidate && HUB_SORT_IDS.has(candidate) ? (candidate as HubSortId) : 'recent';
+  /** Time view. `current` (the default) is Live + Upcoming together. */
+  const [view, setView] = useState<HubViewId>(() => {
+    const candidate = searchParams.get('view');
+    return candidate && HUB_VIEW_IDS.has(candidate)
+      ? (candidate as HubViewId)
+      : DEFAULT_HUB_VIEW;
   });
   const [page, setPage] = useState(() => positivePage(searchParams.get('page')));
   const listScrollRef = useListScrollRestore<HTMLDivElement>('hub', !loading);
 
   const updateListUrl = useCallback(
-    (updates: { q?: string; facet?: HubFacetId | null; sort?: HubSortId; page?: number; scope?: 'search' | null }) => {
+    (updates: { q?: string; view?: HubViewId; page?: number }) => {
       setSearchParams((previous) => {
         const next = new URLSearchParams(previous);
         if (updates.q !== undefined) {
           if (updates.q) next.set('q', updates.q);
           else next.delete('q');
         }
-        if (updates.facet !== undefined) {
-          if (updates.facet === null) next.delete('facet');
-          else next.set('facet', updates.facet);
-        }
-        if (updates.sort !== undefined) {
-          if (updates.sort === 'recent') next.delete('sort');
-          else next.set('sort', updates.sort);
+        if (updates.view !== undefined) {
+          if (updates.view === DEFAULT_HUB_VIEW) next.delete('view');
+          else next.set('view', updates.view);
         }
         if (updates.page !== undefined) {
           if (updates.page <= 1) next.delete('page');
           else next.set('page', String(updates.page));
-        }
-        if (updates.scope !== undefined) {
-          if (updates.scope === null) next.delete('scope');
-          else next.set('scope', updates.scope);
         }
         return next;
       }, { replace: true });
@@ -199,7 +167,6 @@ export function HubPage() {
     try {
       const list = await apiClient.listTournaments();
       setTournaments(list);
-      setRefreshedAt(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load workspaces');
     } finally {
@@ -211,30 +178,30 @@ export function HubPage() {
     void refresh();
   }, [refresh]);
 
-  // Tick `now` so the footer's relative time stays fresh (30s is plenty).
-  useEffect(() => {
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
   const todayKey = new Date().toISOString().slice(0, 10);
 
-  // Filter by name (the search box), then derive facet counts over that set so
-  // the strip's badges reflect what a search has narrowed to.
+  // Search reaches EVERY workspace — past and undated included. A director
+  // typing a name is not asking a question about time, and the old behaviour
+  // (search inside the current facet, with a hidden facet-swap heuristic to
+  // paper over it) meant a finished event could not be found at all.
+  const searching = query.trim().length > 0;
   const nameFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q
       ? tournaments.filter((t) => (t.name || '').toLowerCase().includes(q))
       : tournaments;
   }, [tournaments, query]);
-  const counts = useMemo(() => facetCounts(nameFiltered), [nameFiltered]);
+  const counts = useMemo(() => viewCounts(nameFiltered), [nameFiltered]);
 
-  // The visible rows: name-filtered ∩ active facet, then ordered by the chosen
-  // sort (Recent / Event date / Name).
+  // The visible rows: the matching set, narrowed by the view unless a search
+  // is running, in the Hub's one fixed order (live → upcoming → undated →
+  // past). Sorting is not a control: there is one useful operational order.
   const visible = useMemo(
-    () => sortBy(nameFiltered.filter((t) => matchesFacet(t, facet)), sort, todayKey),
-    [nameFiltered, facet, sort, todayKey],
+    () =>
+      sortForHub(
+        searching ? nameFiltered : nameFiltered.filter((t) => matchesView(t, view)),
+      ),
+    [nameFiltered, searching, view],
   );
   const pageCount = Math.max(1, Math.ceil(visible.length / HUB_PAGE_SIZE));
   const pageRows = useMemo(
@@ -252,38 +219,17 @@ export function HubPage() {
   }, [loading, page, pageCount, updateListUrl]);
 
   const changeQuery = (value: string) => {
-    let nextFacet = facet;
-    let facetUrl: HubFacetId | null = facet;
-    if (value && !implicitQueryOrigin.current && facet === 'active' && !explicitActiveFacet.current) {
-      implicitQueryOrigin.current = facet;
-      nextFacet = 'all';
-      facetUrl = 'all';
-    } else if (!value && implicitQueryOrigin.current) {
-      nextFacet = implicitQueryOrigin.current;
-      facetUrl = nextFacet === 'active' && !explicitActiveFacet.current ? null : nextFacet;
-      implicitQueryOrigin.current = null;
-    }
     setQuery(value);
-    if (nextFacet !== facet) setFacet(nextFacet);
     setPage(1);
-    updateListUrl({
-      q: value.trim(),
-      facet: facetUrl,
-      page: 1,
-      scope: value.trim() && nextFacet === 'all' && implicitQueryOrigin.current ? 'search' : null,
-    });
+    updateListUrl({ q: value.trim(), page: 1 });
   };
-  const changeFacet = (nextFacet: HubFacetId) => {
-    implicitQueryOrigin.current = null;
-    if (nextFacet === 'active') explicitActiveFacet.current = true;
-    setFacet(nextFacet);
+  /** Clicking the selected view returns to the combined default, so a
+   *  narrowed strip is always escapable with the control that narrowed it. */
+  const changeView = (next: Exclude<HubViewId, 'current'>) => {
+    const resolved: HubViewId = view === next ? DEFAULT_HUB_VIEW : next;
+    setView(resolved);
     setPage(1);
-    updateListUrl({ facet: nextFacet, page: 1, scope: null });
-  };
-  const changeSort = (nextSort: HubSortId) => {
-    setSort(nextSort);
-    setPage(1);
-    updateListUrl({ sort: nextSort, page: 1 });
+    updateListUrl({ view: resolved, page: 1 });
   };
   const changePage = (nextPage: number) => {
     const safePage = Math.min(Math.max(nextPage, 1), pageCount);
@@ -291,26 +237,31 @@ export function HubPage() {
     updateListUrl({ page: safePage });
     requestAnimationFrame(() => focusListPage(listScrollRef.current));
   };
-  const facetLabel = HUB_FACETS.find((f) => f.id === facet)!.label;
+  const viewLabel =
+    view === 'current'
+      ? 'Live and Upcoming'
+      : HUB_VIEWS.find((v) => v.id === view)!.label;
 
-  // Hide the whole DATE column when no visible row has a date — a rail of
-  // muted em-dashes is noise; per-row "—" only appears when the column has
-  // data elsewhere (2026-07 cleanup).
-  const showDates = useMemo(
-    () => visible.some((t) => !!t.tournamentDate),
-    [visible],
-  );
+  // Hide the date entirely when no visible row has one — a rail of muted
+  // em-dashes is noise standing in for a fact nobody asked for.
+  const showDates = useMemo(() => visible.some((t) => !!t.tournamentDate), [visible]);
 
-  // SP-OPCON-1 SWP-2 (X6 never-varies): when every visible row would carry
-  // the SAME lifecycle chip — e.g. the "Complete" facet, where the strip
-  // already says "Complete · 30" — the per-row chip is suppressed. Any
-  // variation (including some rows unbadged) keeps it.
+  // When every visible row would carry the SAME lifecycle chip, the per-row
+  // chip is suppressed (X6 never-varies). Any variation keeps it.
   const lifecycleChipVaries = useMemo(() => {
     const labels = new Set(
       visible.map((t) => lifecycleChip(t.signals?.phase, t.status)?.text ?? ''),
     );
     return labels.size !== 1 || labels.has('');
   }, [visible]);
+
+  // The undated rows sort to the foot of the default view; this is the index
+  // where the compact "Date not set" group header goes.
+  const undatedHeaderId = useMemo(() => {
+    if (searching) return null;
+    const first = pageRows.find((t) => timeBucketOf(t) === 'undated');
+    return first ? first.id : null;
+  }, [pageRows, searching]);
 
   // Footer summary counts over the full (unfiltered) list.
   const footerCounts = useMemo(
@@ -321,8 +272,6 @@ export function HubPage() {
     }),
     [tournaments],
   );
-  const updatedLabel =
-    refreshedAt != null && now != null ? sinceLabel(now - refreshedAt) : null;
 
   const selected = useMemo(
     () => tournaments.find((t) => t.id === selectedId) ?? null,
@@ -394,54 +343,35 @@ export function HubPage() {
         </Button>
       </header>
 
-      {/* Page chrome — title + the controls that narrow the list.
-          One block, one rule at its foot.
-
-          This used to be a bare `h-10` facet strip with its own `border-b`,
-          which made it a horizontal band with a bottom hairline sitting
-          directly above… a table of horizontal bands with bottom hairlines.
-          Same device, three different jobs (chrome / column headers / data),
-          so nothing on the page carried more weight than anything else.
-          The title supplies the missing top tier — it is the only thing on
-          this surface above 14px — and the filters now group WITH it as
-          chrome rather than reading as another row. */}
+      {/* Page chrome — title + the three time views that narrow the list.
+          One block, one rule at its foot. */}
       {!loading && tournaments.length > 0 ? (
         <div className="shrink-0 border-b border-border px-4 pb-2.5 pt-4">
           <h1 className="type-display text-2xl text-foreground">Workspaces</h1>
           <div className="mt-2.5 flex items-center justify-between gap-3">
-            {/* The strip SCROLLS when it doesn't fit. It used to overflow the
-                viewport under an ancestor's `overflow-hidden`, which put the
-                last two chips — "Needs attention" among them — past the edge
-                with no scrollbar, no swipe and no way to reach them at all. */}
+            {/* The strip SCROLLS when it doesn't fit — it used to overflow the
+                viewport under an ancestor's `overflow-hidden`. */}
             <div
               data-testid="hub-facet-strip"
               className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
             >
-              {/* Zero-count facets are HIDDEN (H1.1): eight chips reading "0"
-                  above one row is a big dashboard's clothes on an empty one.
-                  "All" always shows, and the ACTIVE facet stays visible even
-                  at zero so a selection that empties remains escapable. */}
-              {HUB_FACETS.filter(
-                (f) =>
-                  f.id === 'all' ||
-                  f.id === 'active' ||
-                  f.id === 'complete' ||
-                  counts[f.id] > 0 ||
-                  facet === f.id,
-              ).map((f) => (
+              {/* Three chips, always all three: they are a partition of time,
+                  and a missing one would read as "you have no past events"
+                  rather than "this view is empty". In the combined default
+                  BOTH Upcoming and Live show as selected, because both are
+                  what the list is showing; clicking one narrows to it, and
+                  clicking it again returns to the pair. */}
+              {HUB_VIEWS.map((v) => (
                 <FilterChip
-                  key={f.id}
-                  label={f.label}
-                  count={counts[f.id]}
-                  active={facet === f.id}
-                  emphasize={
-                    f.id === 'attention' ? 'attention' : f.id === 'live' ? 'live' : undefined
-                  }
-                  onClick={() => changeFacet(f.id)}
+                  key={v.id}
+                  label={v.label}
+                  count={counts[v.id]}
+                  active={view === v.id || (view === 'current' && v.id !== 'past')}
+                  emphasize={v.id === 'live' ? 'live' : undefined}
+                  onClick={() => changeView(v.id)}
                 />
               ))}
             </div>
-            <SortControl value={sort} onChange={changeSort} />
           </div>
         </div>
       ) : null}
@@ -477,7 +407,7 @@ export function HubPage() {
             <div className="p-6 text-sm text-muted-foreground">
               {query.trim()
                 ? 'No workspaces match your search.'
-                : `Nothing in “${facetLabel}” right now.`}
+                : `Nothing in “${viewLabel}” right now.`}
             </div>
           ) : (
             <div>
@@ -491,19 +421,24 @@ export function HubPage() {
                 className={`flex items-center gap-3 border-b border-border px-4 py-2 @container/table ${EYEBROW_CLASS} text-ink-faint`}
               >
                 <span className="min-w-0 flex-1">Workspace</span>
-                <span className={['w-[132px] shrink-0', COL_PRIORITY_CLASS[3]].join(' ')}>
-                  Attention
-                </span>
-                {showDates ? (
-                  <span className={['w-16 shrink-0 text-right', COL_PRIORITY_CLASS[2]].join(' ')}>
-                    Date
-                  </span>
-                ) : null}
+                <span className={['shrink-0', COL_PRIORITY_CLASS[3]].join(' ')}>Modules</span>
                 <span className="w-40 shrink-0 px-2">Next action</span>
                 <span className="w-6 shrink-0" />
               </div>
               <div className="divide-y divide-border">
                 {pageRows.map((t) => (
+                  <Fragment key={t.id}>
+                  {/* Undated workspaces stay reachable without a fourth
+                      primary view: one compact group header at the foot of
+                      the default list. */}
+                  {t.id === undatedHeaderId ? (
+                    <div
+                      data-testid="hub-undated-group"
+                      className={`border-y border-border bg-muted/20 px-4 py-1 ${EYEBROW_CLASS} text-ink-faint`}
+                    >
+                      Date not set
+                    </div>
+                  ) : null}
                   <WorkspaceRow
                     key={t.id}
                     tournament={t}
@@ -513,10 +448,11 @@ export function HubPage() {
                     selected={t.id === selectedId}
                     onSelect={() => setSelectedId(t.id)}
                     onOpen={(segment) => openTournament(t.id, segment)}
-                    onSetDate={() => navigate(`/tournaments/${t.id}/setup/dates`)}
+                    onSetDate={() => navigate(`/tournaments/${t.id}/setup/details`)}
                     onSettings={() => navigate(`/tournaments/${t.id}/administration/lifecycle`)}
                     onDelete={t.role === 'owner' ? () => setDeleteTarget(t) : undefined}
                   />
+                  </Fragment>
                 ))}
               </div>
               {visible.length > HUB_PAGE_SIZE ? (
@@ -587,8 +523,11 @@ export function HubPage() {
           )}
           </div>
 
-          {/* Footer summary bar (redesign) — counts over the full list + a
-              relative "updated" stamp; pinned to the bottom of the list column. */}
+          {/* Footer summary — counts over the full list, and nothing else.
+              The dot legend and the "Updated just now" stamp are gone: the
+              first explained a dot that now carries its own accessible label,
+              and the second was a refresh timestamp presented as if it were
+              news about the events. */}
           {!loading && tournaments.length > 0 ? (
             <div
               data-testid="hub-footer"
@@ -600,19 +539,13 @@ export function HubPage() {
                   <>
                     {' · '}
                     <span className="text-status-warning">
-                      {footerCounts.attention} need attention
+                      {footerCounts.attention}{' '}
+                      {footerCounts.attention === 1 ? 'needs' : 'need'} attention
                     </span>
                   </>
                 ) : null}
                 {footerCounts.archived > 0 ? `  ·  ${footerCounts.archived} archived` : null}
               </span>
-              {/* SIG-7: the lifecycle/attention dot leading every row carried
-                  meaning with nothing on the page to decode it, and its only
-                  explanation was a tooltip that printed the raw enum
-                  ("Health: good"). One legend line, in the meta row that
-                  already exists, next to the list it describes. */}
-              <span data-testid="hub-dot-legend">{HEALTH_LEGEND}</span>
-              {updatedLabel ? <span>Updated {updatedLabel}</span> : null}
             </div>
           ) : null}
         </div>
@@ -627,7 +560,7 @@ export function HubPage() {
             key={selected?.id}
             tournament={selected}
             onOpen={openTournament}
-            onSetDate={(id) => navigate(`/tournaments/${id}/setup/dates`)}
+            onSetDate={(id) => navigate(`/tournaments/${id}/setup/details`)}
             onSettings={(id) => navigate(`/tournaments/${id}/administration/lifecycle`)}
             onClose={() => setSelectedId(null)}
           />

@@ -1,200 +1,100 @@
-import { useCallback, useState } from "react";
-import { Button, Modal } from "@scheduler/design-system";
+import { useCallback } from "react";
 import { useAction } from "../../hooks/useAction";
 import { isModuleEnableable } from "../../platform/domain/moduleModel";
 import type { WorkspaceModule } from "../../platform/product-shell/types";
 import { catalogMeta } from "./moduleCatalog";
-import {
-  SELECTABLE_ROW_FOCUS,
-  selectableRowProps,
-} from "../../lib/selectableRow";
-import { TEXT_MUTED_XS, TEXT_TITLE } from '../../lib/utils'
+import { Seg } from "../../platform/engine-config/SettingsControls";
+import { TEXT_MUTED_XS } from '../../lib/utils'
 
-/** The catalog chip speaks the glossary's tri-state, not the wire's. The chip
- *  used to print `module.status` straight through, so it read "enabled" and
- *  "disabled" while every other surface and `console-naming.md` said On and
- *  Off (WSMOD-1). */
-const MODULE_STATUS_WORD: Record<string, string> = {
-  enabled: "On",
-  available: "Available",
-  disabled: "Off",
-};
+/**
+ * One row of the Modules catalog: **name + one line of description + one
+ * switch**. When the switch cannot move, it is disabled and carries ONE short
+ * reason ("Has draws or matches: can't turn off.").
+ *
+ * It used to carry, per module: a status word (ON / AVAILABLE / OFF), the
+ * capability line, a dependency line, a blocked-reason line, a consequence
+ * paragraph ("Turning Meet off hides it from this workspace's navigation…"),
+ * a completion footer ("Enabled; finish setup"), a Configure button, and — for
+ * a module with data — a "Review impact" button opening a modal that restated
+ * the consequence paragraph and offered one button that did nothing. Nine
+ * elements to express a two-state setting. The state is the switch; the reason
+ * appears only when the switch is stuck.
+ *
+ * Nothing here relaxes a guard: the switch is disabled exactly where the
+ * backend would refuse (last operational module, Display without an engine,
+ * a module that owns data), and a server-side refusal still surfaces as a
+ * toast through `useAction`.
+ */
+const ON_OFF = [
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+] as const;
 
-/** One row of the Modules catalog: name + status word, capability description,
- *  a dependency note when relevant, and the enable/disable action (per the
- *  backend rules — 409s surface as toasts). */
 export function ModuleCatalogRow({
   module,
   onEnable,
   onDisable,
-  onConfigure,
   hasData,
   blockedReason,
 }: {
   module: WorkspaceModule;
   onEnable: () => void | Promise<unknown>;
   onDisable: () => void | Promise<unknown>;
-  /** Opens the canonical configuration surface for this module. */
-  onConfigure?: () => void;
   /** Server-computed signal that this module owns operational data. */
   hasData?: boolean;
   /** A server rule the CLIENT can evaluate (last operational module; Display
-   *  needs an engine): the action renders visibly disabled with this reason.
-   *  Rules needing server state (a module with data) stay 409→toast. */
+   *  needs an engine): the switch renders disabled with this reason. */
   blockedReason?: string;
 }) {
   const meta = catalogMeta(module.id);
+  const name = meta?.name ?? module.label;
   const enabled = module.status === "enabled";
   const ownsData = hasData ?? module.hasData ?? false;
-  const [impactOpen, setImpactOpen] = useState(false);
-  // The backend refuses to disable the last operational module, or one that has
-  // data. Those rejections had NO failure path here — `void disable(id)` turned
-  // them into genuine `unhandledrejection` events (audit B1). `useAction` owns
-  // the failure (and the api client's `__handled` marker keeps it from
-  // double-toasting what the interceptor already surfaced), plus it stops the
-  // double-fire the sweep saw on these same buttons (audit C1).
+  // The backend refuses to disable the last operational module, or one that
+  // has data. `useAction` owns the failure (and the api client's `__handled`
+  // marker keeps it from double-toasting what the interceptor surfaced), plus
+  // it stops the double-fire the sweep saw on these buttons (audit C1).
   const toggle = useAction(
     useCallback(
-      async () => (enabled ? onDisable() : onEnable()),
-      [enabled, onEnable, onDisable],
+      async (next: boolean) => (next ? onEnable() : onDisable()),
+      [onEnable, onDisable],
     ),
   );
-  const row = onConfigure ? selectableRowProps(onConfigure) : null;
+  // Data ownership is a *disable* rule only, and it is the one the operator
+  // most often meets — say it in the same place, in the same shape, as the
+  // other two.
+  const reason = enabled && ownsData
+    ? `Has draws or matches: can't turn off.`
+    : blockedReason;
+  const locked =
+    reason !== undefined || (!enabled && !isModuleEnableable(module.status));
+
   return (
     <li
       data-testid={`settings-module-${module.id}`}
-      {...(row ?? {})}
-      className={[
-        "flex items-start justify-between gap-4 p-3",
-        row ? `cursor-pointer hover:bg-muted/30 ${SELECTABLE_ROW_FOCUS}` : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      className="flex items-start justify-between gap-4 p-3"
     >
       <div className="min-w-0 space-y-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-foreground">
-            {meta?.name ?? module.label}
-          </span>
-          {/* Text, not a container (X6): module state is configuration, not
-              a time-sensitive signal — ink weight carries the tri-state.
-              On = accent semibold; Available = muted semibold; Off = muted
-              normal, one visible step quieter. */}
-          <span
-            className={[
-              "text-xs uppercase tracking-[0.06em]",
-              module.status === "enabled"
-                ? "font-semibold text-accent"
-                : module.status === "available"
-                  ? "font-semibold text-muted-foreground"
-                  : "text-muted-foreground",
-            ].join(" ")}
-          >
-            {MODULE_STATUS_WORD[module.status] ?? module.status}
-          </span>
-        </div>
-        <p className={TEXT_MUTED_XS}>
-          {meta?.capability ?? module.note}
-        </p>
-        {meta?.dependency ? (
-          <p className={TEXT_MUTED_XS}>{meta.dependency}</p>
+        <span className="text-sm font-medium text-foreground">{name}</span>
+        <p className={TEXT_MUTED_XS}>{meta?.capability ?? module.note}</p>
+        {reason ? (
+          <p data-testid={`module-reason-${module.id}`} className={TEXT_MUTED_XS}>
+            {reason}
+          </p>
         ) : null}
-        {/* Don't repeat the dependency line word-for-word as the reason. */}
-        {blockedReason && blockedReason !== meta?.dependency ? (
-          <p className={TEXT_MUTED_XS}>{blockedReason}</p>
-        ) : null}
-        <p
-          data-testid={`module-impact-${module.id}`}
-          className={TEXT_MUTED_XS}
-        >
-          {ownsData
-            ? `${meta?.name ?? module.label} has draws or matches, so it stays on. It can be turned off once they are removed through ${meta?.name ?? module.label}.`
-            : `Turning ${meta?.name ?? module.label} off hides it from this workspace's navigation. Nothing is stored yet, so nothing is deleted.`}
-        </p>
-        <p
-          data-testid={`module-completion-${module.id}`}
-          className={TEXT_MUTED_XS}
-        >
-          {module.status === "enabled"
-            ? ownsData
-              ? "Active with data; finish setup"
-              : "Enabled; finish setup"
-            : module.status === "disabled"
-              ? "Off"
-              : "Available to enable"}
-        </p>
       </div>
-      <div className="shrink-0">
-        <div className="flex items-center gap-1.5">
-          {onConfigure ? (
-            <Button variant="ghost" onClick={onConfigure}>
-              Configure
-            </Button>
-          ) : null}
-          {module.status === "enabled" && ownsData ? (
-            <Button
-              variant="outline"
-              onClick={() => setImpactOpen(true)}
-              title="Review the data this module owns before disabling"
-            >
-              Review impact
-            </Button>
-          ) : module.status === "enabled" ? (
-            <Button
-              variant="ghost"
-              onClick={() => void toggle.run()}
-              disabled={toggle.pending || blockedReason !== undefined}
-              aria-busy={toggle.pending}
-              title={blockedReason}
-              className="text-muted-foreground"
-            >
-              Disable
-            </Button>
-          ) : isModuleEnableable(module.status) ? (
-            // SIG-6: `outline`, not the accent-filled primary. Weight follows
-            // operator need, and turning ON a module this workspace is not using
-            // is not the page's most-wanted action — yet Enable was the largest,
-            // bluest control on the surface (the primary glow button, one per
-            // unused module) while every module actually in use carried a grey
-            // ghost link. The catalog read as a shop. Same size, same position,
-            // same action; secondary weight.
-            <Button
-              variant="outline"
-              onClick={() => void toggle.run()}
-              disabled={toggle.pending || blockedReason !== undefined}
-              aria-busy={toggle.pending}
-              title={blockedReason}
-            >
-              Enable
-            </Button>
-          ) : null}
-        </div>
+      <div className="w-28 shrink-0">
+        <Seg
+          options={ON_OFF}
+          value={enabled ? "on" : "off"}
+          onChange={(next) => {
+            const wanted = next === "on";
+            if (wanted !== enabled) void toggle.run(wanted);
+          }}
+          ariaLabel={name}
+          disabled={locked || toggle.pending}
+        />
       </div>
-      {impactOpen ? (
-        <Modal
-          onClose={() => setImpactOpen(false)}
-          titleId={`module-impact-heading-${module.id}`}
-        >
-          <div className="p-6">
-            <h2
-              id={`module-impact-heading-${module.id}`}
-              className={TEXT_TITLE}
-            >
-              Review {meta?.name ?? module.label} data impact
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {meta?.name ?? module.label} has draws or matches, so it stays
-              on. It can be turned off once they are removed through{" "}
-              {meta?.name ?? module.label}.
-            </p>
-            <div className="mt-5 flex justify-end">
-              <Button onClick={() => setImpactOpen(false)}>
-                Keep module enabled
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      ) : null}
     </li>
   );
 }

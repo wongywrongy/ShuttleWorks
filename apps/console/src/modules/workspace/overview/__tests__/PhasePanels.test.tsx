@@ -109,3 +109,66 @@ describe('PhasePanels — Live (V3-OC19.1 / V3-OC19.2 / V3-03-3)', () => {
     expect(onNavigate).toHaveBeenCalledWith('matches');
   });
 });
+
+// P2: "Plan not finalized · Open Plan" is the workspace's NEXT ACTION on the
+// Overview, not a status pill in the Live day header. Until the plan is marked
+// ready nothing is late and the floor has no authority behind it.
+describe('PhasePanels — the Plan → Run handoff blocker (P2)', () => {
+  const signals = (planFinalized: boolean | undefined) => ({
+    health: 'good' as const,
+    attention: [],
+    modules: { enabled: 1, available: 1, disabled: 0, comingSoon: 0 },
+    setup: {},
+    collaboration: { memberCount: 0, activeInviteCount: 0 },
+    phase: 'ready' as const,
+    planFinalized,
+    matches: { total: 4, scheduled: 4, toDo: 0 },
+  });
+
+  it('READY with an unfinalized plan names the blocker and routes to Plan', () => {
+    const onNavigate = vi.fn();
+    render(
+      <PhasePanels
+        phase="ready"
+        summary={summary({ signals: signals(false) })}
+        steps={[]}
+        onNavigate={onNavigate}
+      />,
+    );
+    const block = screen.getByTestId('overview-plan-not-finalized');
+    expect(block).toHaveTextContent('Plan not finalized');
+    screen.getByRole('button', { name: 'Open Plan' }).click();
+    expect(onNavigate).toHaveBeenCalledWith('schedule');
+    // ...and it does not sit beside a second route to the same surface.
+    expect(screen.queryByRole('button', { name: /review the plan/i })).toBeNull();
+  });
+
+  it('LIVE carries the same blocker while the plan is not ready', () => {
+    const onNavigate = vi.fn();
+    render(
+      <PhasePanels
+        phase="live"
+        summary={summary({ signals: { ...signals(false), phase: 'live' } })}
+        steps={[]}
+        onNavigate={onNavigate}
+      />,
+    );
+    screen.getByRole('button', { name: 'Open Plan' }).click();
+    expect(onNavigate).toHaveBeenCalledWith('schedule');
+  });
+
+  it('a finalized plan — and an older payload that cannot say — show nothing', () => {
+    for (const value of [true, undefined]) {
+      const { unmount } = render(
+        <PhasePanels
+          phase="ready"
+          summary={summary({ signals: signals(value) })}
+          steps={[]}
+          onNavigate={vi.fn()}
+        />,
+      );
+      expect(screen.queryByTestId('overview-plan-not-finalized')).toBeNull();
+      unmount();
+    }
+  });
+});

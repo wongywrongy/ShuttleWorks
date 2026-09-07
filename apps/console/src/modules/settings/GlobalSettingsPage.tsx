@@ -16,6 +16,7 @@ import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
 import { PageBody, PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { AppearanceSettings } from './AppearanceSettings';
 import { useAuth } from '../../context/AuthContext';
+import { presentIdentity, LOCAL_OWNER_LABEL } from './memberIdentity';
 import { apiClient } from '../../api/client';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from '../../platform/auth/passwordPolicy';
 import { FieldRow, Section } from '../../platform/engine-config/SettingsControls';
@@ -92,7 +93,9 @@ function Note({ children }: { children: React.ReactNode }) {
 function ProfilePage() {
   const { user, isBootstrap } = useAuth();
   const locked = isBootstrap;
-  const email = user?.email ?? 'local@dev';
+  // Never the raw bootstrap placeholder: local mode has an operator, not an
+  // address (see memberIdentity.presentIdentity).
+  const email = presentIdentity(user?.email) ?? LOCAL_OWNER_LABEL;
   const displayName = user?.displayName ?? '';
   const initials = (displayName || email).trim().charAt(0).toUpperCase() || 'L';
   return (

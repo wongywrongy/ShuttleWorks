@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { ModuleCatalogRow } from "../ModuleCatalogRow";
 
 const module = {
@@ -9,73 +9,79 @@ const module = {
   hasData: true,
 };
 
+/** The row's one control. */
+const switchFor = (name: string) => screen.getByRole("radiogroup", { name });
+
 describe("ModuleCatalogRow", () => {
-  it("shows purpose, data impact, configuration status, and configure action", () => {
-    const onConfigure = vi.fn();
+  it("is a name, one line of description, and one switch", () => {
     render(
       <ul>
         <ModuleCatalogRow
-          module={module}
+          module={{ ...module, hasData: false }}
           onEnable={vi.fn()}
           onDisable={vi.fn()}
-          onConfigure={onConfigure}
         />
       </ul>,
     );
+    expect(screen.getByText("Meet")).toBeInTheDocument();
     expect(screen.getByText(/roster, build a court schedule/i)).toBeInTheDocument();
-    expect(screen.getByTestId("module-impact-meet")).toHaveTextContent(
-      /has draws or matches, so it stays on/i,
+    expect(within(switchFor("Meet")).getByRole("radio", { name: "On" })).toHaveAttribute(
+      "aria-checked",
+      "true",
     );
-    expect(screen.getByTestId("module-completion-meet")).toHaveTextContent(
-      /active with data/i,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Configure" }));
-    expect(onConfigure).toHaveBeenCalledOnce();
+    // Everything the row used to say around the switch is gone.
+    expect(screen.queryByRole("button", { name: "Configure" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review impact" })).toBeNull();
+    expect(screen.queryByTestId("module-impact-meet")).toBeNull();
+    expect(screen.queryByTestId("module-completion-meet")).toBeNull();
+    expect(screen.queryByText(/^ON$/)).toBeNull();
+    expect(screen.queryByText(/^AVAILABLE$/)).toBeNull();
   });
 
-  it("opens configuration from the row without double-firing nested actions", () => {
-    const onConfigure = vi.fn();
-    render(
-      <ul>
-        <ModuleCatalogRow
-          module={module}
-          onEnable={vi.fn()}
-          onDisable={vi.fn()}
-          onConfigure={onConfigure}
-        />
-      </ul>,
-    );
-    fireEvent.click(screen.getByTestId("settings-module-meet"));
-    expect(onConfigure).toHaveBeenCalledOnce();
-
-    fireEvent.click(screen.getByRole("button", { name: "Configure" }));
-    expect(onConfigure).toHaveBeenCalledTimes(2);
-  });
-
-  it("requires reviewing impact before offering any disable behavior", () => {
+  it("turns the module off through the switch", () => {
     const onDisable = vi.fn();
     render(
       <ul>
         <ModuleCatalogRow
-          module={module}
+          module={{ ...module, hasData: false }}
           onEnable={vi.fn()}
           onDisable={onDisable}
         />
       </ul>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Review impact" }));
-    expect(
-      screen.getByRole("heading", { name: /Review Meet data impact/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getAllByText(/it can be turned off once they are removed through meet/i).length,
-    ).toBeGreaterThan(0);
-    expect(onDisable).not.toHaveBeenCalled();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Keep module enabled" }),
+    fireEvent.click(within(switchFor("Meet")).getByRole("radio", { name: "Off" }));
+    expect(onDisable).toHaveBeenCalledOnce();
+  });
+
+  it("disables the switch with one reason when the module owns data", () => {
+    const onDisable = vi.fn();
+    render(
+      <ul>
+        <ModuleCatalogRow module={module} onEnable={vi.fn()} onDisable={onDisable} />
+      </ul>,
     );
-    expect(
-      screen.queryByRole("heading", { name: /Review Meet data impact/i }),
-    ).toBeNull();
+    expect(screen.getByTestId("module-reason-meet")).toHaveTextContent(
+      "Has draws or matches: can't turn off.",
+    );
+    expect(switchFor("Meet")).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(within(switchFor("Meet")).getByRole("radio", { name: "Off" }));
+    expect(onDisable).not.toHaveBeenCalled();
+  });
+
+  it("disables the switch with the caller's reason (dependency / last engine)", () => {
+    render(
+      <ul>
+        <ModuleCatalogRow
+          module={{ id: "display", label: "Display", status: "available" }}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          blockedReason="Needs Meet or Bracket on."
+        />
+      </ul>,
+    );
+    expect(screen.getByTestId("module-reason-display")).toHaveTextContent(
+      "Needs Meet or Bracket on.",
+    );
+    expect(switchFor("Display")).toHaveAttribute("aria-disabled", "true");
   });
 });

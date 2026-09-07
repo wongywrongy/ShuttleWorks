@@ -100,6 +100,34 @@ function SetupPanel({ summary, steps, onNavigate }: PanelProps) {
   );
 }
 
+/**
+ * The Plan → Run handoff blocker, as the workspace's next action (P2).
+ *
+ * Until the plan is marked ready nothing is late, the board is not running,
+ * and the floor has no authority behind it — which makes it a next action,
+ * not a status pill on the Live day header where it used to live.
+ */
+function PlanNotFinalized({
+  summary,
+  onNavigate,
+}: {
+  summary: TournamentSummaryDTO;
+  onNavigate: (segment: AppTab) => void;
+}) {
+  if (summary.signals?.planFinalized !== false) return null;
+  return (
+    <div data-testid="overview-plan-not-finalized">
+      <SectionLabel>Next</SectionLabel>
+      <p className={TEXT_MUTED_SM}>Plan not finalized</p>
+      <div className="mt-2">
+        <Button variant="outline" onClick={() => onNavigate(segments(summary.kind).plan)}>
+          Open Plan
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
   const seg = segments(summary.kind);
   const m = summary.signals?.matches;
@@ -107,6 +135,7 @@ function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
   return (
     <section className="space-y-5">
       <ReadySummary steps={steps} />
+      <PlanNotFinalized summary={summary} onNavigate={onNavigate} />
       <div>
         <SectionLabel>Schedule</SectionLabel>
         <Figures
@@ -118,12 +147,16 @@ function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
         />
       </div>
       {/* The phase's primary CTA ("Open live day") lives in the page header
-          (G3.1) — the panel keeps only its secondary action. */}
-      <div>
-        <Button variant="outline" onClick={() => onNavigate(seg.plan)}>
-          Review the plan
-        </Button>
-      </div>
+          (G3.1) — the panel keeps only its secondary action. Once the plan is
+          not yet ready, `PlanNotFinalized` above already offers Open Plan, so
+          this second route to the same surface stands down. */}
+      {summary.signals?.planFinalized === false ? null : (
+        <div>
+          <Button variant="outline" onClick={() => onNavigate(seg.plan)}>
+            Review the plan
+          </Button>
+        </div>
+      )}
     </section>
   );
 }
@@ -141,6 +174,7 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
     : 0;
   return (
     <section className="space-y-5">
+      <PlanNotFinalized summary={summary} onNavigate={onNavigate} />
       <div>
         <SectionLabel>Progress</SectionLabel>
         {/* Played / Remaining / Total (W1.2): "matches" and "scheduled"

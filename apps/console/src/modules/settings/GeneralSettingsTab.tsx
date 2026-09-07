@@ -5,9 +5,15 @@ import { lifecycleBadge } from '../../platform/domain/lifecycle';
 import { resolvePhase, PHASE_LABEL } from '../../platform/domain/overviewPhase';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { TEXT_MUTED_SM } from '../../lib/utils'
-import { formatDateTime } from '../../lib/formatDateTime'
 
-/** Workspace administration. Tournament properties are edited in Setup.
+/** Workspace administration: the workspace's own state, not the event's.
+ *
+ *  The read-only "Tournament name / Tournament date" pair and its two "Edit
+ *  tournament properties" / "Edit dates" links are gone: both links went to
+ *  the same place (Setup · Details), which is also where those two facts are
+ *  edited — so this page restated two fields it could not change in order to
+ *  offer twice the same way to leave. The workspace name is in the shell
+ *  header on every page of the workspace.
  *
  *  Lifecycle is DISPLAY-ONLY here (SP-CONSOLE-REFINE A6.1): the app derives
  *  it from match state (`lifecycleBadge`), and the stored-status dropdown this
@@ -15,7 +21,6 @@ import { formatDateTime } from '../../lib/formatDateTime'
  *  invited the operator to "set" a state that nothing obeyed. The one explicit
  *  lifecycle action is Archive / Unarchive in the danger zone below. */
 export function GeneralSettingsTab({
-  tid,
   summary,
 }: {
   tid: string;
@@ -51,17 +56,7 @@ export function GeneralSettingsTab({
           Workspace settings
         </h2>
       </div>
-      <Section title="Workspace details" defaultOpen>
-        <dl className="space-y-4 py-4 text-sm">
-          <div><dt className="text-muted-foreground">Tournament name</dt><dd className="mt-1">{summary?.name ?? 'Loading…'}</dd></div>
-          {/* Same date grammar as everywhere else on the workspace (V3-OC29.1,
-              X6): the raw ISO string used to render here directly. */}
-          <div><dt className="text-muted-foreground">Tournament date</dt><dd className="mt-1">{summary?.tournamentDate ? (formatDateTime(summary.tournamentDate, 'date_with_year') ?? 'Not set') : 'Not set'}</dd></div>
-        </dl>
-        <div className="flex gap-4 pb-4 text-sm">
-          <a className="text-accent underline" href={`/tournaments/${encodeURIComponent(tid)}/setup/general`}>Edit tournament properties</a>
-          <a className="text-accent underline" href={`/tournaments/${encodeURIComponent(tid)}/setup/dates`}>Edit dates</a>
-        </div>
+      <Section title="Status" defaultOpen>
         <Row
           label="Tournament status"
           last
