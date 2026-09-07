@@ -525,6 +525,7 @@ surface-books-fixture:
 	display_token="$$(jq -er .displayToken "$$fixture_json")"; \
 	entrant_slug="$$(jq -er .koreaSlug "$$fixture_json")"; \
 	fixture_mode="$$(jq -r '.fixtureMode // "normal"' "$$fixture_json")"; \
+	player_key="$$(jq -r '.playerKey // ""' "$$fixture_json")"; \
 	api_url="$$(jq -er .apiBaseUrl "$$fixture_json")"; \
 	event_tz="$$(curl -fsS "$$api_url/tournaments/$$workspace_id" | jq -r '.timeZone // empty')"; \
 	mkdir -p "$(SURFACE_REPORT_DIR)"; \
@@ -532,7 +533,7 @@ surface-books-fixture:
 	WS_ID="$$workspace_id" DISPLAY_TOKEN="$$display_token" \
 		node tools/surface-capture.mjs console "$$console_url" \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
-	FIXTURE_MODE="$$fixture_mode" \
+	FIXTURE_MODE="$$fixture_mode" PLAYER_KEY="$$player_key" \
 	SLUG="$$entrant_slug" node tools/surface-capture.mjs entrant "$$entrant_url" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
 	@$(MAKE) --no-print-directory surface-books-status

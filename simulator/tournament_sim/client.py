@@ -490,14 +490,28 @@ class SimClient:
     def confirm_entry(self, tid: str, entry_id: str) -> dict:
         return self._json("POST", f"/tournaments/{tid}/entries/{entry_id}/confirm")
 
+    def withdraw_entry(self, tid: str, entry_id: str) -> dict:
+        return self._json("POST", f"/tournaments/{tid}/entries/{entry_id}/withdraw")
+
     def commit_entries(self, tid: str) -> dict:
         return self._json("POST", f"/tournaments/{tid}/entries/commit")
 
+    def import_entries(self, tid: str, body: dict) -> dict:
+        """``POST /tournaments/{tid}/entries/import`` — the operator import seam.
+
+        The bulk counterpart of the public form below. It still goes through
+        ``entries.submissions.create_submission`` (no direct ORM writes) but
+        takes an already-resolved account id and workspace event ids, so one
+        request can register a whole draw's worth of people. Idempotent on
+        ``idempotencyKey`` per account.
+        """
+        return self._json("POST", f"/tournaments/{tid}/entries/import", json=body)
+
     # ---- entries: the public write surface ---------------------------------
     #
-    # These are the ONLY way an entry row can exist — there is no operator
-    # "create entry" route — so seeding a desk means being a real entrant:
-    # an account, a session cookie, and the form's own CSRF token.
+    # Together with ``import_entries`` above these are the only ways an entry
+    # row can exist; seeding a desk from the public side means being a real
+    # entrant: an account, a session cookie, and the form's own CSRF token.
 
     def entrant_signup(self, body: dict, *, expect: Iterable[int] = (202,)):
         """``POST /e/account/signup``, as JSON.
@@ -509,6 +523,15 @@ class SimClient:
         is the production one with no stub in it.
         """
         return self.request("POST", "/e/account/signup", json=body, expect=expect)
+
+    def entrant_me(self) -> dict:
+        """``GET /e/account/me`` — the signed-in entrant account.
+
+        Signup answers with a deliberately non-enumerating envelope that
+        carries no id, so a seeder that needs the ``accountId`` the entries
+        import seam wants has to sign in once and ask.
+        """
+        return self._json("GET", "/e/account/me")
 
     def entrant_login(self, email: str, password: str) -> httpx.Response:
         """``POST /e/account/login`` — sets ``sw_play_session`` on the jar."""

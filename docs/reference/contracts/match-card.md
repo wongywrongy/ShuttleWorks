@@ -37,6 +37,31 @@ they disagree. The four changes it makes to this page, each applied in place and
    stay entirely with the operator.
 :::
 
+::: danger Amended 2026-09-07 — public visual fixes, package P0
+`public-visual-fixes.md` is approved product direction for the **public entrant tier**. It extends
+the operator amendment above (which still holds in full) with five changes, each applied in place
+below and marked *(public P0)*:
+
+1. **One match reference, both tiers** (§2.2, §4.2, §4.3). A public bracket node and the operator's
+   match list name the same match with the same string, from the same identity authority —
+   `MS R32·11`, `MS R16·2`. The public `Match 1` / `Match 2` labels and the public tier's own
+   `"SF 1"` speller are deleted. In a single-event view the compact form `R16-2 · 10:00 · Court 3`
+   drops the event code; a mixed-event schedule keeps it.
+2. **A public empty side is empty** (§2.1, §4.3). An unresolved public side renders empty
+   participant slots and one muted feeder line; the phrase "Winner of" leaves the public tier
+   entirely, and no `nodeKey`, play-unit id or slot index ever appears.
+3. **Paired scorelines and seeds, publicly** (§2.7, §3.4, §4.2, §4.3). `21–16, 22–20` in
+   first-listed-side order, no per-game emphasis, right-aligned in a bracket node and attached to
+   its own side's row on a schedule card. Available seed values render beside the side.
+4. **The bracket scrolls natively** (§4.3). The canvas lives in its own `overflow: auto`,
+   accessibly-named, keyboard-reachable region with sticky round headers; the page itself never
+   scrolls horizontally. Total-height ceilings and fixed node heights are withdrawn — node height
+   derives from content, and a doubles node is taller than a singles node.
+5. **Venue-local time, stated once** (§4.2). The tournament frame says "All times local to the
+   venue" once; cards then print bare venue-local values with no IANA identifier and no offset, and
+   a day-grouped list does not repeat its date on every card.
+:::
+
 [[toc]]
 
 ---
@@ -213,7 +238,7 @@ a name. It is never a blank row, and the ledger stays collapsed (§3.4).
 
 | Field | Rule |
 | --- | --- |
-| `reference` | Derived once by the tier's identity authority (`matchIdentity.ts` console-side) and rendered *verbatim* on every renderer, including the board and the compact chip (plan §3 correction 10). Never re-spelled per view. |
+| `reference` | Derived once by the identity authority (`matchIdentity.ts` console-side) and rendered *verbatim* on every renderer, including the board and the compact chip (plan §3 correction 10). Never re-spelled per view. *(public P0, 2026-09-07)* **One authority, not one per tier**: a public bracket node and the operator's match list must show the **same string** for the same match. A view whose event is unambiguous may drop the event code (`R16-2`); a mixed-event view keeps it (`MS R16-2`). Public `Match {position}` labels are deleted. This currently requires wire work — the public DTOs carry no reference (state-and-formatting §6.4). |
 | `eventLabel` / `roundLabel` | One speller per tier (state-and-formatting §6.3). When the round label cannot be derived, the bare sequence ("Match 12") is used — never an empty header. |
 | `tournamentName` | **Omitted inside a tournament-scoped view.** The mockup repeated it on every card; plan §3 correction 4 removes it. It is present only where cards from more than one workspace can appear on one screen: the hub, a cross-workspace search result, an entrant's own "my matches" list, and email. |
 | slot indexes | **Never rendered.** V3-OC16.1: "slot 52 · court 5" is replaced by the tournament-timezone time and court; the slot index is not user-facing at any density. |
@@ -460,6 +485,24 @@ tournament name inside a tournament-scoped view. A saturated header band on ever
 card. A repeated ISO date on each card under a day heading that already carries the date. "Live" as
 a match state.
 
+**Amended by public P0, 2026-09-07.** Four additions and one deletion:
+
+- **The card carries the shared match reference** (state-and-formatting §6.1), the same string the
+  operator's list shows. In a single-event context the compact line is
+  `R16-2 · 10:00 · Court 3`; in a mixed-event day schedule the event code stays: `MS R16-2 · 10:00 ·
+  Court 3`. The bare labels `Match 1`, `Match 2` are deleted.
+- **The approved court is shown whenever it exists**, in every grouping mode including *By time* —
+  a card that omits a court the operator has approved is not "quieter", it is wrong. A court that is
+  genuinely absent, withheld or disputed renders nothing at all, and such a match is never described
+  as "On court".
+- **Scores attach to sides.** Each side's games sit on that side's own row, paired sequence, no
+  per-game emphasis, winner shown only by the winning side's name (state-and-formatting §5.1 rule 6).
+  Seeds render beside the side they belong to.
+- **Sides stack; doubles partners stack within a side.** One person per line, so a doubles card is
+  taller than a singles card rather than compressing two names onto one.
+- **Deleted: the repeated per-card date** inside a list already grouped by day, and every per-card
+  timezone note. The date context returns for a multi-day or ungrouped list.
+
 **Envelope.** 320 px: both sides, the state word and the ledger are all visible; names wrap rather
 than truncate; the card never scrolls horizontally. 390/768/1440: progressively more metadata on
 one line, never more *information*. 200% zoom at 320 px: the card grows vertically; no element
@@ -492,6 +535,31 @@ The console's current `BRACKET_CARD_HEIGHT = 160` comment already records the co
 budget the worst case its own data produces, because "the canvas auto-fit absorbs the extra height;
 truncation and overlap may not". This contract makes that a rule: **node geometry is derived from
 the tallest rendered side, not from a constant chosen for a typical name.**
+
+**Amended by public P0, 2026-09-07 — the public bracket.** The console's `DrawView` keeps the rules
+above; the public bracket node additionally obeys:
+
+- **The reference on a public node is the shared one** (state-and-formatting §6.1) — the identical
+  string the operator's match list shows for that match. Not `Match 3`, not a per-round renumbering,
+  not a locally computed `"SF 1"`.
+- **An unresolved side is empty, with a muted feeder line.** No "Winner of", no `nodeKey`, no
+  participant key, no slot index. The relationship travels in the connector geometry and in the one
+  muted line; the participant slots stay at their normal height so nothing jumps as results land.
+  A partly-known doubles side keeps its known player and leaves the other slot empty.
+- **Seeds and paired scores render, right-aligned** against the node's trailing edge —
+  `21–16, 22–20`, first-listed-side order, no per-game emphasis.
+- **The canvas scrolls natively, in its own region.** `overflow: auto`, height bounded to the
+  available viewport, an accessible name, reachable and scrollable by keyboard, and it never traps
+  the page. The **page** never scrolls horizontally. Round headers stay sticky at the top of that
+  region. Round controls (`R32 · R16 · QF · SF · F`, adapted to the format) are **native anchors**
+  that work with no JavaScript and may be enhanced by a page-scoped script.
+- **Node geometry derives from content**, per the rule already stated above. *Withdrawn:* total
+  draw-height ceilings and any fixed per-node height — in particular a 44 px node cannot hold a
+  doubles side, which is two person lines at the ≥ 14 px floor. Tests assert readable content,
+  non-overlap, scroll reachability and connector correctness rather than a DOM shape or a height
+  number (§6.1).
+- **First-round separation starts in the 8–12 px range** and grows with node height; connector
+  geometry is recomputed for varied node heights, and the Finals column is never clipped.
 
 **Envelope.** 320/390: Round view. 768/1440: canvas, no node overlap, connectors meeting the right
 sides. 200% zoom: nodes grow; the canvas scrolls; names stay whole.

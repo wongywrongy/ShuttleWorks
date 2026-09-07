@@ -37,6 +37,32 @@ they disagree. Six changes, each also applied in place below and marked *(P0)*:
    task.
 :::
 
+::: danger Amended 2026-09-07 — public visual fixes, package P0
+`public-visual-fixes.md` is approved product direction for the **public entrant tier** and
+supersedes the rules below wherever they disagree. It extends, and does not reverse, the operator
+amendment above: everything that amendment fixes about the operator's vocabulary, paired scores and
+operator-owned diagnostics still holds. Five changes, each also applied in place below:
+
+1. **One tournament frame** (§11, new). Every tournament-scoped public route — Overview, Schedule,
+   Draws, a draw detail, Players, a tournament-scoped player page, Regulations — renders inside one
+   shared frame: the same hero, the same tab bar, and one breadcrumb trail rendered once, above the
+   hero. Per-page back links, per-page heroes and a page's own second navigation are deleted.
+2. **A public empty side is empty** (§6.1, §6.2). The public tier renders an unresolved side as
+   **empty participant slots plus one muted feeder line**; the operator keeps "Winner of
+   {reference}". Neither tier ever renders a machine id, and the *public* tier never renders the
+   phrase "Winner of".
+3. **Paired scorelines, publicly too** (§5.1). A published score reads as paired games —
+   `21–16, 22–20` — in first-listed-side order, with no per-game emphasis, right-aligned in a
+   bracket node and clearly attached to its side on a schedule card.
+4. **One match reference, both tiers** (§6.1). A public bracket node and the operator's match list
+   name the same match with the **same string**, produced by the same identity authority. `Match 1`,
+   `Match 2` and any per-surface renumbering are deleted.
+5. **Venue-local time, no technical strings** (§7). Public copy states "All times local to the
+   venue" once, in the tournament hero, and then prints venue-local dates and times with **no IANA
+   identifier and no GMT/UTC offset**. The timezone stays in the data and in machine attributes; it
+   leaves the prose.
+:::
+
 ## How to read a domain section
 
 Every section has the same four parts.
@@ -437,6 +463,14 @@ live score is a lead, not a won game.* The rule is:
 5. **The match-winner mark is absent during an unfinished match** and carries an accessible text
    equivalent when present (e.g. `aria-label="Winner"` on the mark, or visually hidden text) — never
    a bare glyph.
+6. **The public tier follows the same rule, in its own layouts** *(P0, 2026-09-07)*. A published
+   score reads as the paired sequence `21–16, 22–20`, first number to the first-listed side, no
+   per-game emphasis, winner shown only by the winning side's name. On a **bracket node** the
+   sequence is right-aligned against the node's trailing edge; on a **schedule card** each side's
+   games sit on that side's own row so the association is positional rather than inferred. Where
+   live scores are published, the **current game** is shown; where they are not, no promise of
+   updating scores is displayed. **An absent score renders nothing** — never `0–0`, never a dash —
+   and a retirement or walkover keeps whatever was actually played (a walkover has no games at all).
 
 ::: tip Ruled — C3 (confirmed 2026-09-06)
 The configuration carries `deuceEnabled` but **no point cap field**. Plan §3 rules out hardcoding
@@ -509,15 +543,34 @@ and one outstanding partner is `persons: [A], unresolved: {kind:'pending_member'
 missing:1}`. That is the case the current code cannot express, which is why it invents a person or
 prints `TBD`.
 
-**Labels, per unresolved kind:**
+**Labels, per unresolved kind** *(public column rewritten by P0, 2026-09-07)*:
 
 | Kind | Operator label | Public label |
 | --- | --- | --- |
 | `bye` | Bye | Bye |
 | `pending_member` | the known names, then "partner to be confirmed" | the known names, then "partner to be confirmed" |
-| `winner_of` | "Winner of {match reference}" | "Winner of {match reference}" |
-| `loser_of` | "Loser of {match reference}" | "Loser of {match reference}" |
-| `undetermined` | "To be decided" | "To be decided" |
+| `winner_of` | "Winner of {match reference}" | **empty participant slots + one muted feeder line naming the feeding match: "from {match reference}"** |
+| `loser_of` | "Loser of {match reference}" | **empty participant slots + one muted feeder line: "from {match reference}"** |
+| `undetermined` | "To be decided" | **empty participant slots, no label** |
+
+**The public empty side, specified** *(P0)*. A future match has no players yet, and the public tier
+says so by *showing no players* — the side's person slots render at their normal height, empty, and
+the relationship to the earlier match is carried by (a) the connector/`feederNodeKey` data that is
+already on the wire and (b) at most one muted line per node. Concretely:
+
+- The phrase **"Winner of"** is deleted from the public tier. It reads as a player's name in a slot
+  that is otherwise full of names, which is the defect: a reader scanning a bracket sees "Winner of
+  SF 1" where every neighbouring row holds a person.
+- A feeder line names the feeding match by its **match reference** (§6.1 below), never by a
+  `nodeKey`, play-unit id, participant key, slot index or any other machine identifier.
+- A side that is **partly** known keeps what is known: a doubles side with one confirmed player
+  renders that player and one empty slot, never a second invented person and never a collapse to a
+  single line that reads as singles.
+- **Bye** and **withheld** stay distinct from an unknown feeder. A bye is a real, known outcome and
+  says "Bye"; a person who exists but is not published renders "Player not published" (§6.2); an
+  unresolved side renders neither.
+- Empty is not a placeholder. There is no `—`, no `TBD`, no `?`, no grey silhouette and no
+  zero-height row: the node keeps its geometry so a column of nodes does not jump as results land.
 
 **Pair labels are never assembled or parsed from slash strings.** Seven builders, two separators and
 four different unresolved fallbacks exist today (D14); `lib/names.ts:21-57` splits
@@ -551,6 +604,24 @@ is already the source-aware identity value object and explicitly "does not parse
 machine id". It becomes the authority for the console; the **round label** it produces becomes the
 one speller, replacing four spellings (D16).
 
+**One reference, both tiers** *(P0, 2026-09-07)*. A public bracket node and the operator's match
+list **must name the same match with the same string**. A reader who is told `MS R32·11` at the desk
+and `Match 11` on the public draw has been given two identities for one match, and neither can be
+used to talk to the other.
+
+- The grammar is the identity authority's: event code, stage, sequence — `MS R32·11`, `WD R16·1`,
+  `MS QF2`, `MS F`. (`public-visual-fixes.md` writes this as `MS R32-11`; that is the same
+  reference, and the separator the authority emits — U+00B7 — is the spelling that ships.)
+- It is **derived from the identity coordinates**, never recomputed from rendered order, never
+  renumbered per surface, and never tournament-wide. The bare public labels `Match 1`, `Match 2`
+  are deleted, as is the public tier's separate `"SF 1"` speller.
+- The public wire therefore has to carry the coordinates the console already receives. Until it
+  does, a public surface has no reference to render and this rule is unimplementable — that is a
+  wire gap, recorded in §6.4, not a licence to renumber locally.
+- In a view whose event is already unambiguous (a single draw), the reference may drop the event
+  code and read `R16-2 · 10:00 · Court 3`. In a mixed-event view (a whole-day schedule) it keeps
+  the event code.
+
 ### 6.2 Missing data
 
 | Absent | Renders |
@@ -558,7 +629,7 @@ one speller, replacing four spellings (D16).
 | A person is not published | `PersonReferenceDTO(resolution='dead', label='Player not published')` — already the backend behaviour and it is correct; the label is fixed here. |
 | A side has no persons and no known unresolved kind | "To be decided". **Not** `TBD`, **not** `–`, **not** `No players`, **not** empty string — those four fallbacks (D14) are deleted. |
 | A doubles side is one player short | The known player's name, then "partner to be confirmed". **Never** invent a second person, and never render the single name as if the side were singles. |
-| A predecessor match has not been played | "Winner of {reference}". The reference uses the same round/sequence speller as everything else. |
+| A predecessor match has not been played | **Operator:** "Winner of {reference}". **Public:** empty participant slots and one muted feeder line, "from {reference}" *(P0)*. Both use the same round/sequence speller as everything else. |
 | A round label cannot be derived | The bare sequence ("Match 12"). Never an empty header. |
 
 ### 6.3 Authority
@@ -594,6 +665,9 @@ one speller, replacing four spellings (D16).
 | D16 | `workspace_signals.py:270-321`, `entries_site.py:743-766`, `bracketDisplayData.ts:97` | redirect to authority | 03, 04, 17 |
 | D16 | `apps/console/src/platform/domain/matchIdentity.ts` | becomes authority | 10 |
 | D17 | `apps/console/src/platform/domain/match.ts:52-53` pre-joined side strings | **becomes structured** — the console adopts the entrant tier's `persons[]` shape; this is the largest single change in this contract | 10 |
+| P0 | Public wire carries **no match reference**: `MatchNodeDTO` has `position`, `ScheduleMatchDTO` has `matchKey` + `roundLabel`, and `PublicUnresolvedSideDTO.reference` spells its own `"SF 1"` | **wire gap** — the identity coordinates the console formats from are not published, so no public surface can yet render the shared reference. Publish the coordinates (or the formatted reference) and retire the local speller | public P3 |
+| P0 | `apps/entrant/app/components/MatchCard.tsx` `Match {position}` | deleted — replaced by the shared reference above | public P3 |
+| P0 | `apps/entrant/app/lib/side.ts` `Winner of ${reference}` | deleted on the public tier — empty slots plus a muted feeder line (§6.1) | public P3 |
 
 ::: tip Ruled — C4 (confirmed 2026-09-06)
 D17 requires the console's operator match model to carry structured sides, which touches the Meet
@@ -631,6 +705,30 @@ except where the context below says otherwise.
 datetime="…">` carrying the `diagnostic` ISO value, so the machine-readable value is always present
 even though it is never the prose.
 
+**Venue-local presentation on the public tier** *(P0, 2026-09-07)*. A spectator, a player and a
+parent are all reading about one venue, and the venue has one clock. So on every public tournament
+surface:
+
+- The tournament hero states **"All times local to the venue"** — **once per tournament frame**, not
+  once per card, once per day heading and once per section as it is today.
+- Having said it once, public prose then prints **bare venue-local dates and times**: `14:30`,
+  `Sat 1 August`, `closes 1 Aug`. It contains **no IANA identifier** (`Asia/Seoul`), **no offset**
+  (`GMT+9`, `+09:00`) and **no zone abbreviation** (`KST`) — which supersedes `clock_with_zone` and
+  the zone half of `deadline` **for public tournament pages**. Operator surfaces, emails and
+  anything a reader may open outside the venue keep the zone, because there the reader has no venue
+  clock to read.
+- **Removing the suffix is not the fix.** The instant must be *converted* into the event's timezone
+  before it is formatted; a UTC value with the "UTC" trimmed off is a wrong time presented
+  confidently. The timezone identifier stays in the data, in `<time datetime>`, and in every
+  computation — it simply never reaches the prose.
+- **Dates alone where a date is enough** (an entry deadline day, a play date). Precise local times
+  are retained where the time is the point: a scheduled match, a session start, a deadline instant.
+  A real deadline is never rounded to make it read better.
+- **Midnight and cross-zone cases are fixture-checked**, not reasoned about: converting must not
+  move an intended date across a day boundary, and the rendering must not change when the reader's
+  browser is in another timezone. The shared fixture carries venue-local entry windows written with
+  the venue's real offset for exactly this.
+
 **Browser locale date order alone does not prove a timezone bug** (plan §5). A reviewer seeing
 `8/8/2026` where they expected `8 Aug 2026` has found a locale observation, not a defect; the named
 contexts above are explicit enough that locale order is never load-bearing.
@@ -665,6 +763,8 @@ contexts above are explicit enough that locale order is never load-bearing.
 | D11 | `apps/entrant/app/lib/format.ts:58-72 formatMomentInZone` | becomes authority (entrant) | 11 |
 | D11 | `apps/console/src/lib/timezoneLocal.ts:17-35` | becomes authority (generalised into `formatDateTime.ts`) | 07 |
 | D12 | `format.ts:55, 60`; `schedule.tsx:206`; `schedule.types.ts:105` raw ISO in prose | deleted | 11 |
+| P0 | Rendered `Asia/Seoul` / GMT offsets in public tournament copy (hero, schedule header, deadlines) | deleted — one "All times local to the venue" line in the frame, bare venue-local values thereafter | public P7 |
+| P0 | `ScheduleMatchDTO.scheduledDate` published as the tournament's start date for **every** match | **fixed 2026-09-07** — `entries_site.py::_slot_date` + `shared/schedule_slots.py::slot_day_offset` derive the calendar day from the plan slot, so a six-day event no longer groups every match under day one | public P0 |
 | D13 | `apps/console/src/lib/timeFormatters.ts:12-16` | redirects to authority | 07 |
 | D13 | `useLiveOperations.ts:298`, `settings/PeopleAccessTab.tsx:25-29`, `SyncBackupsTab.tsx:25-46`, `SharingTab.tsx:27`, `hub/WorkspaceRow.tsx:84`, `workspace/overview/railRows.ts:37`, `plan/SolverProgressLog.tsx:156`, `components/SyncHealthIndicator.tsx:22` inline `toLocale*` | redirect to authority | 07, 12, 18, 19, 20 |
 | D13 | `display/publicDisplay/helpers.ts:19-20` (forces UTC), `MeetDisplayPage.tsx:122, 530-535`, `BracketDisplayPage.tsx:59, 135-138` | redirect to authority — the board renders the **tournament** timezone, which is the venue's | 17 |
@@ -809,6 +909,71 @@ Contact fields never cross the boundary in any state.
 | D17 | `entries_site.py` structured `persons[]` | becomes authority — the console adopts this shape, not the reverse | 04, 10 |
 | — | `entries_json.py:296, 374, 574-600`; `entries_me.py:171-200` twins | redirect to authority | 04 |
 | — | `apps/console/src/modules/display/publicDisplay/CourtsView.tsx:302-309` "Two current matches claim this court." | *(P0, 2026-09-07)* operator wording stays *Needs resolution*; the public/board string is **deleted** — a disputed court renders the court number alone | 17, P4 |
+
+---
+
+## 11. The public tournament frame
+
+*(New, P0, 2026-09-07 — `public-visual-fixes.md`. This section is the public counterpart of §1's
+module vocabulary: it fixes what a tournament-scoped public page is made of, not how it looks.)*
+
+### 11.1 Canonical model
+
+Every tournament-scoped public route renders inside **one frame**, composed once:
+
+```
+breadcrumbs          Tournaments › Korea Masters › Draws › Men's Singles
+tournament hero      name · dates · venue · status · "All times local to the venue" · live CTA
+tab bar              Overview · Schedule · Draws · Players · Documents
+page content         the route's own content, and nothing that repeats the three rows above
+```
+
+The routes in scope: Overview, Schedule, Draws index, a draw detail, Players, a tournament-scoped
+player page, and Regulations.
+
+**Rules.**
+
+- **The hero is built once, from one source.** Every route in scope is fed the same hero data. A
+  route may not implement its own hero, restate the timezone, restate the entries status, or add its
+  own freshness line.
+- **Breadcrumbs are rendered by the frame, above the hero, once.** Ancestor segments are native
+  links; the current segment is marked as the current page and is not a link. Labels come from real
+  tournament and event data, never from a route pattern or a slug.
+- **No floating back links.** `← Tournament`, `← Tournament · Draws` and every per-page text-arrow
+  back control are deleted; the breadcrumb is the route back.
+- **One navigation system.** A nested page highlights its parent tab. A page may not introduce a
+  second, competing tab bar or side navigation of its own; Regulations is reached through
+  Documents and the breadcrumb.
+- **Depth does not cost identity.** At any depth a reader can still see which tournament they are
+  in, the live call-to-action when there is one, and a route back — including on a draw detail and
+  on a tournament-scoped player page.
+- **The frame stays reachable on a narrow screen.** The hero is compact enough that the page's
+  primary content is not pushed below the fold at 320 px.
+
+### 11.2 Missing data
+
+| Absent | Renders |
+| --- | --- |
+| A breadcrumb label cannot be derived from real data | the segment is **omitted**, not filled with a slug, an id or a route name |
+| No live match | the live CTA is omitted; nothing takes its place |
+| No documents published | the Documents tab is omitted rather than shown leading to an empty page |
+| Tournament dates unknown | the hero omits the date line; it never fabricates a date to fill the slot |
+
+### 11.3 Authority
+
+| Tier | Module | Note |
+| --- | --- | --- |
+| Entrant | `apps/entrant/app/components/PlayShell.tsx` + `HeroHeader.tsx` + `TabBar.tsx` (**become the frame**) | The frame owns hero, tabs and breadcrumbs; routes render content only. |
+| Entrant | `apps/entrant/app/routes/*` tournament routes | **redirect to authority** — each drops its own hero/back-link/second-nav. |
+| Backend | `apps/api/src/entries/entries_site.py` page projection | The one source of the hero's tournament identity, dates, venue, timezone and publication state. |
+
+### 11.4 Implementation delta
+
+| D | Site | Verdict | Package |
+| --- | --- | --- | --- |
+| P0 | `schedule.tsx`'s own hero, repeated timezone, entries-status and freshness lines | deleted; fed by the frame | public P1 |
+| P0 | `regulations.tsx`'s separate left navigation and facts/header frame | deleted | public P1, P6 |
+| P0 | per-page `← Tournament` / `← Tournament · Draws` links | deleted | public P1 |
 
 ---
 

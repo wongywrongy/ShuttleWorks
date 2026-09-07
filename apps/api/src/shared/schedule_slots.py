@@ -84,6 +84,28 @@ def slot_time_from_start(
     return add_minutes_wrapping(f"{start_hour:02d}:{start_minute:02d}", minutes)
 
 
+def slot_day_offset(
+    start_hour: int,
+    start_minute: int,
+    slot_id: Optional[int],
+    interval_minutes: Optional[int],
+) -> int:
+    """Whole days between the plan's first slot and ``slot_id``.
+
+    The companion of :func:`slot_time_from_start`, which deliberately wraps
+    at midnight and therefore says "09:00" for a day-five slot without
+    saying WHICH day. Slot ids span the whole tournament plan, so a
+    multi-day event needs both halves: the time of day from that function
+    and the day offset from this one. Without it every match in a six-day
+    tournament publishes on the tournament's start date, which is what the
+    public schedule did before (public-visual-fixes.md, package P0).
+    """
+    if slot_id is None:
+        return 0
+    minutes = max(0, int(slot_id)) * max(0, int(interval_minutes or 0))
+    return (start_hour * 60 + start_minute + minutes) // _MINUTES_PER_DAY
+
+
 def slot_approved(approved_slot: Optional[object]) -> bool:
     """True when an approved time slot exists for publication (contract §3.1).
 

@@ -10,7 +10,9 @@
  *
  * Not wired into CI: it needs a running stack and is an authoring tool.
  */
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, extname } from "node:path";
 
@@ -66,6 +68,21 @@ const PLAYER_KEY = process.env.PLAYER_KEY ?? "";
 // clean dataset. EVENT_TIMEZONE is auto-resolved from the public page
 // projection when it is not supplied.
 const FIXTURE_MODE = process.env.FIXTURE_MODE ?? "normal";
+// The commit the captured build was made from. Resolved from git rather than
+// required as an argument so a book can never silently claim a baseline it was
+// not captured at; CHECKOUT_SHA overrides it where the capture host is not a
+// checkout (a container, a remote demo).
+const CHECKOUT_SHA = (() => {
+  if (process.env.CHECKOUT_SHA) return process.env.CHECKOUT_SHA;
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: dirname(fileURLToPath(import.meta.url)),
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    return "unavailable";
+  }
+})();
 const EVENT_TIMEZONE_ENV = process.env.EVENT_TIMEZONE ?? "";
 const SETTLE_MS = Number(process.env.CAPTURE_SETTLE_MS ?? "1800");
 const CAPTURE_LIMIT = Number(process.env.CAPTURE_LIMIT ?? "0");
@@ -443,10 +460,17 @@ const eventTimeZone = (await resolveEventTimeZone()) || "unavailable";
 // which dataset, which event timezone, which viewports, which routes (the
 // per-surface `path` / `finalUrl` below).
 const captureContext = {
+  // The five things a reader needs before a single sheet means anything
+  // (public-visual-fixes.md, package P0): WHICH build, WHICH dataset, WHICH
+  // window, WHICH clock, and WHICH route. The first four live here; the fifth
+  // is per sheet — `baselineRoute` is this run's entry point and every sheet
+  // additionally records its requested path and the final URL reached.
+  checkoutSha: CHECKOUT_SHA,
   fixtureMode: FIXTURE_MODE,
   eventTimeZone,
   workspaceId: tier === "console" ? WS : null,
   publicSlug: tier === "entrant" ? SLUG : null,
+  baselineRoute: surfaces.length ? surfaces[0][1] : null,
   viewports: VIEWPORTS.map(([name, width, height]) => ({ name, width, height, deviceScaleFactor: 2 })),
   routeCoverage,
   omittedStates: tier === "entrant" ? omittedOptionalStates : [],
@@ -731,7 +755,7 @@ const html = `<!doctype html>
 <p><strong>Design direction:</strong> preserve readable match identity and stored participant names; use restrained semantic colour, flat ordinary surfaces, consistent property panels and explicit saved/unsaved feedback. Backend terms belong in the UI only when they help a user make a decision.</p>
 <p><strong>Annotate:</strong> cite surface ID, viewport and segment, then state the observed problem, affected task, severity, proposed change and measurable acceptance criterion. Distinguish a visual observation from an interaction hypothesis.</p>
 <p><strong>Further validation:</strong> keyboard/focus order, screen-reader output, dark theme, form errors, authenticated entry outcomes, offline recovery and physical venue viewing distance require separate testing. Internal scroll panels, horizontal canvases and virtualized regions show their initial visible position only. Document continuations do not scroll these panels.</p>
-<p><strong>Capture context:</strong> fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> canonical destinations and <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets. Compatibility URLs are excluded from current books; historical redirect behavior is documented separately in the route contract. Every sheet records its requested route and the final URL reached.</p>
+<p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> canonical destinations and <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets. Compatibility URLs are excluded from current books; historical redirect behavior is documented separately in the route contract. Every sheet records its requested route and the final URL reached.</p>
 <p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; reduced motion. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Timing is live demo data, not a frozen cross-surface snapshot. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
 </div></section>
 <section class="index"><h1>Surface index</h1><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>

@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 
 from .historical_matches import (
     ROUND_LABELS,
+    ROUND_ORDER,
     HistoricalMatch,
     SourceCoverage,
     load_source_map,
@@ -70,6 +71,13 @@ _DEMO_BANNER_DATA_URI = (
     "N4PSIxMDIwIiBjeT0iODYiIHI9IjEyMCIvPjxjaXJjbGUgY3g9IjE4MCIgY3k9IjI0NCIgcj0iOTIiLz48L2c+PC"
     "9zdmc+"
 )
+_EVENT_NAMES = {
+    "MS": "Men's singles",
+    "WS": "Women's singles",
+    "MD": "Men's doubles",
+    "WD": "Women's doubles",
+    "XD": "Mixed doubles",
+}
 _DEMO_LIVE_TOURNAMENT = "T029"
 _DEMO_UPCOMING_TOURNAMENT = "T030"
 # Clean, deterministic surnames used only when a custom/demo historical
@@ -108,6 +116,94 @@ _KNOCKOUT_PREDECESSOR = {
     "QF": "R16",
     "SF": "QF",
     "Final": "SF",
+}
+
+# --- The published-entrant layer (public-visual-fixes.md, package P0) -------
+#
+# A bracket import alone produces people who are *display-only*: the public
+# person directory is built from confirmed ENTRIES
+# (``entries_site.py::_public_identities``), so a draw whose roster never went
+# through the entries desk has no resolvable identity, no linkable name and no
+# profile URL at all — every ``/e/{slug}/players/{key}`` request 404s at the
+# ``entrants_published`` gate. That is the S46 missing-player finding, and it
+# is a FIXTURE gap rather than a product one.
+#
+# So the demo seed registers its whole draw through the operator entries
+# import seam before the bracket is imported, and then uses the resulting
+# ``entry_players.id`` as the person's bracket roster id
+# (``entry-{uuid}``, the same key ``entries/entries.py::roster_id`` mints).
+# One id, one person, one profile URL, on both tiers.
+#
+# Accounts are the one scarce resource here: ``POST /e/account/signup`` is
+# throttled to ``settings.entrant_signup_max_per_ip`` (8) per hour per IP and
+# that limit is a real product protection, not a test artefact. The seed
+# therefore uses SIX accounts and models them the way a circuit event really
+# receives entries:
+#
+#   * four club/association managers, each entering the players their club
+#     sends (the ``entry_players`` docstring's own example: "a club
+#     representative entering eight players"), and
+#   * two personal accounts for the two featured players below, so that a
+#     single human is verifiably the SAME account across Taipei and Korea and
+#     cross-tournament profile history has something true to be built on.
+#
+# ``(account_id, full_name)`` is therefore the fixture's canonical person
+# link. A club account deliberately owns many differently-named players, so a
+# consumer that treats ``account_id`` alone as a person key is demonstrably
+# wrong against this fixture rather than accidentally right.
+_ENTRANT_PASSWORD = "FixtureOnly!2026-aZ"
+_TURNSTILE_TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
+_DEMO_CLUBS = (
+    ("Northgate Badminton Club", "entries@northgate-badminton.example.test"),
+    ("Harbourline Shuttlers", "entries@harbourline-shuttlers.example.test"),
+    ("Riverside Racquet Academy", "entries@riverside-academy.example.test"),
+    ("Summit Badminton Centre", "entries@summit-badminton.example.test"),
+)
+# Two people who enter in their own name. Chosen by DISCIPLINE and position
+# rather than by a hardcoded name so the pair stays valid if the source
+# archive changes: the first is a men's-singles entrant present in both demo
+# tournaments, the second a women's-doubles entrant present in both.
+_FEATURED_PERSONAL_ACCOUNTS = (
+    ("MS", "featured.singles@players.example.test"),
+    ("WD", "featured.doubles@players.example.test"),
+)
+# Concise organizer prose, replacing the generated "Fictional,
+# badminton-plausible demo of the Super 300 …" sentence and the
+# semicolon-separated draw inventory ("32-entry men's singles draw;
+# 32-entry women's singles draw; …") that the source NOTES file supplies for
+# provenance. The notes text is still imported and still reconciled — it is
+# simply no longer used as public reader-facing copy. This is fixture data,
+# written for the fixture; no real organizer's words are rewritten anywhere.
+_DEMO_ORGANIZER_PROSE = {
+    _DEMO_LIVE_TOURNAMENT: (
+        "Six days of international badminton at the Taipei Arena, with all five "
+        "disciplines played across six show courts. Entry is by association "
+        "nomination and the main draw is seeded from the current world ranking."
+    ),
+    _DEMO_UPCOMING_TOURNAMENT: (
+        "The Korea Masters returns to Asan for six days of main-draw play across "
+        "all five disciplines. Qualifying is played on the opening day and the "
+        "finals are scheduled for the Sunday afternoon session."
+    ),
+}
+_DEMO_REGULATIONS_PROSE = {
+    _DEMO_LIVE_TOURNAMENT: (
+        "Matches are played to the best of three games to 21, with a two-point "
+        "advantage required from 20-all and a cap at 30. Report to the control "
+        "desk thirty minutes before your scheduled time; a court call is followed "
+        "by a ten-minute grace period before a walkover is recorded. Players are "
+        "responsible for their own shuttles in qualifying rounds; feather "
+        "shuttles are supplied for all main-draw matches. Withdrawals after the "
+        "published deadline are referred to the referee."
+    ),
+    _DEMO_UPCOMING_TOURNAMENT: (
+        "Matches are played to the best of three games to 21, with a two-point "
+        "advantage required from 20-all and a cap at 30. Entries close at the "
+        "published deadline for each event; mixed doubles pairs may be confirmed "
+        "up to the later mixed-doubles deadline. Seeding follows the current "
+        "world ranking on the day the draw is made. Report to the control desk "
+        "thirty minutes before your scheduled time."
+    ),
 }
 
 
@@ -1179,6 +1275,240 @@ def complete_demo_historical_draws(dataset: Dataset) -> Dataset:
     return dataset
 
 
+def _demo_event_seeds(matches: list[HistoricalMatch]) -> dict[tuple[str, ...], int]:
+    """Seeds 1..8 for one event, derived from how far each entry actually goes.
+
+    A real draw is seeded before it is played, so a seed cannot be *computed*
+    from a completed archive without inverting cause and effect. What this
+    does instead is choose a seeding that the recorded results are consistent
+    with — the eight entries that reach the quarter-finals, ordered by depth
+    reached and then by first appearance — which is what a plausible fixture
+    needs and is deterministic for a given source file. It is fixture data,
+    not a ranking claim.
+    """
+    depth: dict[tuple[str, ...], int] = {}
+    first_seen: dict[tuple[str, ...], tuple[str, ...]] = {}
+    for match in sorted(matches, key=_historical_sort_key):
+        order = ROUND_ORDER.get(match.round_code, 0)
+        for side in (match.side_a, match.side_b):
+            key = source_team_key(side)
+            reached = order + (1 if _winning_team_key(match) == key else 0)
+            depth[key] = max(depth.get(key, 0), reached)
+            first_seen.setdefault(key, (match.played_on, match.source_ref))
+    ranked = sorted(depth, key=lambda key: (-depth[key], first_seen[key], key))
+    return {key: index + 1 for index, key in enumerate(ranked[:8])}
+
+
+def _demo_person_index(
+    rows: list[HistoricalMatch],
+) -> dict[str, dict]:
+    """Canonical person name -> the disciplines they play and a gender code.
+
+    The entries desk needs both for every person before a draw can be
+    registered: ``eventIds`` is what an entry *is*, and ``gender`` is a
+    required, collected field (``entry_players.gender``). Both are read off
+    the draw the person actually appears in rather than guessed from a name.
+    """
+    people: dict[str, dict] = {}
+    for match in sorted(rows, key=_historical_sort_key):
+        for side in (match.side_a, match.side_b):
+            for position, raw in enumerate(side):
+                name = source_name_key(raw)
+                record = people.setdefault(name, {"events": set(), "gender": None})
+                record["events"].add(match.event)
+                if record["gender"] is None:
+                    record["gender"] = _demo_gender(match.event, position)
+    return people
+
+
+def _demo_gender(event: str, position: int) -> str:
+    if event in {"MS", "MD"}:
+        return "M"
+    if event in {"WS", "WD"}:
+        return "F"
+    # Mixed doubles: the source archive lists the man first, which is the
+    # BWF convention the fixture inherits.
+    return "M" if position == 0 else "F"
+
+
+def _demo_club_for(name: str) -> tuple[str, str]:
+    """A stable club (name, manager email) for one person, in every workspace.
+
+    Keyed on the canonical name so a player who enters both demo tournaments
+    is entered by the same club both times — otherwise a reader comparing two
+    tournaments would see one human change association between them.
+    """
+    digest = hashlib.sha256(f"club:{name}".encode("utf-8")).digest()
+    return _DEMO_CLUBS[digest[0] % len(_DEMO_CLUBS)]
+
+
+def _demo_featured_people(
+    rows_by_tournament: dict[str, list[HistoricalMatch]],
+) -> dict[str, str]:
+    """``discipline -> canonical name`` for the two personal-account players.
+
+    Chosen as a person who genuinely appears in BOTH demo tournaments, so the
+    fixture actually contains a linked identity to exercise rather than two
+    people who happen to share a name.
+    """
+    featured: dict[str, str] = {}
+    taken: set[str] = set()
+    for discipline, _email in _FEATURED_PERSONAL_ACCOUNTS:
+        pools = [
+            {
+                source_name_key(raw)
+                for match in rows
+                if match.event == discipline
+                for side in (match.side_a, match.side_b)
+                for raw in side
+            }
+            for rows in rows_by_tournament.values()
+        ]
+        shared = sorted(set.intersection(*pools) - taken) if pools else []
+        if not shared:
+            raise DatasetError(
+                [
+                    f"demo seed: no {discipline} person appears in every demo "
+                    "tournament, so no linked identity can be seeded"
+                ]
+            )
+        featured[discipline] = shared[0]
+        taken.add(shared[0])
+    return featured
+
+
+def _demo_withheld_person(
+    rows: list[HistoricalMatch],
+    featured: dict[str, str],
+) -> str | None:
+    """One women's-singles first-round loser to leave unpublished.
+
+    Singles on purpose: withdrawing one member of a doubles pair would make
+    the whole pair fall back to its imported source label, which is a
+    different (and legitimate) privacy behaviour and would obscure the case
+    this person exists to demonstrate — a single named slot that reads
+    "Player not published" and whose profile URL is a real 404.
+    """
+    appearances: dict[str, int] = {}
+    for match in rows:
+        if match.event != "WS":
+            continue
+        for side in (match.side_a, match.side_b):
+            for raw in side:
+                name = source_name_key(raw)
+                appearances[name] = appearances.get(name, 0) + 1
+    once = sorted(
+        name
+        for name, count in appearances.items()
+        if count == 1 and name not in featured.values()
+    )
+    return once[-1] if once else None
+
+
+def _demo_entry_accounts(client: SimClient) -> dict[str, str]:
+    """Create (or reuse) the six entrant accounts and return ``email -> id``.
+
+    Signup is throttled per IP, and deliberately answers with a
+    non-enumerating envelope carrying no id, so each account is created and
+    then signed in once to read its own ``/e/account/me``. A 409 means the
+    account already exists, which is the ordinary re-run case.
+    """
+    display_names = {email: f"{club} entries" for club, email in _DEMO_CLUBS}
+    display_names.update(
+        {email: f"{code} entrant" for code, email in _FEATURED_PERSONAL_ACCOUNTS}
+    )
+    accounts: dict[str, str] = {}
+    for email in display_names:
+        entrant = type(client)(client.base_url)
+        try:
+            entrant.entrant_signup(
+                {
+                    "email": email,
+                    "password": _ENTRANT_PASSWORD,
+                    "displayName": display_names[email],
+                    "turnstileToken": _TURNSTILE_TEST_TOKEN,
+                },
+                expect=(202, 409),
+            )
+            entrant.entrant_login(email, _ENTRANT_PASSWORD)
+            accounts[email] = str(entrant.entrant_me()["id"])
+        finally:
+            entrant.close()
+    return accounts
+
+
+def _register_demo_entrants(
+    client: SimClient,
+    tid: str,
+    *,
+    rows: list[HistoricalMatch],
+    entry_event_ids: dict[str, str],
+    accounts: dict[str, str],
+    featured: dict[str, str],
+    seed_key: str,
+) -> dict[str, str]:
+    """Register this workspace's whole draw through the entries desk.
+
+    Returns ``canonical name -> entry_players.id``. Every person in the draw
+    becomes a confirmed entrant, which is what makes their public identity
+    resolvable, their name a link, and their profile URL a real page.
+    """
+    people = _demo_person_index(rows)
+    by_account: dict[str, list[dict]] = {}
+    for name in sorted(people):
+        record = people[name]
+        club_name, club_email = _demo_club_for(name)
+        email = next(
+            (
+                account_email
+                for discipline, account_email in _FEATURED_PERSONAL_ACCOUNTS
+                if featured.get(discipline) == name
+            ),
+            club_email,
+        )
+        event_ids = [
+            entry_event_ids[code] for code in _EVENTS if code in record["events"]
+        ]
+        if not event_ids:
+            continue
+        by_account.setdefault(email, []).append(
+            {
+                "sourceKey": f"p-{hashlib.sha256(name.encode('utf-8')).hexdigest()[:24]}",
+                "fullName": name,
+                "gender": record["gender"] or "M",
+                "club": club_name,
+                "eventIds": event_ids,
+            }
+        )
+
+    for email, players in sorted(by_account.items()):
+        client.import_entries(
+            tid,
+            {
+                "sourceKey": f"demo-seed-{seed_key}",
+                "submissions": [
+                    {
+                        "sourceKey": f"s-{email.split('@', 1)[0]}",
+                        "idempotencyKey": f"{seed_key}:{tid}:{email}"[:64],
+                        "accountId": accounts[email],
+                        "emailVerified": True,
+                        "players": players,
+                    }
+                ],
+            },
+        )
+
+    for row in client.list_entries(tid):
+        if row.get("state") == "pending":
+            client.confirm_entry(tid, row["id"])
+
+    return {
+        row["playerName"]: row["entryPlayerId"]
+        for row in client.list_entries(tid)
+        if row.get("entryPlayerId")
+    }
+
+
 def _slug(tournament: Tournament) -> str:
     value = re.sub(r"[^a-z0-9]+", "-", tournament.name.lower()).strip("-")
     return f"{tournament.year}-{value}-{tournament.id.lower()}"[:60]
@@ -1237,6 +1567,14 @@ class _HistoricalIdentityRegistry:
     tournament_id: str
     players: dict[str, dict] = field(default_factory=dict)
     _owners: dict[str, str] = field(default_factory=dict)
+    #: canonical person name -> the ``entry_players.id`` UUID that person was
+    #: registered under in THIS workspace. Present only for the demo seed,
+    #: which registers its draw through the entries desk first. When a name is
+    #: here, its roster id becomes ``entry-{uuid}`` — the one key the public
+    #: person directory resolves — instead of a source-local content hash.
+    entry_player_ids: dict[str, str] = field(default_factory=dict)
+    #: canonical team key (sorted member names) -> seed number, 1 = top seed.
+    seeds: dict[tuple[str, ...], int] = field(default_factory=dict)
 
     def _id(self, prefix: str, payload: list[Any]) -> str:
         owner = json.dumps(
@@ -1257,11 +1595,17 @@ class _HistoricalIdentityRegistry:
 
     def player_id(self, name: str) -> str:
         canonical = source_name_key(name)
-        identifier = self._id("player", [canonical])
-        existing = self.players.setdefault(
-            identifier,
-            {"id": identifier, "name": canonical},
-        )
+        entry_player_id = self.entry_player_ids.get(canonical)
+        if entry_player_id is not None:
+            # ``entries/entries.py::roster_id``'s shape, reproduced rather than
+            # imported: the simulator has no product imports by design.
+            identifier = f"entry-{entry_player_id}"
+            self._owners.setdefault(identifier, canonical)
+            record = {"id": identifier, "name": canonical, "entryPlayerId": entry_player_id}
+        else:
+            identifier = self._id("player", [canonical])
+            record = {"id": identifier, "name": canonical}
+        existing = self.players.setdefault(identifier, record)
         if existing["name"] != canonical:
             raise DatasetError(
                 [
@@ -1274,14 +1618,18 @@ class _HistoricalIdentityRegistry:
     def participant(self, names: tuple[str, ...]) -> dict:
         canonical_names = tuple(sorted(source_name_key(name) for name in names))
         member_ids = sorted(self.player_id(name) for name in canonical_names)
+        seed = self.seeds.get(canonical_names)
         if len(member_ids) == 1:
-            return dict(self.players[member_ids[0]])
-        identifier = self._id("pair", member_ids)
-        return {
-            "id": identifier,
-            "name": " / ".join(canonical_names),
-            "members": member_ids,
-        }
+            participant = dict(self.players[member_ids[0]])
+        else:
+            participant = {
+                "id": self._id("pair", member_ids),
+                "name": " / ".join(canonical_names),
+                "members": member_ids,
+            }
+        if seed is not None:
+            participant["seed"] = seed
+        return participant
 
     @property
     def roster(self) -> list[dict]:
@@ -1667,6 +2015,39 @@ def _demo_dates(tournament: Tournament, rows: list[HistoricalMatch]) -> tuple[da
     return (min(starts) if starts else end), end
 
 
+def _demo_entry_window(
+    tournament: Tournament,
+    event_code: str,
+    start: date,
+    *,
+    demo_seed: bool,
+) -> tuple[str, str]:
+    """Opening and deadline instants for one entry event, in venue-local time.
+
+    Both are written with the venue's real UTC offset rather than a bare
+    ``+00:00``, because a deadline is a wall-clock promise made at the venue:
+    "23:59 on 14 July" in Taipei and in Asan are two different instants, and a
+    fixture that stores both as midnight UTC cannot be used to check that the
+    public tier converts before it prints.
+
+    Korea's mixed doubles closes later than its other four events. That is an
+    ordinary circuit practice — mixed pairs are confirmed last — and it is
+    what gives the fixture one genuinely OPEN entry window at the frozen demo
+    clock, next to four closed ones.
+    """
+    if not demo_seed:
+        opens = f"{tournament.year - 1:04d}-01-01T00:00:00+00:00"
+        return opens, f"{tournament.end_date}T23:59:59+00:00"
+    zone = ZoneInfo(_demo_timezone(tournament))
+    opening = datetime.combine(start - timedelta(days=120), time(9, 0), tzinfo=zone)
+    if tournament.id == _DEMO_UPCOMING_TOURNAMENT and event_code == "XD":
+        deadline_day = start - timedelta(days=3)
+    else:
+        deadline_day = start - timedelta(days=14)
+    deadline = datetime.combine(deadline_day, time(23, 59), tzinfo=zone)
+    return opening.isoformat(), deadline.isoformat()
+
+
 def _demo_setup_sections(
     tournament: Tournament,
     rows: list[HistoricalMatch],
@@ -1698,13 +2079,7 @@ def _demo_setup_sections(
         for index in range((end - start).days + 1)
         for day in [start + timedelta(days=index)]
     ]
-    event_names = {
-        "MS": "Men's singles",
-        "WS": "Women's singles",
-        "MD": "Men's doubles",
-        "WD": "Women's doubles",
-        "XD": "Mixed doubles",
-    }
+    event_names = _EVENT_NAMES
     events = [
         {
             "id": code,
@@ -1719,7 +2094,11 @@ def _demo_setup_sections(
         }
         for code in _EVENTS
     ]
-    opening = start - timedelta(days=90)
+    # Kept in step with ``_demo_entry_window`` above, which writes the same
+    # dates onto the entry EVENTS the public tier actually reads. These
+    # Setup values are the operator-facing copy of the same schedule; a
+    # reader who sees two different deadlines has found a fixture bug.
+    opening = start - timedelta(days=120)
     deadline = start - timedelta(days=14)
     withdrawal = start - timedelta(days=10)
     draw_publication = start - timedelta(days=7)
@@ -1784,12 +2163,41 @@ def _demo_setup_sections(
         },
         "public-info": {
             "publicSlug": slug,
-            "description": f"Fictional, badminton-plausible demo of the {tournament.level} {tournament.name} at {tournament.venue}.",
+            "description": _DEMO_ORGANIZER_PROSE.get(
+                tournament.id,
+                f"{tournament.name} {tournament.year} at {tournament.venue}, "
+                f"{tournament.host}. All five disciplines, {tournament.date_range}.",
+            ),
             "regulationsUrl": f"https://example.test/{safe_slug}/regulations.pdf",
             "logoUrl": _DEMO_LOGO_DATA_URI,
             "bannerUrl": _DEMO_BANNER_DATA_URI,
         },
     }
+
+
+# How far each Taipei discipline has actually got by the frozen demo clock
+# (2026-07-31 13:00 Asia/Taipei, day four of six). One number per round:
+# how many of that round's matches carry a recorded result.
+#
+# Varied on purpose (public-visual-fixes.md P0, "resolved later rounds …
+# varied match progress"). Before this the whole tournament sat in R32, so no
+# public surface anywhere in the fixture could show a resolved later round, a
+# populated semi-final, or a champion — every draw looked like the same
+# screenshot. Now one draw is finished, one is a round from finishing, one is
+# mid-draw, one has a fully resolved round waiting to be played, and one is
+# still in its opening round with live matches on court.
+_DEMO_LIVE_PROGRESS = {
+    # men's singles — opening round, ten of sixteen played, six on/awaiting court
+    "MS": {"R32": 10},
+    # women's singles — opening round complete, R16 half played
+    "WS": {"R32": 16, "R16": 4},
+    # men's doubles — into the quarter-finals
+    "MD": {"R32": 16, "R16": 8, "QF": 2},
+    # women's doubles — complete, champion decided
+    "WD": {"R32": 16, "R16": 8, "QF": 4, "SF": 2, "Final": 1},
+    # mixed doubles — R16 fully resolved and entirely unplayed
+    "XD": {"R32": 16},
+}
 
 
 def _demo_operational_event(event: dict, tournament_id: str) -> dict:
@@ -1798,24 +2206,67 @@ def _demo_operational_event(event: dict, tournament_id: str) -> dict:
     output = {**event, "record_scope": "full_draw", "historical": False}
     output.pop("topology_scope", None)
     output.pop("topology_edge_count", None)
-    completed_rounds = {"R64", "R32", "R16", "QF"}
+    progress = (
+        {}
+        if tournament_id == _DEMO_UPCOMING_TOURNAMENT
+        else _DEMO_LIVE_PROGRESS.get(str(output.get("discipline") or output.get("id")), {})
+    )
+    exceptional = (
+        {}
+        if tournament_id == _DEMO_UPCOMING_TOURNAMENT
+        else _DEMO_EXCEPTIONAL_RESULTS.get(
+            str(output.get("discipline") or output.get("id")), {}
+        )
+    )
     for round_code, units in zip(output.get("round_codes") or [], output["rounds"]):
+        played = progress.get(round_code, 0)
         for index, unit in enumerate(units):
-            # Taipei is deliberately caught during the opening round: ten of
-            # sixteen matches per discipline are complete, six remain. That
-            # leaves six concrete-participant matches live and another 24
-            # concrete matches waiting before the feeder-dependent rounds.
-            taipei_opening_complete = round_code == "R32" and index < 10
-            if (
-                tournament_id == _DEMO_UPCOMING_TOURNAMENT
-                or round_code not in completed_rounds
-                or (
-                    tournament_id == _DEMO_LIVE_TOURNAMENT
-                    and not taipei_opening_complete
-                )
-            ):
+            if index >= played:
                 unit.pop("result", None)
+                continue
+            kind = exceptional.get((round_code, index))
+            if kind is not None:
+                _apply_exceptional_result(unit, kind)
     return output
+
+
+# Two matches that did not finish the ordinary way, so every consumer has a
+# real one to render (public-visual-fixes.md P0). A walkover has NO score at
+# all — a fixture that invents 21-0 teaches the wrong lesson — and a
+# retirement keeps the score that was actually played when the match stopped.
+_DEMO_EXCEPTIONAL_RESULTS = {
+    "MS": {("R32", 3): "walkover"},
+    "WS": {("R32", 5): "retired"},
+}
+
+
+def _apply_exceptional_result(unit: dict, kind: str) -> None:
+    result = unit.get("result")
+    if not isinstance(result, dict):
+        return
+    if kind == "walkover":
+        result["walkover"] = True
+        result["reason"] = "walkover"
+        result["score"] = None
+        return
+    # Retired: the winner had taken the first game and led the second when
+    # the match was stopped. Orientation follows the recorded winner, never
+    # the game totals.
+    won_first, lost_first = (21, 15)
+    leading, trailing = (11, 7)
+    if result.get("winner_side") == "B":
+        sets = [
+            {"sideA": lost_first, "sideB": won_first},
+            {"sideA": trailing, "sideB": leading},
+        ]
+    else:
+        sets = [
+            {"sideA": won_first, "sideB": lost_first},
+            {"sideA": leading, "sideB": trailing},
+        ]
+    result["walkover"] = False
+    result["reason"] = "retired"
+    result["score"] = {"sets": sets}
 
 
 def _parse_demo_time(value: str | None) -> time:
@@ -1868,6 +2319,29 @@ def _place_on_courts(requests: list[dict], court_count: int) -> list[dict]:
     return placed
 
 
+def _demo_startable_units(event: dict) -> list[str]:
+    """Unplayed play units whose feeders have already produced both sides.
+
+    Round order, first-listed first. A unit with no feeders is a first-round
+    unit and is startable by definition.
+    """
+    decided = {
+        unit["id"]
+        for units in event["rounds"]
+        for unit in units
+        if unit.get("result") is not None
+    }
+    startable: list[str] = []
+    for units in event["rounds"]:
+        for unit in units:
+            if unit.get("result") is not None:
+                continue
+            feeders = [unit.get("feeder_a"), unit.get("feeder_b")]
+            if all(feeder is None or feeder in decided for feeder in feeders):
+                startable.append(unit["id"])
+    return startable
+
+
 def _demo_plan(
     tournament: Tournament,
     rows: list[HistoricalMatch],
@@ -1879,25 +2353,23 @@ def _demo_plan(
     court_count = _demo_court_count(tournament.id)
     requests: list[dict] = []
     live_candidates: list[str] = []
+    queued_ids: set[str] = set()
     if tournament.id == _DEMO_LIVE_TOURNAMENT:
-        by_event = [
-            [
-                unit["id"]
-                for round_code, units in zip(
-                    event.get("round_codes") or [], event["rounds"]
-                )
-                if round_code == "R32"
-                for unit in units
-                if unit.get("result") is None
-            ]
-            for event in events
-        ]
-        # One live match from every discipline, then a second MS match, gives
-        # all six courts distinct, concrete work without making the floor look
-        # artificially single-discipline.
+        # A match can only be ON COURT if it is unplayed AND both of its
+        # feeders have produced a winner — the same rule the product enforces
+        # at ``_require_resolved_play_unit``. Scanning for that rather than
+        # assuming "the opening round" is what lets the disciplines sit at
+        # different depths (_DEMO_LIVE_PROGRESS) without the live wave
+        # silently emptying.
+        by_event = [_demo_startable_units(event) for event in events]
+        # One live match from every discipline that still has one, then more
+        # from the same pools, so every court has distinct, concrete work
+        # without the floor looking artificially single-discipline.
         live_candidates = [group[0] for group in by_event if group]
-        live_candidates.extend(by_event[0][1:2] if by_event else [])
+        overflow = [unit_id for group in by_event for unit_id in group[1:]]
+        live_candidates.extend(overflow[: max(0, court_count - len(live_candidates))])
         live_candidates = live_candidates[:court_count]
+        queued_ids = {unit_id for group in by_event for unit_id in group}
     live_position = {play_unit_id: index for index, play_unit_id in enumerate(live_candidates)}
     pending_round_index: dict[str, int] = {}
     for event in events:
@@ -1944,13 +2416,13 @@ def _demo_plan(
                             slot_id = 240 + 2 * (position // court_count)
                         else:  # Finals
                             slot_id = 246 + 2 * (position // court_count)
-                    # Keep the remaining concrete R32 wave in the live-day
-                    # queue. Its source row still carries the planned court
-                    # and local time (and every later round stays on Plan), but
-                    # an Operations assignment means "physically on court",
-                    # so importing these 24 as assigned would truthfully leave
-                    # the queue empty while six matches are playing.
-                    if round_code == "R32" and unit["id"] not in live_position:
+                    # Keep the rest of the currently-playable wave in the
+                    # live-day queue. Its source row still carries the planned
+                    # court and local time (and every later round stays on
+                    # Plan), but an Operations assignment means "physically on
+                    # court", so importing these as assigned would truthfully
+                    # leave the queue empty while six matches are playing.
+                    if unit["id"] in queued_ids and unit["id"] not in live_position:
                         continue
                 requests.append(
                     {
@@ -2029,6 +2501,26 @@ def apply(
     by_tournament = dataset.matches_by_tournament
     historical_by_tournament = dataset.historical_by_tournament
     notes = dataset.notes_by_tournament
+    # The published-entrant layer (see _DEMO_CLUBS above). Both of these are
+    # dataset-wide rather than per-tournament: the featured people must be
+    # present in EVERY demo workspace for the linked identity to be real, and
+    # the six accounts are shared across them for the same reason.
+    demo_tournaments = {
+        tournament.id: historical_by_tournament.get(tournament.id, [])
+        for tournament in dataset.tournaments
+        if dataset.demo_generator_version is not None
+        and historical_by_tournament.get(tournament.id)
+    }
+    featured_people: dict[str, str] = {}
+    entrant_accounts: dict[str, str] = {}
+    if demo_tournaments:
+        featured_people = _demo_featured_people(demo_tournaments)
+        entrant_accounts = _demo_entry_accounts(client)
+        manifest["publicEntrants"] = {
+            "accounts": entrant_accounts,
+            "featured": featured_people,
+            "clubs": [name for name, _email in _DEMO_CLUBS],
+        }
     for tournament in dataset.tournaments:
         entry = manifest["tournaments"].setdefault(tournament.id, {})
         rows = by_tournament[tournament.id]
@@ -2118,36 +2610,27 @@ def apply(
         # Keeping this ahead of bracket import exercises the same checkout
         # fence as production instead of weakening it for fixture seeding.
         if not entry.get("entryPage"):
-            closed_at = (
-                f"{(demo_start - timedelta(days=14)).isoformat()}T23:59:59+00:00"
-                if demo_seed
-                else f"{tournament.end_date}T23:59:59+00:00"
-            )
-            note = notes.get(tournament.id)
-            details = (
-                f" {note.level_description[:1].upper()}{note.level_description[1:]} "
-                f"Draw listing: {note.draw_description}."
-                if note is not None
-                else ""
-            )
             coverage = dataset.historical_coverage.get(tournament.id)
-            demo_state = (
-                "Tournament in progress"
-                if tournament.id == _DEMO_LIVE_TOURNAMENT and demo_seed
-                else "Upcoming tournament"
-                if tournament.id == _DEMO_UPCOMING_TOURNAMENT and demo_seed
-                else "Completed tournament"
-            )
-            intro_text = (
-                f"{demo_state}: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the published draws and available results across all five events.{details}"
-                if demo_seed
-                else f"Completed tournament: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the complete published draws and results across all five events.{details}"
-            )
-            regulations_text = (
-                f"Fictional operational demo; entries are closed and match details are populated for visual testing. Source reference: {(coverage.source_url if coverage else tournament.source_url)}."
-                if demo_seed
-                else f"Read-only completed tournament; entries are closed. Source: {(coverage.source_url if coverage else tournament.source_url)}."
-            )
+            # Reader-facing copy is organizer prose, not a rendered inventory
+            # of the source record. The provenance the NOTES file carries
+            # (level description, "32-entry men's singles draw; …", source
+            # URL) is still imported and still reconciled — it lives in the
+            # manifest's ``source`` block, where a provenance audit reads it,
+            # and no longer in a sentence a spectator sees.
+            intro_text = _DEMO_ORGANIZER_PROSE.get(tournament.id) if demo_seed else None
+            if not intro_text:
+                intro_text = (
+                    f"{tournament.name} {tournament.year} at {tournament.venue}, "
+                    f"{tournament.host}. All five disciplines, {tournament.date_range}."
+                )
+            regulations_text = _DEMO_REGULATIONS_PROSE.get(tournament.id) if demo_seed else None
+            if not regulations_text:
+                regulations_text = (
+                    "Matches are played to the best of three games to 21, with a "
+                    "two-point advantage required from 20-all and a cap at 30. "
+                    "Report to the control desk thirty minutes before your "
+                    "scheduled time."
+                )
             client.upsert_entry_page(
                 tid,
                 {
@@ -2158,25 +2641,40 @@ def apply(
                     "waiverRequired": False,
                     "collectPhone": False,
                     "venueName": tournament.venue,
-                    "venueAddress": f"{tournament.host}; {tournament.date_range}; {tournament.draw_format}",
+                    "venueAddress": f"{tournament.venue}, {tournament.host}",
                 },
             )
+            entry_event_ids: dict[str, str] = {}
             for row in rows:
-                client.create_entry_event(
+                opens_at, closes_at = _demo_entry_window(
+                    tournament, row.event, demo_start, demo_seed=demo_seed
+                )
+                created = client.create_entry_event(
                     tid,
                     {
                         "code": row.event,
-                        "discipline": row.event_label,
+                        # The human discipline name, not the source archive's
+                        # record label ("mens_doubles_final"), which reached
+                        # the public profile page verbatim as an event's
+                        # discipline.
+                        "discipline": _EVENT_NAMES.get(row.event, row.event_label),
                         "entryType": "doubles" if row.event in {"MD", "WD", "XD"} else "singles",
                         "bracketEventId": row.event,
-                        "opensAt": f"{tournament.year - 1:04d}-01-01T00:00:00+00:00",
-                        "closesAt": closed_at,
+                        "opensAt": opens_at,
+                        "closesAt": closes_at,
                     },
                 )
+                entry_event_ids[row.event] = str(created["id"])
+            entry["entryEventIds"] = entry_event_ids
             client.patch_entry_page_publication(
                 tid,
                 {
                     "audience": "public",
+                    # The public person directory — every linkable name and
+                    # every profile URL on the entrant tier — is gated on this
+                    # flag. Leaving it off is what made every
+                    # ``/e/{slug}/players/{key}`` request a 404.
+                    "entrantsPublished": True,
                     "drawsPublished": True,
                     "resultsPublished": tournament.id != _DEMO_UPCOMING_TOURNAMENT or not demo_seed,
                 },
@@ -2196,6 +2694,36 @@ def apply(
             }
             _write_manifest(path, manifest)
 
+        # Register the whole draw through the entries desk BEFORE the bracket
+        # is imported. Two reasons it cannot move later: the resulting
+        # ``entry_players.id`` becomes each person's bracket roster id, and a
+        # live workspace is checked out to an event node, which freezes every
+        # entries write (``EVENT_CHECKED_OUT``).
+        if demo_seed and not entry.get("entrantsRegistered"):
+            entry["entryPlayerIds"] = _register_demo_entrants(
+                client,
+                tid,
+                rows=historical_rows,
+                entry_event_ids=entry["entryEventIds"],
+                accounts=entrant_accounts,
+                featured=featured_people,
+                seed_key=seed_key,
+            )
+            # One deliberately unpublished person per workspace, so a 404 and
+            # a "Player not published" reference can both be exercised against
+            # a fixture that is otherwise fully linked. Withdrawn rather than
+            # never-registered: that is the state a real desk produces, and it
+            # keeps the person present-but-not-public rather than absent.
+            withheld = _demo_withheld_person(historical_rows, featured_people)
+            withheld_id = entry["entryPlayerIds"].get(withheld) if withheld else None
+            if withheld_id:
+                for row in client.list_entries(tid):
+                    if row.get("entryPlayerId") == withheld_id:
+                        client.withdraw_entry(tid, row["id"])
+                entry["withheldPerson"] = {"name": withheld, "entryPlayerId": withheld_id}
+            entry["entrantsRegistered"] = True
+            _write_manifest(path, manifest)
+
         if not entry.get("bracketImported"):
             events = []
             results = []
@@ -2203,6 +2731,17 @@ def apply(
             if historical_rows:
                 coverage = dataset.historical_coverage[tournament.id]
                 identities = _HistoricalIdentityRegistry(tournament.id)
+                if demo_seed:
+                    identities.entry_player_ids = {
+                        name: player_id
+                        for name, player_id in (entry.get("entryPlayerIds") or {}).items()
+                    }
+                    for event_code in _EVENTS:
+                        identities.seeds.update(
+                            _demo_event_seeds(
+                                [row for row in historical_rows if row.event == event_code]
+                            )
+                        )
                 for event_code in _EVENTS:
                     event_rows = [row for row in historical_rows if row.event == event_code]
                     if not event_rows:

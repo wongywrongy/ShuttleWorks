@@ -30,6 +30,7 @@ import json
 import unicodedata
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Dict, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -59,7 +60,11 @@ from db.models import (
 )
 from repositories import LocalRepository, get_repository
 from shared.court_occupancy import CourtState, derive_court_states
-from shared.schedule_slots import add_minutes_wrapping, slot_time_from_start
+from shared.schedule_slots import (
+    add_minutes_wrapping,
+    slot_day_offset,
+    slot_time_from_start,
+)
 from shared.sides import is_pair_discipline
 
 router = APIRouter(prefix="/e/api/page/{slug}", tags=["entries-site"])
@@ -1136,6 +1141,22 @@ def _slot_time(payload, slot_id: Optional[int]) -> Optional[str]:
         return None
     base = payload.start_time
     return slot_time_from_start(base.hour, base.minute, slot_id, payload.interval_minutes)
+
+
+def _slot_date(payload, slot_id: Optional[int], fallback: Optional[str]) -> Optional[str]:
+    """Venue-local CALENDAR DAY for a bracket slot.
+
+    ``_slot_time`` above wraps at midnight, so on its own it publishes a
+    day-four semi-final as "13:00" on the tournament's start date. The plan's
+    ``start_time`` names both the first slot's day and its time of day, so the
+    day offset is derivable — and must be, or every match in a six-day
+    tournament groups under one heading on the public schedule.
+    """
+    if payload.start_time is None or slot_id is None:
+        return fallback
+    base = payload.start_time
+    offset = slot_day_offset(base.hour, base.minute, slot_id, payload.interval_minutes)
+    return (base.date() + timedelta(days=offset)).isoformat()
 
 
 def _event_or_404(payload, draw_key: str):
@@ -2491,7 +2512,8 @@ def _bracket_schedule_matches(
                                 unresolved=projected.unresolved,
                             )
                         )
-                    scheduled = _slot_time(payload, assignment.slot_id if assignment else None)
+                    slot_id = assignment.slot_id if assignment else None
+                    scheduled = _slot_time(payload, slot_id)
                     out.append(ScheduleMatchDTO(
                         matchKey=f"{event.id}:{unit.id}",
                         source="bracket",
@@ -2499,7 +2521,9 @@ def _bracket_schedule_matches(
                         discipline=event.discipline,
                         roundLabel=label,
                         status=state,
-                        scheduledDate=tournament_date if scheduled else None,
+                        scheduledDate=(
+                            _slot_date(payload, slot_id, tournament_date) if scheduled else None
+                        ),
                         scheduledTime=scheduled,
                         court=operational_courts.get(unit_id),
                         sides=sides,

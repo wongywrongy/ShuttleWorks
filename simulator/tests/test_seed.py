@@ -130,7 +130,8 @@ def test_manifest_write_keeps_the_previous_file_if_atomic_replace_fails(
 
 
 class FakeClient:
-    def __init__(self):
+    def __init__(self, base_url="fake://seed"):
+        self.base_url = base_url
         self.created = []
         self.imported = []
         self.commands = []
@@ -138,6 +139,10 @@ class FakeClient:
         self.events = []
         self.publications = []
         self.deleted = []
+        # The published-entrant layer: a tiny in-memory entries desk, enough
+        # for the demo seed's register/confirm/withdraw sequence.
+        self.signups = []
+        self.entries = {}
 
     def create_tournament(
         self,
@@ -188,7 +193,57 @@ class FakeClient:
 
     def create_entry_event(self, tid, body):
         self.events.append((tid, body))
+        return {"id": f"entry-event-{len(self.events)}"}
+
+    # ---- entrant accounts and the entries desk ---------------------------
+
+    def entrant_signup(self, body, *, expect=(202,)):
+        self.signups.append(body["email"])
+
+        class Response:
+            status_code = 202
+
+        return Response()
+
+    def entrant_login(self, email, password):
+        self._email = email
+        return None
+
+    def entrant_me(self):
+        return {"id": f"account-{self._email}"}
+
+    def import_entries(self, tid, body):
+        rows = self.entries.setdefault(tid, [])
+        for submission in body["submissions"]:
+            for player in submission["players"]:
+                rows.append(
+                    {
+                        "id": f"entry-{tid}-{len(rows)}",
+                        "state": "pending",
+                        "playerName": player["fullName"],
+                        "entryPlayerId": f"player-{tid}-{player['sourceKey']}",
+                    }
+                )
+        return {"submissions": []}
+
+    def list_entries(self, tid, state=None):
+        rows = self.entries.get(tid, [])
+        return [row for row in rows if state is None or row["state"] == state]
+
+    def confirm_entry(self, tid, entry_id):
+        for row in self.entries.get(tid, []):
+            if row["id"] == entry_id:
+                row["state"] = "confirmed"
         return {}
+
+    def withdraw_entry(self, tid, entry_id):
+        for row in self.entries.get(tid, []):
+            if row["id"] == entry_id:
+                row["state"] = "withdrawn"
+        return {}
+
+    def close(self):
+        return None
 
     def patch_entry_page_publication(self, tid, body):
         self.publications.append((tid, body))
@@ -304,7 +359,17 @@ def test_apply_checkpoints_and_same_hash_noop(tmp_path: Path):
     assert first["topologyEdgeCount"] == 0
     assert len(client.imported[0][1]["roster"]) == 5
     assert client.publications == [
-        ("workspace-1", {"drawsPublished": True, "resultsPublished": True})
+        (
+            "workspace-1",
+            {
+                "audience": "public",
+                # The public person directory is gated on this: without it
+                # every ``/e/{slug}/players/{key}`` request 404s.
+                "entrantsPublished": True,
+                "drawsPublished": True,
+                "resultsPublished": True,
+            },
+        )
     ]
     second = apply(dataset, client, seed_key="bwf-demo", run_dir=tmp_path)
     assert second["noop"] is True
@@ -387,11 +452,19 @@ def test_notes_enrich_manifest_and_label_import_as_finals_only(tmp_path: Path):
     assert source["recordScope"] == "finals_only"
     assert source["drawDescription"] == "five 32-entry draws"
     assert output["notesSha256"] == "notes-hash"
-    assert "complete published draws and results" in client.pages[0][1]["introText"]
-    assert "unavailable" not in client.pages[0][1]["introText"]
-    assert "not inferred" not in client.pages[0][1]["introText"]
-    assert "BWF Tour development event" in client.pages[0][1]["introText"]
+    # Reader-facing copy is organizer prose (public-visual-fixes.md P0). The
+    # NOTES file's provenance — the level description and the semicolon draw
+    # inventory — is still parsed and still reconciled into the manifest
+    # ``source`` block above; it is simply no longer a sentence a spectator
+    # reads.
+    intro = client.pages[0][1]["introText"]
+    assert "Demo Open" in intro
+    assert "unavailable" not in intro
+    assert "not inferred" not in intro
+    assert "BWF Tour development event" not in intro
+    assert ";" not in intro
     assert "only five finals are supplied" not in client.pages[0][1]["regulationsText"]
+    assert "Source" not in client.pages[0][1]["regulationsText"]
 
 
 def test_historical_archive_embeds_results_and_disables_scheduling_commands(tmp_path: Path):
