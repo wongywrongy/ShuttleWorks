@@ -1,15 +1,18 @@
 /**
- * `/e/` — the season calendar, asserted on real server-rendered HTML (SP-P8 §2).
+ * `/e/` — the season calendar, asserted on real server-rendered HTML (SP-P8
+ * §2, P5).
  *
  * The G1 decline is over: `GET /e/api/pages` ships every field the calendar
  * renders, so this page is ONE backend read and the old per-slug fan-out is
- * gone. That call count is pinned below, because "one read" is the property the
- * whole task bought.
+ * gone. That call count is pinned below, because "one read" is the property
+ * the whole task bought.
  *
- * Dates are fixed 2026 strings: nothing this page decides reads the clock
- * (no date filter is set in these fixtures, and the views neither filter nor
- * order by `now`), so the real-clock renders stay deterministic. The pinned-
- * `now` state tables live in `phase.test.ts`; this file asserts the wiring.
+ * P5 replaced the three lifecycle segments with ONE continuous season: what is
+ * still to come, ascending, then "Earlier this season" descending. Which half
+ * a row lands in is decided against `now`, so this suite pins the CLOCK
+ * (`Date` only — nothing else is faked) rather than writing 2026 literals that
+ * quietly turn into past tournaments. The pinned-`now` state tables live in
+ * `phase.test.ts`; this file asserts the wiring.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
@@ -20,12 +23,18 @@ import type { PageStatus, SeasonList, SeasonRow } from '../app/lib/phase';
 const MASTHEAD =
   'Badminton tournaments taking entries through ShuttleWorks. Every entry is confirmed by the organizer.';
 
-/** V3-PE01.1: the Season view's body sentence — a plain browsing cue, not a
+/** V3-PE01.1: the season's body sentence — a plain browsing cue, not a
  * platform description ("Explore Badminton tournaments … through
- * ShuttleWorks" read like assembled metadata and over-capitalized the
- * sport). Distinct from `MASTHEAD`, which only the `<meta name="description">`
+ * ShuttleWorks" read like assembled metadata and over-capitalized the sport).
+ * Distinct from `MASTHEAD`, which only the `<meta name="description">`
  * carries now. */
 const SEASON_INTRO = 'Find badminton tournaments, schedules, and results.';
+
+/** The render clock. Mid-season on purpose: the fixture has real months on
+ * both sides of it. */
+const CLOCK = new Date('2026-08-11T12:00:00Z');
+const THIS_SEASON = 2026;
+const LAST_SEASON = 2025;
 
 function row(slug: string, name: string, status: PageStatus, overrides: Partial<SeasonRow> = {}): SeasonRow {
   return {
@@ -46,10 +55,11 @@ function row(slug: string, name: string, status: PageStatus, overrides: Partial<
   };
 }
 
-/** One row per `PageStatus`, plus the NOW pick. */
+/** One row per `PageStatus`: four still to come, two already played. */
 const SEASON: SeasonList = {
   tournaments: [
     row('wessex-open', 'Wessex Autumn Gold', 'entries_open', {
+      date: '2026-08-31',
       closesInDays: 5,
       closesAt: '2026-08-30 12:00 UTC',
       timeZone: 'Europe/London',
@@ -57,10 +67,10 @@ const SEASON: SeasonList = {
     }),
     row('meadowbank-closed', 'Meadowbank Masters', 'entries_closed', { date: '2026-09-26' }),
     row('harbour-live', 'Harbour Invitational', 'in_progress_live', {
-      date: '2026-10-03',
+      date: '2026-08-11',
       drawsPublished: true,
     }),
-    row('granite-progress', 'Granite City Open', 'in_progress', { date: '2026-10-04' }),
+    row('granite-progress', 'Granite City Open', 'in_progress', { date: '2026-08-12' }),
     row('sussex-winners', 'Sussex Spring Restricted', 'completed_winners', {
       date: '2026-05-02',
       winnersPublished: true,
@@ -74,6 +84,18 @@ const SEASON: SeasonList = {
 /** The same season with nothing happening now — the strip is the server's
  *  call, so switching it off is a payload change, never a filter. */
 const NO_NOW: SeasonList = { ...SEASON, now: null };
+
+/** Two seasons, so the selector has something to select. */
+const TWO_SEASONS: SeasonList = {
+  ...NO_NOW,
+  tournaments: [
+    ...NO_NOW.tournaments,
+    row('bygone-cup', 'Bygone Cup', 'completed_winners', {
+      date: '2025-06-14',
+      winnersPublished: true,
+    }),
+  ],
+};
 
 const EMPTY: SeasonList = {
   tournaments: [],
@@ -89,8 +111,13 @@ const called: string[] = [];
 beforeEach(() => {
   called.length = 0;
   process.env.API_BASE_URL = 'http://backend:8000';
+  // `Date` ONLY: the season split is a comparison against today, and nothing
+  // else in this render may be frozen (vite's SSR loader is async).
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(CLOCK);
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -123,7 +150,7 @@ describe('the front door', () => {
 
     expect(res.status).toBe(200);
     // Not `toContain('Tournaments')`: the shell's wordmark carries that word.
-    expect(html).toMatch(/<h1[^>]*>\s*Live &amp; upcoming\s*<\/h1>/);
+    expect(html).toMatch(new RegExp(`<h1[^>]*>\\s*${THIS_SEASON} season\\s*</h1>`));
     expect(html).toContain(MASTHEAD);
     expect(html).toContain(SEASON_INTRO);
     expect(html).toContain('Wessex Autumn Gold');
@@ -142,10 +169,8 @@ describe('the front door', () => {
     const start = html.indexOf(SEASON_INTRO, html.indexOf('<h1')) + SEASON_INTRO.length;
     const between = html.slice(start, html.indexOf('name="q"', start));
 
-    // The view segments are the control row's own links (they sit to the
-    // left of the search box since ADR 0028), so `<a` is no longer a tell.
     expect(between).not.toMatch(/<h2|<ul/);
-    expect(between).toContain('aria-label="Calendar view"');
+    expect(between).toContain('aria-label="Season"');
   });
 
   it('ships zero script tags and mints nothing', async () => {
@@ -156,12 +181,79 @@ describe('the front door', () => {
     expect(res.headers.get('set-cookie')).toBeNull();
     expect(html).not.toContain('name="_csrf"');
   });
+});
 
-  it('leads the completed view with archive content instead of the live strip', async () => {
-    const html = await render('/e/?view=completed');
-    expect(html).toMatch(/<h1[^>]*>\s*Completed tournaments\s*<\/h1>/);
-    expect(html).toContain('Browse completed badminton tournaments');
-    expect(html).not.toContain('aria-label="Now playing"');
+describe('one season, upcoming then earlier (P5)', () => {
+  it('reads top to bottom as time does, with the past on the same page', async () => {
+    const html = await render('/e/', NO_NOW);
+
+    expect(html).toContain('August 2026');
+    expect(html).toContain('September 2026');
+    expect(html).toContain('Earlier this season');
+    expect(html).toContain('May 2026');
+    // Upcoming first, in full weight; the past below it.
+    expect(html.indexOf('Wessex Autumn Gold')).toBeLessThan(html.indexOf('Earlier this season'));
+    expect(html.indexOf('Earlier this season')).toBeLessThan(html.indexOf('Sussex Spring Restricted'));
+    // Ascending on top, descending below.
+    expect(html.indexOf('Harbour Invitational')).toBeLessThan(html.indexOf('Meadowbank Masters'));
+    expect(html.indexOf('Sussex Spring Restricted')).toBeLessThan(html.indexOf('Triangle Trophy'));
+  });
+
+  it('shows no lifecycle tabs, facet counts or archive detour anywhere', async () => {
+    const html = await render('/e/', NO_NOW);
+
+    for (const gone of [
+      'Live &amp; upcoming',
+      'Entries open ·',
+      'Completed ·',
+      'Looking for past results?',
+      'View completed tournaments',
+      'Tournament pages',
+      'aria-label="Calendar view"',
+    ]) {
+      expect(html).not.toContain(gone);
+    }
+  });
+
+  it('mutes the past rows, drops their venue line and offers Results only', async () => {
+    const html = await render('/e/', NO_NOW);
+    const past = html.slice(html.indexOf('Earlier this season'));
+
+    expect(past).toContain('Sussex Spring Restricted');
+    expect(past).not.toContain('Some Hall');
+    expect(past).toMatch(/<a href="\/e\/sussex-winners\?tab=draws"/);
+    // Nothing published on the other one, so nowhere to link (§7 trap 3).
+    expect(past).toContain('Results not published');
+    expect(past).not.toContain('/e/triangle-done?tab=');
+  });
+
+  it('names the season boundary in the count line', async () => {
+    const html = await render('/e/', NO_NOW);
+    expect(html).toContain(`6 tournaments in the ${THIS_SEASON} season`);
+  });
+});
+
+describe('the entry action (P5)', () => {
+  it('links Enter to the real entry flow and names the closing day', async () => {
+    const html = await render('/e/', NO_NOW);
+
+    expect(html).toContain('href="/e/wessex-open/enter"');
+    // 12:00 UTC on 30 August is 13:00 in London, still the 30th.
+    expect(html).toContain('Enter · closes 30 Aug');
+  });
+
+  it('carries no countdown, no offset and no zone spelling', async () => {
+    const html = await render('/e/', NO_NOW);
+
+    expect(html).not.toContain('closes in 5d');
+    expect(html).not.toContain('· 5d');
+    expect(html).not.toContain('GMT+1');
+    expect(html).not.toContain('Europe/London');
+  });
+
+  it('says Entries closed where entry status is what matters', async () => {
+    const html = await render('/e/', NO_NOW);
+    expect(html).toContain('Entries closed');
   });
 });
 
@@ -185,9 +277,8 @@ describe('the NOW strip (§2.1)', () => {
     // §7 trap 1, frontend half. `in_progress` means the director has NOT
     // published draws; only the server can know that, so a row dated today
     // must not conjure a band the payload does not carry.
-    const today = new Date().toISOString().slice(0, 10);
     const html = await render('/e/', {
-      tournaments: [row('granite-progress', 'Granite City Open', 'in_progress', { date: today })],
+      tournaments: [row('granite-progress', 'Granite City Open', 'in_progress', { date: '2026-08-11' })],
       counts: { takingEntries: 0, completed: 0 },
       now: null,
     });
@@ -195,35 +286,58 @@ describe('the NOW strip (§2.1)', () => {
     expect(html).toContain('Granite City Open');
     expect(html).not.toContain('Now playing');
   });
+
+  it('steps aside for a search, which is a deliberate question about something else', async () => {
+    const html = await render('/e/?q=Triangle&year=all');
+    expect(html).not.toContain('Now playing');
+  });
 });
 
-describe('the control row (§2.3)', () => {
-  it('has no chip row at all in the default state (§7 trap 4)', async () => {
-    const html = await render();
+describe('the toolbar: season selector + search (P5)', () => {
+  it('offers each published season and an all-seasons escape', async () => {
+    const html = await render('/e/', TWO_SEASONS);
 
-    expect(html).not.toContain('data-active-filter-row');
+    expect(html).toContain('aria-label="Season"');
+    expect(html).toContain(`href="/e/?year=${THIS_SEASON}#calendar"`);
+    expect(html).toContain(`href="/e/?year=${LAST_SEASON}#calendar"`);
+    expect(html).toContain('href="/e/?year=all#calendar"');
   });
 
-  it('labels the segments with counts over the FILTERED collection', async () => {
-    // Unfiltered, the derived counts and the server's `counts` agree (1 / 2).
-    const unfiltered = await render();
-    expect(unfiltered).toContain('Entries open · 1');
-    expect(unfiltered).toContain('Completed · 2');
-
-    // Under a search they must follow it: the list-pagination contract puts
-    // counts on the full filtered collection. `?q=Triangle` keeps exactly one
-    // completed row, so the server's unfiltered 1 / 2 would be a stale label.
-    const searched = await render('/e/?q=Triangle', NO_NOW);
-    expect(searched).toContain('Entries open · 0');
-    expect(searched).toContain('Completed · 1');
+  it('bounds the page to one season — last season is not rendered', async () => {
+    const html = await render('/e/', TWO_SEASONS);
+    expect(html).not.toContain('Bygone Cup');
   });
 
-  it('counts the segments BEFORE the view, so choosing one never moves a label', async () => {
-    // The view selects and orders; it is not one of the filters `rowMatches`
-    // reads. Switching segment must therefore leave the labels alone.
-    const completed = await render('/e/?view=completed', NO_NOW);
-    expect(completed).toContain('Entries open · 1');
-    expect(completed).toContain('Completed · 2');
+  it('shows another season when the URL names it, and says so in the h1', async () => {
+    const html = await render(`/e/?year=${LAST_SEASON}`, TWO_SEASONS);
+
+    expect(html).toMatch(new RegExp(`<h1[^>]*>\\s*${LAST_SEASON} season\\s*</h1>`));
+    expect(html).toContain('Bygone Cup');
+    expect(html).not.toContain('Wessex Autumn Gold');
+  });
+
+  it('lists every season at once when the reader asks for it', async () => {
+    const html = await render('/e/?year=all', TWO_SEASONS);
+
+    expect(html).toMatch(/<h1[^>]*>\s*All tournaments\s*<\/h1>/);
+    expect(html).toContain('Bygone Cup');
+    expect(html).toContain('Wessex Autumn Gold');
+    expect(html).toContain('Earlier tournaments');
+  });
+
+  it('searches name, organizer and venue, and stays in the season on screen', async () => {
+    const html = await render(`/e/?q=granite&year=${THIS_SEASON}`, NO_NOW);
+
+    expect(html).toContain('Granite City Open');
+    expect(html).not.toContain('Wessex Autumn Gold');
+    expect(html).toContain(`1 tournament in the ${THIS_SEASON} season match`);
+  });
+
+  it('lets a shared bare search URL cross every season', async () => {
+    const html = await render('/e/?q=Bygone', TWO_SEASONS);
+
+    expect(html).toContain('Bygone Cup');
+    expect(html).toContain('every season');
   });
 
   it('returns 404 for the removed ?status= route alias', async () => {
@@ -231,226 +345,95 @@ describe('the control row (§2.3)', () => {
 
     expect(html).toContain('This page is not available');
   });
-
-  it('searches name, organizer and venue', async () => {
-    const html = await render('/e/?q=granite', NO_NOW);
-
-    expect(html).toContain('Granite City Open');
-    expect(html).not.toContain('Wessex Autumn Gold');
-  });
-});
-
-describe('the calendar (§2.4)', () => {
-  it('sections the active rows under their month header', async () => {
-    const html = await render();
-
-    expect(html).toContain('September 2026');
-  });
-
-  it('keeps a clear archive link below the current collection', async () => {
-    const html = await render();
-    expect(html).toMatch(/View completed tournaments →/);
-    expect(html.indexOf('View completed tournaments →')).toBeGreaterThan(html.indexOf('Wessex Autumn Gold'));
-  });
-
-  it('links Results where they are published and says Completed where they are not (§7 trap 3)', async () => {
-    const html = await render('/e/?view=completed');
-
-    expect(html).toMatch(/<a href="\/e\/sussex-winners\?tab=draws"/);
-    expect(html).toContain('Results');
-    expect(html).toMatch(/text-muted-foreground">Completed<\/span>/);
-    expect(html).not.toContain('/e/triangle-done?tab=');
-  });
-
-  it('states the exact tournament-timezone deadline, with the relative countdown secondary (V3-PE01.2)', async () => {
-    const html = await render();
-
-    expect(html).toContain('Closes 30 Aug 2026, 13:00 GMT+1 · 5d');
-    // No unexplained bare "d" suffix standing alone as the deadline.
-    expect(html).not.toContain('closes in 5d');
-  });
-
-  it('states a row locality beside the venue (V3-PE01.3)', async () => {
-    const html = await render();
-
-    expect(html).toContain('Some Hall');
-    expect(html).toContain('Winchester, United Kingdom');
-  });
-
-  it.each([
-    [10, false, 'Tenth completed'],
-    [11, false, 'Eleventh completed'],
-    [20, false, 'Twentieth completed'],
-    [21, true, 'Twenty-first completed'],
-  ])('bounds completed results at twenty rows (%i)', async (count, paginated, lastName) => {
-    const tournaments = Array.from({ length: count }, (_, index) => row(
-      `completed-${index + 1}`,
-      index === count - 1 ? lastName : `Completed ${index + 1}`,
-      'completed_winners',
-      { date: `2026-${String(12 - Math.floor(index / 28)).padStart(2, '0')}-${String((index % 28) + 1).padStart(2, '0')}`, winnersPublished: true },
-    ));
-    const html = await render('/e/?view=completed', {
-      tournaments,
-      counts: { takingEntries: 0, completed: count },
-      now: null,
-    });
-    expect(html).toContain('Completed tournaments');
-    expect(html).toContain(lastName);
-    if (paginated) {
-      expect(html).toContain('Showing');
-      expect(html).toContain('21');
-      expect(html).toContain('Tournament pages');
-    }
-    else expect(html).not.toContain('Tournament pages');
-  });
-
-  it('searches the complete public set and can find a completed row absent from the default page', async () => {
-    const html = await render('/e/?q=Triangle', NO_NOW);
-    expect(html).toContain('All tournaments');
-    expect(html).toContain('Triangle Trophy');
-    expect(html).toContain('Search all published tournaments');
-  });
-
-  it('keeps deliberate status and year scope when searching', async () => {
-    const html = await render('/e/?view=completed&year=2026&q=Sussex', NO_NOW);
-    expect(html).toContain('Completed tournaments');
-    expect(html).toContain('Sussex Spring Restricted');
-    expect(html).toMatch(/name="year"[^>]*value="2026"/);
-  });
 });
 
 describe('the two empty states', () => {
-  it('says so honestly when the calendar is empty — no dead Clear action', async () => {
+  it('says so honestly when nothing is published at all — no dead action', async () => {
     const html = await render('/e/', EMPTY);
 
     expect(html).toContain('No tournaments on the calendar yet');
-    expect(html).toContain('No live or upcoming tournament is published right now');
-    expect(html).toContain('View completed tournaments');
+    expect(html).not.toContain('id="calendar"');
     expect(html).not.toContain('Clear filters');
   });
 
-  it('offers Clear filters when a query matched nothing', async () => {
+  it('offers the wider search when a query matched nothing in the season on screen', async () => {
+    const html = await render(`/e/?q=zzz-no-such&year=${THIS_SEASON}`);
+
+    expect(html).toContain('No tournaments match');
+    expect(html).toMatch(/<a href="\/e\/\?q=zzz-no-such&amp;year=all#calendar"/);
+    expect(html).toContain('Search all seasons');
+  });
+
+  it('offers no wider search when the query already crossed every season', async () => {
     const html = await render('/e/?q=zzz-no-such');
 
     expect(html).toContain('No tournaments match');
-    expect(html).toMatch(/<a href="\/e\/"[^>]*>Clear filters<\/a>/);
+    expect(html).not.toContain('Search all seasons');
+    expect(html).toContain('Back to the calendar');
   });
 
-  it('takes the same arm for an empty SEGMENT — never a bare empty calendar', async () => {
-    // §2.4: a conditional element disappears cleanly. A view is a selection
-    // too, so `?view=completed` over a season with nothing completed has zero
-    // rows and no filter set — the old `anyFilterActive` gate let that fall
-    // through to an empty bordered card, which is the "empty band" the rule
-    // forbids.
-    const html = await render('/e/?view=completed', {
-      tournaments: [row('wessex-open', 'Wessex Autumn Gold', 'entries_open')],
-      counts: { takingEntries: 1, completed: 0 },
-      now: null,
-    });
+  it('takes the same arm for an empty SEASON — never a bare empty calendar', async () => {
+    // §2.4: a conditional element disappears cleanly. A season is a selection
+    // too, so `?year=2019` over a list with nothing in 2019 has zero rows.
+    const html = await render('/e/?year=2019', NO_NOW);
 
     expect(html).toContain('No tournaments match');
-    expect(html).toMatch(/<a href="\/e\/"[^>]*>Clear filters<\/a>/);
+    expect(html).toContain('Choose another season above');
     expect(html).not.toContain('id="calendar"');
   });
 });
 
-describe('page links carry the scope the URL actually chose', () => {
-  /** Twelve searchable rows — two pages at the ten-row public page size. */
-  const MANY: SeasonList = {
-    tournaments: Array.from({ length: 12 }, (_, index) =>
-      row(`open-${index + 1}`, `Autumn Open ${index + 1}`, 'entries_open', {
-        date: `2026-09-${String(index + 1).padStart(2, '0')}`,
-      }),
-    ),
-    counts: { takingEntries: 12, completed: 0 },
-    now: null,
-  };
-
-  function pageTwoHref(html: string): string {
-    const match = /<a href="([^"]+)" aria-label="Page 2"/.exec(html);
-    expect(match, 'expected a Page 2 link').not.toBeNull();
-    return match![1].replaceAll('&amp;', '&');
-  }
-
-  it('leaves an IMPLIED all-results scope implicit', async () => {
-    // `?q=Open` parses to view `all` with `scopeExplicit: false` — the scope
-    // is implied by the query, not chosen. Writing `view=all` into the page
-    // link would make the next parse call it deliberate, the control row's
-    // hidden field would then post it, and clearing the search box would land
-    // the entrant on "All tournaments" instead of the calendar.
-    const href = pageTwoHref(await render('/e/?q=Open', MANY));
-
-    const params = new URL(href, 'http://entrant.test').searchParams;
-    expect(params.has('view')).toBe(false);
-    expect(params.get('q')).toBe('Open');
-    expect(params.get('page')).toBe('2');
-  });
-
-  it('keeps a DELIBERATE all-results scope on the link', async () => {
-    const href = pageTwoHref(await render('/e/?view=all&q=Open', MANY));
-
-    const params = new URL(href, 'http://entrant.test').searchParams;
-    expect(params.get('view')).toBe('all');
-    expect(params.get('q')).toBe('Open');
-    expect(params.get('page')).toBe('2');
-  });
-});
-
-describe('E5: empty filter fields never survive into a shareable URL', () => {
+describe('E5/P5: the URL carries the season and the search, and nothing else', () => {
   it.each([
-    ['/e/?page=2', '/e/#calendar'],
-    ['/e/?view=completed&year=2026&page=999', '/e/?view=completed&year=2026#calendar'],
-    // No `view=all`: `?q=Gold` only IMPLIES the all-results scope, and a
-    // clamp must not promote it to a deliberate one (see the page-link tests).
-    ['/e/?q=Gold&page=invalid', '/e/?q=Gold#calendar'],
-  ])('clamps %s to a reachable URL with one basename', async (path, expected) => {
+    // The retired page-two of a two-item list.
+    ['/e/?page=2', '/e/'],
+    // The retired date facet.
+    ['/e/?preset=7d&from=2026-09-01&to=2026-09-30', '/e/'],
+    // The retired lifecycle segments. `completed` named the archive, so it
+    // lands on the past section rather than nowhere.
+    ['/e/?view=open', '/e/'],
+    ['/e/?view=all&q=Gold', '/e/?q=Gold'],
+    ['/e/?view=completed', '/e/#past'],
+    ['/e/?view=completed&year=2026', '/e/?year=2026#past'],
+    // Blank fields a native GET form submits.
+    ['/e/?q=&year=', '/e/'],
+    // A year nothing can read narrows nothing, so it does not stay in a URL
+    // describing a filter the list is not under.
+    ['/e/?year=banana', '/e/'],
+  ])('canonicalises %s to %s', async (path, expected) => {
     const response = await respond(path);
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe(expected);
-    const destination = await respond(expected);
+    const destination = await respond(expected.split('#')[0]);
     expect(destination.status).toBe(200);
-    expect(await destination.text()).toContain('id="calendar"');
   });
 
-  it('drops empty filter fields from the URL instead of echoing them', async () => {
-    // A native GET form submits every named control, including the ones left
-    // blank — so an empty submit produced `/e/?q=&preset=&from=&to=`, which is
-    // the URL an entrant then copies out of the address bar and sends to a
-    // club mailing list. No markup can suppress a blank field without script.
-    const res = await respond('/e/?q=&preset=&from=&to=');
-
+  it('keeps the two live parameters, in one canonical order', async () => {
+    const res = await respond(`/e/?year=${THIS_SEASON}&q=gold`);
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/e/');
-  });
-
-  it('keeps the filters that carry a value while dropping the blanks', async () => {
-    const res = await respond('/e/?q=&view=open&preset=&from=2026-01-01&to=');
-
-    expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/e/?view=open&from=2026-01-01');
+    expect(res.headers.get('location')).toBe(`/e/?q=gold&year=${THIS_SEASON}`);
   });
 
   it('answers an already-clean URL directly — no redirect, no loop', async () => {
     // The half that makes the canonicalisation safe: the redirect target must
     // itself be answered 200, or every visit is an infinite bounce.
-    for (const path of ['/e/', '/e/?view=open']) {
+    for (const path of ['/e/', '/e/?q=gold', `/e/?year=${THIS_SEASON}`, '/e/?year=all']) {
       expect((await respond(path)).status).toBe(200);
     }
   });
 });
 
-describe('the retired sidebar leaves nothing behind', () => {
-  it('renders no FilterStrip status facet and no second search landmark', async () => {
-    const html = await render();
+describe('the retired sidebar and facets leave nothing behind', () => {
+  it('renders no status facet, no date popover and no second search landmark', async () => {
+    const html = await render('/e/', NO_NOW);
 
     expect(html).not.toContain('aria-label="Status"');
     expect(html).not.toContain('aria-label="Dates"');
-    // Exactly one, and since SP-P8 §4 it is the control row's search form,
-    // not the shell's — the header sheds its search and this page owns it.
-    // The popover (dates/view) form carries no role, which is what keeps the
-    // count at one.
+    expect(html).not.toContain('<details');
+    expect(html).not.toContain('data-active-filter-row');
+    // Exactly one, and since SP-P8 §4 it is the toolbar's search form, not the
+    // shell's — the header sheds its search and this page owns it.
     expect(html.match(/role="search"/g)).toHaveLength(1);
-    // The facet LINK is gone; the chip that says the same words lives on.
     expect(html).not.toMatch(/<a[^>]*>Entries open<\/a>/);
   });
 });

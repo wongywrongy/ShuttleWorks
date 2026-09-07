@@ -90,11 +90,17 @@ plus the page-scoped scripts in `apps/entrant/public/assets/`.
 
 | Surface | Route | Main components |
 | --- | --- | --- |
-| Discovery — live & upcoming | `/e/` | `SeasonCalendar`, `SeasonControls`, `SeasonStatusCell`, `EmptyState` |
-| Discovery — live & upcoming · requested page 2 | `/e/?page=2#calendar` | 10-item scope; the two-current-event demo correctly clamps this request to page one |
-| Discovery — entries open | `/e/?view=open#calendar` | explicit entries-open status scope |
-| Discovery — all results search | `/e/?view=all&q=Open#calendar` | search across all public tournaments with explicit all-results scope |
-| Discovery — completed · page 2 | `/e/?view=completed&page=2#calendar` | `Pagination`, year/status filter, 20-item result scope |
+| Discovery — season calendar | `/e/` | `SeasonCalendar`, `SeasonControls`, `SeasonStatusCell`, `NowStrip`, `EmptyState` |
+| Discovery — earlier this season | `/e/#past` | the same page at its past-section anchor; the selected season's finished tournaments, muted, Results only |
+| Discovery — another season | `/e/?year=YYYY#calendar` | the season selector; one season is the content boundary |
+| Discovery — search across seasons | `/e/?q=Open&year=all#calendar` | search widened past the selected season |
+
+The retired lifecycle and pagination queries (`?view=season|open|completed|all`,
+`?preset=`, `?from=`, `?to=`, `?page=`) are **compatibility URLs, not
+surfaces**: the loader canonicalises them off the URL, and `?view=completed`
+lands on `/e/#past`. The surface book captures them under
+`Discovery · Compatibility · …` labels and counts them apart from the product
+sheets (`routeCoverage.compatibilitySheets`).
 | Tournament — overview | `/e/SLUG` | `HeroHeader`, `TabBar` (`SegmentedNav`), `SectionCard` + `SectionRow`, `NowStrip` |
 | Tournament — draws / players | `/e/SLUG?tab=draws`, `?tab=players` (ADR 0028; these are the only public tournament index tabs) | `TabBar`, `EventRow` (+ `Button` Entrants / Draw), `PlayersList`, `EntrantsList`, `PersonRef`/`PersonGroup`, `StatusChip` |
 | Schedule and live | `/e/SLUG/schedule` | `HeroHeader`, `SegmentedNav` (days, by time / by court), `MatchCard`, filter card (`FIELD_INPUT` controls) |

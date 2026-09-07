@@ -175,20 +175,24 @@ export interface SeasonList {
   now: { slug: string; moreCount: number } | null;
 }
 
-/** The three segments of the calendar. A view is navigation, not a filter. */
-export type View = 'season' | 'open' | 'completed' | 'all';
-
-export type DatePreset = '7d' | '30d' | '90d';
-
+/**
+ * The season calendar's whole state (P5): WHICH season, and WHAT the reader
+ * typed.
+ *
+ * The lifecycle segments (`?view=season|open|completed|all`) and the date
+ * facet (`?preset`/`?from`/`?to`) are retired — one continuous month-grouped
+ * season replaced them, so there is no second axis left to keep in the URL.
+ * `routes/discovery.tsx` still ANSWERS the retired queries: it canonicalises
+ * them away, and the completed segment lands on the past section's anchor.
+ */
 export interface Filters {
-  view: View;
-  preset: DatePreset | null;
-  from: string | null;
-  to: string | null;
-  year?: number | null;
+  /**
+   * The selected season. `null` is "unspecified" — the loader then picks the
+   * season with current work in it, and lets a search run across every season
+   * — and `'all'` is the reader deliberately asking for every season at once.
+   */
+  year: number | 'all' | null;
   q: string;
-  /** Whether the URL deliberately selected a canonical view scope. */
-  scopeExplicit?: boolean;
 }
 
 /** A month header plus its rows (§2.4). `key` is `year-monthIndex`. */
@@ -199,21 +203,22 @@ export interface MonthGroup {
 }
 
 /**
- * What the status column renders for one row (§2.4 table).
+ * What one calendar row's single right-hand action slot renders (P5).
  *
- * A closed sum type rather than a string plus optional href: `completed`
- * without published winners has NOWHERE to link (§7 trap 3), and the only way
- * to make that unrepresentable is for the no-link arm to carry no `href`
- * field at all.
+ * A closed sum type rather than a string plus optional href: a tournament
+ * with nothing published has NOWHERE to link (§7 trap 3), and the only way to
+ * make that unrepresentable is for the no-link arm to carry no `href` field
+ * at all.
  */
-export type StatusCell =
-  | { kind: 'chip-live'; label: string; href: string }
-  // `closesAt`/`timeZone` ride beside the binary chip so the renderer can
-  // state the exact tournament-timezone deadline (V3-PE01.2) without this
-  // module importing the formatter (see `SeasonRow.closesAt`).
-  | { kind: 'chip-open'; chip: ChipState; closesAt: string | null; timeZone: string }
-  | { kind: 'chip-muted'; label: string }
-  | { kind: 'link'; label: string; href: string }
+export type ActionCell =
+  | { kind: 'live'; label: string; href: string }
+  // `closesAt`/`timeZone` ride beside the entry link so the renderer can name
+  // the closing DAY in the tournament's own zone without this module
+  // importing the formatter (see `SeasonRow.closesAt`). No countdown: a "Nd"
+  // suffix is not a date a reader can act on, and it goes stale in a
+  // screenshot.
+  | { kind: 'enter'; href: string; closesAt: string | null; timeZone: string }
+  | { kind: 'results'; href: string }
   | { kind: 'text'; label: string };
 
 export type TotalBarState =
@@ -405,186 +410,103 @@ export function activeTab(requested: string | null, visible: readonly Tab[]): Ta
   return visible.includes(requested as Tab) ? requested as Tab : null;
 }
 
-/** A chain, not a module-scoped Map: the mutable-bindings guard
- * (`tests/helpers/sourceGuards.ts`) rules shared containers out of this
- * process, and three literals do not need a data structure. */
-function presetDays(preset: DatePreset): number {
-  if (preset === '7d') return 7;
-  if (preset === '30d') return 30;
-  return 90;
+// Frozen literals — the safe-to-share form the mutable-bindings guard exempts.
+const COMPLETED_STATUSES = Object.freeze<PageStatus[]>(['completed', 'completed_winners']);
+
+/**
+ * Case-folded substring of `q` against name, ORGANIZER and venue (D2 — there
+ * is no city on the wire).
+ *
+ * The SEASON is deliberately not applied here: it selects (`seasonModel`), so
+ * a search reads the same text whichever season is open, and the two pieces of
+ * URL state stay independent.
+ */
+export function rowMatches(row: SeasonRow, q: string): boolean {
+  const needle = q.trim().toLowerCase();
+  if (needle === '') return true;
+  return `${row.name ?? ''} ${row.organizer ?? ''} ${row.venueName ?? ''}`
+    .toLowerCase()
+    .includes(needle);
 }
 
 /**
- * Conjunction of date-window match and case-folded substring of `q` against
- * name, ORGANIZER and venue (D2 — there is no city on the wire). A custom
- * from/to wins over a preset; a row whose date is unparseable matches only
- * when no date filter is set. The VIEW is not applied here: it selects and
- * orders (`viewRows`). That is what keeps the segment counts, which the
- * discovery loader takes over the rows this kept, from moving when the
- * entrant switches segment — they follow the search and the dates only.
+ * The toolbar's query string → a validated `Filters`. Unknown values fall
+ * back to "unspecified" rather than erroring — a URL is typeable, and the
+ * retired lifecycle/date queries are simply absent from this vocabulary
+ * (`routes/discovery.tsx` redirects them off the URL).
  */
-export function rowMatches(row: SeasonRow, filters: Filters, now: Date): boolean {
-  if (filters.year !== null && filters.year !== undefined) {
-    const date = parseIsoDate(row.date);
-    if (date === null || date.getUTCFullYear() !== filters.year) return false;
-  }
-  const from = parseIsoDate(filters.from);
-  const to = parseIsoDate(filters.to);
-  if (from !== null || to !== null || filters.preset !== null) {
-    const date = parseIsoDate(row.date);
-    if (date === null) return false;
-    const t = date.getTime();
-    if (from !== null || to !== null) {
-      if (from !== null && t < from.getTime()) return false;
-      if (to !== null && t > to.getTime()) return false;
-    } else {
-      const start = utcDayStart(now);
-      if (t < start || t > start + presetDays(filters.preset!) * DAY_MS) return false;
-    }
-  }
-  const q = filters.q.trim().toLowerCase();
-  if (q !== '') {
-    const haystack =
-      `${row.name ?? ''} ${row.organizer ?? ''} ${row.venueName ?? ''}`.toLowerCase();
-    if (!haystack.includes(q)) return false;
-  }
-  return true;
-}
-
-// Frozen literals — the safe-to-share form the mutable-bindings guard exempts.
-const VIEW_CHOICES = Object.freeze<View[]>(['season', 'open', 'completed', 'all']);
-const PRESET_CHOICES = Object.freeze<DatePreset[]>(['7d', '30d', '90d']);
-const COMPLETED_STATUSES = Object.freeze<PageStatus[]>(['completed', 'completed_winners']);
-
-/** The control row's query string → a validated `Filters`. Unknown values fall
- * back to "no filter" rather than erroring — a URL is typeable. */
 export function parseFilters(params: URLSearchParams): Filters {
-  const view = params.get('view');
-  const preset = params.get('preset');
-  const yearValue = params.get('year');
-  const year = yearValue !== null && /^\d{4}$/.test(yearValue) ? Number(yearValue) : null;
-  const explicitScope = params.has('view');
-  const requestedView = VIEW_CHOICES.includes(view as View)
-    ? (view as View)
-      : 'season';
+  const year = params.get('year');
   return {
-    view: !explicitScope && (params.get('q') ?? '').trim() !== '' ? 'all' : requestedView,
-    preset: PRESET_CHOICES.includes(preset as DatePreset) ? (preset as DatePreset) : null,
-    from: params.get('from') || null,
-    to: params.get('to') || null,
-    year,
+    year:
+      year === 'all'
+        ? 'all'
+        : year !== null && /^\d{4}$/.test(year)
+          ? Number(year)
+          : null,
     q: params.get('q') ?? '',
-    scopeExplicit: explicitScope,
   };
 }
 
 /**
  * The inverse of `parseFilters`: a `Filters` back to the query string that
- * parses to it. One serialiser, because the `view` rule is subtle enough that
- * a second copy of it drifts.
- *
- * **`view` is written only when the URL it came from named a scope.** A bare
- * `?q=Open` parses to `{ view: 'all', scopeExplicit: false }` — the search
- * scope is IMPLIED by the query, not chosen — so re-emitting `view=all` would
- * promote it: the next parse sets `scopeExplicit`, the control row's hidden
- * `view` field then posts it, and clearing the search box lands the entrant on
- * "All tournaments" instead of the calendar they started from. `season` is
- * likewise the parse of a URL that names no view, so it is never written
- * unless it was deliberately selected. Every other view is a real selection
- * and is always written.
- *
- * `page` is NOT included: a filter change starts from page one, so the caller
- * that paginates appends it.
+ * parses to it. One serialiser, shared by the toolbar's links and its hidden
+ * form fields, so the two cannot drift.
  */
 export function filtersToParams(filters: Filters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.q.trim() !== '') params.set('q', filters.q);
-  if ((filters.view !== 'season' && filters.view !== 'all') || filters.scopeExplicit) {
-    params.set('view', filters.view);
-  }
-  if (filters.preset !== null) params.set('preset', filters.preset);
-  if (filters.from !== null && filters.from !== '') params.set('from', filters.from);
-  if (filters.to !== null && filters.to !== '') params.set('to', filters.to);
-  if (filters.year !== null && filters.year !== undefined) params.set('year', String(filters.year));
+  if (filters.year !== null) params.set('year', String(filters.year));
   return params;
 }
 
-/** Is a DATE filter active? Drives the chips row and its badge, which say
- * nothing about a text search. The bounds are tested PARSED, the way
- * `rowMatches` reads them: `?from=abc` narrows nothing, so it must not put a
- * "From abc" chip over an unfiltered list. */
-export function dateFilterActive(filters: Filters): boolean {
-  return (
-    filters.preset !== null ||
-    parseIsoDate(filters.from) !== null ||
-    parseIsoDate(filters.to) !== null
-  );
-}
-
-/** Is any filter active (drives the "Clear filters" affordance)? The view is
- * deliberately excluded: switching segment is navigation, and offering to
- * "clear" it would name a default the entrant never set. */
-export function anyFilterActive(filters: Filters): boolean {
-  return dateFilterActive(filters) || filters.q.trim() !== '';
+/** Every season the published list actually contains, most recent first.
+ * Rows with no parseable date name no season and contribute none. */
+export function seasonYears(rows: readonly SeasonRow[]): number[] {
+  const years = new Set<number>();
+  for (const row of rows) {
+    const date = parseIsoDate(row.date);
+    if (date !== null) years.add(date.getUTCFullYear());
+  }
+  return [...years].sort((a, b) => b - a);
 }
 
 /**
- * The rows one segment shows, in that segment's own order (§2.3).
+ * Which season the page is showing — `null` meaning "every season at once".
  *
- * `open` leads with the deadline an entrant can still act on — closing
- * soonest first, the SP-P6-2 refinement carried over. `completed` reads most
- * recent first. `season` keeps the server's (date, slug) order verbatim, which
- * is what the month sections are built on.
+ * A deliberate `?year=` wins. Otherwise a SEARCH crosses seasons (a reader
+ * who types a name is looking for that tournament, not for that tournament in
+ * one particular year), and a bare visit lands on the season with current work
+ * in it: this calendar year when it has any rows, else the nearest future
+ * season, else the most recent past one.
  */
-export function viewRows(rows: readonly SeasonRow[], view: View): SeasonRow[] {
-  if (view === 'open') {
-    return rows
-      .filter((row) => row.status === 'entries_open')
-      .sort(
-        // Two null countdowns give `Infinity - Infinity` = NaN, which is falsy
-        // and therefore falls through to the slug tiebreak — the order this
-        // wants, reached by `||` rather than by a branch. Pinned by a test row.
-        (a, b) =>
-          (a.closesInDays ?? Number.POSITIVE_INFINITY) -
-            (b.closesInDays ?? Number.POSITIVE_INFINITY) ||
-          a.slug.localeCompare(b.slug),
-      );
-  }
-  if (view === 'completed') {
-    return rows
-      .filter((row) => COMPLETED_STATUSES.includes(row.status))
-      .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug));
-  }
-  if (view === 'all') {
-    return [...rows].sort((a, b) =>
-      (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug),
-    );
-  }
-  // The default landing view is bounded to live and upcoming work. Completed
-  // events have their own archive and must never consume the front door.
-  return rows
-    .filter((row) => !COMPLETED_STATUSES.includes(row.status))
-    .sort((a, b) => {
-      const liveA = a.status === 'in_progress_live' || a.status === 'in_progress' ? 0 : 1;
-      const liveB = b.status === 'in_progress_live' || b.status === 'in_progress' ? 0 : 1;
-      return liveA - liveB || (a.date ?? '\uffff').localeCompare(b.date ?? '\uffff') || a.slug.localeCompare(b.slug);
-    });
+export function resolveSeason(
+  rows: readonly SeasonRow[],
+  filters: Filters,
+  now: Date,
+): number | null {
+  if (typeof filters.year === 'number') return filters.year;
+  if (filters.year === 'all') return null;
+  if (filters.q.trim() !== '') return null;
+  const years = seasonYears(rows);
+  const current = now.getUTCFullYear();
+  if (years.includes(current)) return current;
+  const future = years.filter((year) => year > current);
+  if (future.length > 0) return future[future.length - 1];
+  return years[0] ?? current;
 }
 
-/** Stable, storage-agnostic page slicing shared by the public loader tests and
- * the rendered discovery route. Invalid and overrun pages resolve to a valid
- * page so a deleted final record cannot leave an empty phantom page. */
-export function paginateRows<T>(rows: readonly T[], requestedPage: number, pageSize: number): {
-  rows: T[];
-  page: number;
-  pageCount: number;
-} {
-  const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : 1;
-  const pageCount = Math.max(1, Math.ceil(rows.length / safeSize));
-  const page = Number.isFinite(requestedPage) && requestedPage > 0
-    ? Math.min(Math.floor(requestedPage), pageCount)
-    : 1;
-  return { rows: [...rows.slice((page - 1) * safeSize, page * safeSize)], page, pageCount };
+/**
+ * Has this tournament already happened?
+ *
+ * Publication first (a completed tournament is past whatever its stored date
+ * says), then the calendar day — never the other way round, because a date is
+ * the one fact on this row a director may not have kept current.
+ */
+function isPast(row: SeasonRow, now: Date): boolean {
+  if (COMPLETED_STATUSES.includes(row.status)) return true;
+  const date = parseIsoDate(row.date);
+  return date !== null && date.getTime() < utcDayStart(now);
 }
 
 /**
@@ -610,73 +532,130 @@ function groupByMonth(rows: readonly SeasonRow[]): MonthGroup[] {
   return groups;
 }
 
+/** One season, as the page renders it (P5). */
+export interface SeasonModel {
+  /** The season on screen; `null` = every season at once. */
+  season: number | null;
+  /** Every season the published list contains, most recent first. */
+  years: number[];
+  /** Ascending month sections — the full-weight half of the page. */
+  upcoming: MonthGroup[];
+  /** Active tournaments whose date the organizer has not set yet. */
+  upcomingUndated: SeasonRow[];
+  /** "Earlier this season": descending month sections, muted. */
+  past: MonthGroup[];
+  /** Past tournaments with no recorded date. */
+  pastUndated: SeasonRow[];
+  /** How many rows this page lists. */
+  listedCount: number;
+  /** How many rows the wire carried, before the season and the search. */
+  publishedCount: number;
+}
+
+const byDateAsc = (a: SeasonRow, b: SeasonRow) =>
+  (a.date ?? '').localeCompare(b.date ?? '') || a.slug.localeCompare(b.slug);
+const byDateDesc = (a: SeasonRow, b: SeasonRow) =>
+  (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug);
+const bySlug = (a: SeasonRow, b: SeasonRow) => a.slug.localeCompare(b.slug);
+const dated = (row: SeasonRow) => parseIsoDate(row.date) !== null;
+
 /**
- * The Season view's shape (§2.4): active tournaments in ascending month
- * sections, with completed ones and undated ones trailing as their own
- * sections. A tournament with no date is still listed — it is a real state
- * ("date to be confirmed"), not missing data to hide.
+ * The whole page shape, from the wire rows plus the URL state (P5).
+ *
+ * One continuous season: what is still to come, ascending, then what already
+ * happened, descending. There are no lifecycle segments to switch between and
+ * no archive elsewhere to detour to.
+ *
+ * **A dateless tournament belongs to no season**, so it is listed in EVERY
+ * season rather than hidden in all of them, in its own "date to be confirmed"
+ * section. Nothing here invents a date to place a row in a month.
  */
-export function seasonSections(rows: readonly SeasonRow[]): {
-  months: MonthGroup[];
-  completed: SeasonRow[];
-  undated: SeasonRow[];
-  undatedLive: SeasonRow[];
-} {
-  const isCompleted = (row: SeasonRow) => COMPLETED_STATUSES.includes(row.status);
-  const isLive = (row: SeasonRow) => row.status === 'in_progress_live' || row.status === 'in_progress';
-  const active = rows.filter((row) => !isCompleted(row));
+export function seasonModel(
+  rows: readonly SeasonRow[],
+  filters: Filters,
+  now: Date,
+): SeasonModel {
+  const season = resolveSeason(rows, filters, now);
+  const inSeason = rows.filter((row) => {
+    if (!rowMatches(row, filters.q)) return false;
+    if (season === null) return true;
+    const date = parseIsoDate(row.date);
+    return date === null || date.getUTCFullYear() === season;
+  });
+  const upcomingRows = inSeason.filter((row) => !isPast(row, now));
+  const pastRows = inSeason.filter((row) => isPast(row, now));
   return {
-    months: groupByMonth(active.filter((row) => parseIsoDate(row.date) !== null)),
-    completed: rows
-      .filter(isCompleted)
-      .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug)),
-    // Keep undated live courts at the front of the Season view, matching
-    // viewRows' live-first ordering even though month grouping cannot place
-    // them in a dated section.
-    undatedLive: active.filter((row) => parseIsoDate(row.date) === null && isLive(row)),
-    undated: active.filter((row) => parseIsoDate(row.date) === null && !isLive(row)),
+    season,
+    years: seasonYears(rows),
+    upcoming: groupByMonth([...upcomingRows.filter(dated)].sort(byDateAsc)),
+    upcomingUndated: [...upcomingRows.filter((row) => !dated(row))].sort(bySlug),
+    past: groupByMonth([...pastRows.filter(dated)].sort(byDateDesc)),
+    pastUndated: [...pastRows.filter((row) => !dated(row))].sort(bySlug),
+    listedCount: inSeason.length,
+    publishedCount: rows.length,
   };
 }
 
 /**
- * Month sections for the Completed view. Rows arrive already date-descending
- * from `viewRows('completed')`, and grouping preserves that order, so the
- * months come out most-recent-first without a second sort.
+ * The title as the calendar shows it (P5).
+ *
+ * Organizers commonly stamp the year into the stored name ("2026 Taipei
+ * Open"), and under a "July 2026" month header that year is then said twice
+ * on one line. The STORED name is untouched — this is a display
+ * normalisation, and a deliberately narrow one: exactly one leading or
+ * trailing token equal to THIS row's own year, with the separator it sits
+ * against, and only when a name is left over. A row with no date has no year
+ * to be redundant with, so its name is returned verbatim.
  */
-export function monthGroupsDesc(rows: readonly SeasonRow[]): MonthGroup[] {
-  return groupByMonth(rows.filter((row) => parseIsoDate(row.date) !== null));
+export function displayTitle(row: SeasonRow): string {
+  const name = row.name ?? row.slug;
+  const date = parseIsoDate(row.date);
+  if (date === null) return name;
+  const year = String(date.getUTCFullYear());
+  const separator = '[\\s\\u2013\\u2014/.:-]+';
+  const stripped = name
+    .replace(new RegExp(`^${year}${separator}`), '')
+    .replace(new RegExp(`${separator}${year}$`), '')
+    .trim();
+  return stripped === '' ? name : stripped;
 }
 
 /**
- * The §2.4 status-column table, one arm per `PageStatus`.
+ * The one right-hand action a calendar row offers (P5).
  *
- * Exhaustive over the enum with no default, so adding a status is a compile
- * error here rather than a blank cell in production.
+ * Exhaustive over `PageStatus` with no default, so adding a status is a
+ * compile error here rather than a blank slot in production. A PAST row gets
+ * the results treatment whatever its stored status says: an event that has
+ * happened cannot be entered, and offering the entry flow for it would be a
+ * dead end.
  */
-export function statusCell(row: SeasonRow): StatusCell {
+export function actionCell(row: SeasonRow, past: boolean): ActionCell {
   const page = `/e/${encodeURIComponent(row.slug)}`;
+  // Draws and winners share one public panel (ADR 0028); either publication
+  // makes the row link there. Neither means there is nothing to link to, and
+  // the arm that says so carries no `href` to grow one by accident.
+  const results = (): ActionCell =>
+    row.drawsPublished || row.winnersPublished
+      ? { kind: 'results', href: `${page}?tab=draws` }
+      : { kind: 'text', label: 'Results not published' };
+  if (past) return results();
   switch (row.status) {
     case 'in_progress_live':
-      return { kind: 'chip-live', label: 'Follow live', href: `${page}?tab=draws` };
+      return { kind: 'live', label: 'Follow live', href: `${page}?tab=draws` };
     case 'in_progress':
-      return { kind: 'chip-muted', label: 'In progress' };
+      return { kind: 'text', label: 'In progress' };
     case 'entries_open':
       return {
-        kind: 'chip-open',
-        chip: { kind: 'entriesOpen', closesInDays: row.closesInDays },
+        kind: 'enter',
+        href: `${page}/enter`,
         closesAt: row.closesAt,
         timeZone: row.timeZone,
       };
     case 'entries_closed':
-      return { kind: 'chip-muted', label: 'Entries closed' };
+      return { kind: 'text', label: 'Entries closed' };
     case 'completed_winners':
     case 'completed':
-      // Draws and winners share one public panel (ADR 0028); either
-      // publication makes the row link there.
-      if (row.drawsPublished || row.winnersPublished) {
-        return { kind: 'link', label: 'Results', href: `${page}?tab=draws` };
-      }
-      return { kind: 'text', label: 'Completed' };
+      return results();
   }
 }
 

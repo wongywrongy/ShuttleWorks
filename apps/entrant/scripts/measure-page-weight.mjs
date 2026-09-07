@@ -79,8 +79,22 @@ const PAGE = JSON.parse(
 globalThis.fetch = async (input) => {
   const url = typeof input === 'string' ? input : input.url;
   if (url === `${process.env.API_BASE_URL}/e/api/pages`) {
-    // The SP-P8 season list: one row, so `/e/` measures a real calendar row
-    // and `/e/spring-open` below measures the same tournament's page.
+    // The season list. P5 made ONE SEASON the content boundary and removed
+    // the pagination that used to cap this page at ten rows, so measuring a
+    // single-row list would measure a page nobody has: the number that
+    // matters is a REAL season, one busy month after another. Twenty-four
+    // tournaments across a year — half of them already played, so both the
+    // full-weight and the muted halves are in the measurement — with
+    // `spring-open` first so `/e/spring-open` below measures the same
+    // tournament's page.
+    //
+    // The dates are relative to the render clock because "upcoming" and
+    // "earlier this season" are decided against today: fixed 2026 literals
+    // would quietly move the whole list into the past and stop measuring the
+    // upcoming half at all.
+    const today = new Date();
+    const day = (offset) =>
+      new Date(today.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
     const season = {
       tournaments: [
         {
@@ -88,15 +102,36 @@ globalThis.fetch = async (input) => {
           name: 'Spring Open',
           organizer: 'Riverside BC',
           venueName: 'Riverside Sports Hall',
-          date: '2026-09-12',
+          date: day(12),
           eventCount: 4,
           status: 'entries_open',
           closesInDays: 5,
+          closesAt: '2026-09-01 22:00 UTC',
+          timeZone: 'Europe/London',
+          locality: 'Winchester, United Kingdom',
           drawsPublished: false,
           winnersPublished: false,
         },
+        ...Array.from({ length: 23 }, (_, index) => {
+          const past = index >= 11;
+          return {
+            slug: `regional-championship-${index + 1}`,
+            name: `Regional Championship ${index + 1}`,
+            organizer: 'Northgate Badminton Club',
+            venueName: 'Northgate Leisure Centre',
+            date: day(past ? -14 * (index - 10) : 20 + 12 * index),
+            eventCount: 5,
+            status: past ? 'completed_winners' : 'entries_open',
+            closesInDays: past ? null : 9,
+            closesAt: past ? null : '2026-09-01 22:00 UTC',
+            timeZone: 'Europe/London',
+            locality: 'Winchester, United Kingdom',
+            drawsPublished: past,
+            winnersPublished: past,
+          };
+        }),
       ],
-      counts: { takingEntries: 1, completed: 0 },
+      counts: { takingEntries: 12, completed: 12 },
       now: null,
     };
     return new Response(JSON.stringify(season), {

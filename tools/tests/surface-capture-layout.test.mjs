@@ -51,7 +51,7 @@ test('surface capture preserves paginated query state and covers a long document
   const output = join(outputDir, 'fixture.pdf');
   try {
     await runCapture(['entrant', base, output], {
-      CAPTURE_LABEL: 'Discovery · Completed tournaments',
+      CAPTURE_LABEL: 'Discovery · Compatibility · completed tournaments',
       CAPTURE_LIMIT: '1',
       CAPTURE_SETTLE_MS: '0',
     });

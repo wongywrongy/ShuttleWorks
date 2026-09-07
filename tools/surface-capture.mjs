@@ -187,8 +187,8 @@ if (MEET_WS_ID) {
 }
 
 const ENTRANT_SURFACES = [
-  ["Discovery · Live & upcoming", "/e/"],
-  ["Discovery · Completed tournaments", "/e/?view=completed#calendar"],
+  ["Discovery · Season calendar", "/e/"],
+  ["Discovery · Earlier this season", "/e/#past"],
   ["Tournament · Overview", `/e/${SLUG}`],
   ["Tournament · Players", `/e/${SLUG}?tab=players`],
   ["Tournament · Draws", `/e/${SLUG}?tab=draws`],
@@ -231,16 +231,30 @@ const ENTRANT_SURFACES = [
   ["Doubles partner failed", "/e/partner/failed"],
   ["My entries (signed out)", "/e/me/entries"],
   ["Entry receipt", `/e/${SLUG}/receipt/${SUBMISSION_ID}`],
-  // Public discovery scope states are appended so original surface IDs remain
-  // stable in previously generated review books.
-  ["Discovery · Live & upcoming · requested page 2", "/e/?page=2#calendar"],
-  ["Discovery · Entries open", "/e/?view=open#calendar"],
-  ["Discovery · All results search", "/e/?view=all&q=Open#calendar"],
-  [
-    "Discovery · Completed tournaments · page 2",
-    "/e/?view=completed&page=2#calendar",
-  ],
+  // Public discovery scope states. P5 retired the lifecycle facets and the
+  // pagination with them: the season list has no "Entries open" segment to
+  // capture, and a page two of a two-item list was never a real surface. What
+  // remains are the two states a reader actually reaches — a search, and a
+  // season other than the current one.
+  ["Discovery · Search across seasons", "/e/?q=Open&year=all#calendar"],
   ["Partner invitation · Missing fixture token", "/e/partner/missing-fixture-token"],
+];
+
+/**
+ * Retired URLs that still have to ANSWER, captured apart from the product
+ * surfaces above and counted apart in `routeCoverage`.
+ *
+ * These are not screens: `?view=completed` and `?view=open` named lifecycle
+ * segments the season calendar replaced, and each now canonicalises onto a
+ * position in the one continuous list. They stay in the book because the
+ * URLs are in posters and mailing lists and a reader following one must land
+ * somewhere honest — but counting them as unique surfaces overstated the
+ * product by four sheets, which is the miscount this split fixes.
+ */
+const ENTRANT_COMPATIBILITY_SURFACES = [
+  ["Discovery · Compatibility · completed tournaments", "/e/?view=completed#calendar"],
+  ["Discovery · Compatibility · entries-open segment", "/e/?view=open#calendar"],
+  ["Discovery · Compatibility · retired pagination", "/e/?page=2#calendar"],
 ];
 
 if (PARTNER_TOKEN) {
@@ -272,10 +286,18 @@ const EXACT_DESCRIPTIONS = Object.freeze({
     "Capability guard for Meet roster tools in a bracket workspace.",
   "Module guard · Meet matches unavailable":
     "Capability guard for Meet match tools in a bracket workspace.",
-  "Discovery · Live & upcoming":
-    "Public tournament discovery page for browsing the active season.",
-  "Discovery · Completed tournaments":
-    "Historical discovery view focused on completed tournaments.",
+  "Discovery · Season calendar":
+    "Public front door: one month-grouped season, upcoming first, with the season selector and search.",
+  "Discovery · Earlier this season":
+    "The same page at its Earlier this season anchor, where the selected season's finished tournaments and their results sit.",
+  "Discovery · Search across seasons":
+    "Discovery search widened past the selected season.",
+  "Discovery · Compatibility · completed tournaments":
+    "Retired lifecycle URL: canonicalises onto the season calendar's past section.",
+  "Discovery · Compatibility · entries-open segment":
+    "Retired lifecycle URL: canonicalises onto the season calendar.",
+  "Discovery · Compatibility · retired pagination":
+    "Retired pagination URL: canonicalises onto the season calendar.",
   "Tournament · Overview":
     "Public tournament summary, dates, venue, status, and primary calls to action.",
   "Tournament · Events":
@@ -393,6 +415,12 @@ async function resolvePublicPersonKey() {
 }
 
 let surfaces = tier === "console" ? [...CONSOLE_SURFACES] : [...ENTRANT_SURFACES];
+// Compatibility URLs ride at the end of the run and are counted apart (see
+// `routeCoverage` below); they are redirect behaviour, not product surfaces.
+const compatibilityLabels = new Set(
+  tier === "entrant" ? ENTRANT_COMPATIBILITY_SURFACES.map(([label]) => label) : [],
+);
+if (tier === "entrant") surfaces.push(...ENTRANT_COMPATIBILITY_SURFACES);
 const omittedOptionalStates = [];
 if (tier === "entrant") {
   const playerKey = await resolvePublicPersonKey();
@@ -424,16 +452,21 @@ if (CAPTURE_LABEL) {
 if (CAPTURE_LIMIT > 0) {
   surfaces = surfaces.slice(0, CAPTURE_LIMIT);
 }
-// Route coverage describes product screens only. Compatibility URLs are
-// intentionally absent: historical redirect behavior belongs in the route
-// contract, never in the current visual surface book. Compute after optional
-// filtering so the manifest matches the actual sheets in this run.
+// Route coverage describes product screens, and says separately how many
+// sheets are compatibility URLs. Counting a redirect as a unique surface
+// overstates the product — the season calendar's four retired lifecycle and
+// pagination queries were four such sheets — so the two are tallied apart
+// rather than the compatibility sheets being dropped from the book. Compute
+// after optional filtering so the manifest matches the actual sheets in this
+// run.
+const productSurfaces = surfaces.filter(([label]) => !compatibilityLabels.has(label));
 const canonicalDestinationCount = new Set(
-  surfaces.map(([, path]) => path.split(/[?#]/, 1)[0]),
+  productSurfaces.map(([, path]) => path.split(/[?#]/, 1)[0]),
 ).size;
 const routeCoverage = {
   canonicalDestinations: canonicalDestinationCount,
-  stateSheets: surfaces.length,
+  stateSheets: productSurfaces.length,
+  compatibilitySheets: surfaces.length - productSurfaces.length,
 };
 const VIEWPORTS = [
   ["desktop", 1440, 900],
@@ -755,7 +788,7 @@ const html = `<!doctype html>
 <p><strong>Design direction:</strong> preserve readable match identity and stored participant names; use restrained semantic colour, flat ordinary surfaces, consistent property panels and explicit saved/unsaved feedback. Backend terms belong in the UI only when they help a user make a decision.</p>
 <p><strong>Annotate:</strong> cite surface ID, viewport and segment, then state the observed problem, affected task, severity, proposed change and measurable acceptance criterion. Distinguish a visual observation from an interaction hypothesis.</p>
 <p><strong>Further validation:</strong> keyboard/focus order, screen-reader output, dark theme, form errors, authenticated entry outcomes, offline recovery and physical venue viewing distance require separate testing. Internal scroll panels, horizontal canvases and virtualized regions show their initial visible position only. Document continuations do not scroll these panels.</p>
-<p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> canonical destinations and <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets. Compatibility URLs are excluded from current books; historical redirect behavior is documented separately in the route contract. Every sheet records its requested route and the final URL reached.</p>
+<p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> canonical destinations and <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets, plus <code>${esc(routeCoverage.compatibilitySheets)}</code> compatibility sheets counted separately. A compatibility sheet is a retired URL proving it still lands somewhere honest, not a product surface. Every sheet records its requested route and the final URL reached.</p>
 <p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; reduced motion. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Timing is live demo data, not a frozen cross-surface snapshot. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
 </div></section>
 <section class="index"><h1>Surface index</h1><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>

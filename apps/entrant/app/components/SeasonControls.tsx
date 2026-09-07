@@ -1,347 +1,140 @@
 /**
- * §2.3: the one control row above the calendar — the three view segments,
- * the search box with the date-filter panel attached to it, and plain links
- * that say what is active.
+ * P5: the one control row above the calendar — a season selector and a search
+ * box, and nothing else.
  *
- * No framework hydration, four native mechanisms (Z1): search and the date range are
- * GET forms; each segment is a LINK carrying the whole current query with the
- * view swapped (the retired `FilterStrip`'s facet idiom, reimplemented here
- * because it dies with that file); the filter panel is a `<details>`, styled
- * as an anchored popover from `sm:` up and as a bottom sheet below it, in CSS
- * alone; each active-filter link points to the same URL minus one parameter.
+ * The lifecycle segments ("Live & upcoming" / "Entries open · N" /
+ * "Completed · N") and the date-facet popover are gone with the page shape
+ * that needed them: one continuous season list has no lifecycle to switch
+ * between, and the counts those segments carried were a count of a state the
+ * reader no longer chooses. What remains is the two questions a season
+ * calendar actually raises — WHICH season, and WHERE is the one I am looking
+ * for — and both stay in the URL, so a season or a search is shareable.
  *
- * ADR 0028: segments left, search right, one bordered box — the input and
- * the Filters disclosure share a border. The search form has no visible
- * button: Enter (or the keyboard's search key) submits a single-field GET
- * form, and an `sr-only` submit keeps it reachable by assistive tech.
+ * No framework hydration, two native mechanisms (Z1): each season is a LINK
+ * carrying the current search, and the search is a single-field GET form
+ * carrying the current season. There is no submit button and no popover:
+ * Enter (or the keyboard's search key) submits, and an `sr-only` submit keeps
+ * it reachable by assistive tech.
  *
- * **The active-filter row exists only when a DATE filter is set** (§7 trap 4). A
- * default page has nothing to dismiss, and a row of "all dates"-style chips
- * describing a state the entrant never chose is chrome pretending to be
- * feedback. The search text is deliberately not a chip: it is visible in the
- * box it was typed into.
- *
- * The segment COUNTS follow the ACTIVE FILTERS (the list-pagination contract:
- * counts refer to the full filtered collection), so a search narrows them.
- * They are counted before the view is applied, though, so switching segment
- * never moves them — the labels answer "how much of what I searched for is in
- * each segment".
+ * `role="search"` since SP-P8 §4: the header shed its search, and a tier with
+ * no search landmark anywhere is an a11y regression, so the landmark lives
+ * here with the box — exactly one per page.
  */
-import { Button } from '@scheduler/design-system/components';
-
-import {
-  dateFilterActive,
-  filtersToParams,
-  parseIsoDate,
-  type DatePreset,
-  type Filters,
-  type View,
-} from '../lib/phase';
-import { FIELD_INPUT } from '../lib/ui';
+import { filtersToParams, type Filters } from '../lib/phase';
 import { SegmentedNav } from './SegmentedNav';
 
 const ACTION = '/e/#calendar';
 
 /**
- * Every preset a URL can carry, labelled. `30d` has no radio in the panel —
- * the design offers three choices — but the retired sidebar's links are in
- * mailing lists and posters, so a `?preset=30d` URL still filters and still
- * gets named honestly rather than rendering an unlabelled chip (D6-adjacent).
+ * How many seasons the selector offers before it stops being a selector. A
+ * public list can accumulate a decade of them; the recent ones are what a
+ * reader picks, and "All seasons" reaches the rest.
  */
-const PRESET_LABELS: Readonly<Record<DatePreset, string>> = Object.freeze({
-  '7d': 'Next 7 days',
-  '30d': 'Next 30 days',
-  '90d': 'Next 3 months',
-});
+const MAX_SEASONS = 6;
 
-/** The panel's three choices, in order; `''` is "no date filter at all". */
-const PRESET_CHOICES: readonly { value: '' | DatePreset; label: string }[] = Object.freeze([
-  { value: '', label: 'This season' },
-  { value: '7d', label: PRESET_LABELS['7d'] },
-  { value: '90d', label: PRESET_LABELS['90d'] },
-]);
-
-const SEGMENTS: readonly View[] = Object.freeze(['season', 'open', 'completed']);
-
-/**
- * The current query with some fields swapped, as the URL the GET forms would
- * produce: empty values dropped, and `view=season` dropped because it is what
- * `parseFilters` answers for a URL that names no view.
- */
+/** The current query with some fields swapped, as the URL the search form
+ * would produce: empty values dropped, so a default page's links carry no
+ * query at all. */
 function queryHref(filters: Filters, patch: Partial<Filters>): string {
-  // `filtersToParams` owns the rule that an implicit `all` (the scope a bare
-  // `?q=` implies) stays implicit while deliberate status/all selections stay
-  // explicit, and it omits `page` — any filter change starts from page one.
-  const params = filtersToParams({ ...filters, ...patch });
-  const query = params.toString();
+  const query = filtersToParams({ ...filters, ...patch }).toString();
   return query === '' ? ACTION : `/e/?${query}#calendar`;
 }
 
-const NO_DATES: Partial<Filters> = Object.freeze({ preset: null, from: null, to: null, year: null });
-
-/** The fields a form must carry so submitting it does not silently clear the
- * state the entrant set somewhere else in this row. */
+/** The fields the search form must carry so submitting it does not silently
+ * drop the season the reader chose. */
 function Hidden({ name, value }: { name: string; value: string | null }) {
   return value === null || value === '' ? null : (
     <input type="hidden" name={name} value={value} />
   );
 }
 
-/** One removable filter as an unboxed text link. */
-function ActiveFilterLink({ label, href }: { label: string; href: string }) {
-  return (
-    <a
-      href={href}
-      className="inline-flex items-center gap-1.5 border-b border-rule-control py-1 text-xs text-foreground hover:border-foreground"
-    >
-      {label}
-      <span aria-hidden className="text-muted-foreground">
-        ×
-      </span>
-      <span className="sr-only">(remove)</span>
-    </a>
-  );
-}
-
 export function SeasonControls({
   filters,
-  counts,
+  season,
+  years,
 }: {
   filters: Filters;
-  counts: { takingEntries: number; completed: number };
+  /** The season actually on screen — `null` when every season is listed. */
+  season: number | null;
+  /** Every season the published list contains, most recent first. */
+  years: readonly number[];
 }) {
-  const labels: Readonly<Record<View, string>> = {
-    season: 'Live & upcoming',
-    open: `Entries open · ${counts.takingEntries}`,
-    completed: `Completed · ${counts.completed}`,
-    all: 'All results',
-  };
-  const activeDates = [filters.preset, filters.from, filters.to, filters.year].filter(
-    (value) => value !== null && value !== undefined && value !== '',
-  ).length;
+  // The resolved season leads the list even when it is older than the six
+  // most recent: a shared `?year=2019` URL must show its own season selected,
+  // not an unselected row of newer ones.
+  const offered = [
+    ...(season !== null && !years.slice(0, MAX_SEASONS).includes(season) ? [season] : []),
+    ...years.slice(0, MAX_SEASONS),
+  ];
 
   return (
-    // v3-consolidated work package 26b: `min-w-0` added. This is a CSS
-    // Grid item with no explicit `grid-template-columns`, so its implicit
-    // track sizes to `auto` — which, like a flex item, defaults to
-    // `min-width: auto` (its content's min-content size) rather than
-    // shrinking to fit the parent. Verified against a real running page:
-    // this single div was measurably rendering 330px wide inside a 288px
-    // parent at 320px viewport (the search box's own children being
-    // unable to fit inside `flex`'s row was a real, separate contributor,
-    // fixed alongside this in the same package, but THIS is what let that
-    // overflow escape past `<main>` and cause the page itself to scroll
-    // horizontally — plan §6 "Responsive/signage"). `min-w-0` is the
-    // standard fix for an implicit grid/flex track refusing to shrink
-    // below its content.
+    // v3-consolidated work package 26b: `min-w-0` added. This is a CSS Grid
+    // item with no explicit `grid-template-columns`, so its implicit track
+    // sizes to `auto` — which, like a flex item, defaults to `min-width: auto`
+    // (its content's min-content size) rather than shrinking to fit the
+    // parent. `min-w-0` is the standard fix for an implicit grid/flex track
+    // refusing to shrink below its content.
     <div className="grid min-w-0 gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* The segments: navigation, not a filter — which is why they carry
-            no "clear", and why the counts beside them do not move when one is
-            chosen (they are counted before the view is applied). They do
-            follow the search and the date range. */}
+        {/* The seasons: navigation, not a filter — which is why they carry no
+            "clear". "All seasons" is the escape hatch for anything older than
+            the offered ones, and for a reader who wants the whole list. */}
         <SegmentedNav
-          label="Calendar view"
+          label="Season"
           currentAttr="true"
-          segments={SEGMENTS.map((view) => ({
-            label: labels[view],
-            href: queryHref(filters, { view }),
-            current: view === filters.view,
-          }))}
+          segments={[
+            ...offered.map((year) => ({
+              label: String(year),
+              href: queryHref(filters, { year }),
+              current: season === year,
+            })),
+            {
+              label: 'All seasons',
+              href: queryHref(filters, { year: 'all' }),
+              current: season === null,
+            },
+          ]}
         />
 
-        {/* Search: a GET form landing on the calendar, carrying the dates and
-            the view so searching does not reset the rest of the row.
-            `role="search"` since SP-P8 §4: the header shed its search, and a
-            tier with no search landmark anywhere is an a11y regression, so
-            the landmark moves here with the box. The dates popover below
-            stays roleless — one search landmark per page. */}
-        {/* v3-consolidated work package 26b: `basis-80` (320px) is a
-            sensible starting width from `sm:` up (paired with
-            `sm:max-w-md`), but as the UNCONDITIONAL basis it was also the
-            shrink algorithm's starting point below `sm:` — with the
-            "Filters" `<details>` sibling refusing to shrink below its own
-            text's min-content, the pair's combined floor overflowed a
-            320px viewport by ~26px (plan §6 "Responsive/signage": no
-            horizontal document scroll at 320/390).
-            **`basis-80` alone did not fix it** (verified against a real
-            browser, not just reasoned about): `flex-1`'s implicit
-            `flex-basis: 0%` gives the wrap algorithm nothing to measure,
-            so this box is placed on the SAME line as the `nav` beside it
-            regardless of room, and only THEN does flex-shrink run — by
-            which point `<details>` (no `min-width`/shrink override, and
-            never given one, because its content genuinely cannot shrink
-            below "Filters" + its icon) simply overflows this box's edge
-            rather than the box growing or wrapping to contain it. Below
-            `sm:`, `basis-full` gives this box a 100%-of-line hypothetical
-            size, which forces the OUTER `flex-wrap` row to drop it onto
-            its own line — where it has the full 288px content width and
-            neither child needs to shrink at all. `sm:basis-80` keeps the
-            narrower, `sm:max-w-md`-capped box once there is room for it
-            beside the segments on one line. */}
-        <div className="flex h-9 min-w-0 max-w-full flex-1 basis-full sm:basis-80 items-stretch rounded-sm border border-rule-control bg-surface-raised sm:max-w-md">
-          <form
-            role="search"
-            method="get"
-            action={ACTION}
-            className="flex min-w-0 flex-1 items-center"
-          >
-            <Hidden name="view" value={filters.scopeExplicit ? filters.view : null} />
-            <Hidden name="preset" value={filters.preset} />
-            <Hidden name="from" value={filters.from} />
-                <Hidden name="to" value={filters.to} />
-                <Hidden name="year" value={filters.year == null ? null : String(filters.year)} />
-            <label className="flex min-w-0 flex-1 items-center gap-2 px-3">
-              <svg aria-hidden width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="shrink-0 text-muted-foreground">
-                <circle cx="7" cy="7" r="4.5" />
-                <path d="M10.5 10.5 14 14" />
-              </svg>
-              <input
-                type="search"
-                name="q"
-                defaultValue={filters.q}
-                placeholder="Search tournaments"
-                aria-label="Search tournaments, organizers or venues"
-                className="h-full w-full min-w-0 border-0 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
-            <button type="submit" className="sr-only">
-              Search
-            </button>
-          </form>
-
-          {/* The panel shares the search box's border: its summary is the
-              box's right-hand cell. */}
-          <details className="group relative flex">
-            <summary className="inline-flex h-full cursor-pointer list-none items-center gap-2 border-s border-rule-control px-3 text-sm font-medium text-foreground hover:bg-surface-sunken [&::-webkit-details-marker]:hidden">
-              <svg aria-hidden width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <path d="M1 3h12M3 7h8M5 11h4" />
-              </svg>
-              {activeDates === 0 ? 'Filters' : `Filters · ${activeDates}`}
-            </summary>
-            {/* Anchored popover from `sm:` up, bottom sheet below it — the
-                same markup, two layouts, no script (D3).
-                v3-consolidated work package 26b: `hidden group-open:block`
-                is EXPLICIT rather than relying solely on the native
-                `details:not([open]) > *:not(summary){display:none}` UA
-                rule. Verified against a real running page (not reasoned
-                about): with `max-sm:fixed` also on this element, the
-                CLOSED panel measurably kept a real, non-zero, off-screen
-                layout box (`display:block`, a `position:fixed` box whose
-                resolved geometry — bounding-rect x≈345 on a 320px
-                viewport — did not match its own `left:0/right:0/width:100%`
-                declarations at all, i.e. some fixed-position/utility
-                interaction this box's inspection could not fully explain
-                inside this package's budget), and that phantom box alone
-                accounted for the entire 320/390px horizontal-scroll defect
-                on Discovery (plan §6 "Responsive/signage"). An explicit
-                `display:none` at rest removes the layout box entirely
-                regardless of that mechanism, which is the property this
-                fix actually needs — not a specific theory of why the old
-                approach failed. `group-open:block` restores it exactly
-                when `<details open>`, so the popover/sheet behaviour is
-                otherwise unchanged. */}
-            <div className="hidden group-open:block absolute right-0 top-full z-20 mt-2 w-72 rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-md max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:mt-0 max-sm:w-full max-sm:rounded-b-none">
-              <form method="get" action={ACTION} className="grid gap-3">
-                <Hidden name="q" value={filters.q.trim() === '' ? null : filters.q} />
-                <Hidden name="view" value={filters.scopeExplicit ? filters.view : null} />
-                <Hidden name="year" value={filters.year == null ? null : String(filters.year)} />
-
-                <fieldset className="grid gap-1.5">
-                  <legend className="mb-1 text-xs font-semibold text-muted-foreground">
-                    When
-                  </legend>
-                  {PRESET_CHOICES.map((choice) => (
-                    <label key={choice.value} className="flex items-center gap-2 py-1 text-sm">
-                      <input
-                        type="radio"
-                        name="preset"
-                        value={choice.value}
-                        defaultChecked={(filters.preset ?? '') === choice.value}
-                      />
-                      {choice.label}
-                    </label>
-                  ))}
-                </fieldset>
-
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                  From
-                  <input
-                    type="date"
-                    name="from"
-                    defaultValue={filters.from ?? ''}
-                    className={FIELD_INPUT}
-                  />
-                </label>
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                  To
-                  <input
-                    type="date"
-                    name="to"
-                    defaultValue={filters.to ?? ''}
-                    className={FIELD_INPUT}
-                  />
-                </label>
-
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-                  Year
-                  <input
-                    type="number"
-                    name="year"
-                    min="2000"
-                    max="2100"
-                    inputMode="numeric"
-                    placeholder="All years"
-                    defaultValue={filters.year == null ? '' : String(filters.year)}
-                    className={FIELD_INPUT}
-                  />
-                </label>
-
-                <div className="mt-1 flex items-center gap-3">
-                  <Button type="submit" size="sm">
-                    Apply dates
-                  </Button>
-                  <a
-                    href={queryHref(filters, NO_DATES)}
-                    className="text-sm text-accent underline-offset-4 hover:underline"
-                  >
-                    Reset
-                  </a>
-                </div>
-              </form>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      {dateFilterActive(filters) ? (
-        <div data-active-filter-row="" className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {filters.preset === null ? null : (
-            <ActiveFilterLink
-              label={PRESET_LABELS[filters.preset]}
-              href={queryHref(filters, { preset: null })}
+        {/* v3-consolidated work package 26b: `basis-full` below `sm:`. With
+            `flex-1`'s implicit `flex-basis: 0%` the wrap algorithm has nothing
+            to measure, so this box is placed on the SAME line as the `nav`
+            beside it regardless of room and only then shrinks. `basis-full`
+            gives it a 100%-of-line hypothetical size, which drops it onto its
+            own line where it has the full content width. `sm:basis-80` keeps
+            the narrower, `sm:max-w-md`-capped box once there is room for it
+            beside the seasons on one line. */}
+        <form
+          role="search"
+          method="get"
+          action={ACTION}
+          className="flex h-9 min-w-0 max-w-full flex-1 basis-full items-stretch rounded-sm border border-rule-control bg-surface-raised sm:max-w-md sm:basis-80"
+        >
+          {/* The RESOLVED season, not the raw query field: searching from a
+              default visit must stay in the season the reader is looking at
+              rather than silently widening to every season ever published.
+              Widening is the "All seasons" link's job, and it keeps the
+              search text when it does it. */}
+          <Hidden name="year" value={season === null ? 'all' : String(season)} />
+          <label className="flex min-w-0 flex-1 items-center gap-2 px-3">
+            <svg aria-hidden width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="shrink-0 text-muted-foreground">
+              <circle cx="7" cy="7" r="4.5" />
+              <path d="M10.5 10.5 14 14" />
+            </svg>
+            <input
+              type="search"
+              name="q"
+              defaultValue={filters.q}
+              placeholder="Search tournaments"
+              aria-label="Search tournaments, organizers or venues"
+              className="h-full w-full min-w-0 border-0 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
-          )}
-          {/* Parsed, like `dateFilterActive` and `rowMatches`: an unparseable
-              bound narrows nothing, so it gets no link describing a filter the
-              list is not under. */}
-          {parseIsoDate(filters.from) === null ? null : (
-            <ActiveFilterLink label={`From ${filters.from}`} href={queryHref(filters, { from: null })} />
-          )}
-          {parseIsoDate(filters.to) === null ? null : (
-            <ActiveFilterLink label={`To ${filters.to}`} href={queryHref(filters, { to: null })} />
-          )}
-          {filters.year == null ? null : (
-            <ActiveFilterLink label={`Year ${filters.year}`} href={queryHref(filters, { year: null })} />
-          )}
-          <a
-            href={queryHref(filters, NO_DATES)}
-            className="text-sm text-accent underline-offset-4 hover:underline"
-          >
-            Clear all
-          </a>
-        </div>
-      ) : null}
+          </label>
+          <button type="submit" className="sr-only">
+            Search
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

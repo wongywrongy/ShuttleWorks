@@ -9,28 +9,27 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  actionCell,
   activeTab,
-  anyFilterActive,
   chipLabel,
   chipState,
   ctaState,
-  dateFilterActive,
+  displayTitle,
   entriesOpen,
-  monthGroupsDesc,
+  filtersToParams,
   nearestCloseAt,
   parseFilters,
-  paginateRows,
   parseIsoDate,
   parseMoment,
+  resolveSeason,
   rowMatches,
-  seasonSections,
-  statusCell,
+  seasonModel,
+  seasonYears,
   timelineModel,
   normalizeTournamentPhase,
   phaseLabel,
   tournamentPhase,
   totalBarState,
-  viewRows,
   visibleBlocks,
   visibleTabs,
   type Filters,
@@ -61,7 +60,7 @@ const row = (over: Partial<SeasonRow>): SeasonRow => ({
   drawsPublished: false, winnersPublished: false, ...over,
 });
 
-const NO_FILTERS: Filters = { view: 'season', preset: null, from: null, to: null, q: '' };
+const NO_FILTERS: Filters = { year: null, q: '' };
 
 function echo(overrides: Partial<FormEcho> = {}): FormEcho {
   return { players: [], showAllEvents: false, totalCents: null, refusal: null, ...overrides };
@@ -307,243 +306,260 @@ describe('activeTab', () => {
   });
 });
 
-// ---- the SP-P8 season list: filters, views, sections, the status cell -------
+// ---- the season list: filters, the season model, the action cell -----------
 
-describe('parseFilters (SP-P8 §2.3 canonical query)', () => {
-  it('defaults to the season view', () => {
-    expect(parseFilters(new URLSearchParams()).view).toBe('season');
+describe('parseFilters (P5: the calendar carries two things, and only two)', () => {
+  it('is unspecified when the URL names nothing', () => {
+    expect(parseFilters(new URLSearchParams())).toEqual({ year: null, q: '' });
   });
-  it('reads ?view=', () => {
-    expect(parseFilters(new URLSearchParams('view=completed')).view).toBe('completed');
+  it('reads a four-digit season and the deliberate all-seasons scope', () => {
+    expect(parseFilters(new URLSearchParams('year=2026')).year).toBe(2026);
+    expect(parseFilters(new URLSearchParams('year=all')).year).toBe('all');
   });
-  it('ignores the removed status query', () => {
-    expect(parseFilters(new URLSearchParams('status=open')).view).toBe('season');
-    expect(parseFilters(new URLSearchParams('status=past')).view).toBe('season');
-  });
-  it('uses the canonical view query when present', () => {
-    expect(parseFilters(new URLSearchParams('view=season&status=open')).view).toBe('season');
-  });
-  it('keeps legacy presets valid so old preset links still filter', () => {
-    expect(parseFilters(new URLSearchParams('preset=30d')).preset).toBe('30d');
+  it('drops a year it cannot read rather than filtering by a guess', () => {
+    for (const bad of ['banana', '26', '20266', '']) {
+      expect(parseFilters(new URLSearchParams(`year=${bad}`)).year).toBeNull();
+    }
   });
   it.each([['toString'], ['constructor'], ['__proto__'], ['hasOwnProperty']])(
     'ignores unknown query values safely: %s',
     (key) => {
-      // `key in map` would answer true for every Object.prototype member and
-      // put a FUNCTION in `view` — a public-tier URL is attacker-typeable, and
-      // Task 7 echoes `view` back into a hidden form input.
-      expect(parseFilters(new URLSearchParams(`status=${key}`)).view).toBe('season');
+      // A public-tier URL is attacker-typeable and the toolbar echoes state
+      // back into a hidden form input, so nothing here may reach a prototype
+      // member.
+      expect(parseFilters(new URLSearchParams(`year=${key}&status=${key}`))).toEqual({
+        year: null, q: '',
+      });
     },
   );
-  it('reads the rest of the vocabulary, dropping unknown values', () => {
+  it('reads the search text verbatim', () => {
+    expect(parseFilters(new URLSearchParams('q=gold')).q).toBe('gold');
+  });
+  it('ignores the retired lifecycle and date vocabulary', () => {
     expect(
-      parseFilters(new URLSearchParams('preset=1y&from=2026-09-01&to=&q=gold')),
-    ).toMatchObject({ view: 'all', preset: null, from: '2026-09-01', to: null, year: null, q: 'gold' });
-  });
-  it('keeps deliberate status and year scope when searching', () => {
-    expect(parseFilters(new URLSearchParams('view=completed&year=2026&q=gold'))).toMatchObject({
-      view: 'completed', year: 2026, q: 'gold',
-    });
-  });
-  it('uses All only for implicit search and returns to the landing view when q clears', () => {
-    expect(parseFilters(new URLSearchParams('q=gold')).view).toBe('all');
-    expect(parseFilters(new URLSearchParams()).view).toBe('season');
-    expect(parseFilters(new URLSearchParams('view=all&q=gold')).scopeExplicit).toBe(true);
+      parseFilters(new URLSearchParams('view=completed&preset=30d&from=2026-09-01&to=&page=2')),
+    ).toEqual({ year: null, q: '' });
   });
 });
 
-describe('anyFilterActive / dateFilterActive (a view is not a filter)', () => {
+describe('filtersToParams (the inverse, so the toolbar cannot drift)', () => {
   it.each([
-    ['nothing set', NO_FILTERS, false, false],
-    ['whitespace-only q', { ...NO_FILTERS, q: '  ' }, false, false],
-    // The SP-P8 semantics change: switching segment is navigation, so it must
-    // not light the "Clear filters" affordance or the date badge.
-    ['a non-default view', { ...NO_FILTERS, view: 'completed' as const }, false, false],
-    ['a preset', { ...NO_FILTERS, preset: '7d' as const }, true, true],
-    ['a custom from', { ...NO_FILTERS, from: '2026-09-01' }, true, true],
-    ['a custom to', { ...NO_FILTERS, to: '2026-09-30' }, true, true],
-    // `rowMatches` parses from/to and ignores what it cannot parse, so an
-    // unparseable one filters NOTHING — and must not claim a chip either.
-    ['an unparseable from', { ...NO_FILTERS, from: 'abc' }, false, false],
-    // q is a filter, but not a DATE filter — only the latter drives the chips.
-    ['a query', { ...NO_FILTERS, q: 'gold' }, true, false],
-  ])('%s → any %s, date %s', (_label, f, any, date) => {
-    expect(anyFilterActive(f)).toBe(any);
-    expect(dateFilterActive(f)).toBe(date);
+    [{ year: null, q: '' }, ''],
+    [{ year: 2026, q: '' }, 'year=2026'],
+    [{ year: 'all' as const, q: '' }, 'year=all'],
+    [{ year: 2026, q: 'gold' }, 'q=gold&year=2026'],
+    [{ year: null, q: '   ' }, ''],
+  ])('%o serialises to %s', (filters, expected) => {
+    const params = filtersToParams(filters as Filters);
+    expect(params.toString()).toBe(expected);
+    // The round trip is the property: whatever it writes must parse back.
+    if (expected !== '') {
+      expect(parseFilters(new URLSearchParams(expected))).toMatchObject({
+        year: (filters as Filters).year,
+      });
+    }
   });
 });
 
-describe('rowMatches', () => {
-  const now = new Date(Date.UTC(2026, 8, 12));
+describe('rowMatches (search is text, and only text)', () => {
   it('searches name, organizer and venue (D2 — there is no city)', () => {
     const r = row({ name: 'Fall Open', organizer: 'Balboa BC', venueName: 'Riverside Hall' });
     for (const q of ['fall', 'balboa', 'riverside']) {
-      expect(rowMatches(r, { ...NO_FILTERS, q }, now)).toBe(true);
+      expect(rowMatches(r, q)).toBe(true);
     }
-    expect(rowMatches(r, { ...NO_FILTERS, q: 'zurich' }, now)).toBe(false);
+    expect(rowMatches(r, 'zurich')).toBe(false);
   });
-  it('custom from/to wins over a preset', () => {
-    const r = row({ date: '2026-12-01' });
-    const f = { ...NO_FILTERS, preset: '7d' as const, from: '2026-11-01', to: '2026-12-31' };
-    expect(rowMatches(r, f, now)).toBe(true);
-  });
-  it('an undated row fails any date filter', () => {
-    expect(rowMatches(row({}), { ...NO_FILTERS, preset: '7d' as const }, now)).toBe(false);
-  });
-  it('applies a preset window forward from today', () => {
-    // 2026-10-21 is 39 days out: inside 90d, outside 30d.
-    const r = row({ date: '2026-10-21' });
-    expect(rowMatches(r, { ...NO_FILTERS, preset: '90d' as const }, now)).toBe(true);
-    expect(rowMatches(r, { ...NO_FILTERS, preset: '30d' as const }, now)).toBe(false);
-  });
-  it('matches everything when no filter is set', () => {
-    expect(rowMatches(row({}), NO_FILTERS, now)).toBe(true);
-  });
-  it('matches a separate tournament year filter', () => {
-    expect(rowMatches(row({ date: '2026-09-19' }), { ...NO_FILTERS, year: 2026 }, now)).toBe(true);
-    expect(rowMatches(row({ date: '2025-09-19' }), { ...NO_FILTERS, year: 2026 }, now)).toBe(false);
-    expect(rowMatches(row({ date: null }), { ...NO_FILTERS, year: 2026 }, now)).toBe(false);
+  it('matches everything for an empty or whitespace query', () => {
+    expect(rowMatches(row({}), '')).toBe(true);
+    expect(rowMatches(row({}), '   ')).toBe(true);
   });
 });
 
-describe('viewRows', () => {
-  it('open: entries_open only, closing soonest first', () => {
-    const rows = [
-      row({ slug: 'b', status: 'entries_open', closesInDays: 9 }),
-      row({ slug: 'a', status: 'entries_open', closesInDays: 2 }),
-      row({ slug: 'c', status: 'completed' }),
-    ];
-    expect(viewRows(rows, 'open').map((r) => r.slug)).toEqual(['a', 'b']);
+describe('seasonYears / resolveSeason', () => {
+  const rows = [
+    row({ slug: 'a', date: '2026-09-11' }),
+    row({ slug: 'b', date: '2026-10-01' }),
+    row({ slug: 'c', date: '2024-03-02' }),
+    row({ slug: 'tbc', date: null }),
+  ];
+  it('names each season once, most recent first, and never invents one', () => {
+    expect(seasonYears(rows)).toEqual([2026, 2024]);
+    expect(seasonYears([row({ date: null })])).toEqual([]);
   });
-  it('open: two deadline-less rows fall through to the slug tiebreak (the NaN arm)', () => {
-    const rows = [
-      row({ slug: 'b', status: 'entries_open', closesInDays: null }),
-      row({ slug: 'a', status: 'entries_open', closesInDays: null }),
-    ];
-    expect(viewRows(rows, 'open').map((r) => r.slug)).toEqual(['a', 'b']);
+  it('honours a deliberate season and the deliberate all-seasons scope', () => {
+    expect(resolveSeason(rows, { year: 2024, q: '' }, NOW)).toBe(2024);
+    expect(resolveSeason(rows, { year: 'all', q: '' }, NOW)).toBeNull();
   });
-  it('completed: both completed statuses, most recent first', () => {
-    const rows = [
-      row({ slug: 'old', status: 'completed', date: '2026-05-30' }),
-      row({ slug: 'new', status: 'completed_winners', date: '2026-08-16' }),
-      row({ slug: 'open', status: 'entries_open' }),
-    ];
-    expect(viewRows(rows, 'completed').map((r) => r.slug)).toEqual(['new', 'old']);
+  it('lets a typed search cross every season', () => {
+    expect(resolveSeason(rows, { year: null, q: 'fall' }, NOW)).toBeNull();
   });
-  it('season: live first, then upcoming by date, excluding completed', () => {
-    const rows = [
-      row({ slug: 'later', status: 'entries_open', date: '2026-10-01' }),
-      row({ slug: 'live-b', status: 'in_progress', date: '2026-09-12' }),
-      row({ slug: 'live-a', status: 'in_progress_live', date: '2026-09-20' }),
-      row({ slug: 'done', status: 'completed', date: '2026-09-01' }),
-      row({ slug: 'undated', status: 'entries_closed', date: null }),
-    ];
-    expect(viewRows(rows, 'season').map((r) => r.slug)).toEqual([
-      'live-b', 'live-a', 'later', 'undated',
+  it('lands a bare visit on this calendar year when it has rows', () => {
+    expect(resolveSeason(rows, NO_FILTERS, NOW)).toBe(2026);
+  });
+  it('falls forward to the nearest future season, then back to the latest past one', () => {
+    const future = [row({ date: '2028-01-01' }), row({ date: '2030-01-01' })];
+    expect(resolveSeason(future, NO_FILTERS, NOW)).toBe(2028);
+    const past = [row({ date: '2019-01-01' }), row({ date: '2021-01-01' })];
+    expect(resolveSeason(past, NO_FILTERS, NOW)).toBe(2021);
+  });
+  it('answers this year when nothing is published at all', () => {
+    expect(resolveSeason([], NO_FILTERS, NOW)).toBe(2026);
+  });
+});
+
+describe('seasonModel (P5: one season, upcoming ascending then past descending)', () => {
+  // NOW is 2026-08-11.
+  const rows = [
+    row({ slug: 'sep', status: 'entries_open', date: '2026-09-11' }),
+    row({ slug: 'aug-later', status: 'entries_closed', date: '2026-08-20' }),
+    row({ slug: 'oct', status: 'entries_open', date: '2026-10-03' }),
+    row({ slug: 'jul', status: 'completed_winners', date: '2026-07-04' }),
+    row({ slug: 'jun', status: 'entries_closed', date: '2026-06-01' }),
+    row({ slug: 'last-year', status: 'completed', date: '2025-11-01' }),
+    row({ slug: 'tbc', status: 'entries_open', date: null }),
+  ];
+
+  it('orders upcoming months ascending and past months descending', () => {
+    const model = seasonModel(rows, NO_FILTERS, NOW);
+    expect(model.season).toBe(2026);
+    expect(model.upcoming.map((m) => m.label)).toEqual([
+      'August 2026', 'September 2026', 'October 2026',
     ]);
-  });
-  it('all: newest first with slug tie-breaker', () => {
-    const rows = [
-      row({ slug: 'b', status: 'completed', date: '2026-09-01' }),
-      row({ slug: 'a', status: 'completed_winners', date: '2026-09-01' }),
-      row({ slug: 'old', status: 'entries_open', date: '2025-01-01' }),
-    ];
-    expect(viewRows(rows, 'all').map((r) => r.slug)).toEqual(['a', 'b', 'old']);
-  });
-});
-
-describe('paginateRows boundaries', () => {
-  it.each([0, 1, 10, 11, 20, 21, 1000])('handles %i records without phantom pages', (count) => {
-    const rows = Array.from({ length: count }, (_, index) => index);
-    const first = paginateRows(rows, 1, 10);
-    expect(first.page).toBe(1);
-    expect(first.pageCount).toBe(Math.max(1, Math.ceil(count / 10)));
-    expect(first.rows.length).toBe(Math.min(10, count));
-    const last = paginateRows(rows, 999, 10);
-    expect(last.page).toBe(first.pageCount);
-    expect(last.rows.length).toBe(count === 0 ? 0 : count - (first.pageCount - 1) * 10);
-  });
-});
-
-describe('seasonSections (§2.4: active months ascending, Completed trailing)', () => {
-  it('groups active rows by month and trails completed + undated', () => {
-    const rows = [
-      row({ slug: 'done', status: 'completed', date: '2026-05-30' }),
-      row({ slug: 'sep1', status: 'entries_open', date: '2026-09-11' }),
-      row({ slug: 'sep2', status: 'entries_closed', date: '2026-09-19' }),
-      row({ slug: 'oct', status: 'entries_open', date: '2026-10-03' }),
-      row({ slug: 'tbc', status: 'entries_closed', date: null }),
-    ];
-    const s = seasonSections(rows);
-    expect(s.months.map((m) => m.label)).toEqual(['September 2026', 'October 2026']);
-    expect(s.months[0].rows.map((r) => r.slug)).toEqual(['sep1', 'sep2']);
-    expect(s.completed.map((r) => r.slug)).toEqual(['done']);
-    expect(s.undated.map((r) => r.slug)).toEqual(['tbc']);
-    expect(s.undatedLive).toEqual([]);
-  });
-
-  it('keeps an undated live tournament ahead of dated upcoming months', () => {
-    const s = seasonSections([
-      row({ slug: 'upcoming', status: 'entries_open', date: '2026-09-11' }),
-      row({ slug: 'live-tbc', status: 'in_progress_live', date: null }),
+    expect(model.upcoming.flatMap((m) => m.rows).map((r) => r.slug)).toEqual([
+      'aug-later', 'sep', 'oct',
     ]);
-    expect(s.undatedLive.map((r) => r.slug)).toEqual(['live-tbc']);
-    expect(s.months.flatMap((m) => m.rows).map((r) => r.slug)).toEqual(['upcoming']);
+    expect(model.past.map((m) => m.label)).toEqual(['July 2026', 'June 2026']);
+    expect(model.past.flatMap((m) => m.rows).map((r) => r.slug)).toEqual(['jul', 'jun']);
   });
-});
 
-describe('monthGroupsDesc (the Completed view keeps its incoming order)', () => {
-  it('groups date-descending rows into most-recent-first months', () => {
-    const rows = viewRows(
-      [
-        row({ slug: 'may', status: 'completed', date: '2026-05-30' }),
-        row({ slug: 'aug2', status: 'completed_winners', date: '2026-08-02' }),
-        row({ slug: 'aug1', status: 'completed', date: '2026-08-16' }),
-        row({ slug: 'undated', status: 'completed', date: null }),
-      ],
-      'completed',
+  it('treats a completed tournament as past whatever its stored date says', () => {
+    const model = seasonModel(
+      [row({ slug: 'done', status: 'completed', date: '2026-12-01' })],
+      { year: 2026, q: '' },
+      NOW,
     );
-    expect(monthGroupsDesc(rows).map((m) => m.label)).toEqual(['August 2026', 'May 2026']);
-    expect(monthGroupsDesc(rows)[0].rows.map((r) => r.slug)).toEqual(['aug1', 'aug2']);
+    expect(model.upcoming).toEqual([]);
+    expect(model.past.flatMap((m) => m.rows).map((r) => r.slug)).toEqual(['done']);
+  });
+
+  it('bounds the page to one season, and says how much it left out', () => {
+    const model = seasonModel(rows, NO_FILTERS, NOW);
+    expect(model.publishedCount).toBe(7);
+    // Six 2026 rows plus the dateless one; last year's is not on this page.
+    expect(model.listedCount).toBe(6);
+    const slugs = [
+      ...model.upcoming.flatMap((m) => m.rows),
+      ...model.upcomingUndated,
+      ...model.past.flatMap((m) => m.rows),
+      ...model.pastUndated,
+    ].map((r) => r.slug);
+    expect(slugs).not.toContain('last-year');
+    expect(model.years).toEqual([2026, 2025]);
+  });
+
+  it('lists a dateless tournament in every season rather than hiding it in all of them', () => {
+    for (const year of [2026, 2025] as const) {
+      const model = seasonModel(rows, { year, q: '' }, NOW);
+      expect(model.upcomingUndated.map((r) => r.slug)).toEqual(['tbc']);
+    }
+    // And it is never given a month it does not have.
+    expect(
+      seasonModel(rows, NO_FILTERS, NOW).upcoming.flatMap((m) => m.rows).map((r) => r.slug),
+    ).not.toContain('tbc');
+  });
+
+  it('keeps a dateless PAST tournament in the past half', () => {
+    const model = seasonModel(
+      [row({ slug: 'old-tbc', status: 'completed', date: null })],
+      NO_FILTERS,
+      NOW,
+    );
+    expect(model.pastUndated.map((r) => r.slug)).toEqual(['old-tbc']);
+    expect(model.upcomingUndated).toEqual([]);
+  });
+
+  it('applies the search inside the season, and across seasons when asked', () => {
+    const named = [
+      row({ slug: 'a', name: 'Harbour Cup', status: 'entries_open', date: '2026-09-01' }),
+      row({ slug: 'b', name: 'Harbour Cup', status: 'completed', date: '2019-09-01' }),
+    ];
+    expect(seasonModel(named, { year: 2026, q: 'harbour' }, NOW).listedCount).toBe(1);
+    expect(seasonModel(named, { year: 'all', q: 'harbour' }, NOW).listedCount).toBe(2);
+    expect(seasonModel(named, { year: 'all', q: 'zurich' }, NOW).listedCount).toBe(0);
   });
 });
 
-describe('statusCell — the §2.4 table, one arm per enum case', () => {
-  it('in_progress_live is a live chip deep-linking to draws', () => {
-    expect(statusCell(row({ slug: 'x', status: 'in_progress_live' }))).toEqual({
-      kind: 'chip-live', label: 'Follow live', href: '/e/x?tab=draws',
+describe('displayTitle (P5: the grouping says the year, so the title need not)', () => {
+  it.each([
+    ['2026 Taipei Open', '2026-07-31', 'Taipei Open'],
+    ['Taipei Open 2026', '2026-07-31', 'Taipei Open'],
+    ['Taipei Open - 2026', '2026-07-31', 'Taipei Open'],
+    // A year that is not THIS row's year is part of the name, not a stamp.
+    ['1992 Memorial Cup', '2026-07-31', '1992 Memorial Cup'],
+    // Never leave an empty title behind.
+    ['2026', '2026-07-31', '2026'],
+    // Mid-name years are untouched: this is a stamp remover, not a scrubber.
+    ['The 2026 Cup', '2026-07-31', 'The 2026 Cup'],
+  ])('%s on %s reads as %s', (name, date, expected) => {
+    expect(displayTitle(row({ name, date }))).toBe(expected);
+  });
+
+  it('leaves a dateless row alone — there is no year to be redundant with', () => {
+    expect(displayTitle(row({ name: '2026 Taipei Open', date: null }))).toBe('2026 Taipei Open');
+  });
+
+  it('falls back to the slug when the organizer published no name', () => {
+    expect(displayTitle(row({ slug: 'x', name: null, date: '2026-07-31' }))).toBe('x');
+  });
+});
+
+describe('actionCell — one action slot, one arm per enum case', () => {
+  it('offers the real entry flow while entries are open, with the closing instant', () => {
+    expect(actionCell(row({
+      slug: 'x', status: 'entries_open',
+      closesAt: '2026-08-14 23:59 UTC', timeZone: 'Asia/Seoul',
+    }), false)).toEqual({
+      kind: 'enter', href: '/e/x/enter',
+      closesAt: '2026-08-14 23:59 UTC', timeZone: 'Asia/Seoul',
     });
   });
-  it('in_progress without published draws is a plain chip — no link', () => {
-    expect(statusCell(row({ status: 'in_progress' }))).toEqual({
-      kind: 'chip-muted', label: 'In progress',
+  it('carries no countdown at all — the deadline is a date, not a duration', () => {
+    const cell = actionCell(row({ status: 'entries_open', closesInDays: 5 }), false);
+    expect(JSON.stringify(cell)).not.toContain('5');
+  });
+  it('in_progress_live deep-links to draws', () => {
+    expect(actionCell(row({ slug: 'x', status: 'in_progress_live' }), false)).toEqual({
+      kind: 'live', label: 'Follow live', href: '/e/x?tab=draws',
     });
   });
-  it('entries_open carries the countdown chip and the exact deadline (V3-PE01.2)', () => {
-    expect(statusCell(row({
-      status: 'entries_open', closesInDays: 3,
-      closesAt: '2026-08-14 23:59 UTC', timeZone: 'Europe/London',
-    }))).toEqual({
-      kind: 'chip-open', chip: { kind: 'entriesOpen', closesInDays: 3 },
-      closesAt: '2026-08-14 23:59 UTC', timeZone: 'Europe/London',
+  it('in_progress without published draws is plain text — no link', () => {
+    expect(actionCell(row({ status: 'in_progress' }), false)).toEqual({
+      kind: 'text', label: 'In progress',
     });
   });
-  it('entries_closed is the gray chip', () => {
-    expect(statusCell(row({ status: 'entries_closed' }))).toEqual({
-      kind: 'chip-muted', label: 'Entries closed',
+  it('entries_closed says so where entry status is what matters', () => {
+    expect(actionCell(row({ status: 'entries_closed' }), false)).toEqual({
+      kind: 'text', label: 'Entries closed',
     });
   });
-  it('completed links to Results whether draws or winners were published (ADR 0028)', () => {
-    expect(statusCell(row({ slug: 'x', status: 'completed', drawsPublished: true }))).toEqual({
-      kind: 'link', label: 'Results', href: '/e/x?tab=draws',
+  it('a PAST row gets Results only, whatever its stored status says', () => {
+    for (const status of ['entries_open', 'entries_closed', 'in_progress_live'] as const) {
+      expect(actionCell(row({ slug: 'x', status, drawsPublished: true }), true)).toEqual({
+        kind: 'results', href: '/e/x?tab=draws',
+      });
+    }
+  });
+  it('links Results whether draws or winners were published (ADR 0028)', () => {
+    expect(actionCell(row({ slug: 'x', status: 'completed', drawsPublished: true }), true)).toEqual({
+      kind: 'results', href: '/e/x?tab=draws',
     });
-    expect(statusCell(row({ slug: 'x', status: 'completed_winners', winnersPublished: true }))).toEqual({
-      kind: 'link', label: 'Results', href: '/e/x?tab=draws',
+    expect(actionCell(row({ slug: 'x', status: 'completed_winners', winnersPublished: true }), true)).toEqual({
+      kind: 'results', href: '/e/x?tab=draws',
     });
   });
-  it('completed without winners is TEXT — never a dead link (§7 trap 3)', () => {
-    const cell = statusCell(row({ status: 'completed' }));
-    expect(cell).toEqual({ kind: 'text', label: 'Completed' });
+  it('a past row with nothing published is TEXT — never a dead link (§7 trap 3)', () => {
+    const cell = actionCell(row({ status: 'completed' }), true);
+    expect(cell).toEqual({ kind: 'text', label: 'Results not published' });
     expect('href' in cell).toBe(false);
   });
 });

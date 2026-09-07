@@ -115,11 +115,6 @@ const RULES: readonly Rule[] = Object.freeze([
  */
 const ALLOWED: readonly { file: string; rule: string; why: string }[] = Object.freeze([
   {
-    file: 'routes/discovery.tsx',
-    rule: 'ellipsis-literal',
-    why: 'Pagination uses an aria-hidden ellipsis between nonconsecutive page links. It abbreviates navigation, never tournament content; Previous/Next still reach every page.',
-  },
-  {
     file: 'components/StatusChip.tsx',
     rule: 'nowrap',
     why:

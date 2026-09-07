@@ -130,6 +130,34 @@ export function formatDateInZone(wire: string, timeZone: string): string | null 
 }
 
 /**
+ * The closing DAY, in the tournament's own zone, with no year and no zone
+ * spelling: `15 Aug` (P5).
+ *
+ * The season calendar's entry action names a deadline a reader can act on
+ * this week, beside a month header that already carries the year, so the year
+ * and the offset would both be noise. Same rules as its siblings: an
+ * unrecognised `timeZone` degrades to the UTC day rather than omitting a known
+ * instant, and an unparseable `wire` is `null`, never raw ISO.
+ *
+ * CONVERSION, not suffix-trimming (contract §7.1): a deadline at 23:59 in
+ * Seoul is a different calendar day from the same instant read in UTC, and
+ * dropping the zone name off a UTC rendering would state the wrong day.
+ */
+export function formatDayMonthInZone(wire: string, timeZone: string): string | null {
+  const moment = parseMoment(wire);
+  if (moment === null) return null;
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      day: 'numeric', month: 'short', timeZone,
+    }).formatToParts(moment);
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('day')} ${value('month')}`;
+  } catch {
+    return `${moment.getUTCDate()} ${MONTHS[moment.getUTCMonth()]}`;
+  }
+}
+
+/**
  * V3-26-5 (owner ruling: cap the day count). "Closes in Nd" stops being a
  * useful micro-label once N runs past `CHIP_ABSOLUTE_DATE_THRESHOLD_DAYS` —
  * a fixture's synthetic far-future `closesAt` read "closes in 3039d" and, on
