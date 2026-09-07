@@ -250,8 +250,8 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
           <p className="mb-2 text-xs text-muted-foreground">
             Anyone with this link can view the board.
           </p>
-          <div className="flex items-center gap-2">
-            <label htmlFor="public-display-link" className="text-xs font-medium text-foreground">Venue board link</label>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <label htmlFor="public-display-link" className="basis-full text-xs font-medium text-foreground">Venue board link</label>
             <input
               id="public-display-link"
               readOnly
@@ -273,7 +273,7 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
               size="xs"
               variant="ghost"
               disabled={!displayLink}
-              onClick={() => displayLink && window.open(displayLink, '_blank')}
+              onClick={() => displayLink && window.open(displayLink, '_blank', 'noopener,noreferrer')}
             >
               Open fullscreen
             </Button>

@@ -30,6 +30,7 @@ with no rule for which one to open is worse than one drawer.
 | `pollPolicy.ts` | Poll intervals and backoff policy. |
 | `schoolAccent.ts` | Per-school accent colour. |
 | `selectableRow.ts` | Shared selectable-row behaviour for banded lists. |
+| `spreadsheetSafe.ts` | `safeCellText()` — apostrophe-quotes user text that Excel would read as a formula. Apply to free-text XLSX/CSV cells only, never to numbers or dates. |
 | `stateWords.ts` | The one state vocabulary (SP-CONSOLE-2 X1). |
 | `time.ts` | Time parsing/formatting; mirror of the API's time utils. |
 | `timeFormatters.ts` | Display formatters for times and durations. |

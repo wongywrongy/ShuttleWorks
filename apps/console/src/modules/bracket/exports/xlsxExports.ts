@@ -17,6 +17,7 @@
 import type ExcelJSNs from 'exceljs';
 import type { BracketPlayerDTO } from '../../../api/dto';
 import { formatWindowSummary } from '../../../components/control-plane';
+import { safeCellText } from '../../../lib/spreadsheetSafe';
 import type { BadgeEntry } from '../rosterEvents';
 
 type ExcelJSType = typeof ExcelJSNs;
@@ -126,13 +127,13 @@ export async function exportBracketMatchesXlsx(
   rows.forEach((r, i) => {
     const row = sheet.getRow(i + 2);
     row.height = 20;
-    row.getCell(1).value = r.event;
-    row.getCell(2).value = r.discipline;
+    row.getCell(1).value = safeCellText(r.event);
+    row.getCell(2).value = safeCellText(r.discipline);
     row.getCell(3).value = r.n;
-    row.getCell(4).value = r.match;
-    row.getCell(5).value = r.sideA;
-    row.getCell(6).value = r.sideB;
-    row.getCell(7).value = r.status;
+    row.getCell(4).value = safeCellText(r.match);
+    row.getCell(5).value = safeCellText(r.sideA);
+    row.getCell(6).value = safeCellText(r.sideB);
+    row.getCell(7).value = safeCellText(r.status);
     applyBodyRow(row, colCount, i, i === rows.length - 1);
   });
 
@@ -176,13 +177,13 @@ export async function exportBracketRosterXlsx(
   sorted.forEach((p, i) => {
     const row = sheet.getRow(i + 2);
     row.height = 20;
-    row.getCell(1).value = p.name || '(unnamed)';
-    row.getCell(2).value = (badgesById.get(p.id) ?? [])
-      .map((b) => b.code)
-      .join(', ');
+    row.getCell(1).value = safeCellText(p.name || '(unnamed)');
+    row.getCell(2).value = safeCellText(
+      (badgesById.get(p.id) ?? []).map((b) => b.code).join(', '),
+    );
     row.getCell(3).value = p.restSlots ?? '–';
     row.getCell(4).value = formatWindowSummary(p.availability ?? []);
-    row.getCell(5).value = p.notes ?? '';
+    row.getCell(5).value = safeCellText(p.notes ?? '');
 
     // Alternating rose tint per row + thin grid, thick rule under the last
     // row — the meet exports' group treatment, at single-row granularity.

@@ -1335,6 +1335,9 @@ class SolveJob(Base):
     Two distinct dedup mechanisms (do not conflate):
     - ``uq_solve_jobs_idempotency_key`` — client retry safety (Stripe
       semantics): a resubmit with the same key returns the original job.
+      Scoped to ``(tournament_id, idempotency_key)``, never the key alone
+      — the key is caller-chosen, so a global scope let one workspace's
+      key resolve to another workspace's job.
     - ``uq_solve_jobs_active`` — business rule: at most one *active*
       job per ``(tournament_id, type)``, enforced declaratively by a
       partial unique index (works on both SQLite and Postgres; no
@@ -1392,8 +1395,13 @@ class SolveJob(Base):
     )
 
     __table_args__ = (
+        # Composite, not global (SEC, 2026-09-07): the key is caller-chosen,
+        # so a global unique index made one workspace's key collide with —
+        # and, through the enqueue lookup, hand back — another workspace's
+        # job. Tenancy is the scope every other solve-job index already uses.
         Index(
             "uq_solve_jobs_idempotency_key",
+            "tournament_id",
             "idempotency_key",
             unique=True,
         ),

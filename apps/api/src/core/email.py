@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import smtplib
+import ssl
 from email.message import EmailMessage
 
 from core.config import settings
@@ -90,6 +91,26 @@ def send_email(*, to: str, subject: str, body: str) -> None:
         )
 
 
+def _tls_context() -> ssl.SSLContext:
+    """Verified TLS for STARTTLS (SEC, 2026-09-07).
+
+    ``smtplib``'s ``starttls()`` with no ``context`` builds one that does
+    **not** verify the certificate chain and does **not** check the
+    hostname — the connection is encrypted against a passive listener and
+    wide open to anyone who can answer for the mail host. Everything this
+    seam carries is credential material: password-reset links, workspace
+    invite links, and the SMTP login itself on the very next command. So
+    the context is explicit here rather than left to the stdlib default,
+    which is permissive precisely because it cannot know that.
+
+    ``ssl.create_default_context()`` is CERT_REQUIRED + hostname checking
+    against the system trust store; a mail host with a private CA is
+    configured by pointing ``SSL_CERT_FILE``/``SSL_CERT_DIR`` at it, not
+    by weakening this.
+    """
+    return ssl.create_default_context()
+
+
 def _send_smtp(*, to: str, subject: str, body: str) -> None:
     msg = EmailMessage()
     msg["From"] = settings.smtp_from
@@ -100,7 +121,7 @@ def _send_smtp(*, to: str, subject: str, body: str) -> None:
         server: smtplib.SMTP = smtplib.SMTP(
             settings.smtp_host, settings.smtp_port, timeout=15
         )
-        server.starttls()
+        server.starttls(context=_tls_context())
     else:
         server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15)
     try:

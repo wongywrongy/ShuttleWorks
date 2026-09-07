@@ -103,6 +103,7 @@ from bracket.formats import (
 )
 from core.limits import (
     MAX_ASSIGNMENTS,
+    MAX_CANDIDATES,
     MAX_COURTS,
     MAX_EVENTS,
     MAX_MATCHES,
@@ -794,6 +795,24 @@ def _bracket_solver_options(time_limit_seconds: float, camel_cfg: dict) -> Solve
             deterministic=True,
         )
     return SolverOptions(time_limit_seconds=time_limit_seconds, log_progress=False)
+
+
+def _session_time_limit_seconds(session_cfg: dict) -> float:
+    """Read the persisted per-session solve budget, clamped to the ceiling.
+
+    Hardening 2026-09-07: the CSV-import route accepted an unbounded
+    ``time_limit_seconds`` and persisted it, so a stored value could ask
+    an in-request CP-SAT solve for an arbitrary wall-clock spend. The
+    query param is now bounded, and this clamp neutralises values already
+    written by the unbounded version.
+    """
+    try:
+        stored = float(session_cfg.get("time_limit_seconds", 5.0))
+    except (TypeError, ValueError):
+        return 5.0
+    if not stored > 0:
+        return 5.0
+    return min(stored, MAX_SOLVE_SECONDS)
 
 
 def _hydrated_session_config(data_blob: dict):
@@ -2038,7 +2057,7 @@ def schedule_next_round(
     tournament = repo.tournaments.get_by_id(tournament_id)
     data_blob = (tournament.data or {}) if tournament else {}
     session_cfg = data_blob.get("bracket_session") or {}
-    time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
+    time_limit_seconds = _session_time_limit_seconds(session_cfg)
 
     driver = TournamentDriver(
         state=session.state,
@@ -2107,7 +2126,8 @@ def _resolve_candidate_pool_size(session_cfg: dict, override: Optional[int]) -> 
 async def schedule_next_round_stream(
     http_request: Request,
     tournament_id: uuid.UUID = Path(...),
-    candidate_pool_size: Optional[int] = Query(None, ge=1),
+    # Hardening 2026-09-07: bounded like every other candidate-pool input.
+    candidate_pool_size: Optional[int] = Query(None, ge=1, le=MAX_CANDIDATES),
     repo: LocalRepository = Depends(get_repository),
 ) -> StreamingResponse:
     """Solve the next ready wave with real-time progress over SSE.
@@ -2135,7 +2155,7 @@ async def schedule_next_round_stream(
     tournament = repo.tournaments.get_by_id(tournament_id)
     data_blob = (tournament.data or {}) if tournament else {}
     session_cfg = data_blob.get("bracket_session") or {}
-    time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
+    time_limit_seconds = _session_time_limit_seconds(session_cfg)
     pool_size = _resolve_candidate_pool_size(session_cfg, candidate_pool_size)
     solver_options = _bracket_solver_options(time_limit_seconds, data_blob.get("config") or {})
 
@@ -3359,12 +3379,16 @@ async def import_tournament_csv(
     request: Request,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
-    courts: int = Query(2, ge=1),
-    total_slots: int = Query(128, ge=1),
-    interval_minutes: int = Query(30, ge=1),
-    rest_between_rounds: int = Query(1, ge=0),
-    time_limit_seconds: float = Query(5.0, gt=0),
-    duration_slots: int = Query(1, ge=1),
+    # Hardening 2026-09-07: these mirror the JSON-body siblings'
+    # (``CreateTournamentIn`` / ``ImportTournamentIn``) bounds — the query
+    # form had lower bounds only, so an import could persist an
+    # out-of-range session config the JSON path rejects.
+    courts: int = Query(2, ge=1, le=MAX_COURTS),
+    total_slots: int = Query(128, ge=1, le=MAX_SLOT_INDEX),
+    interval_minutes: int = Query(30, ge=1, le=240),
+    rest_between_rounds: int = Query(1, ge=0, le=MAX_SLOT_INDEX),
+    time_limit_seconds: float = Query(5.0, gt=0, le=MAX_SOLVE_SECONDS),
+    duration_slots: int = Query(1, ge=1, le=MAX_DURATION_SLOTS),
 ) -> TournamentOut:
     """Import a pre-paired bracket (CSV).
 

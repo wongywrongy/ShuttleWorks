@@ -303,6 +303,11 @@ def _settings(**overrides):
         email_backend="smtp",
         smtp_host="smtp.example.com",
         ops_token="an-ops-token",
+        # Real-shaped Turnstile keys: the cloud validator refuses
+        # Cloudflare's always-pass test pair (SEC, 2026-09-07), and this
+        # fixture is about ROLE-aware startup, not bot protection.
+        turnstile_site_key="0x4AAAAAAAsite",
+        turnstile_secret_key="0x4AAAAAAAsecret",
     )
     base.update(overrides)
     return Settings(**base)

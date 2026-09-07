@@ -11,6 +11,7 @@
 import type ExcelJSNs from 'exceljs';
 import { defaultEventOrder } from '../roster/positionGrid/helpers';
 import { indexById } from '../../../lib/indexById';
+import { safeCellText } from '../../../lib/spreadsheetSafe';
 import { isDoublesCode } from '../../../lib/doubles';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { meetMatchIdentityFromStored } from '../../../platform/domain/matchIdentity';
@@ -110,7 +111,7 @@ export async function exportRosterXlsx(
     bannerRow.height = 24;
     sheet.mergeCells(rowIdx, 1, rowIdx, colCount);
     const bannerCell = bannerRow.getCell(1);
-    bannerCell.value = g.name;
+    bannerCell.value = safeCellText(g.name);
     bannerCell.font = { bold: true, size: 12, color: { argb: BANNER_FONT } };
     bannerCell.alignment = { vertical: 'middle', horizontal: 'center' };
     applyRangeStyle(sheet, rowIdx, rowIdx, 1, colCount, {
@@ -145,7 +146,9 @@ export async function exportRosterXlsx(
         }
         const occupants = byRank.get(`${ev}${r}`) ?? [];
         const names = occupants.map((p) => p.name || '(unnamed)');
-        row.getCell(col).value = isDoublesCode(ev) ? names.join(' & ') : (names[0] ?? '');
+        row.getCell(col).value = safeCellText(
+          isDoublesCode(ev) ? names.join(' & ') : (names[0] ?? ''),
+        );
       });
 
       rowIdx++;
@@ -292,11 +295,11 @@ export async function exportMatchesXlsx(
       const row = sheet.getRow(rowIdx);
       row.height = 20;
       row.getCell(1).value = m.matchNumber ?? i + 1;
-      row.getCell(2).value = m.eventRank ?? '';
-      row.getCell(3).value = sideSchool(m.sideA, playerById, schoolById);
-      row.getCell(4).value = sideNamesAmp(m.sideA, playerById);
-      row.getCell(5).value = sideSchool(m.sideB, playerById, schoolById);
-      row.getCell(6).value = sideNamesAmp(m.sideB, playerById);
+      row.getCell(2).value = safeCellText(m.eventRank ?? '');
+      row.getCell(3).value = safeCellText(sideSchool(m.sideA, playerById, schoolById));
+      row.getCell(4).value = safeCellText(sideNamesAmp(m.sideA, playerById));
+      row.getCell(5).value = safeCellText(sideSchool(m.sideB, playerById, schoolById));
+      row.getCell(6).value = safeCellText(sideNamesAmp(m.sideB, playerById));
       rowIdx++;
     });
 

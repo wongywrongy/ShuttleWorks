@@ -22,6 +22,27 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from core.brand import BRAND_SIGNATURE
 from core.limits import MAX_REQUEST_BODY_BYTES
 
+# Cloudflare's published Turnstile TEST keypairs (always-pass,
+# always-block, and the token-already-spent variant), site keys and secret
+# keys together. They are documented, public, and identical for everyone —
+# which is exactly why one reaching a cloud deployment means the widget is
+# theatre. Kept as one set rather than two because the check only ever asks
+# "is this a test key", never "is this the site or the secret half".
+_TURNSTILE_TEST_KEYS: frozenset[str] = frozenset(
+    {
+        # site keys
+        "1x00000000000000000000AA",  # always passes, visible
+        "2x00000000000000000000AB",  # always blocks
+        "3x00000000000000000000FF",  # forces an interactive challenge
+        "1x00000000000000000000BB",  # always passes, invisible
+        "2x00000000000000000000BB",  # always blocks, invisible
+        # secret keys
+        "1x0000000000000000000000000000000AA",  # always passes
+        "2x0000000000000000000000000000000AA",  # always fails
+        "3x0000000000000000000000000000000AA",  # token already spent
+    }
+)
+
 
 class Settings(BaseSettings):
     """Process-wide configuration. One source of truth for env vars."""
@@ -578,6 +599,24 @@ class Settings(BaseSettings):
         # endpoints are open to the internet.
         if not self.ops_token:
             missing.append("OPS_TOKEN (guards /health/ready|deep|metrics)")
+        # Turnstile ships with Cloudflare's always-pass DUMMY pair as the
+        # default (see ``turnstile_site_key`` above) so development and CI
+        # exercise the real code path without a network call. In cloud that
+        # default is bot protection that is present, green, and does
+        # nothing: the entrant signup and public entry forms would accept
+        # any token an automated flood cared to send, and nothing in the
+        # logs would look wrong. Refused at startup (SEC, 2026-09-07)
+        # rather than left as a deployment checklist item, because a
+        # forgotten key is indistinguishable at runtime from a working one.
+        if not self.turnstile_site_key or self.turnstile_site_key in _TURNSTILE_TEST_KEYS:
+            missing.append("TURNSTILE_SITE_KEY (a real key, not a Cloudflare test key)")
+        if (
+            not self.turnstile_secret_key
+            or self.turnstile_secret_key in _TURNSTILE_TEST_KEYS
+        ):
+            missing.append(
+                "TURNSTILE_SECRET_KEY (a real key, not a Cloudflare test key)"
+            )
         if missing:
             raise ValueError(
                 "ENVIRONMENT=cloud requires: "

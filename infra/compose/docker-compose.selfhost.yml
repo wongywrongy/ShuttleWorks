@@ -177,14 +177,24 @@ services:
       # true — a variable documented but never handed to the container is
       # a setting an operator sets and watches do nothing.
       #
-      # The defaults are Cloudflare's documented DUMMY keypair, which
-      # always passes. That is right for a deployment that has not turned
-      # the entry surface on yet (nothing routes to /e/ until the Phase 2
-      # ingress exists) and WRONG the moment it does: an always-pass
-      # challenge is no challenge. Replace both with real keys in the same
-      # change that publishes the entry hostname.
-      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-1x00000000000000000000AA}
-      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY:-1x0000000000000000000000000000000AA}
+      # REQUIRED, with no fallback (2026-09-07, closing SEC-0907-1).
+      #
+      # These used to default to Cloudflare's documented DUMMY keypair,
+      # which always passes — on the reasoning that nothing routed to /e/
+      # yet. The play hostname has shipped since (SP-HOST-1), so that
+      # default is now an always-pass challenge on a live public entry
+      # form: the signup and entry surfaces would accept any token an
+      # automated flood cared to send, and nothing in the logs would look
+      # wrong. Bot protection that is present, green, and inert is worse
+      # than none, because it stops anyone from looking.
+      #
+      # `_enforce_cloud_secrets` (apps/api/src/core/config.py) refuses to
+      # start under ENVIRONMENT=cloud on a blank OR a test key, so the
+      # fallback bought nothing but a later, noisier failure. `:?` moves it
+      # to compose time, before an image is pulled, with the name of the
+      # variable in the message — the same shape as SMTP_HOST above.
+      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:?required in cloud mode}
+      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY:?required in cloud mode}
       - ENTRIES_MAX_PER_IP=${ENTRIES_MAX_PER_IP:-20}
       - ENTRIES_WINDOW_SECONDS=${ENTRIES_WINDOW_SECONDS:-600}
       - ENTRIES_LOCK_SECONDS=${ENTRIES_LOCK_SECONDS:-300}
@@ -333,7 +343,24 @@ services:
           memory: 256M
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # PINNED, not `:latest` (2026-09-07 hardening). `:latest` means the
+    # connector that terminates the public edge changes under the stack on
+    # every `docker compose pull` — a silent, unreviewed swap of the one
+    # component every request on both hostnames passes through, and the
+    # reason a rollback ("bring back what was running on Tuesday") had no
+    # answer. It is also the supply-chain shape worth removing: a compromised
+    # or simply regressed upstream tag reaches production without anyone
+    # choosing it.
+    #
+    # `--no-autoupdate` in the command below has been here all along and says
+    # the same thing about the RUNNING process; `:latest` on the image said
+    # the opposite about which process starts. This makes the two agree.
+    #
+    # Bumping is deliberate work: read the release notes at
+    # github.com/cloudflare/cloudflared/releases, change the tag here, and
+    # redeploy. Cloudflare will warn in the dashboard when a connector version
+    # falls far enough behind to matter.
+    image: cloudflare/cloudflared:2026.8.3
     restart: always
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN}
     # ─────────────────────────────────────────────────────────────────
