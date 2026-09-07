@@ -22,6 +22,8 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import type { TournamentConfig } from '../../api/dto';
 import { useLockGuard } from '../../hooks/useLockGuard';
 import { useTournamentIdOrNull } from '../../hooks/useTournamentId';
+import { useUiStore } from '../../store/uiStore';
+import { workflowHref } from '../../platform/product-shell/workspaceNav';
 import { useMatchStateSync } from '../../hooks/useMatchStateSync';
 import { useMeetResultsLock } from '../../hooks/useMeetResultsLock';
 import { LockRibbon } from '../../components/status/LockRibbon';
@@ -70,6 +72,7 @@ export function VenueScheduleTab() {
   // window one nav item away, autosaving, with nothing to stop them.
   // The engine surfaces' own lock, on the fields that deserve it most.
   const tid = useTournamentIdOrNull();
+  const tournamentKind = useUiStore((state) => state.activeTournamentKind);
   // The store is only hydrated by surfaces that mount a match-state loader,
   // and this is not one of them; without this the hook silently answers false
   // (see useMeetResultsLock's note). Same lightweight loader Meet
@@ -164,7 +167,7 @@ export function VenueScheduleTab() {
           action={
             tid ? (
               <Link
-                to={`/tournaments/${tid}/competition/matches`}
+                to={workflowHref(tid, tournamentKind === 'bracket' ? 'bracket-matches' : 'matches')}
                 className="ml-1 font-medium text-accent hover:underline"
               >
                 View matches →

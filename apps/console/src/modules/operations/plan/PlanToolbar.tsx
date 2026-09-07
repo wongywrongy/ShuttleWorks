@@ -34,18 +34,21 @@ import { apiClient } from '../../../api/client';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { exportScheduleXlsx } from '../exports/scheduleXlsx';
 import { PickerPopover } from '../../../components/control-plane';
-import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../../lib/utils';
+import { INTERACTIVE_BASE, ACCENT_PRESS, UTILITY_BUTTON } from '../../../lib/utils';
 import type { WorkspacePhase } from '../../../platform/domain/lifecycle';
 import { opsPlanMode } from '../lifecycleMatrix';
 import type { PlanDialog } from './planDialogs';
+import { PlanSettings } from './PlanSettings';
 
+// The neutral variant IS the shared workspace utility button (P6); the
+// accent and armed variants take its geometry so the bar stays one row of
+// equal-height controls.
 const schedBtnBase =
-  `${INTERACTIVE_BASE} inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-sm px-2.5 py-1 text-xs ` +
+  `${INTERACTIVE_BASE} inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-2.5 text-xs ` +
   `font-medium disabled:cursor-not-allowed disabled:opacity-50`;
 const commitBtn =
   `${schedBtnBase} bg-accent text-accent-ink ${ACCENT_PRESS}`;
-const solveBtn =
-  `${schedBtnBase} border border-border-control bg-card text-foreground hover:bg-muted/40`;
+const solveBtn = UTILITY_BUTTON;
 const solveArmedBtn =
   `${schedBtnBase} border border-destructive bg-destructive/10 text-destructive`;
 const finalizedPillBtn =
@@ -68,6 +71,11 @@ export interface PlanToolbarProps {
    *  simply vanishing with no explanation. Zero when unknown/not applicable. */
   blockedCount?: number;
   onOpenScheduleNext: () => void;
+  /** Courts the PLAN double-books (two matches in overlapping slots on one
+   *  court). Non-empty refuses "Mark plan ready" and says which courts —
+   *  the same refusal the write boundary enforces, so a stale screen or a
+   *  concurrent submission cannot get an invalid plan marked ready. */
+  doubleBookedCourts?: number[];
   planFinalized: boolean;
   planFinalizePending: boolean;
   onTogglePlanFinalized: () => void;
@@ -82,6 +90,7 @@ export function PlanToolbar({
   schedulableCount,
   blockedCount = 0,
   onOpenScheduleNext,
+  doubleBookedCourts = [],
   planFinalized,
   planFinalizePending,
   onTogglePlanFinalized,
@@ -112,6 +121,18 @@ export function PlanToolbar({
 
   const review = opsPlanMode(phase) === 'plan-review';
   const busy = generating || isReoptimizing;
+
+  // A plan that double-books a court is not ready by definition: the floor
+  // would be sent two matches to one court. Named courts, not a count — the
+  // operator has to go and fix them.
+  const blocked = doubleBookedCourts.length > 0;
+  const blockedReason = blocked
+    ? `Two matches share ${
+        doubleBookedCourts.length === 1
+          ? `Court ${doubleBookedCourts[0]}`
+          : `Courts ${doubleBookedCourts.join(', ')}`
+      }. Fix the overlap before marking the plan ready.`
+    : '';
 
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="plan-toolbar">
@@ -258,6 +279,10 @@ export function PlanToolbar({
         </>
       )}
 
+      {/* Minimum rest is a planning constraint, so it is edited beside the
+          plan it constrains rather than in Setup (P1). */}
+      {!review ? <PlanSettings /> : null}
+
       {(meetEnabled && schedule) || bracketEnabled ? (
         <PickerPopover open={exportOpen} onOpenChange={setExportOpen}>
           <PickerPopover.Anchor asChild>
@@ -323,13 +348,18 @@ export function PlanToolbar({
             type="button"
             className={planFinalized ? finalizedPillBtn : commitBtn}
             onClick={onTogglePlanFinalized}
-            disabled={planFinalizePending || !canEdit}
+            /* Un-readying a plan is always allowed — a double-booking must
+               never trap the day in the ready state. Only the READY
+               direction is refused. */
+            disabled={planFinalizePending || !canEdit || (!planFinalized && blocked)}
             aria-busy={planFinalizePending}
             title={
               !canEdit
                 ? READ_ONLY_MESSAGE
                 : planFinalized
                 ? 'Press to un-ready the plan'
+                : blocked
+                ? blockedReason
                 : 'Mark the full generated schedule ready for live operations'
             }
             aria-label={planFinalized ? 'Plan ready. Press to un-ready the plan' : 'Mark the full schedule ready for live operations'}
@@ -337,6 +367,14 @@ export function PlanToolbar({
           >
             {planFinalized ? 'Plan ready ✓' : 'Mark plan ready'}
           </button>
+          {blocked && !planFinalized ? (
+            <span
+              data-testid="ops-plan-finalize-blocked"
+              className="text-xs text-destructive"
+            >
+              {blockedReason}
+            </span>
+          ) : null}
         </>
       ) : null}
     </div>

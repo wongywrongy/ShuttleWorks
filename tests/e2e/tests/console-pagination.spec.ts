@@ -44,7 +44,7 @@ test('large roster pages, selects across pages, searches offline and restores it
 });
 
 test('match inventory pages the whole collection and keeps court awareness', async ({ page, context }) => {
-  await page.goto(`/tournaments/${fixture.koreaTid}/competition/matches`);
+  await page.goto(`/tournaments/${fixture.koreaTid}/bracket/matches`);
   const rows = page.locator('[data-testid^="bracket-match-row-"]');
   await expect(rows).toHaveCount(100);
   await page.getByRole('button', { name: 'Page 2', exact: true }).click();

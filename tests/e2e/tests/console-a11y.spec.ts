@@ -56,11 +56,11 @@ const SURFACES: Surface[] = [
     ready: (p) => p.getByTestId('workspace-overview'),
   },
   {
-    name: 'Setup › Dates',
-    path: `/tournaments/${TAIPEI_TID}/setup/dates`,
-    // V3-RT-1: `setup-strip` renders only while the section is NOT ready, so it
-    // is not a readiness signal for a fixture whose Dates section is ready.
-    ready: (p) => p.getByText('Setup · Dates and sessions'),
+    name: 'Setup › Details',
+    path: `/tournaments/${TAIPEI_TID}/setup/details`,
+    // Navigation and the page heading identify the page; there is no
+    // `SETUP · …` eyebrow to wait on.
+    ready: (p) => p.getByLabel('Tournament name'),
   },
   {
     name: 'Roster',
@@ -75,18 +75,20 @@ const SURFACES: Surface[] = [
   },
   {
     name: 'Draw canvas',
-    path: `/tournaments/${TAIPEI_TID}/competition/draw`,
+    path: `/tournaments/${TAIPEI_TID}/bracket/draw`,
     ready: (p) => p.getByTestId('bracket-canvas'),
   },
   {
     name: 'Matches (result inventory)',
-    path: `/tournaments/${TAIPEI_TID}/competition/matches`,
+    path: `/tournaments/${TAIPEI_TID}/bracket/matches`,
     ready: (p) => p.getByRole('main'),
   },
   {
     name: 'Plan',
     path: `/tournaments/${TAIPEI_TID}/operations/plan`,
-    ready: (p) => p.getByTestId('unified-ops-board'),
+    // P2: court queues are the default Plan view; the time-scaled board is
+    // behind the Timeline toggle.
+    ready: (p) => p.getByTestId('plan-court-queues'),
   },
   {
     name: 'Live day',
@@ -95,7 +97,7 @@ const SURFACES: Surface[] = [
   },
   {
     name: 'Publish › Displays',
-    path: `/tournaments/${TAIPEI_TID}/publish/displays`,
+    path: `/tournaments/${TAIPEI_TID}/display/board`,
     ready: (p) => p.getByRole('heading', { name: 'Venue board' }),
   },
   {
@@ -309,7 +311,7 @@ test.describe('console accessibility (work package 26a)', () => {
     await page.goto(`/tournaments/${TAIPEI_TID}/operations/live`);
     await expect(page.getByTestId('run-surface')).toBeVisible({ timeout: 15_000 });
 
-    const disputeButtons = page.locator('[data-testid^="dispute-keep-"], [data-testid^="run-conflict-match-"]');
+    const disputeButtons = page.locator('[data-testid^="dispute-keep-"], [data-testid^="dispute-take-off-"]');
     const count = await disputeButtons.count();
     if (count === 0) {
       test.info().annotations.push({
@@ -329,22 +331,22 @@ test.describe('console accessibility (work package 26a)', () => {
     await expect(disputeButtons.first()).toBeFocused();
   });
 
-  test('Save bar dirty/clean states are announced via role=status or aria-live (Setup › Dates)', async ({
+  test('Save bar dirty/clean states are announced via role=status or aria-live (Setup › Details)', async ({
     page,
   }) => {
     // NOT Publish › Displays: that surface (DisplayConfig + SharingTab
     // scope="links") has no FormActions save bar at all — its "Rotate" link
     // action is immediate, not a dirty/clean form — so it is not a fair
-    // target for this check. Setup › Dates (`SetupProduct.tsx`) is: its
+    // target for this check. Setup › Details (`SetupProduct.tsx`) is: its
     // section status line (`status={<span role="status">{dirty ? 'Unsaved
     // changes' : ...}</span>}`, line ~798) is the caller-side live region
     // FormActions' own doc comment expects a caller to place next to it
     // (FormActions itself only wires `role="alert"` for its error state).
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/tournaments/${TAIPEI_TID}/setup/dates`);
-    await expect(page.getByText('Setup · Dates and sessions')).toBeVisible({ timeout: 15_000 });
+    await page.goto(`/tournaments/${TAIPEI_TID}/setup/details`);
+    await expect(page.getByLabel('Tournament name')).toBeVisible({ timeout: 15_000 });
 
     const liveRegions = page.locator('[role="status"], [aria-live]');
-    expect(await liveRegions.count(), 'Setup › Dates has no role=status/aria-live region at all').toBeGreaterThan(0);
+    expect(await liveRegions.count(), 'Setup › Details has no role=status/aria-live region at all').toBeGreaterThan(0);
   });
 });

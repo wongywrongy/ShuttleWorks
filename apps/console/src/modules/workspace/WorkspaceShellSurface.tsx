@@ -2,11 +2,11 @@
  * Resolves the shell-owned workspace segments (Overview, Display configuration,
  * and the WORKSPACE admin sections) to their surfaces. The admin sections reuse
  * the existing settings tab components — re-homed from the former standalone
- * `/tournaments/:id/settings` page. The workspace summary is fetched once here
+ * workspace administration pages. The workspace summary is fetched once here
  * and shared across the readiness Overview + the admin tabs that need it.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import type { AppTab } from '../../store/uiStore';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
 import type { TournamentSummaryDTO } from '../../api/dto';
@@ -45,11 +45,12 @@ export function WorkspaceShellSurface({
 
   if (!tid) return null;
 
-  // Workflow-first Publish routes retain the existing renderer's AppTab for
-  // compatibility. Inspect the URL here so `/publish/site`, `/publish/links`,
-  // and `/publish/displays` still mount one consolidated Publish surface.
-  if (location.pathname.includes('/publish/')) {
-    return <PublishProduct tid={tid} modules={modules} />;
+  // Display owns the venue board: its on/off state, courts shown, Show next,
+  // appearance and preview (DisplayConfig) plus the board link's copy /
+  // replace controls (SharingTab, scope="links"). Publish is gone as a
+  // category; its old URLs redirect here.
+  if (location.pathname.includes('/display/board')) {
+    return <DisplayBoardSettings tid={tid} modules={modules} />;
   }
 
   // Overview is the one shell segment that is NOT a form: it is a dashboard of
@@ -70,24 +71,14 @@ export function WorkspaceShellSurface({
       case 'ws-modules':
         return <ModulesSettingsTab tid={tid} />;
       case 'ws-sync':
-        return location.pathname.endsWith('/administration/activity') ? (
-          <ActivityTab tid={tid} timeZone={summary?.timeZone} />
-        ) : (
-          // Contract §7: backup timestamps render in the tournament
-          // timezone, not the browser's (V3-OC27.2).
-          <SyncBackupsTab timeZone={summary?.timeZone} />
-        );
       case 'ws-settings':
         return (
-          // Two panes, one page. The divider used to carry an `mx-6` that
-          // paid for the tabs' own `p-6`; with the gutter owned above it is
-          // the column's full width, and `space-y-6` supplies the breathing
-          // room the two `p-6`s used to.
-          <div className="space-y-6">
-            <GeneralSettingsTab tid={tid} summary={summary} onSaved={load} />
-            <div className="border-t border-border" />
-            <DangerZoneTab tid={tid} summary={summary} onChanged={load} />
-          </div>
+          <WorkspaceAdminPage
+            tid={tid}
+            summary={summary}
+            onChanged={load}
+            path={location.pathname}
+          />
         );
       default:
         return null;
@@ -97,51 +88,106 @@ export function WorkspaceShellSurface({
   return surface ? <PageBody variant="form">{surface}</PageBody> : null;
 }
 
-type PublishPane = 'site' | 'draws-results' | 'displays' | 'links';
-
-const PUBLISH_PANES: readonly { id: PublishPane; label: string; description: string }[] = [
-  { id: 'site', label: 'Site', description: 'Choose who can view the tournament and what they see.' },
-  { id: 'displays', label: 'Displays', description: 'Configure and share the venue board.' },
-];
-
-export function paneFromPath(pathname: string): PublishPane {
-  const value = pathname.split('/publish/')[1]?.split('/')[0];
-  if (value === 'draws-results' || value === 'links') return value;
-  return PUBLISH_PANES.some((pane) => pane.id === value) ? (value as PublishPane) : 'site';
-}
-
 /**
- * Publish is workflow composition, not a fifth enableable module. Keeping its
- * facade in the existing shell compositor makes that ownership structural:
- * Site delegates to SharingTab, Displays to DisplayConfig, and Competition
- * keeps draw/result data. No feature module reaches into another module.
+ * Display · Board — venue-board configuration in one place.
+ *
+ * `DisplayConfig` supplies the board's own settings, appearance and the
+ * fullscreen preview action; `SharingTab` (scope="links") owns the
+ * capability URL and its copy / replace controls. One "Venue board" name,
+ * two components, no second state owner.
  */
-export function PublishProduct({ tid, modules = [] }: { tid: string; modules?: WorkspaceModule[] }) {
-  const location = useLocation();
-  const pane = paneFromPath(location.pathname);
-  if (pane === 'draws-results' || pane === 'links') {
-    const destination = pane === 'links' ? 'displays' : 'site';
-    return <Navigate replace to={`/tournaments/${encodeURIComponent(tid)}/publish/${destination}`} />;
-  }
-  const active = PUBLISH_PANES.find((candidate) => candidate.id === pane)!;
-
+export function DisplayBoardSettings({
+  tid,
+  modules = [],
+}: {
+  tid: string;
+  modules?: WorkspaceModule[];
+}) {
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background" data-testid="publish-product">
-      <ActionsBar title={active.label} status={active.description} />
+    <div className="flex h-full min-h-0 flex-col bg-background" data-testid="display-board-settings">
+      <ActionsBar title="Venue board" status="Configure and share the board shown in the venue." />
       <div className="min-h-0 flex-1 overflow-auto">
         <PageBody variant="form" className="space-y-6">
-          <PublishPaneContent pane={pane} tid={tid} modules={modules} />
+          {/* The link controls are composed INTO the board settings, under
+              the on/off switch — "is the board on, what is its link" is one
+              question in two parts, and they used to sit a screen apart. */}
+          <DisplayConfig
+            tid={tid}
+            modules={modules}
+            linkSlot={<SharingTab tid={tid} scope="links" />}
+          />
         </PageBody>
       </div>
     </div>
   );
 }
 
-function PublishPaneContent({ pane, tid, modules }: { pane: PublishPane; tid: string; modules: WorkspaceModule[] }) {
-  if (pane === 'site') return <SharingTab tid={tid} scope="site" />;
-  // SharingTab owns the capability URL and its rotate/revoke confirmation.
-  // DisplayConfig supplies board sources, layout controls and the fullscreen
-  // preview action; SharingTab (scope="links") owns the capability URL and
-  // its copy/replace controls. One "Venue board" name, two components.
-  return <div className="space-y-6"><DisplayConfig tid={tid} modules={modules} /><SharingTab tid={tid} scope="links" /></div>;
+/**
+ * Administration · **Workspace** — everything that is about this workspace as
+ * an object rather than about the event it runs: its settings and lifecycle,
+ * its backups, and its activity log.
+ *
+ * Administration used to list five destinations (Team, Modules, Backups,
+ * Activity, Workspace settings), three of which answered questions about the
+ * same thing. They are one destination with three tabs now; the URLs are
+ * unchanged, so an old bookmark still opens the exact tab it named.
+ */
+const WORKSPACE_ADMIN_TABS = [
+  { path: 'lifecycle', label: 'Settings' },
+  { path: 'backups', label: 'Backups' },
+  { path: 'activity', label: 'Activity log' },
+] as const;
+
+export function WorkspaceAdminPage({
+  tid,
+  summary,
+  onChanged,
+  path,
+}: {
+  tid: string;
+  summary: TournamentSummaryDTO | null;
+  onChanged: () => void;
+  path: string;
+}) {
+  const current = path.endsWith('/administration/backups')
+    ? 'backups'
+    : path.endsWith('/administration/activity')
+      ? 'activity'
+      : 'lifecycle';
+
+  return (
+    <div className="space-y-6" data-testid="workspace-admin">
+      <nav aria-label="Workspace administration" className="flex gap-1 border-b border-border">
+        {WORKSPACE_ADMIN_TABS.map((tab) => (
+          <Link
+            key={tab.path}
+            to={`/tournaments/${encodeURIComponent(tid)}/administration/${tab.path}`}
+            aria-current={tab.path === current ? 'page' : undefined}
+            className={[
+              '-mb-px border-b-2 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+              tab.path === current
+                ? 'border-accent font-medium text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            ].join(' ')}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </nav>
+
+      {current === 'backups' ? (
+        // Contract §7: backup timestamps render in the tournament timezone,
+        // not the browser's (V3-OC27.2).
+        <SyncBackupsTab timeZone={summary?.timeZone} />
+      ) : current === 'activity' ? (
+        <ActivityTab tid={tid} timeZone={summary?.timeZone} />
+      ) : (
+        <div className="space-y-6">
+          <GeneralSettingsTab tid={tid} summary={summary} onSaved={onChanged} />
+          <div className="border-t border-border" />
+          <DangerZoneTab tid={tid} summary={summary} onChanged={onChanged} />
+        </div>
+      )}
+    </div>
+  );
 }

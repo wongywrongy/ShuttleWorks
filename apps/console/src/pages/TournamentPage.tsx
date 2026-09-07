@@ -4,63 +4,20 @@
  * module-level helpers (``forceSaveNow``) can resolve the active
  * tournament, then renders the existing ``AppShell``.
  *
- * Syncs the URL trailing segment into ``uiStore.activeTab`` so deep
- * links and refresh land on the right tab. Bundle 3 made this 1:1 —
- * every tab id is a URL segment (``/setup``, ``/bracket-events``, …);
- * the reverse direction (tab click → URL) is wired in ``TabBar.tsx``
- * with ``{ replace: true }`` semantics so back-button doesn't
- * accumulate per-tab stops. Legacy ``/bracket`` URLs are handled by a
- * ``<Navigate>`` route in ``App.tsx`` that redirects to ``/bracket-setup``
- * before this page mounts.
+ * Syncs canonical workflow paths into ``uiStore.activeTab`` so deep links and
+ * refresh land on the right renderer. Workflow paths are registered in
+ * ``workspaceNav.ts`` and emitted by the shell navigation helpers.
  *
  * Hooks inside ``AppShell`` (``useTournamentState``, ``useAdvisories``,
  * ``useSuggestions``, etc.) read the same id via ``useParams`` /
  * ``useTournamentId`` — no prop drilling required.
  */
 import { useEffect, useLayoutEffect, type ReactNode } from "react";
-import { Link, Navigate, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { AppShell } from "../app/AppShell";
 import { useTournamentKind } from "../hooks/useTournamentKind";
-import { useUiStore, type AppTab } from "../store/uiStore";
-import { MEET_TAB_IDS, BRACKET_TAB_IDS } from "../lib/bracketTabs";
-import {
-  SHELL_SEGMENTS,
-  ENTRIES_SEGMENTS,
-  workflowRouteForPath,
-} from "../platform/product-shell/workspaceNav";
-
-// URL-routable trailing segments: every meet tab id + every bracket tab id +
-// the workspace-shell segments (overview / display-config / ws-* admin).
-// Legacy `/bracket` is handled by an explicit <Navigate> route in App.tsx;
-// by the time we reach this layoutEffect the URL is already /bracket-setup.
-const _TAB_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
-  ...MEET_TAB_IDS,
-  ...BRACKET_TAB_IDS,
-  ...SHELL_SEGMENTS,
-  // Entries (SP-E1-1) belongs to neither engine's tab list — it is a module
-  // segment of its own. Without it here the URL /tournaments/:id/entries
-  // would leave `activeTab` on whatever it was, and a poster-following
-  // operator would land on the wrong surface with a correct-looking URL.
-  ...ENTRIES_SEGMENTS,
-]);
-
-/** Kind-agnostic module segments: the URL says nothing about whether this is
- *  a meet or a bracket, so the optimistic-kind guess below must skip them and
- *  let `useTournamentKind`'s fetch be the only source of truth. */
-const KIND_AGNOSTIC: ReadonlySet<AppTab> = new Set<AppTab>([
-  ...SHELL_SEGMENTS,
-  ...ENTRIES_SEGMENTS,
-]);
-
-// `setup` is absent deliberately: bare /setup is the readiness-checklist
-// landing (a registered WORKFLOW_ROUTES entry), not a section root.
-const WORKFLOW_SECTION_DEFAULTS: Readonly<Record<string, string>> = {
-  participants: "participants/people",
-  competition: "competition/matches",
-  operations: "operations/plan",
-  publish: "publish/site",
-  administration: "administration/team",
-};
+import { useUiStore } from "../store/uiStore";
+import { workflowRouteForPath } from "../platform/product-shell/workspaceNav";
 
 export function TournamentPage() {
   const params = useParams<{ id?: string }>();
@@ -77,8 +34,6 @@ export function TournamentPage() {
   const trailingParts =
     tournamentIndex >= 0 ? pathParts.slice(tournamentIndex + 1) : [];
   const workflowPath = trailingParts.join("/");
-  const sectionRootDestination =
-    WORKFLOW_SECTION_DEFAULTS[workflowPath] ?? null;
   const workflowRoute = workflowRouteForPath(
     workflowPath,
     activeTournamentKind,
@@ -88,11 +43,9 @@ export function TournamentPage() {
   const routeTab = workflowRoute?.tab;
   const unknownSegment =
     !isBareTournamentPath &&
-    !sectionRootDestination &&
-    !workflowRoute &&
-    !_TAB_SEGMENTS.has(segment as AppTab);
+    !workflowRoute;
 
-  // Load the tournament's kind so the AppShell + TabBar can render
+  // Load the tournament's kind so the AppShell can render
   // meet-style or bracket-style chrome. The hook is a no-op when tid
   // is null and clears the store on unmount. It also reports the uniform
   // 404 — see the not-found branch below.
@@ -105,39 +58,18 @@ export function TournamentPage() {
     };
   }, [tid]);
 
-  // Sync the URL trailing segment into activeTab + optimistic kind
-  // BEFORE the first paint, so the AppShell never flashes meet tabs
-  // on a tournament-kind page (or vice versa). ``useLayoutEffect``
-  // runs after DOM mutations but before the browser paints, so the
-  // synchronous Zustand update + re-render lands before the user
-  // sees anything. ``useTournamentKind``'s async fetch corrects the
-  // optimistic guess if the URL lies (e.g. someone hand-edits the
-  // URL to ``/bracket`` on a meet-kind tournament).
+  // Sync the canonical route into activeTab before the first paint.
   useLayoutEffect(() => {
     // An unrecognised segment renders not-found below; it must not leave a
-    // stale tab (or a guessed kind) behind it.
+    // stale tab behind it.
     if (!tid || unknownSegment) return;
     if (routeTab) {
       useUiStore.getState().setActiveTab(routeTab);
-    } else if (segment && _TAB_SEGMENTS.has(segment as AppTab)) {
-      // Legacy segment IS the tab id, 1:1. No translation.
-      useUiStore.getState().setActiveTab(segment as AppTab);
     } else if (isBareTournamentPath) {
       useUiStore.getState().setActiveTab("overview");
     }
-    // Optimistic kind: any bracket-* segment → bracket; otherwise meet. Skip
-    // for kind-agnostic shell segments (overview / ws-* / display-config) —
-    // there ``useTournamentKind``'s async fetch is the only source of truth, so
-    // we don't flash the wrong engine's groups on a bracket workspace.
-    if (segment && !workflowRoute && !KIND_AGNOSTIC.has(segment as AppTab)) {
-      const optimisticKind: "meet" | "bracket" = segment.startsWith("bracket-")
-        ? "bracket"
-        : "meet";
-      useUiStore.getState().setActiveTournamentKind(optimisticKind);
-    }
   }, [
     tid,
-    segment,
     routeTab,
     workflowRoute,
     workflowPath,
@@ -145,11 +77,8 @@ export function TournamentPage() {
     unknownSegment,
   ]);
 
-  // No kind-based snap: a tab whose module isn't enterable for this workspace
-  // is preserved so the AppShell guard can show the unavailable panel (rather
-  // than silently routing away), and a valid multi-module tab is never snapped
-  // to the wrong kind's home. The legacy ``/bracket`` URL is redirected to
-  // ``/bracket-setup`` by a route in ``App.tsx`` before this page mounts.
+  // A route whose module is unavailable remains visible so the AppShell guard
+  // can explain the missing capability and offer its supported next step.
 
   if (!tid) {
     return (
@@ -184,18 +113,6 @@ export function TournamentPage() {
           Go to your workspaces
         </Link>
       </NotFound>
-    );
-  }
-
-  // Section labels are navigational landmarks. A copied or hand-entered root
-  // should land on that workflow's first real surface, not a 404 or a page
-  // with no active child in the sidebar.
-  if (sectionRootDestination) {
-    return (
-      <Navigate
-        to={`/tournaments/${encodeURIComponent(tid)}/${sectionRootDestination}`}
-        replace
-      />
     );
   }
 

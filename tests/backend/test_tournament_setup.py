@@ -193,12 +193,15 @@ def test_events_patch_refused_once_domain_events_exist(client):
 
 
 @pytest.mark.parametrize("kind", ["meet", "bracket"])
-def test_scheduled_venue_is_a_read_only_domain_summary(client, kind):
-    """R-N A applies to both schedule projections, not only Events.
+def test_scheduled_venue_stays_editable_and_the_plan_absorbs_the_change(client, kind):
+    """Descriptive information is not locked by the existence of a plan.
 
-    Negative control: delete the assignment before the GET and ``authority``
-    becomes ``setup``; the PATCH then succeeds instead of returning 409.
-    Verified red 2026-08-30, then restored.
+    Venue name, address, accessibility notes and the court list are things a
+    director corrects on the day. Locking the whole page because a schedule
+    refers to a court is a worse failure than a schedule that needs
+    revalidating, so the edit is accepted here and reconciliation belongs in
+    Plan. The structural lock that IS real — a generated draw — is asserted by
+    ``test_events_patch_refused_once_domain_events_exist``.
     """
     created = client.post(
         "/tournaments",
@@ -234,16 +237,18 @@ def test_scheduled_venue_is_a_read_only_domain_summary(client, kind):
 
     setup = client.get(f"/tournaments/{tid}/setup")
     venue = next(section for section in setup.json()["sections"] if section["key"] == "venue")
-    assert venue["authority"] == "domain"
-    assert venue["data"]["courts"][0]["name"] == "Court 1"
+    assert venue["authority"] == "setup"
 
-    refused = client.patch(
+    accepted = client.patch(
         f"/tournaments/{tid}/setup/venue",
         headers={"If-Match": setup.headers["etag"]},
-        json={"data": {"courts": []}},
+        json={"data": {"venueName": "Hall B", "courts": venue["data"]["courts"]}},
     )
-    assert refused.status_code == 409
-    assert refused.json()["detail"]["code"] == "SETUP_SECTION_DOMAIN_OWNED"
+    assert accepted.status_code == 200
+    saved = next(
+        section for section in accepted.json()["sections"] if section["key"] == "venue"
+    )
+    assert saved["data"]["venueName"] == "Hall B"
 
 
 def test_meet_divisions_read_as_domain_events(client):
@@ -565,3 +570,91 @@ def test_naive_window_bounds_are_read_in_the_tournament_timezone(client):
     assert dates_patch.status_code == 200
     dates = next(s for s in dates_patch.json()["sections"] if s["key"] == "dates")
     assert not any(i["code"] == "SETUP_DATES_SESSION_OUT_OF_WINDOW" for i in dates["issues"])
+
+
+def _entry_page(tid: str) -> dict:
+    """The stored entry-page row — the one `/e/SLUG/regulations` reads."""
+    import uuid as _uuid
+
+    from db.models import EntryPage
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        row = session.get(EntryPage, _uuid.UUID(tid))
+        assert row is not None
+        return {
+            "slug": row.slug,
+            "regulations_text": row.regulations_text,
+            "regulations_version": row.regulations_version,
+        }
+    finally:
+        session.close()
+
+
+def test_regulations_text_is_written_to_the_page_the_public_reader_reads(client):
+    """Setup · Public site is where regulations are authored.
+
+    The document itself lives on ``entry_pages`` — the row ``/e/SLUG/
+    regulations`` reads — so writing it from Setup must reach that row and not
+    a second copy in the setup blob. The page is created on demand from the
+    public address the same save carries: otherwise the control would be
+    visible and inert on every workspace without an entry page.
+    """
+    created = client.post(
+        "/tournaments",
+        json={"name": "Regulations", "kind": "bracket", "tournamentDate": "2026-09-05"},
+    )
+    tid = created.json()["id"]
+    setup = client.get(f"/tournaments/{tid}/setup")
+    saved = client.patch(
+        f"/tournaments/{tid}/setup/public-info",
+        headers={"If-Match": setup.headers["etag"]},
+        json={"data": {"publicSlug": "regs-open", "regulationsText": "1. Warm-up\nTwo minutes."}},
+    )
+    assert saved.status_code == 200
+    info = next(s for s in saved.json()["sections"] if s["key"] == "public-info")
+    assert info["data"]["regulationsText"].startswith("1. Warm-up")
+
+    stored = _entry_page(tid)
+    assert stored["regulations_text"].startswith("1. Warm-up")
+    first_version = stored["regulations_version"]
+
+    # An unrelated save must not bump the version: every entry records the
+    # version it accepted.
+    unchanged = client.patch(
+        f"/tournaments/{tid}/setup/public-info",
+        headers={"If-Match": saved.headers["etag"]},
+        json={"data": {
+            "publicSlug": "regs-open",
+            "description": "Open to all",
+            "regulationsText": "1. Warm-up\nTwo minutes.",
+        }},
+    )
+    assert unchanged.status_code == 200
+    assert _entry_page(tid)["regulations_version"] == first_version
+
+    edited = client.patch(
+        f"/tournaments/{tid}/setup/public-info",
+        headers={"If-Match": unchanged.headers["etag"]},
+        json={"data": {"publicSlug": "regs-open", "regulationsText": "1. Warm-up\nThree minutes."}},
+    )
+    assert edited.status_code == 200
+    assert _entry_page(tid)["regulations_version"] == first_version + 1
+    assert _entry_page(tid)["regulations_text"].endswith("Three minutes.")
+
+
+def test_regulations_without_a_public_address_refuses_rather_than_silently_dropping(client):
+    created = client.post(
+        "/tournaments",
+        json={"name": "No address", "kind": "bracket", "tournamentDate": "2026-09-05"},
+    )
+    tid = created.json()["id"]
+    setup = client.get(f"/tournaments/{tid}/setup")
+    refused = client.patch(
+        f"/tournaments/{tid}/setup/public-info",
+        headers={"If-Match": setup.headers["etag"]},
+        json={"data": {"regulationsText": "1. Warm-up"}},
+    )
+    assert refused.status_code == 409
+    assert "page address" in refused.json()["detail"]["message"]

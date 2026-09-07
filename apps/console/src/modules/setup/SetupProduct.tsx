@@ -1,35 +1,36 @@
 /**
- * SetupProduct — the workflow-first Setup surface (SP-OPCON-1 rework).
+ * SetupProduct — the consolidated Setup surface.
  *
- * Two modes off one route family:
+ * Setup answers four questions, one page each, and every setting has exactly
+ * one editing location:
  *
- * - `/setup` (landing) renders the ONE full readiness checklist (RDY-3).
- * - `/setup/{section}` renders that section's editor with a one-line strip
- *   (section status + overall) linking back — the checklist card does not
- *   repeat beside a rail that already lists the same sections.
+ *   - `setup/details`     — name, dates, timezone, venue, courts, sessions,
+ *                           staff contacts
+ *   - `setup/entries`     — entry windows beside entry requirements
+ *   - `setup/scoring`     — points, best-of, deuce, cap
+ *   - `setup/public-site` — public content, regulations, branding, and the
+ *                           audience / visible-content controls that govern it
  *
- * Readiness itself is server-derived from domain rows (ruling R-M A); this
- * component renders it and never re-derives. A section whose `authority` is
- * `domain` (events once real draws/divisions exist — ruling R-N A) renders a
- * read-only summary of actual state plus a link to the owning surface; its
- * editor and Save affordance do not mount, so the "empty events textarea over
- * five running draws" state (evidence S09) is structurally impossible.
+ * The readiness checklist is NOT here: Overview owns it, once. Event
+ * definitions, draw format and draw size moved to Bracket (they are
+ * structural properties of a draw); minimum rest moved to Operations · Plan.
  *
- * Inputs follow the settings row grammar (`platform/engine-config/
- * SettingsControls`): free text → `FieldRow`, everything else → `Row` with a
- * fixed-width control (Seg / Toggle / number+unit). Repeating records use
- * `SetupRowsEditor` (INP-1) — the pipe textareas and their syntax captions
- * are gone. There is no Refresh button (INP-3): the surface refetches on
- * section navigation, after every save (the PATCH returns the full setup),
- * and on window focus.
+ * A page maps onto SEVERAL stored sections (Details writes general, dates,
+ * venue and people). Save patches only the sections the operator actually
+ * changed, in order, and reports honestly when one of them fails — a partial
+ * multi-section write is never announced as a success.
+ *
+ * Descriptive information stays editable after draws and schedules exist.
+ * When an edit invalidates the current plan the plan is marked for
+ * revalidation (`scheduleIsStale`) rather than the information being locked:
+ * reconciliation belongs in Plan, and recorded results are untouched.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useLocation } from 'react-router-dom';
 import { FormActions, Notice } from '@scheduler/design-system';
 import { ActionsBar, PageBody } from '../../components/control-plane';
 import {
   FieldRow,
-  NumberWithSuffix,
   Row,
   SelectInput,
   Toggle,
@@ -44,37 +45,41 @@ import type {
   TournamentSetupDTO,
 } from '../../api/dto';
 import { STATE_WORD } from '../../lib/stateWords';
-import { useUiStore } from '../../store/uiStore';
-import { DownstreamImpact } from './DownstreamImpact';
+import { useTournamentStore } from '../../store/tournamentStore';
 import { PropertyPanel } from '../../components/control-plane/PropertyPanel';
+import { PublicationSettings } from '../../components/PublicationSettings';
 import { isAmbiguousLocalTime, localInputToUtc, zonedLocalInput } from '../../lib/timezoneLocal';
 import { SetupRowsEditor, type SetupRow } from './SetupRowsEditor';
 import { StatusPill } from '../../components/StatusPill';
-import { DISCIPLINE_NAMES } from '../../lib/disciplineNames';
-import { TEXT_EMPHASIS, TEXT_MUTED_SM, TEXT_MUTED_XS, TEXT_TITLE_SM } from '../../lib/utils'
 
-const SECTION_LABELS: Record<SetupKey, string> = {
-  general: 'Tournament details',
-  dates: 'Dates and sessions',
-  venue: 'Venue and courts',
-  events: 'Events and eligibility',
-  rules: 'Formats and scoring',
-  entries: 'Entry rules',
-  people: 'Staff contacts',
-  'public-info': 'Public information',
+/** The four consolidated Setup destinations. */
+export type SetupPage = 'details' | 'entries' | 'scoring' | 'public-site';
+
+export const SETUP_PAGES: readonly SetupPage[] = ['details', 'entries', 'scoring', 'public-site'];
+
+export const PAGE_LABELS: Record<SetupPage, string> = {
+  details: 'Details',
+  entries: 'Entries',
+  scoring: 'Scoring',
+  'public-site': 'Public site',
 };
 
-const SECTION_ORDER: readonly SetupKey[] = [
-  'general',
-  'dates',
-  'venue',
-  'events',
-  'rules',
-  'entries',
-  'people',
-  'public-info',
-];
+/**
+ * Which stored sections each page reads and writes. Order matters: it is the
+ * order Save patches them in, so the most identifying write lands first.
+ */
+export const PAGE_SECTIONS: Record<SetupPage, readonly SetupKey[]> = {
+  details: ['general', 'dates', 'venue', 'people'],
+  // Entry windows are stored on `dates`; they are edited beside the entry
+  // requirements they belong to, never on a separate dates page.
+  entries: ['entries', 'dates'],
+  scoring: ['rules'],
+  'public-site': ['public-info'],
+};
 
+/** Fields a page does not render but must not silently drop. The PATCH
+ *  replaces a section's stored data wholesale, so anything not rendered still
+ *  travels in the draft it was loaded into. */
 const STATUS_LABELS: Record<SetupStatus, string> = {
   not_started: 'Not started',
   in_progress: STATE_WORD.pending,
@@ -83,19 +88,6 @@ const STATUS_LABELS: Record<SetupStatus, string> = {
   published: 'Published',
   complete: 'Complete',
 };
-
-/** `none` sentinel because the underlying Select cannot carry an empty
- *  string item value; mapped back to null on change. */
-const FORMAT_OPTIONS = [
-  { value: 'none', label: 'Not configured' },
-  { value: 'mixed', label: 'Mixed / by event' },
-  { value: 'se', label: 'Single elimination' },
-  { value: 'de', label: 'Double elimination' },
-  { value: 'rr', label: 'Round robin' },
-  { value: 'swiss', label: 'Swiss' },
-  { value: 'monrad', label: 'Monrad' },
-  { value: 'compass', label: 'Compass' },
-];
 
 const supportedTimezones = (Intl as typeof Intl & {
   supportedValuesOf?: (key: 'timeZone') => string[];
@@ -126,35 +118,83 @@ function sectionState(setup: TournamentSetupDTO | null, key: SetupKey): SetupSec
   return setup?.sections.find((section) => section.key === key) ?? null;
 }
 
-function SetupStatusLabel({ status }: { status: SetupStatus }) {
-  if (status === 'blocked') {
-    return <StatusPill tone="red">{STATUS_LABELS[status]}</StatusPill>;
-  }
-  const tone = status === 'published'
-    ? 'text-accent'
-    : status === 'ready' || status === 'complete'
-      ? 'font-semibold text-muted-foreground'
-      : 'font-normal text-muted-foreground';
-  return <span className={`shrink-0 text-xs ${tone}`}>{STATUS_LABELS[status]}</span>;
-}
-
-function textOf(data: SetupSectionData, field: string): string {
-  const value = data[field];
+function textOf(data: SetupSectionData | undefined, field: string): string {
+  const value = data?.[field];
   return value == null ? '' : String(value);
 }
 
-function rowsOf(data: SetupSectionData, field: string): SetupRow[] {
-  const value = data[field];
+function rowsOf(data: SetupSectionData | undefined, field: string): SetupRow[] {
+  const value = data?.[field];
   return Array.isArray(value) ? (value as SetupRow[]) : [];
 }
 
-function numberOf(data: SetupSectionData, field: string): number {
-  const value = Number(data[field]);
+function numberOf(data: SetupSectionData | undefined, field: string): number {
+  const value = Number(data?.[field]);
   return Number.isFinite(value) ? value : 0;
+}
+
+/** The stored instant as a plain calendar date in the tournament timezone.
+ *  A value already stored date-only is taken as written — reading it through
+ *  `Date` would shift it a day in every negative-offset zone. */
+function dateInputValue(value: string, timezone: string): string {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return zonedLocalInput(value, timezone).slice(0, 10);
+}
+
+/**
+ * A tournament starts on a day and ends on a day — not at 09:00. The stored
+ * value stays a real instant so nothing downstream changes shape: the start
+ * is the first moment of that local day, the end the last.
+ */
+function DateOnlyRow({
+  label,
+  hint,
+  value,
+  timezone,
+  edge,
+  onChange,
+  last,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  timezone: string;
+  edge: 'start' | 'end';
+  onChange: (iso: string | null) => void;
+  last?: boolean;
+}) {
+  const [localValue, setLocalValue] = useState(() => dateInputValue(value, timezone));
+  useEffect(() => setLocalValue(dateInputValue(value, timezone)), [value, timezone]);
+  return (
+    <FieldRow
+      label={label}
+      hint={hint}
+      type="date"
+      value={localValue}
+      onChange={(event) => {
+        const day = event.target.value;
+        setLocalValue(day);
+        if (!day) {
+          onChange(null);
+          return;
+        }
+        const wall = `${day}T${edge === 'start' ? '00:00' : '23:59'}`;
+        // A clock change can delete local midnight. Step forward to the first
+        // minute that exists rather than refusing a perfectly valid date.
+        const iso =
+          localInputToUtc(wall, timezone) ??
+          localInputToUtc(`${day}T${edge === 'start' ? '01:00' : '22:59'}`, timezone);
+        if (iso) onChange(iso);
+      }}
+      last={last}
+    />
+  );
 }
 
 function DateTimeRow({
   label,
+  hint,
   value,
   onChange,
   timezone,
@@ -162,6 +202,7 @@ function DateTimeRow({
   last,
 }: {
   label: string;
+  hint?: string;
   value: string;
   onChange: (iso: string | null) => void;
   timezone: string;
@@ -184,7 +225,11 @@ function DateTimeRow({
       type="datetime-local"
       value={localValue}
       error={error}
-      hint={ambiguous ? 'This local time occurs twice here due to a clock change. The earlier occurrence is used.' : undefined}
+      hint={
+        ambiguous
+          ? 'This local time occurs twice here due to a clock change. The earlier occurrence is used.'
+          : hint
+      }
       onChange={(event) => {
         const local = event.target.value;
         setLocalValue(local);
@@ -200,58 +245,138 @@ function DateTimeRow({
   );
 }
 
-function SectionEditor({
-  tid,
-  timezone,
-  section,
-  data,
-  courtOptions,
-  onChange,
-}: {
-  tid: string;
-  timezone?: string;
-  section: SetupSectionStateDTO;
-  data: SetupSectionData;
-  courtOptions?: readonly { value: string; label: string }[];
-  onChange: (field: string, value: unknown) => void;
-}) {
-  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
-  const [previewNonce, setPreviewNonce] = useState<Record<string, number>>({});
-  switch (section.key) {
-    case 'general':
-      return (
-        <div>
-          <FieldRow label="Tournament name" hint="Used internally: exports, the operator console, activity." value={textOf(data, 'name')} onChange={(e) => onChange('name', e.target.value)} />
-          <FieldRow label="Name shown to players" hint="Appears on the public site and entry forms. Defaults to the tournament name if left blank." value={textOf(data, 'publicName')} onChange={(e) => onChange('publicName', e.target.value)} />
-          <FieldRow label="Organizer" value={textOf(data, 'organizer')} onChange={(e) => onChange('organizer', e.target.value)} />
-          <Row
-            label="Timezone"
-            control={
-              <SelectInput
-                value={textOf(data, 'timezone') || 'UTC'}
-                onChange={(value) => onChange('timezone', value)}
-                options={TIMEZONE_SELECT_OPTIONS}
-                ariaLabel="Tournament timezone"
-                width={240}
-              />
-            }
-          />
-          <FieldRow label="Tournament number" value={textOf(data, 'tournamentNumber')} onChange={(e) => onChange('tournamentNumber', e.target.value)} />
-          <FieldRow label="Season" value={textOf(data, 'season')} onChange={(e) => onChange('season', e.target.value)} last />
-        </div>
-      );
-    case 'dates':
-      return (
-        <div className="space-y-6">
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              All times are in {timezone || textOf(data, 'timezone') || 'the tournament timezone'}.
-            </p>
-            <DateTimeRow label="Tournament starts" value={textOf(data, 'tournamentStart')} timezone={timezone || 'UTC'} onChange={(iso) => onChange('tournamentStart', iso)} />
-            <DateTimeRow label="Tournament ends" value={textOf(data, 'tournamentEnd')} timezone={timezone || 'UTC'} onChange={(iso) => onChange('tournamentEnd', iso)} />
-            <DateTimeRow label="Entries open" value={textOf(data, 'entryOpening')} timezone={timezone || 'UTC'} onChange={(iso) => onChange('entryOpening', iso)} />
-            <DateTimeRow label="Entry deadline" value={textOf(data, 'entryDeadline')} timezone={timezone || 'UTC'} onChange={(iso) => onChange('entryDeadline', iso)} last />
+function ImagePreview({ field, url }: { field: 'logoUrl' | 'bannerUrl'; url: string }) {
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    setFailed(false);
+    setAttempt(0);
+  }, [url]);
+  return (
+    <figure className="min-w-0">
+      <figcaption className="mb-2 text-xs font-medium text-foreground">
+        {field === 'logoUrl' ? 'Logo preview' : 'Banner preview'}
+      </figcaption>
+      <div className="overflow-hidden rounded-sm border border-border bg-muted">
+        {failed ? (
+          <div className="flex h-24 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-muted-foreground">
+            <span>The image could not be loaded from this link.</span>
+            <button
+              type="button"
+              className="font-medium text-accent underline underline-offset-2"
+              onClick={() => {
+                setFailed(false);
+                setAttempt((value) => value + 1);
+              }}
+            >
+              Retry preview
+            </button>
           </div>
+        ) : (
+          <img
+            key={`${field}-${attempt}`}
+            src={url}
+            alt={field === 'logoUrl' ? 'Selected tournament logo' : 'Selected tournament banner'}
+            loading="lazy"
+            // A director's logo is usually hosted somewhere that sends no
+            // CORS headers, so the image must NOT be requested as a CORS
+            // fetch; `no-referrer` keeps hotlink-protected hosts from
+            // rejecting it on the referrer alone (the reported console
+            // errors). Failure is reported in the panel, with a retry.
+            referrerPolicy="no-referrer"
+            onError={() => setFailed(true)}
+            className={field === 'logoUrl' ? 'mx-auto h-24 max-w-full object-contain' : 'h-24 w-full object-cover'}
+          />
+        )}
+      </div>
+    </figure>
+  );
+}
+
+interface PageEditorProps {
+  tid: string;
+  timezone: string;
+  drafts: Partial<Record<SetupKey, SetupSectionData>>;
+  onChange: (section: SetupKey, field: string, value: unknown) => void;
+}
+
+function DetailsPage({ timezone, drafts, onChange }: PageEditorProps) {
+  const general = drafts.general;
+  const dates = drafts.dates;
+  const venue = drafts.venue;
+  const people = drafts.people;
+  const courtOptions = rowsOf(venue, 'courts')
+    .filter((court) => court.id != null && String(court.id).trim() !== '')
+    .map((court, index) => ({
+      value: String(court.id),
+      label: String(court.name ?? `Court ${index + 1}`),
+    }));
+  const contactRows = rowsOf(people, 'contacts');
+  const knownRoles = new Set<string>(CONTACT_ROLE_OPTIONS.map((option) => option.value));
+  const contactRoleOptions = [
+    ...CONTACT_ROLE_OPTIONS,
+    ...contactRows
+      .map((row) => String(row.role ?? ''))
+      .filter((role) => role && !knownRoles.has(role))
+      .map((role) => ({ value: role, label: `Saved value: ${role} (review)` })),
+  ];
+  return (
+    <div className="space-y-6">
+      <PropertyPanel title="Tournament">
+        <FieldRow label="Tournament name" hint="Used internally: exports, the operator console, activity." value={textOf(general, 'name')} onChange={(e) => onChange('general', 'name', e.target.value)} />
+        <FieldRow label="Name shown to players" hint="Appears on the public site and entry forms. Defaults to the tournament name if left blank." value={textOf(general, 'publicName')} onChange={(e) => onChange('general', 'publicName', e.target.value)} />
+        <FieldRow label="Organizer" value={textOf(general, 'organizer')} onChange={(e) => onChange('general', 'organizer', e.target.value)} />
+        <Row
+          label="Timezone"
+          control={
+            <SelectInput
+              value={textOf(general, 'timezone') || 'UTC'}
+              onChange={(value) => onChange('general', 'timezone', value)}
+              options={TIMEZONE_SELECT_OPTIONS}
+              ariaLabel="Tournament timezone"
+              width={240}
+            />
+          }
+        />
+        <FieldRow label="Tournament number" value={textOf(general, 'tournamentNumber')} onChange={(e) => onChange('general', 'tournamentNumber', e.target.value)} />
+        <FieldRow label="Season" value={textOf(general, 'season')} onChange={(e) => onChange('general', 'season', e.target.value)} />
+        <DateOnlyRow
+          label="Tournament starts"
+          value={textOf(dates, 'tournamentStart')}
+          timezone={timezone || 'UTC'}
+          edge="start"
+          onChange={(iso) => onChange('dates', 'tournamentStart', iso)}
+        />
+        <DateOnlyRow
+          label="Tournament ends"
+          value={textOf(dates, 'tournamentEnd')}
+          timezone={timezone || 'UTC'}
+          edge="end"
+          onChange={(iso) => onChange('dates', 'tournamentEnd', iso)}
+          last
+        />
+      </PropertyPanel>
+
+      <PropertyPanel title="Venue and courts">
+        <FieldRow label="Venue name" value={textOf(venue, 'venueName')} onChange={(e) => onChange('venue', 'venueName', e.target.value)} />
+        <FieldRow label="Address" value={textOf(venue, 'address')} onChange={(e) => onChange('venue', 'address', e.target.value)} />
+        <FieldRow label="Map link" type="url" value={textOf(venue, 'mapLink')} onChange={(e) => onChange('venue', 'mapLink', e.target.value)} />
+        <FieldRow label="Accessibility notes" value={textOf(venue, 'accessibilityNotes')} onChange={(e) => onChange('venue', 'accessibilityNotes', e.target.value)} last />
+        <div className="mt-6 space-y-6">
+          <SetupRowsEditor
+            label="Named courts"
+            addLabel="Add court"
+            columns={[
+              { field: 'name', label: 'Court name' },
+              { field: 'group', label: 'Group', placeholder: 'Optional' },
+              { field: 'available', label: 'Available', type: 'checkbox' },
+            ]}
+            rows={rowsOf(venue, 'courts')}
+            onChange={(rows) => onChange('venue', 'courts', rows)}
+            newRow={() => ({ name: '', group: null, available: true })}
+          />
+          {/* Session court availability sits with the courts it selects from,
+              not on a separate dates page that would edit the same list. */}
           <SetupRowsEditor
             label="Daily sessions"
             addLabel="Add session"
@@ -262,395 +387,196 @@ function SectionEditor({
               { field: 'endTime', label: 'Ends', type: 'time' },
               { field: 'courtIds', label: 'Courts', type: 'list', options: courtOptions },
             ]}
-            rows={rowsOf(data, 'dailySessions')}
-            onChange={(rows) => onChange('dailySessions', rows)}
+            rows={rowsOf(dates, 'dailySessions')}
+            onChange={(rows) => onChange('dates', 'dailySessions', rows)}
             newRow={() => ({ name: '', date: '', startTime: '09:00', endTime: '18:00', courtIds: [] })}
           />
         </div>
-      );
-    case 'venue':
-      return (
-        <div className="space-y-6">
-          <div>
-            <FieldRow label="Venue name" value={textOf(data, 'venueName')} onChange={(e) => onChange('venueName', e.target.value)} />
-            <FieldRow label="Address" value={textOf(data, 'address')} onChange={(e) => onChange('address', e.target.value)} />
-            <FieldRow label="Map link" type="url" value={textOf(data, 'mapLink')} onChange={(e) => onChange('mapLink', e.target.value)} />
-            <FieldRow label="Accessibility notes" value={textOf(data, 'accessibilityNotes')} onChange={(e) => onChange('accessibilityNotes', e.target.value)} last />
-          </div>
-          <SetupRowsEditor
-            label="Named courts"
-            addLabel="Add court"
-            columns={[
-              { field: 'name', label: 'Court name' },
-              { field: 'group', label: 'Group', placeholder: 'Optional' },
-              { field: 'available', label: 'Available', type: 'checkbox' },
-            ]}
-            rows={rowsOf(data, 'courts')}
-            onChange={(rows) => onChange('courts', rows)}
-            newRow={() => ({ name: '', group: null, available: true })}
-          />
-        </div>
-      );
-    case 'events':
-      return (
+      </PropertyPanel>
+
+      <PropertyPanel title="Staff contacts">
+        <p className="mb-3 max-w-[68ch] text-sm text-muted-foreground">
+          Staff contacts are visible to tournament operators and are never published.
+        </p>
         <SetupRowsEditor
-          label="Events"
-          addLabel="Add event"
+          label="Contacts"
+          addLabel="Add contact"
           columns={[
-            { field: 'name', label: 'Name', placeholder: "Men's Singles" },
-            { field: 'code', label: 'Code', placeholder: 'MS' },
+            { field: 'role', label: 'Role', type: 'select', options: contactRoleOptions },
+            { field: 'name', label: 'Name' },
+            { field: 'email', label: 'Email', type: 'email' },
           ]}
-          rows={rowsOf(data, 'events')}
-          onChange={(rows) => onChange('events', rows)}
-          newRow={() => ({ name: '', code: '', status: 'draft' })}
+          rows={contactRows}
+          onChange={(rows) => onChange('people', 'contacts', rows)}
+          newRow={() => ({ role: '', name: '', email: null, public: false })}
         />
-      );
-    case 'rules':
-      {
-        const scoring: ScoringValue = {
-          scoringFormat: textOf(data, 'scoring') === 'simple' ? 'simple' : 'badminton',
-          pointsPerSet: numberOf(data, 'pointsPerSet') || 21,
-          setsToWin: numberOf(data, 'setsToWin') || 2,
-          deuceEnabled: data.deuceEnabled !== false,
-          pointCap: numberOf(data, 'pointCap'),
-        };
-        const updateScoring = (patch: Partial<ScoringValue>) => {
+      </PropertyPanel>
+    </div>
+  );
+}
+
+function EntriesPage({ timezone, drafts, onChange }: PageEditorProps) {
+  const entries = drafts.entries;
+  const dates = drafts.dates;
+  const registrationValue = textOf(entries, 'registrationMethod');
+  const registrationOptions = registrationValue && !REGISTRATION_OPTIONS.some((option) => option.value === registrationValue)
+    ? [...REGISTRATION_OPTIONS, { value: registrationValue, label: `Saved value: ${registrationValue} (review)` }]
+    : REGISTRATION_OPTIONS;
+  return (
+    <PropertyPanel title="Entries">
+      {/* Entry windows belong beside the requirements they gate; the entry
+          deadline is a real time of day, so it keeps a time control. */}
+      <DateTimeRow
+        label="Entries open"
+        value={textOf(dates, 'entryOpening')}
+        timezone={timezone || 'UTC'}
+        onChange={(iso) => onChange('dates', 'entryOpening', iso)}
+      />
+      <DateTimeRow
+        label="Entry deadline"
+        value={textOf(dates, 'entryDeadline')}
+        timezone={timezone || 'UTC'}
+        onChange={(iso) => onChange('dates', 'entryDeadline', iso)}
+      />
+      <Row
+        label="Registration method"
+        control={
+          <SelectInput
+            value={registrationValue || 'none'}
+            onChange={(value) => onChange('entries', 'registrationMethod', value === 'none' ? null : value)}
+            options={registrationOptions}
+            ariaLabel="Registration method"
+          />
+        }
+      />
+      <Row
+        label="Payment required"
+        control={<Toggle value={Boolean(entries?.paymentRequired)} onChange={(v) => onChange('entries', 'paymentRequired', v)} ariaLabel="Payment required" />}
+      />
+      <Row
+        label="Waitlist enabled"
+        control={<Toggle value={Boolean(entries?.waitlistEnabled)} onChange={(v) => onChange('entries', 'waitlistEnabled', v)} ariaLabel="Waitlist enabled" />}
+      />
+      <Row
+        label="Organizer approval required"
+        control={<Toggle value={Boolean(entries?.organizerApprovalRequired)} onChange={(v) => onChange('entries', 'organizerApprovalRequired', v)} ariaLabel="Organizer approval required" />}
+        last
+      />
+    </PropertyPanel>
+  );
+}
+
+function ScoringPage({ drafts, onChange }: PageEditorProps) {
+  const rules = drafts.rules;
+  const scoring: ScoringValue = {
+    scoringFormat: textOf(rules, 'scoring') === 'simple' ? 'simple' : 'badminton',
+    pointsPerSet: numberOf(rules, 'pointsPerSet') || 21,
+    setsToWin: numberOf(rules, 'setsToWin') || 2,
+    deuceEnabled: rules?.deuceEnabled !== false,
+    pointCap: numberOf(rules, 'pointCap'),
+  };
+  return (
+    <PropertyPanel title="Scoring">
+      <ScoringFields
+        value={scoring}
+        onChange={(patch) => {
           for (const [field, value] of Object.entries(patch)) {
-            onChange(field === 'scoringFormat' ? 'scoring' : field, value);
+            onChange('rules', field === 'scoringFormat' ? 'scoring' : field, value);
           }
-        };
-      return (
-        <div>
-          <Row
-            label="Format"
-            control={
-              <SelectInput
-                value={textOf(data, 'format') || 'none'}
-                onChange={(v) => onChange('format', v === 'none' ? null : v)}
-                options={FORMAT_OPTIONS}
-                ariaLabel="Default draw format"
-              />
-            }
-          />
-          {/* Point cap (Ruling C3) now renders inside ScoringFields itself —
-              V3-13-2 moved it there so the Engine Config tab's mirrored
-              field gets the identical control instead of a second copy. */}
-          <ScoringFields value={scoring} onChange={updateScoring} />
-          <Row
-            label="Minimum rest between matches"
-            control={
-              <NumberWithSuffix
-                value={numberOf(data, 'defaultRestMinutes')}
-                onChange={(v) => onChange('defaultRestMinutes', v >= 0 ? v : null)}
-                suffix="min"
-                min={0}
-                max={240}
-                ariaLabel="Minimum rest between matches"
-              />
-            }
-          />
-          <Row
-            label="Default draw size"
-            control={
-              <NumberWithSuffix
-                value={numberOf(data, 'drawSize')}
-                onChange={(v) => onChange('drawSize', v > 0 ? v : null)}
-                suffix="entrants"
-                min={2}
-                max={4096}
-                ariaLabel="Default draw size"
-              />
-            }
-            last
+        }}
+      />
+    </PropertyPanel>
+  );
+}
+
+function PublicSitePage({ tid, drafts, onChange }: PageEditorProps) {
+  const info = drafts['public-info'];
+  const logoUrl = textOf(info, 'logoUrl');
+  const bannerUrl = textOf(info, 'bannerUrl');
+  return (
+    <div className="space-y-6">
+      <PropertyPanel title="Public content">
+        <FieldRow
+          label="Tournament page address"
+          hint="This is the slug in your public page's address. The rest of the address does not change."
+          value={textOf(info, 'publicSlug')}
+          onChange={(e) => onChange('public-info', 'publicSlug', e.target.value)}
+        />
+        <div className="border-b border-border/60 py-3">
+          <label htmlFor="setup-public-description" className="mb-2 block text-xs font-medium text-foreground">Description</label>
+          <textarea
+            id="setup-public-description"
+            value={textOf(info, 'description')}
+            onChange={(e) => onChange('public-info', 'description', e.target.value)}
+            rows={4}
+            className="w-full rounded-sm border border-rule-control bg-bg-elev p-3 text-sm text-foreground transition-colors duration-fast ease-brand placeholder:text-muted-foreground hover:border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
-      );
-      }
-    case 'entries':
-      {
-      const registrationValue = textOf(data, 'registrationMethod');
-      const registrationOptions = registrationValue && !REGISTRATION_OPTIONS.some((option) => option.value === registrationValue)
-        ? [...REGISTRATION_OPTIONS, { value: registrationValue, label: `Saved value: ${registrationValue} (review)` }]
-        : REGISTRATION_OPTIONS;
-      return (
-        <div>
-          <Row
-            label="Registration method"
-            control={
-              <SelectInput
-                value={textOf(data, 'registrationMethod') || 'none'}
-                onChange={(value) => onChange('registrationMethod', value === 'none' ? null : value)}
-                options={registrationOptions}
-                ariaLabel="Registration method"
-              />
-            }
-          />
-          <FieldRow
-            label="Partner instructions"
-            hint="An internal note. Not shown to entrants yet, and not enforced. Payment and approval requirements are the switches below."
-            value={textOf(data, 'partnerRules')}
-            onChange={(e) => onChange('partnerRules', e.target.value)}
-            last
-          />
-          <Row
-            label="Payment required"
-            control={<Toggle value={Boolean(data.paymentRequired)} onChange={(v) => onChange('paymentRequired', v)} ariaLabel="Payment required" />}
-          />
-          <Row
-            label="Waitlist enabled"
-            control={<Toggle value={Boolean(data.waitlistEnabled)} onChange={(v) => onChange('waitlistEnabled', v)} ariaLabel="Waitlist enabled" />}
-          />
-          <Row
-            label="Organizer approval required"
-            control={<Toggle value={Boolean(data.organizerApprovalRequired)} onChange={(v) => onChange('organizerApprovalRequired', v)} ariaLabel="Organizer approval required" />}
-            last
-          />
-        </div>
-      );
-      }
-    case 'people':
-      {
-      const contactRows = rowsOf(data, 'contacts');
-      const knownRoles = new Set<string>(CONTACT_ROLE_OPTIONS.map((option) => option.value));
-      const contactRoleOptions = [...CONTACT_ROLE_OPTIONS, ...contactRows
-        .map((row) => String(row.role ?? ''))
-        .filter((role) => role && !knownRoles.has(role))
-        .map((role) => ({ value: role, label: `Saved value: ${role} (review)` }))];
-      return (
-        <div>
-          <p className="mb-3 max-w-[68ch] text-sm text-muted-foreground">
-            Staff contacts are visible to tournament operators and are never
-            published.
+        <div className="border-b border-border/60 py-3">
+          <label htmlFor="setup-regulations-text" className="mb-2 block text-xs font-medium text-foreground">Regulations</label>
+          <p className="mb-2 max-w-[68ch] text-xs text-muted-foreground">
+            Published as the tournament&rsquo;s regulations document. Numbered or
+            capitalised lines become section headings entrants can link to.
           </p>
-          <SetupRowsEditor
-            label="Contacts"
-            addLabel="Add contact"
-            columns={[
-              { field: 'role', label: 'Role', type: 'select', options: contactRoleOptions },
-              { field: 'name', label: 'Name' },
-              { field: 'email', label: 'Email', type: 'email' },
-            ]}
-              rows={contactRows}
-            onChange={(rows) => onChange('contacts', rows)}
-            newRow={() => ({ role: '', name: '', email: null, public: false })}
+          <textarea
+            id="setup-regulations-text"
+            value={textOf(info, 'regulationsText')}
+            onChange={(e) => onChange('public-info', 'regulationsText', e.target.value)}
+            rows={12}
+            className="w-full rounded-sm border border-rule-control bg-bg-elev p-3 text-sm text-foreground transition-colors duration-fast ease-brand placeholder:text-muted-foreground hover:border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
-      );
-      }
-    case 'public-info':
-      return (
-        <div>
-          <FieldRow
-            label="Tournament page address"
-            hint="This is the slug in your public page's address. The rest of the address does not change."
-            value={textOf(data, 'publicSlug')}
-            onChange={(e) => onChange('publicSlug', e.target.value)}
-          />
-          <div className="border-b border-border/60 py-3">
-            <label htmlFor="setup-public-description" className="mb-2 block text-xs font-medium text-foreground">Description</label>
-            <textarea
-              id="setup-public-description"
-              value={textOf(data, 'description')}
-              onChange={(e) => onChange('description', e.target.value)}
-              rows={4}
-              className="w-full rounded-sm border border-rule-control bg-bg-elev p-3 text-sm text-foreground transition-colors duration-fast ease-brand placeholder:text-muted-foreground hover:border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
+        <FieldRow
+          label="Regulations document link"
+          hint="Optional. Use it when the full regulations live in a document elsewhere."
+          type="url"
+          value={textOf(info, 'regulationsUrl')}
+          onChange={(e) => onChange('public-info', 'regulationsUrl', e.target.value)}
+        />
+        <FieldRow label="Logo image link" type="url" value={logoUrl} onChange={(e) => onChange('public-info', 'logoUrl', e.target.value)} />
+        <FieldRow label="Banner image link" type="url" value={bannerUrl} onChange={(e) => onChange('public-info', 'bannerUrl', e.target.value)} last />
+        {logoUrl || bannerUrl ? (
+          <div className="grid gap-4 border-t border-border/60 pt-4 sm:grid-cols-2" aria-label="Publication image preview">
+            {logoUrl ? <ImagePreview field="logoUrl" url={logoUrl} /> : null}
+            {bannerUrl ? <ImagePreview field="bannerUrl" url={bannerUrl} /> : null}
           </div>
-          <FieldRow label="Regulations link" type="url" value={textOf(data, 'regulationsUrl')} onChange={(e) => onChange('regulationsUrl', e.target.value)} />
-          <FieldRow label="Logo image link" type="url" value={textOf(data, 'logoUrl')} onChange={(e) => onChange('logoUrl', e.target.value)} />
-          <FieldRow label="Banner image link" type="url" value={textOf(data, 'bannerUrl')} onChange={(e) => onChange('bannerUrl', e.target.value)} last />
-          {(textOf(data, 'logoUrl') || textOf(data, 'bannerUrl')) ? (
-            <div className="grid gap-4 border-t border-border/60 pt-4 sm:grid-cols-2" aria-label="Publication image preview">
-              {(['logoUrl', 'bannerUrl'] as const).map((field) => {
-                const url = textOf(data, field);
-                if (!url) return null;
-                return (
-                  <figure key={field} className="min-w-0">
-                    <figcaption className="mb-2 text-xs font-medium text-foreground">
-                      {field === 'logoUrl' ? 'Logo preview' : 'Banner preview'}
-                    </figcaption>
-                    <div className="overflow-hidden rounded-sm border border-border bg-muted">
-                      {imageErrors[field] ? (
-                        <div className="flex h-24 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-muted-foreground">
-                          <span>The image could not be loaded from this link.</span>
-                          <button
-                            type="button"
-                            className="font-medium text-accent underline underline-offset-2"
-                            onClick={() => {
-                              setImageErrors((current) => ({ ...current, [field]: false }));
-                              setPreviewNonce((current) => ({ ...current, [field]: (current[field] ?? 0) + 1 }));
-                            }}
-                          >
-                            Retry preview
-                          </button>
-                        </div>
-                      ) : <img
-                        key={`${field}-${previewNonce[field] ?? 0}`}
-                        src={url}
-                        alt={field === 'logoUrl' ? 'Selected tournament logo' : 'Selected tournament banner'}
-                        loading="lazy"
-                        onError={() => setImageErrors((current) => ({ ...current, [field]: true }))}
-                        className={field === 'logoUrl' ? 'mx-auto h-24 max-w-full object-contain' : 'h-24 w-full object-cover'}
-                      />}
-                    </div>
-                  </figure>
-                );
-              })}
-            </div>
-          ) : null}
-          <Row
-            label="Publication audience"
-            readOnly
-            control={
-              <Link to={`/tournaments/${encodeURIComponent(tid)}/publish/site`} className="text-sm font-medium text-accent underline underline-offset-2">
-                Manage audience in Publish Site →
-              </Link>
-            }
-            last
-          />
-        </div>
-      );
-  }
-}
-
-/** V3-OC09.1: doubles disciplines draw on pairs, singles on players — the
- *  same number means a different count of people depending on which. */
-function capacityUnit(discipline: unknown): string {
-  const code = typeof discipline === 'string' ? discipline.toUpperCase() : '';
-  return code.endsWith('D') ? 'pairs' : 'players';
-}
-
-/** Ruling R-N (A): real events exist, so Setup shows them and points at the
- *  owning surface instead of mounting an editor over a shadow copy. */
-function DomainEventsSummary({
-  tid,
-  data,
-}: {
-  tid: string;
-  data: SetupSectionData;
-}) {
-  const storeKind = useUiStore((state) => state.activeTournamentKind);
-  const events = rowsOf(data, 'events');
-  // Before the kind fetch lands, the rows themselves disambiguate: only
-  // bracket-derived events carry `discipline` (see `_domain_events`).
-  const kind = storeKind ?? (events.some((event) => 'discipline' in event) ? 'bracket' : 'meet');
-  const owner = kind === 'bracket'
-    ? { href: `/tournaments/${encodeURIComponent(tid)}/competition/draws`, label: 'Add or manage events' }
-    : { href: `/tournaments/${encodeURIComponent(tid)}/participants/people`, label: 'Manage divisions from the Roster' };
-  return (
-    <div>
-      <div>
-        {events.map((event, index) => {
-          const discipline = typeof event.discipline === 'string' ? event.discipline : null;
-          const rawName = String(event.name ?? event.code ?? '');
-          // No custom name was configured (name fell back to the raw
-          // discipline code) — show the full discipline name instead of
-          // the bare code, with the code itself demoted to secondary text.
-          const primaryName = discipline && rawName === discipline && DISCIPLINE_NAMES[discipline]
-            ? DISCIPLINE_NAMES[discipline]
-            : rawName;
-          const secondaryCode = discipline && discipline !== primaryName ? discipline : null;
-          return (
-          <Row
-            key={String(event.id ?? index)}
-            label={
-              <span className="inline-flex items-baseline gap-2">
-                {primaryName}
-                {secondaryCode ? <span className={TEXT_MUTED_XS}>{secondaryCode}</span> : null}
-              </span>
-            }
-            pane
-            control={
-              <span className="inline-flex whitespace-nowrap items-center gap-3">
-                <span className={TEXT_MUTED_SM}>
-                  {kind === 'bracket' ? (FORMAT_OPTIONS.find((option) => option.value === event.format)?.label ?? 'Format not configured') : String(event.code ?? '')}
-                  {typeof event.capacity === 'number' && event.capacity > 0 ? ` · ${event.capacity} ${capacityUnit(event.discipline)}` : ''}
-                </span>
-                {kind === 'bracket' ? (
-                  <Link
-                    to={`/tournaments/${encodeURIComponent(tid)}/competition/draws?event=${encodeURIComponent(String(event.id ?? event.code ?? ''))}`}
-                    className="text-xs font-medium text-accent underline underline-offset-2"
-                  >
-                    Edit event
-                  </Link>
-                ) : null}
-              </span>
-            }
-            readOnly
-            last={index === events.length - 1}
-          />
-          );
-        })}
-      </div>
-      <p className="mt-4 text-sm text-muted-foreground">
-        <Link to={owner.href} className="text-accent underline underline-offset-2">
-          {owner.label}
-        </Link>
-      </p>
+        ) : null}
+      </PropertyPanel>
+      {/* The audience and the visible-content switches sit with the content
+          they govern, not on a separate Publish page. */}
+      <PublicationSettings key={tid} tid={tid} />
     </div>
   );
 }
 
-function DomainVenueSummary({ tid, data }: { tid: string; data: SetupSectionData }) {
-  const courts = rowsOf(data, 'courts');
-  return (
-    <div>
-      <div>
-        {textOf(data, 'venueName') ? (
-          <Row label="Venue" control={textOf(data, 'venueName')} readOnly />
-        ) : null}
-        {textOf(data, 'address') ? (
-          <Row label="Address" control={textOf(data, 'address')} readOnly />
-        ) : null}
-        {courts.map((court, index) => (
-          <Row
-            key={String(court.id ?? index)}
-            label={String(court.name ?? `Court ${index + 1}`)}
-            control={court.available === false ? 'Unavailable' : String(court.group ?? 'Available')}
-            readOnly
-            last={index === courts.length - 1}
-          />
-        ))}
-      </div>
-      <p className="mt-4 text-sm text-muted-foreground">
-        Venue details and courts are locked here because the current schedule uses them.{' '}
-        <Link
-          to={`/tournaments/${encodeURIComponent(tid)}/operations/plan`}
-          className="text-accent underline underline-offset-2"
-        >
-          Manage the schedule in Operations · Plan
-        </Link>
-      </p>
-    </div>
-  );
-}
+const PAGE_EDITORS: Record<SetupPage, (props: PageEditorProps) => ReactElement> = {
+  details: DetailsPage,
+  entries: EntriesPage,
+  scoring: ScoringPage,
+  'public-site': PublicSitePage,
+};
 
-function DomainSectionSummary({
-  tid,
-  section,
-}: {
-  tid: string;
-  section: SetupSectionStateDTO;
-}) {
-  return section.key === 'venue'
-    ? <DomainVenueSummary tid={tid} data={section.data} />
-    : <DomainEventsSummary tid={tid} data={section.data} />;
-}
+/** Sections whose edits can invalidate an existing plan. */
+const PLAN_AFFECTING: ReadonlySet<SetupKey> = new Set<SetupKey>(['dates', 'venue']);
 
 export function SetupProduct({ tid }: { tid: string }) {
   const location = useLocation();
   return <SetupEditor key={`${tid}:${location.pathname}`} tid={tid} />;
 }
 
+function pageFromPath(pathname: string): SetupPage {
+  const candidate = pathname.split('/').filter(Boolean).pop();
+  return SETUP_PAGES.includes(candidate as SetupPage) ? (candidate as SetupPage) : 'details';
+}
+
 function SetupEditor({ tid }: { tid: string }) {
   const location = useLocation();
-  const routeKey = useMemo<SetupKey | null>(() => {
-    const candidate = location.pathname.split('/').filter(Boolean).pop();
-    return SECTION_ORDER.includes(candidate as SetupKey) ? (candidate as SetupKey) : null;
-  }, [location.pathname]);
+  const page = useMemo(() => pageFromPath(location.pathname), [location.pathname]);
+  const keys = PAGE_SECTIONS[page];
+
   const [setup, setSetup] = useState<TournamentSetupDTO | null>(null);
-  const [draft, setDraft] = useState<SetupSectionData | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [drafts, setDrafts] = useState<Partial<Record<SetupKey, SetupSectionData>>>({});
+  const [dirtyKeys, setDirtyKeys] = useState<SetupKey[]>([]);
   const [saved, setSaved] = useState(false);
   const [editorRevision, setEditorRevision] = useState(0);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -658,6 +584,22 @@ function SetupEditor({ tid }: { tid: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const schedule = useTournamentStore((state) => state.schedule);
+  const setScheduleStale = useTournamentStore((state) => state.setScheduleStale);
+
+  /** Take the server's state as the draft. `only` limits that to the sections
+   *  that actually landed, so a partial save never discards the edits that
+   *  did NOT land — the operator still has them to retry. */
+  const adopt = useCallback((next: TournamentSetupDTO, only?: readonly SetupKey[]) => {
+    setDrafts((current) => {
+      const adopted = Object.fromEntries(
+        next.sections
+          .filter((section) => !only || only.includes(section.key))
+          .map((section) => [section.key, section.data]),
+      ) as Partial<Record<SetupKey, SetupSectionData>>;
+      return only ? { ...current, ...adopted } : adopted;
+    });
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -665,211 +607,156 @@ function SetupEditor({ tid }: { tid: string }) {
     try {
       const next = await apiClient.getTournamentSetup(tid);
       setSetup(next);
-      if (routeKey) {
-        const selected = sectionState(next, routeKey);
-        if (selected && !dirtyRef.current) setDraft(selected.data);
-      }
+      // An in-flight edit is never overwritten by a background refresh: the
+      // operator's unsaved work outranks a re-read of what they are changing.
+      if (!dirtyRef.current) adopt(next);
     } catch {
       setError('Setup could not be loaded. Check the connection and try again.');
     } finally {
       setLoading(false);
     }
-  }, [routeKey, tid]);
+  }, [adopt, tid]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  // INP-3: no Refresh button. Navigation and save already refetch (`load`
-  // re-runs per section; PATCH returns the whole setup); window focus covers
-  // the remaining staleness case (edits made in another tab or by a peer).
+  // No Refresh button: navigation and save already refetch, and window focus
+  // covers edits made in another tab or by a peer.
   useEffect(() => {
     const onFocus = () => { if (!dirtyRef.current) void load(); };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [load]);
 
-  const selected = routeKey ? sectionState(setup, routeKey) : null;
-  const editable = selected != null && selected.authority !== 'domain';
+  const timezone = textOf(drafts.general ?? sectionState(setup, 'general')?.data, 'timezone');
+  const dirty = dirtyKeys.length > 0;
+
+  const onChange = (section: SetupKey, field: string, value: unknown) => {
+    setSaved(false);
+    dirtyRef.current = true;
+    setDirtyKeys((current) => (current.includes(section) ? current : [...current, section]));
+    setDrafts((current) => ({
+      ...current,
+      [section]: { ...(current[section] ?? {}), [field]: value },
+    }));
+  };
 
   const save = async () => {
-    if (!draft || !selected || !editable || saving) return;
+    if (!dirty || saving) return;
     for (const input of editorRef.current?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select') ?? []) {
       if (!input.reportValidity()) return;
     }
     setSaving(true);
     setError(null);
-    try {
-      // Publication audience is owned by the public site. The setup summary
-      // may include it for context, but it is never part of this editor's
-      // writable contract.
-      const payload = selected.key === 'public-info'
-        ? Object.fromEntries(Object.entries(draft).filter(([key]) => key !== 'visibility'))
-        : draft;
-      const next = await apiClient.patchTournamentSetup(tid, selected.key, payload);
-      setSetup(next);
-      const updated = sectionState(next, selected.key);
-      if (updated) setDraft(updated.data);
-      dirtyRef.current = false;
-      setDirty(false);
-      setSaved(true);
-    } catch (err) {
-      const failure = err as { status?: number; response?: { status?: number } };
-      const status = failure?.response?.status ?? failure?.status;
-      setError(status === 409
-        ? 'This section changed elsewhere. Discard your draft or resolve the conflict before saving again.'
-        : 'This section could not be saved. Your draft is still here; check the connection and try again.');
-    } finally {
-      setSaving(false);
+    // Patch in page order so a failure part-way leaves an honest report of
+    // what did and did not land, rather than a blanket "saved".
+    const pending = keys.filter((key) => dirtyKeys.includes(key));
+    const written: SetupKey[] = [];
+    let latest: TournamentSetupDTO | null = null;
+    let failure: unknown = null;
+    for (const key of pending) {
+      const draft = drafts[key];
+      if (!draft) continue;
+      try {
+        // Publication audience is owned by the publication transaction below;
+        // the setup summary carries it for context but never writes it.
+        const payload = key === 'public-info'
+          ? Object.fromEntries(Object.entries(draft).filter(([field]) => field !== 'visibility'))
+          : draft;
+        latest = await apiClient.patchTournamentSetup(tid, key, payload);
+        written.push(key);
+      } catch (err) {
+        failure = err;
+        break;
+      }
     }
+    if (latest) {
+      setSetup(latest);
+      adopt(latest, failure ? written : undefined);
+    }
+    const remaining = pending.filter((key) => !written.includes(key));
+    setDirtyKeys(remaining);
+    dirtyRef.current = remaining.length > 0;
+    if (written.some((key) => PLAN_AFFECTING.has(key)) && schedule) {
+      // The information edit is accepted; the plan it affects is marked for
+      // revalidation in Plan. Recorded results are untouched.
+      setScheduleStale(true);
+    }
+    if (failure) {
+      const status = (failure as { status?: number; response?: { status?: number } })?.response?.status
+        ?? (failure as { status?: number })?.status;
+      const done = written.length ? `${written.length} of ${pending.length} changed sections were saved. ` : '';
+      setError(status === 409
+        ? `${done}This page changed elsewhere. Reload before saving again.`
+        : `${done}The remaining changes were not saved. Your edits are still here; check the connection and try again.`);
+      setSaved(false);
+    } else {
+      setSaved(true);
+    }
+    setSaving(false);
   };
 
-  const setupHref = `/tournaments/${encodeURIComponent(tid)}/setup`;
-  const overall = setup
-    ? `${STATUS_LABELS[setup.status]}${setup.blockingIssueCount ? ` · ${setup.blockingIssueCount} blocking` : ''}`
-    : null;
+  const pageSections = keys
+    .map((key) => sectionState(setup, key))
+    .filter((section): section is SetupSectionStateDTO => section != null);
+  const issues = pageSections.flatMap((section) => section.issues);
+  const blockingCount = issues.filter((issue) => issue.severity === 'blocking').length;
+  const Editor = PAGE_EDITORS[page];
 
-  // ---- Landing: the ONE full checklist rendering (RDY-3) ----
-  if (!routeKey) {
-    return (
-      <div className="flex min-h-full flex-col bg-background">
-        <ActionsBar title="Setup" status={loading && !setup ? 'Loading…' : ''} />
-        <PageBody variant="form">
-          {error ? <Notice tone="warning" title="Setup needs attention">{error}</Notice> : null}
-          {loading && !setup ? (
-            <div className="rounded border border-border bg-card p-6 text-sm text-muted-foreground">Loading setup sections…</div>
-          ) : setup ? (
-            <section aria-labelledby="setup-sections-heading" className="rounded border border-border bg-card">
-              <div className="border-b border-border px-4 py-3">
-                <h2 id="setup-sections-heading" className={TEXT_TITLE_SM}>Readiness checklist</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Complete the sections in any order. Blocking issues explain what must change before the event can run.
-                </p>
-              </div>
-              <div className="divide-y divide-border">
-                {SECTION_ORDER.map((key) => {
-                  const item = sectionState(setup, key);
-                  if (!item) return null;
-                  const blocking = item.issues.filter((issue) => issue.severity === 'blocking').length;
-                  return (
-                    <Link key={item.key} to={`${setupHref}/${item.key}`} className="block px-4 py-3 hover:bg-muted/30">
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="text-sm font-medium text-foreground">{SECTION_LABELS[item.key]}</span>
-                        <SetupStatusLabel status={item.status} />
-                      </div>
-                      {item.summary !== STATUS_LABELS[item.status] && <span className="mt-1 block text-xs text-muted-foreground">{item.summary}</span>}
-                      {blocking ? (
-                        <span className="mt-1 block text-xs text-destructive">
-                          {blocking} blocking issue{blocking === 1 ? '' : 's'}
-                        </span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-              </div>
-              <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-                <span className={TEXT_EMPHASIS}>Overall:</span> {overall}
-              </div>
-            </section>
-          ) : null}
-        </PageBody>
-      </div>
-    );
-  }
-
-  // ---- Section page: strip + editor, checklist lives on the landing ----
   return (
     <div className="flex min-h-full flex-col bg-background">
       <ActionsBar
-        title={`Setup · ${SECTION_LABELS[routeKey]}`}
-        status={<span role="status">{loading && !setup ? 'Loading…' : dirty ? 'Unsaved changes' : saved ? 'Section saved' : ''}</span>}
+        title={PAGE_LABELS[page]}
+        status={<span role="status">{loading && !setup ? 'Loading…' : dirty ? 'Unsaved changes' : saved ? 'Saved' : ''}</span>}
       />
       <PageBody variant="form">
         <div className="space-y-4">
-          {/* The section-page `error` state is reachable only via a failed
-              save (this branch only renders once `setup`/`selected` have
-              already loaded) — shown once, adjacent to Save via
-              `FormActions` below, rather than duplicated in a page-top
-              banner (plan §4 Errors: adjacent, not repeated). */}
-          {setup && selected ? (
+          {setup ? (
             <>
-              {selected.status !== 'ready' && selected.status !== 'complete' ? (
-                <div
-                  data-testid="setup-strip"
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-border bg-card px-4 py-2"
-                >
-                  <SetupStatusLabel status={selected.status} />
-                  {overall !== STATUS_LABELS[selected.status] ? (
-                    <span className={TEXT_MUTED_XS}>Overall: {overall}</span>
-                  ) : null}
-                  <Link to={setupHref} className="ml-auto text-xs text-accent underline underline-offset-2">
-                    View full checklist
-                  </Link>
-                </div>
+              {blockingCount ? (
+                <StatusPill tone="red">
+                  {blockingCount} blocking issue{blockingCount === 1 ? '' : 's'}
+                </StatusPill>
               ) : null}
-              {selected.issues.length ? (
+              {issues.length ? (
                 <div className="space-y-2">
-                  {selected.issues.map((issue) => (
+                  {issues.map((issue) => (
                     <Notice
-                      key={issue.code}
+                      key={`${issue.code}:${issue.path ?? ''}`}
                       tone={issue.severity === 'blocking' ? 'warning' : 'info'}
                       title={issue.message}
                     />
                   ))}
                 </div>
               ) : null}
-              <PropertyPanel
-                title={SECTION_LABELS[selected.key]}
-                action={editable ? (
-                  <FormActions
-                    dirty={dirty}
-                    saving={saving}
-                    error={error ?? undefined}
-                    cleanReason={saved ? 'Section saved' : 'No changes'}
-                    className="flex-wrap justify-end"
-                    onDiscard={() => { dirtyRef.current = false; setDirty(false); setSaved(false); setDraft(selected?.data ?? null); setEditorRevision((value) => value + 1); void load(); }}
-                    onSave={() => void save()}
-                    saveLabel="Save section"
-                  />
-                ) : (
-                  selected?.authority === 'domain' ? (
-                    <FormActions
-                      dirty={false}
-                      saving={false}
-                      locked
-                      lockedReason={selected.key === 'venue'
-                        ? 'Locked: venue details and courts are used by the current schedule. Manage them in Operations · Plan below.'
-                        : 'Locked: real draws or divisions already exist. Manage them from the link below.'}
-                      className="max-w-full"
-                      onSave={() => {}}
-                    />
-                  ) : undefined
-                )}
-              >
-                <div className="space-y-6" ref={editorRef} key={editorRevision}>
-                  {selected.authority === 'domain' ? (
-                    <DomainSectionSummary tid={tid} section={selected} />
-                  ) : draft ? (
-                    <SectionEditor
-                      tid={tid}
-                      timezone={textOf((setup?.sections.find((item) => item.key === 'general')?.data ?? {}) as SetupSectionData, 'timezone')}
-                      section={selected}
-                      data={draft}
-                      courtOptions={rowsOf(sectionState(setup, 'venue')?.data ?? {}, 'courts')
-                        .filter((court) => court.id != null && String(court.id).trim() !== '')
-                        .map((court, index) => ({
-                          value: String(court.id),
-                          label: String(court.name ?? `Court ${index + 1}`),
-                        }))}
-                      onChange={(field, value) => { setSaved(false); dirtyRef.current = true; setDirty(true); setDraft((previous) => ({ ...(previous ?? {}), [field]: value })); }}
-                    />
-                  ) : null}
-              <DownstreamImpact targets={selected.downstreamImpact} readOnly={!editable} />
-                </div>
-              </PropertyPanel>
+              <div className="space-y-6" ref={editorRef} key={editorRevision}>
+                <Editor tid={tid} timezone={timezone} drafts={drafts} onChange={onChange} />
+              </div>
+              <div className="flex justify-end">
+                <FormActions
+                  dirty={dirty}
+                  saving={saving}
+                  error={error ?? undefined}
+                  cleanReason={saved ? 'Saved' : 'No changes'}
+                  className="flex-wrap justify-end"
+                  onDiscard={() => {
+                    dirtyRef.current = false;
+                    setDirtyKeys([]);
+                    setSaved(false);
+                    if (setup) adopt(setup);
+                    setEditorRevision((value) => value + 1);
+                    void load();
+                  }}
+                  onSave={() => void save()}
+                  saveLabel="Save"
+                />
+              </div>
             </>
           ) : loading ? (
-            <div className="rounded border border-border bg-card p-6 text-sm text-muted-foreground">Loading setup sections…</div>
+            <div className="rounded border border-border bg-card p-6 text-sm text-muted-foreground">Loading setup…</div>
+          ) : error ? (
+            <Notice tone="warning" title="Setup needs attention">{error}</Notice>
           ) : null}
         </div>
       </PageBody>
@@ -877,4 +764,4 @@ function SetupEditor({ tid }: { tid: string }) {
   );
 }
 
-export { SECTION_LABELS, STATUS_LABELS };
+export { STATUS_LABELS };

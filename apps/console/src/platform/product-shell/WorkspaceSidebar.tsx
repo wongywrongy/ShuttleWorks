@@ -101,7 +101,8 @@ export function WorkspaceSidebar({
   // ownership context; default-state module marks add noise and are omitted.
   const NavItem = ({ item, nested }: { item: WsNavItem; nested?: boolean }) => {
     const active = item.path
-      ? item.path === workflowPath
+      ? item.path === workflowPath ||
+        (item.matchPaths?.includes(workflowPath) ?? false)
       : item.segment === activeTab;
     return (
       <ActiveChoice

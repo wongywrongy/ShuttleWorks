@@ -98,9 +98,17 @@ function withStartedDraw(): BracketTournamentDTO {
 /** Config sections are collapsed by default; a collapsed section renders no
  *  controls, so every assertion about a control (and especially every
  *  negative one, which would otherwise pass vacuously) opens them first. */
+/** Open every collapsed `Section` disclosure.
+ *
+ *  Scoped to the disclosure buttons themselves — a `Section` wraps its button
+ *  in an `<h3>` (the WAI-ARIA disclosure pattern). A blanket
+ *  `getAllByRole('button', { expanded: false })` also caught select triggers,
+ *  which opened a listbox over the form and swallowed the Save click that
+ *  followed. */
 function expandConfigSections() {
   screen
     .getAllByRole('button', { expanded: false })
+    .filter((btn) => btn.closest('h3') !== null)
     .forEach((btn) => fireEvent.click(btn));
 }
 

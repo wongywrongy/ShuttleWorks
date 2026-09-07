@@ -6,7 +6,6 @@ import {
   Routes,
   useLocation,
   useParams,
-  useSearchParams,
 } from 'react-router-dom';
 import { IconContext } from '@phosphor-icons/react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -43,66 +42,6 @@ const InvitePage = lazy(() =>
 
 function Fallback() {
   return <div className="p-4 text-sm text-muted-foreground">Loading…</div>;
-}
-
-/** Legacy redirect: pre-Bundle-3 URLs pointed at the bare /bracket
- *  segment. Redirect them to /bracket-setup so bookmarks and shared
- *  links don't 404. Uses an absolute target so React Router resolves
- *  the path correctly (a bare relative "bracket-setup" would append
- *  to the matched segment and produce /bracket/bracket-setup). */
-function BracketLegacyRedirect() {
-  const { id } = useParams<{ id: string }>();
-  const location = useLocation();
-  return (
-    <Navigate
-      to={{ pathname: `/tournaments/${id}/setup/general`, search: location.search, hash: location.hash }}
-      replace
-    />
-  );
-}
-
-/** The standalone workspace-settings page was absorbed into the workspace
- *  sidebar (WORKSPACE section). Redirect the old route + its ?tab= deep links
- *  into the in-workspace admin segments so existing links don't break. */
-const _SETTINGS_TAB_TO_SEGMENT: Record<string, string> = {
-  overview: 'overview',
-  general: 'ws-settings',
-  modules: 'ws-modules',
-  people: 'ws-members',
-  sharing: 'ws-sharing',
-  sync: 'ws-sync',
-  venue: 'ws-venue',
-  danger: 'ws-settings',
-};
-function WorkspaceSettingsRedirect() {
-  const { id } = useParams<{ id: string }>();
-  const [sp] = useSearchParams();
-  const location = useLocation();
-  const tab = sp.get('tab') ?? '';
-  const canonical =
-    tab === 'venue'
-      ? 'setup/venue'
-      : tab === 'people'
-        ? 'administration/team'
-        : tab === 'modules'
-          ? 'administration/modules'
-          : tab === 'sharing'
-            ? 'publish/site'
-            : tab === 'sync'
-              ? 'administration/backups'
-              : tab === 'overview'
-                ? 'overview'
-                : 'administration/lifecycle';
-  // Keep the old map as a type-checked compatibility record. It documents
-  // where each historical tab lived even though the visible destination is
-  // now the workflow-first route above.
-  void _SETTINGS_TAB_TO_SEGMENT;
-  return (
-    <Navigate
-      to={{ pathname: `/tournaments/${id}/${canonical}`, search: location.search, hash: location.hash }}
-      replace
-    />
-  );
 }
 
 function TournamentRootRedirect() {
@@ -165,10 +104,6 @@ function App() {
                 }
               />
 
-              {/* Legacy redirects. */}
-              <Route path="/tracking" element={<Navigate to="/" replace />} />
-              <Route path="/live-ops" element={<Navigate to="/" replace />} />
-
               {/* Authenticated app — one layout mounts the persistent global
                   sidebar (AppSidebar) + AuthGuard + Suspense around the routed
                   content, so the rail is present on every authenticated surface
@@ -178,14 +113,11 @@ function App() {
                 <Route path="/new" element={<NewWorkspacePage />} />
                 {/* Global (app-wide) settings — distinct from per-workspace. */}
                 <Route path="/settings" element={<GlobalSettingsPage />} />
-                {/* Legacy redirect: pre-Bundle-3 URLs pointed at the bare /bracket
-                    segment. Replace semantics so history stays clean. */}
-                <Route path="/tournaments/:id/bracket" element={<BracketLegacyRedirect />} />
-                <Route path="/tournaments/:id/settings" element={<WorkspaceSettingsRedirect />} />
                 <Route path="/tournaments/:id" element={<TournamentRootRedirect />} />
                 <Route path="/tournaments/:id/*" element={<TournamentPage />} />
-                {/* Fallback (authenticated paths). */}
-                <Route path="*" element={<Navigate to="/" replace />} />
+                {/* Unknown paths are honest dead ends; legacy URLs are not
+                    silently redirected into a different task. */}
+                <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>
           </AuthProvider>
@@ -196,3 +128,13 @@ function App() {
 }
 
 export default App;
+
+function NotFound() {
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center gap-2 p-6 text-center">
+      <h1 className="text-sm font-semibold text-foreground">Page not found</h1>
+      <p className="text-sm text-muted-foreground">This ShuttleWorks page is no longer available.</p>
+      <a href="/" className="text-sm text-accent underline underline-offset-2">Go to your workspaces</a>
+    </main>
+  );
+}

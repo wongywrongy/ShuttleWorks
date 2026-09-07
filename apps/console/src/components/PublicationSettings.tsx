@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Button, Checkbox, FormActions, Select } from '@scheduler/design-system';
-import { apiClient } from '../../api/client';
-import type { EntryPageDTO, EntryPagePublicationPatchDTO } from '../../api/dto';
-import { useCanEdit } from '../../hooks/useCanEdit';
-import { PropertyPanel } from '../../components/control-plane/PropertyPanel';
-import { Section } from '../../platform/engine-config/SettingsControls';
+import { apiClient } from '../api/client';
+import type { EntryPageDTO, EntryPagePublicationPatchDTO } from '../api/dto';
+import { useCanEdit } from '../hooks/useCanEdit';
+import { PropertyPanel } from './control-plane/PropertyPanel';
+import { Section } from '../platform/engine-config/SettingsControls';
 
 type Publication = Required<EntryPagePublicationPatchDTO>;
 type LoadState = 'loading' | 'ready' | 'absent' | 'denied' | 'failed';
@@ -20,8 +20,8 @@ const audienceDescription = {
 };
 const rows = [
   { key: 'entrantsPublished', label: 'Entrant list', detail: 'Confirmed entrant names, clubs, and player pages.', review: 'participants/people', reviewLabel: 'Review entrants' },
-  { key: 'drawsPublished', label: 'Draws & seeded entries', detail: 'Shows draw pairings and player names. Scores appear only when Results is on.', review: 'competition/draws', reviewLabel: 'Review draws' },
-  { key: 'resultsPublished', label: 'Results', detail: 'Scores, standings, winners, and win-loss records.', review: 'competition/matches', reviewLabel: 'Review results' },
+  { key: 'drawsPublished', label: 'Draws & seeded entries', detail: 'Shows draw pairings and player names. Scores appear only when Results is on.', review: 'bracket/draws', reviewLabel: 'Review draws' },
+  { key: 'resultsPublished', label: 'Results', detail: 'Scores, standings, winners, and win-loss records.', review: 'bracket/matches', reviewLabel: 'Review results' },
 ] as const;
 function publicationOf(page: EntryPageDTO): Publication {
   return { audience: page.audience, entrantsPublished: page.entrantsPublished, drawsPublished: page.drawsPublished, resultsPublished: page.resultsPublished };
@@ -31,7 +31,15 @@ function httpStatus(error: unknown): number | undefined {
   return value?.response?.status ?? value?.status;
 }
 
-/** Publication changes are a deliberate transaction, separate from saving Setup. */
+/**
+ * Publication audience + visible content, rendered beside the public content
+ * it governs (Setup · Public site). Publication stays its own transaction —
+ * turning the entrant list public is a deliberate act, not a side effect of
+ * fixing a typo in the description.
+ *
+ * Lives in `components/` rather than a feature module because two modules
+ * read it (Setup's public site page and the legacy Sharing surface).
+ */
 export function PublicationSettings({ tid, bracketEnabled = true }: { tid: string; bracketEnabled?: boolean }) {
   const canEdit = useCanEdit();
   const [state, setState] = useState<LoadState>('loading');
