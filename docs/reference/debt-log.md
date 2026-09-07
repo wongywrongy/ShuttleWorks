@@ -189,6 +189,7 @@ Debt found delivering work package 24 (`docs/audits/v3-consolidated/plan.md` §3
 | ID | Finding | Size |
 |---|---|---|
 | V3-30-1 | **An organizer cannot look up a quoted entry reference.** The entrant tier now issues and displays `short_reference`, but the operator entries desk's `EntrySubmissionDTO` has no reference field, so a support question ("my reference is 7KQ2M9XA") cannot be answered from the console. Adding it touches the console DTO, the desk UI and the module-contract baselines — a small follow-up with its own ruling, not smuggled into package 30. | S–M |
+| V3-30-2 | **Migrations with row-level SQL are only exercised on SQLite by default.** Package 30's backfill used `exec_driver_sql` with `?` placeholders; every local and CI run passed, and the first Postgres run (the demo rebuild, 2026-09-07) failed with psycopg's "0 placeholders but 3 parameters" and left the demo backend unhealthy until c828e8ee switched it to `sa.text` named binds. `TEST_POSTGRES_URL` enables dialect-parity tests, but CI does not set it, so any Postgres-only paramstyle/DDL difference in a migration is invisible until production or the demo. Either run the migration-chain test under a Postgres service in CI, or lint migrations for `exec_driver_sql(` with `?` (SQLite's paramstyle) and require `sa.text` named binds. | S |
 
 ### Work package 26a — console accessibility and responsive checks
 
