@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { normalizeRoundIndex } from '../app/routes/draw';
+import { stripComments } from './helpers/sourceGuards';
 
 const APP = resolve(__dirname, '../app');
 const PUBLIC = resolve(__dirname, '../public/assets');
@@ -29,14 +30,6 @@ function formatterDefinitionCount(sources: string[]): number {
     (total, source) => total + (source.match(/function\s+formatPersonIdentity\s*\(/g) ?? []).length,
     0,
   );
-}
-
-function bracketHeight(nodeLines: number, firstRoundMatches: number): number {
-  const nodeHeight = nodeLines * 22;
-  const baseGap = 6;
-  const headingAndGap = 28;
-  const canvasPadding = 16;
-  return headingAndGap + firstRoundMatches * (nodeHeight + baseGap) - baseGap + canvasPadding;
 }
 
 describe('SP-P9 public person universality', () => {
@@ -103,25 +96,37 @@ describe('SP-P9 bracket invariants', () => {
     expect(Math.min(Math.max(Number('99'), 0), 3)).not.toBe(99);
   });
 
-  it('keeps the four-round fixture under 450px and a 32 draw under its 850px ceiling', () => {
-    expect(bracketHeight(2, 8)).toBeLessThan(450);
-    expect(bracketHeight(2, 16)).toBeLessThan(850);
-
-    // Negative control: restoring a third 22px line breaks both ceilings.
-    expect(bracketHeight(3, 8)).toBeGreaterThanOrEqual(450);
-    expect(bracketHeight(3, 16)).toBeGreaterThanOrEqual(850);
+  // public-visual-fixes P4 / match-card §4.3: the 450px and 850px total
+  // draw-height ceilings this test used to model are WITHDRAWN, along with
+  // the per-node height they were derived from — a 44px (or 58px) node
+  // cannot hold a doubles side, and a ceiling on the whole draw can only be
+  // met by shrinking what the reader came to read. Height now comes from
+  // content, the tree is bounded by its scroll REGION, and the numbers are
+  // measured in a real browser by
+  // `tests/e2e/tests/11-public-bracket-geometry.spec.ts`. What stays here is
+  // the source-level invariant that survived: ONE separation constant, no
+  // fixed node height, and no measured layout anywhere.
+  it('derives node height from content and keeps one separation constant', () => {
+    const card = stripComments(read(resolve(APP, 'components/MatchCard.tsx')));
+    const css = read(resolve(APP, 'app.css'));
+    const node = card.slice(card.indexOf('public-bracket-node'));
+    // No height, and no width of its own: the column owns the width.
+    expect(node).not.toMatch(/\bmin-h-\[/);
+    expect(node.slice(0, 400)).not.toMatch(/\bw-72\b/);
+    // The separation is padding on the slot, spelled once, in the 8-12 band.
+    const padding = /\.bracket-slot\s*\{[^}]*padding-block:\s*(\d+)px/.exec(css);
+    expect(padding).not.toBeNull();
+    expect(Number(padding![1]) * 2).toBeGreaterThanOrEqual(8);
+    expect(Number(padding![1]) * 2).toBeLessThanOrEqual(12);
+    // ...and the region that bounds the tree, rather than a height ceiling.
+    expect(css).toContain('.bracket-scroll');
+    expect(css).toContain('.bracket-round-header');
   });
 
-  // V3-PE10.1: a bracket-node article gained a third grid row (a small
-  // visible match-number reference above the two sides), so the fixed
-  // strings this test pins moved from a two-row `44px` node to a three-row
-  // `58px` one. The underlying invariant — a fixed CSS-grid geometry, no
-  // measured layout, no `<svg>` — is unchanged; only the exact literals are.
   it('pins three-row nodes, CSS-grid braces, and the absence of measured connectors', () => {
     const card = read(resolve(APP, 'components/MatchCard.tsx'));
-    const draw = read(resolve(APP, 'routes/draw.tsx'));
+    const draw = stripComments(read(resolve(APP, 'routes/draw.tsx')));
     const css = read(resolve(APP, 'app.css'));
-    expect(card).toContain('min-h-[58px]');
     expect(card).toContain('grid-rows-[auto_auto_auto]');
     expect(card).toContain('break-words');
     expect(card).not.toContain('truncate');
@@ -129,7 +134,10 @@ describe('SP-P9 bracket invariants', () => {
     expect(css).toContain('.bracket-link-slot::before');
     expect(css).toContain('.bracket-link-slot::after');
     expect(css).toContain('height: 50%');
-    expect(`${draw}\n${css}`).not.toMatch(/<svg|ResizeObserver|getBoundingClientRect|position:\s*absolute|bracket-connectors/);
+    // Still no SVG, no ResizeObserver, no measured connector layout: the
+    // braces are pseudo-elements on equal flex slots, which is why varied
+    // node heights need no recalculation in JavaScript at all.
+    expect(`${draw}\n${stripComments(css)}`).not.toMatch(/<svg|ResizeObserver|getBoundingClientRect|position:\s*absolute|bracket-connectors/);
   });
 });
 

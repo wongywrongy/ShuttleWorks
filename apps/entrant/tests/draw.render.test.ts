@@ -380,15 +380,19 @@ describe("the Players tab", () => {
 });
 
 describe("the Draws panel (§3.4, ADR 0028)", () => {
-  it("lists every event with its draw facts and a View draw button into each draw", async () => {
+  // public-visual-fixes P6: the row is name · entrants · progress · Open,
+  // and the WHOLE row is the link into the draw. The facts line it used to
+  // carry (format, eligibility, round count) described the draw's shape,
+  // which the draw page itself states.
+  it("lists every event as one row-wide link into its draw", async () => {
     stubApi({ "/draws": DRAWS_INDEX });
     const html = await render("/e/spring-open?tab=draws");
 
     expect(html).toContain('href="/e/spring-open/draws/MS"');
-    expect(html).toContain(">View draw</a>");
-    expect(html).toContain("Elimination");
+    expect(html).toContain(">Open<");
     expect(html).toContain("4 players");
-    expect(html).toContain("2 rounds");
+    expect(html).not.toContain(">View draw</a>");
+    expect(html).not.toContain("2 rounds");
   });
 
   it("names the champion on a decided row, as a person link beside the Draw button", async () => {
@@ -411,7 +415,10 @@ describe("the Draws panel (§3.4, ADR 0028)", () => {
     const html = await render("/e/spring-open?tab=draws");
 
     expect(html).toContain("Champion");
-    expect(html).toContain('/players/11111111-1111-4111-8111-111111111111');
+    // P6: the row IS a link, so the champion reads as text inside it — a
+    // link inside a link is not a link.
+    expect(html).toContain("Ada Lovelace");
+    expect(html).not.toContain('/players/11111111-1111-4111-8111-111111111111');
     expect(html).toContain('aria-label="Men&#x27;s singles draw"');
   });
 
@@ -447,21 +454,30 @@ describe("the Draws panel (§3.4, ADR 0028)", () => {
     expect(html).not.toContain("No draws yet.");
   });
 
-  it.each(["seeds", "winners"])("returns 404 for removed %s tab URLs", async (removed) => {
-    const html = await render(`/e/spring-open?tab=${removed}`);
-    expect(html).toContain('This entry page is not available');
+  // P6: `?tab=seeds` and `?tab=winners` were panels of this same Draws
+  // surface, and both URLs are still in circulation — they canonicalise onto
+  // it rather than 404ing.
+  it.each(["events", "seeds", "winners"])("redirects the retired %s tab URL onto Draws", async (alias) => {
+    stubApi({ "/draws": DRAWS_INDEX });
+    const build = (await vite.ssrLoadModule(
+      "virtual:react-router/server-build",
+    )) as unknown as ServerBuild;
+    const response = await createRequestHandler(build, "development")(
+      new Request(`http://entrant.test/e/spring-open?tab=${alias}`),
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/e/spring-open?tab=draws");
   });
 });
 
 describe("the elimination draw page", () => {
-  // Rewritten for V3-PE10.2 / contract §4.3 P5: with no explicit `?view=`,
-  // the response now renders BOTH the Round block (the mobile default,
-  // `md:hidden`) and the Bracket canvas (`hidden md:block`) — CSS decides
-  // which one a given viewport shows, so a first mobile visit gets Round
-  // without any client redirect or JavaScript. The old assertion that the
-  // default response was bracket-only, with no match detail, no longer
-  // holds; this test now covers both blocks in one response.
-  it("renders both the Round default and the Bracket canvas, CSS-toggled by width", async () => {
+  // Rewritten for public-visual-fixes P4 / contract §4.3: there is ONE tree
+  // in the response now, at every width. "Round" stopped being a page mode
+  // (it is navigation inside the bracket), so the pair of CSS-toggled
+  // blocks that shipped the whole draw twice — and the previous/next round
+  // pager that repeated the round heading on the page it was already on —
+  // are both gone. The bracket is the default; List is the other mode.
+  it("renders one bracket, in its own named scroll region, at every width", async () => {
     stubApi({ "/draws/MS": SE_DRAW });
     const html = await render("/e/spring-open/draws/MS");
 
@@ -475,40 +491,122 @@ describe("the elimination draw page", () => {
     expect(html).toContain("from SF2");
     expect(html).not.toContain("Winner of");
     expect(html).toContain("21");
-    // D12: the raw ISO date is never in prose — humanized instead.
-    expect(html).not.toContain("2026-08-01");
-    expect(html).toContain("Saturday, August 1");
     expect(html).not.toContain("demo-generated:");
-    // The two adaptive containers are both present in the one response.
-    expect(html).toContain('<div class="md:hidden">');
-    expect(html).toContain('<div class="hidden md:block">');
-    // Wide content scrolls in its own container (R11).
-    expect(html).toContain("overflow-x-auto");
+    // The two CSS-toggled copies of the draw are gone.
+    expect(html).not.toContain('<div class="md:hidden">');
+    expect(html).not.toContain('<div class="hidden md:block">');
+    // ...and so is the round pager that duplicated the round heading.
+    expect(html).not.toContain("Previous round");
+    expect(html).not.toContain("Next round");
+    // The tree scrolls in its own region: bounded, named, keyboard-reachable
+    // (§4.3), and snapped by round on narrow screens.
     expect(html).toContain('data-testid="public-bracket-canvas"');
+    expect(html).toContain("data-bracket-scroll");
+    expect(html).toMatch(/role="region"[^>]*tabindex="0"/);
+    expect(html).toContain('aria-label="Men&#x27;s Singles bracket"');
+    expect(html).toContain("bracket-scroll");
+    expect(html).toContain("overflow-auto");
+    expect(html).toContain("snap-x snap-mandatory");
     expect(html).toContain("w-max min-w-full");
+    // Round headers stay in view inside that region.
+    expect(html).toContain("bracket-round-header");
     expect(html).toContain('data-match-variant="bracket-node"');
     expect(html).toContain('data-bracket-links="true"');
     expect(html).toContain('src="/e/assets/bracket-path.js"');
     expect(html).not.toContain("/e/assets/bracket-connectors.js");
-    // 2 Round-block cards (the default round, Semifinals) + 3 Bracket nodes.
-    expect((html.match(/<article/g) ?? []).length).toBe(5);
+    // Three nodes: the whole draw, once.
+    expect((html.match(/<article/g) ?? []).length).toBe(3);
     // V3-PE10.1 / §6.1 (P3): every bracket node carries the SHARED match
     // reference — the same string the operator's match list shows — and no
     // surface renumbers locally as "Match n".
     expect(html).not.toContain("Match 1");
     expect(html).not.toContain("Match 2");
 
-    const bracketOnly = await render("/e/spring-open/draws/MS?view=bracket");
-    expect(bracketOnly).not.toContain('<div class="md:hidden">');
-    expect((bracketOnly.match(/<article/g) ?? []).length).toBe(3);
-
-    const roundOnly = await render("/e/spring-open/draws/MS?view=round");
-    expect(roundOnly).not.toContain('data-testid="public-bracket-canvas"');
-    expect(roundOnly).toMatch(/Round[\s\S]{0,20}1[\s\S]{0,20}of[\s\S]{0,20}2/);
+    // The two modes on offer are Bracket and List — Round is not a mode.
+    const nav = html.match(/<nav aria-label="Draw view"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    expect([...nav.matchAll(/>([^<]+)</g)].map((m) => m[1])).toEqual([
+      "Bracket",
+      "List",
+    ]);
 
     const list = await render("/e/spring-open/draws/MS?view=list");
+    // D12: the raw ISO date is never in prose — humanized instead.
+    expect(list).not.toContain("2026-08-01");
     expect(list).toContain("Saturday, August 1");
     expect(list).toContain("10:30 · Court 1");
+    expect(list).not.toContain('data-testid="public-bracket-canvas"');
+  });
+
+  it("offers R32 · R16 · QF · SF · F round controls as native anchors into the columns", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const html = await render("/e/spring-open/draws/MS");
+    const nav = html.match(/<nav aria-label="Rounds"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    // Adapted to this draw's own format: a two-round draw is SF · F.
+    expect(nav).toContain(">SF<");
+    expect(nav).toContain(">F<");
+    // Native anchors into ids the columns actually carry — no JS required.
+    expect(nav).toContain('href="#draw-round-semifinals"');
+    expect(nav).toContain('href="#draw-round-final"');
+    expect(html).toContain('id="draw-round-semifinals"');
+    expect(html).toContain('id="draw-round-final"');
+    // ...and the mount point the enhancement builds its controls into.
+    expect(html).toContain("data-bracket-toolbar");
+  });
+
+  it("keeps legacy ?view=round links working by positioning the requested round", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const html = await render("/e/spring-open/draws/MS?view=round&round=1");
+    // The bracket answers the old URL...
+    expect(html).toContain('data-testid="public-bracket-canvas"');
+    // ...positioned at the round it asked for, and marked in the controls.
+    expect(html).toContain('data-initial-round="draw-round-final"');
+    expect(html).toMatch(/aria-current="true"[^>]*>[\s\S]{0,80}>F</);
+    // The duplicate "Round 2 of 2" heading and its pager are gone.
+    expect(html).not.toMatch(/Round[\s\S]{0,20}2[\s\S]{0,20}of[\s\S]{0,20}2/);
+  });
+
+  it("keeps a ?view=path link lighting the selected player with no JavaScript", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const html = await render(
+      "/e/spring-open/draws/MS?view=path&player=11111111-1111-4111-8111-111111111111",
+    );
+    // The path is painted SERVER-side: the classes the script would add are
+    // already on the document, so the fallback shows the same thing.
+    expect(html).toContain("has-person-path");
+    expect(html).toContain("is-person-path");
+    expect(html).toContain('data-pinned-person="11111111-1111-4111-8111-111111111111"');
+    // ...with the selected player named, and a reset that needs no script.
+    expect(html).toContain("Ada Lovelace");
+    expect(html).toContain("Clear path");
+  });
+
+  it("resolves ?player= by stable identity, and treats a typed name as a search only", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    // An id: this IS the person, so the path pins and the banner names her.
+    const byId = await render(
+      "/e/spring-open/draws/MS?player=11111111-1111-4111-8111-111111111111",
+    );
+    expect(byId).toContain('data-pinned-person="11111111-1111-4111-8111-111111111111"');
+    expect(byId).toMatch(/found for[\s\S]{0,60}Ada Lovelace/);
+
+    // A name: a search. It highlights and filters, but asserts no identity —
+    // nobody's path is pinned and no full name is printed as if the reader
+    // had chosen it (the P2-flagged substring resolution).
+    const byName = await render("/e/spring-open/draws/MS?view=list&player=ada");
+    expect(byName).not.toContain("data-pinned-person");
+    expect(byName).toMatch(/found for[\s\S]{0,60}>ada</);
+    expect(byName).toMatch(/font-semibold underline decoration-2/);
+    // The only way a name becomes an identity: the reader picks it from an
+    // offer — which is also the no-JavaScript way into a pinned path.
+    expect(byName).toContain(
+      "view=path&amp;player=11111111-1111-4111-8111-111111111111",
+    );
+    expect(byName).toMatch(/Show[\s\S]{0,60}Ada Lovelace[\s\S]{0,40}s path/);
+
+    // Accent- and case-blind, through the tier's one folding.
+    const folded = await render("/e/spring-open/draws/MS?view=list&player=LOVELACE");
+    // Both of Ada's matches, from an all-caps query.
+    expect(folded).toMatch(/>2<[\s\S]{0,60}matches[\s\S]{0,40}found for/);
   });
 
   // ---- public-visual-fixes P3 -----------------------------------------

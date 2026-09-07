@@ -206,6 +206,11 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
   const reference = match.reference ?? null;
 
   if (variant === 'bracket-node') {
+    // §4.3 (public-visual-fixes P4): the node has NO height of its own —
+    // the withdrawn `min-h-[58px]` was a constant chosen for a singles pair,
+    // and a doubles side is two person lines at the 14px floor. Height comes
+    // from the tallest rendered side; the column owns the width, so the node
+    // fills it rather than carrying a second, conflicting `w-72`.
     // §4.3: seeds and the paired score render RIGHT-ALIGNED against the
     // node's trailing edge — one lane, first-listed-side order, no
     // per-game emphasis — rather than a column per side per game, which a
@@ -213,7 +218,7 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
     const paired = pairedScoreLine(match.score);
     const header = [cue, reference].filter(Boolean).join(' ');
     return (
-      <article data-testid="public-bracket-node" data-match-variant="bracket-node" className={`grid min-h-[58px] w-72 grid-rows-[auto_auto_auto] rounded-sm border border-rule-soft bg-surface-raised ${live ? 'border-s-2 border-s-status-live' : ''}`} aria-label={[title, competitors, scoreLabel, stateWord].filter(Boolean).join(' · ')}>
+      <article data-testid="public-bracket-node" data-match-variant="bracket-node" className={`grid w-full min-w-0 grid-rows-[auto_auto_auto] rounded-sm border border-rule-soft bg-surface-raised ${live ? 'border-s-2 border-s-status-live' : ''}`} aria-label={[title, competitors, scoreLabel, stateWord].filter(Boolean).join(' · ')}>
         {header || paired ? (
           <p className="flex items-baseline justify-between gap-2 border-b border-rule-soft px-2 py-0.5 text-xs text-muted-foreground">
             <span className="font-semibold uppercase tracking-[0.04em]">{header}</span>

@@ -527,7 +527,7 @@ narrow-screen behaviour (plan §3 correction 7) — **rejected**.
 
 | Width | Behaviour |
 | --- | --- |
-| < 768 px | the **Round view is the default**; the full Bracket tab remains an explicit, labelled option, and an explicitly chosen view is preserved in navigation. No "this bracket is wide, scroll sideways" instruction in the default state. |
+| < 768 px | *(public tier, superseded by P4 below: the bracket is the default here too, scrolled and snapped by round.)* On the console this row still reads: the **Round view is the default**; the full Bracket tab remains an explicit, labelled option, and an explicitly chosen view is preserved in navigation. No "this bracket is wide, scroll sideways" instruction in the default state. |
 | ≥ 768 px | the bracket canvas renders. It **enlarges rather than shrinking names**: node width and height grow to fit the tallest side at the ≥ 14 px floor, and the canvas scrolls inside its own labelled region rather than widening the document. |
 | any width | zoom-out is a *canvas* transform the reader chooses; it is never the default that makes names unreadable. |
 
@@ -560,6 +560,28 @@ above; the public bracket node additionally obeys:
   number (§6.1).
 - **First-round separation starts in the 8–12 px range** and grows with node height; connector
   geometry is recomputed for varied node heights, and the Finals column is never clipped.
+
+**Amended by public P4, 2026-09-07 — round navigation is inside the bracket.** On the public tier
+"Round" is no longer a page MODE beside Bracket and List:
+
+- The **bracket is the default at every width**, and it is rendered ONCE. The pair of CSS-toggled
+  copies (Round below 768 px, canvas above it) is withdrawn: it shipped the whole draw twice and
+  made the same tree answer to two different vocabularies. Below 768 px the same tree scrolls
+  horizontally and **snaps by round**, at full name size — the narrow-screen answer is scroll, not
+  shrink.
+- The **round controls are the round navigation**. The previous/next round pager, and the
+  `Round n of m` heading it carried on a page that already names the round, are deleted.
+- **`?view=round` and `?view=path` stay live.** The first resolves to the bracket, positioned at the
+  requested round and marked in the controls; the second lights the selected player's path — painted
+  server-side, so the fallback needs no JavaScript. **List** remains a real mode.
+- **A name is a link.** Plain activation of a `PersonRef` opens that person's profile. Path
+  selection happens in an explicit **Highlight path** mode, where a plain activation selects the
+  path in place and a **View profile** link is exposed; the anchor keeps its real `href` throughout,
+  so modified-click and open-in-new-tab still reach the profile. Path selection is persistent and
+  resettable (button, and Escape); hover is a preview only, and never the only way in.
+- **`?player=` resolves by stable identity.** A typed name is a search — case- and accent-blind,
+  through the tier's one folding — that highlights and filters but **asserts no identity**: it pins
+  nobody's path and prints nobody's full name as though the reader had chosen them.
 
 **Envelope.** 320/390: Round view. 768/1440: canvas, no node overlap, connectors meeting the right
 sides. 200% zoom: nodes grow; the canvas scrolls; names stay whole.
