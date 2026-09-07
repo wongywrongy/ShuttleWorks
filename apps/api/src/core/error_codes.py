@@ -82,6 +82,11 @@ class ErrorCode(str, Enum):
     SOLVE_ENDPOINT_GONE = "SOLVE_ENDPOINT_GONE"
 
     # Schedule operations
+    # The plan puts two matches on one court at overlapping times, so it is
+    # not ready by definition — refused at the plan-finalized write boundary
+    # (the console disables the button too, but a stale screen or a second
+    # desk submitting concurrently is exactly what a boundary is for).
+    PLAN_DOUBLE_BOOKED = "PLAN_DOUBLE_BOOKED"
     WARM_RESTART_FAILED = "WARM_RESTART_FAILED"
     REPAIR_FAILED = "REPAIR_FAILED"
     DISRUPTION_INVALID = "DISRUPTION_INVALID"

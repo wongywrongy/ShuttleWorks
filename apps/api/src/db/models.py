@@ -176,6 +176,14 @@ class Tournament(Base):
     )
     schema_version: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Venue-board presentation, owned by the Display module and read by BOTH
+    # boards (meet and bracket) plus the public projection. Deliberately NOT
+    # in ``data`` (the state blob): a board logo is a data URI measured in
+    # kilobytes, and the console PUTs the whole blob back on every state
+    # write, so parking branding there would send the image over the wire on
+    # every save. Shape: see ``display.display.BoardSettingsDTO`` — that DTO
+    # is the schema; this column stores its ``model_dump``.
+    board_settings: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

@@ -163,6 +163,7 @@ BLOB_VERSIONS: dict[str, Optional[int]] = {
     "solve_jobs.progress": None,  # live phase/objective
     "entry_pages.fee_schedule": None,  # cumulative price ladder
     "entry_pages.discipline_caps": None,  # entry policy
+    "tournaments.board_settings": None,  # venue-board branding; flat, rewritten whole by one PUT
     # -- authority/synchronization protocol documents -----------------
     # These are versioned by their enclosing immutable protocol records;
     # stamping an ORM-only key would change signatures, hashes, or payloads.
