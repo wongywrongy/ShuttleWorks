@@ -88,7 +88,10 @@ class PartnerAcceptRequest(StrictModel):
 
 class PartnerAcceptedDTO(BaseModel):
     entryId: str
+    tournamentName: Optional[str] = None
     eventCode: str
+    discipline: str = ""
+    entrantName: str
     state: str
 
 
@@ -113,6 +116,10 @@ _TRANSPORT_FIELDS = frozenset({"_csrf", "next", "token"})
 # outcome, on the same one-page-per-outcome principle as the account flows.
 _ACCEPTED_PAGE = "/e/partner/accepted"
 _FAILED_PAGE = "/e/partner/failed"
+
+
+def _failed_url(reason: str) -> str:
+    return f"{_FAILED_PAGE}?reason={reason}"
 
 
 def is_form_post(request: Request) -> bool:
@@ -201,8 +208,9 @@ def _accept_context(session, token: str):
     event = session.get(
         EntryEvent, (entry.tournament_id, entry.entry_event_id)
     )
+    tournament = session.get(Tournament, entry.tournament_id)
     page = session.get(EntryPage, entry.tournament_id)
-    return entry, checked_out, event, page
+    return entry, checked_out, event, page, tournament
 
 
 @router.get("/{token}", response_model=PartnerInviteDTO)
@@ -281,7 +289,7 @@ def accept_partner_invite(
     if not entrant.email_verified:
         if is_form_post(request):
             return RedirectResponse(
-                url=_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+                url=_failed_url("unverified"), status_code=status.HTTP_303_SEE_OTHER
             )
         raise http_error(
             403,
@@ -293,7 +301,7 @@ def accept_partner_invite(
     if context is None:
         if is_form_post(request):
             return RedirectResponse(
-                url=_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+                url=_failed_url("unusable"), status_code=status.HTTP_303_SEE_OTHER
             )
         raise _dead()
 
@@ -303,8 +311,12 @@ def accept_partner_invite(
     # present in the event node's imported checkpoint.
     # ``_accept_context`` resolves this through ``tournament_is_checked_out``
     # before any acceptance write is staged.
-    entry, checked_out, event, page = context
+    entry, checked_out, event, page, tournament = context
     if checked_out:
+        if is_form_post(request):
+            return RedirectResponse(
+                url=_failed_url("retry"), status_code=status.HTTP_303_SEE_OTHER
+            )
         raise http_error(
             409,
             ErrorCode.EVENT_CHECKED_OUT,
@@ -312,6 +324,10 @@ def accept_partner_invite(
         )
 
     if event is None or page is None:
+        if is_form_post(request):
+            return RedirectResponse(
+                url=_failed_url("unusable"), status_code=status.HTTP_303_SEE_OTHER
+            )
         raise _dead()
 
     # Priced through the same function the entry form quotes with, over this
@@ -336,10 +352,17 @@ def accept_partner_invite(
     )
     if is_form_post(request):
         return RedirectResponse(
-            url=_ACCEPTED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+            # The accepted outcome is account-scoped: the dedicated outcome
+            # loader resolves this id through the authenticated My Entries
+            # projection. Do not put identity data in the public URL.
+            url=f"{_ACCEPTED_PAGE}?entryId={partner_entry.id}",
+            status_code=status.HTTP_303_SEE_OTHER,
         )
     return PartnerAcceptedDTO(
         entryId=str(partner_entry.id),
+        tournamentName=tournament.name if tournament is not None else None,
         eventCode=event.code,
+        discipline=event.discipline,
+        entrantName=body.fullName,
         state=partner_entry.state,
     )

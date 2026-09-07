@@ -48,16 +48,16 @@ plus the page-scoped scripts in `apps/entrant/public/assets/`.
 | Surface | Route | Main components |
 | --- | --- | --- |
 | Discovery — season | `/e/` | `SeasonCalendar`, `SeasonControls`, `SeasonStatusCell`, `EmptyState` |
-| Tournament — overview | `/e/SLUG` | `HeroHeader`, `TabBar`, `SectionCard`, `DateBadge`, `NowStrip` |
-| Tournament — events / players / draws / seeds / winners | `/e/SLUG?tab=…` | `TabBar`, `SectionCard`, `EventRow`, `PlayersList`, `EntrantsList`, `PersonRef`/`PersonGroup`, `StatusChip` |
-| Schedule and live | `/e/SLUG/schedule` | `NowStrip`, `MatchCard`, `TimelineCard`, `StatusChip`, filter bar (`SELECT_CONTROL` selects) |
-| Draws (full / round / path / list) | `/e/SLUG/draws/KEY` | bracket grid (`.bracket-link-slot` CSS in `apps/entrant/app/app.css`), `MatchCard`, `PersonRef`, `StatusChip` |
+| Tournament — overview | `/e/SLUG` | `HeroHeader`, `TabBar` (`SegmentedNav`), `SectionCard` + `SectionRow`, `NowStrip` |
+| Tournament — draws / players | `/e/SLUG?tab=draws`, `?tab=players` (ADR 0028; `events`, `seeds`, `winners`, `entrants` are legacy ids that fold onto these) | `TabBar`, `EventRow` (+ `Button` Entrants / Draw), `PlayersList`, `EntrantsList`, `PersonRef`/`PersonGroup`, `StatusChip` |
+| Schedule and live | `/e/SLUG/schedule` | `HeroHeader`, `SegmentedNav` (days, by time / by court), `MatchCard`, filter card (`FIELD_INPUT` controls) |
+| Draws (full / round / path / list) | `/e/SLUG/draws/KEY` | `SegmentedNav` (view, segments), bracket grid (`.bracket-link-slot` CSS in `apps/entrant/app/app.css`), `MatchCard`, `PersonRef` |
 | Regulations | `/e/SLUG/regulations` | `SectionCard`, prose |
-| Entry wizard | `/e/SLUG/enter` | `TextField`, `Notice`, `Button` + `BUTTON_SECONDARY`, `StickyTotalBar`, `CARD` |
+| Entry wizard | `/e/SLUG/enter` | `TextField`, `Notice`, `Button` + `BUTTON_SECONDARY`, `StickyTotalBar`, `CARD`, `CHIP`, `StatusChip` |
 | Account (login / signup / verify / reset / partner) | `/e/login`, `/e/signup`, `/e/verify`, `/e/reset`, `/e/partner` | `TextField`, `Notice`, `Button`, `CARD`, `MessagePage` |
-| My entries | `/e/me/entries` | entry cards (`CARD`), `StatusChip` |
-| Receipt | `/e/SLUG/receipt/ID` | `CARD`, definition rows |
-| Player page | `/e/SLUG/players/KEY` | `PersonRef`, match history rows |
+| My entries | `/e/me/entries` | entry cards (`LIST_CARD` bands, built by `my-entries.js`), `CHIP` |
+| Receipt | `/e/SLUG/receipt/REFERENCE` | `SectionCard variant="eyebrow"`, definition rows |
+| Player page | `/e/SLUG/players/KEY` | hero band, `PersonRef`, `MatchCard` |
 
 ## What pins each surface
 

@@ -223,6 +223,55 @@ def test_idempotency_key_unique_index_allows_many_nulls(session, tournament_id):
     assert second.idempotency_key is None
 
 
+def test_idempotency_key_is_scoped_to_the_workspace(session, tournament_id):
+    """SEC 2026-09-07: the key is caller-chosen, so its scope is tenancy.
+
+    Before this, the replay lookup matched on the key alone: an operator on
+    workspace B who sent a key workspace A had already used got A's job back
+    — schedule result included — from B's own submit route. Two workspaces
+    using ``"nightly"`` is a collision waiting to happen without any
+    attacker at all.
+    """
+    other = Tournament(name="queue-test-other")
+    session.add(other)
+    session.commit()
+
+    first = _enqueue(session, tournament_id, idempotency_key="shared")
+    session.commit()
+
+    second, created = solve_jobs.enqueue(
+        session,
+        tournament_id=other.id,
+        type_=solve_jobs.MEET_SCHEDULE_SOLVE,
+        params={"random_seed": 42},
+        input_snapshot={"matches": []},
+        idempotency_key="shared",
+    )
+    session.commit()
+
+    assert created is True
+    assert second.id != first.id
+    assert second.tournament_id == other.id
+
+
+def test_idempotency_replay_is_still_deduped_within_one_workspace(
+    session, tournament_id
+):
+    """The composite index must not turn every retry into a second solve."""
+    first = _enqueue(session, tournament_id, idempotency_key="shared")
+    session.commit()
+    replay, created = solve_jobs.enqueue(
+        session,
+        tournament_id=tournament_id,
+        type_=solve_jobs.MEET_SCHEDULE_SOLVE,
+        params={"random_seed": 42},
+        input_snapshot={"matches": []},
+        idempotency_key="shared",
+    )
+    assert created is False
+    assert replay.id == first.id
+
+
 def test_transactional_enqueue_rollback_leaves_no_job(session, tournament_id):
     _enqueue(session, tournament_id, idempotency_key="doomed")
     session.rollback()

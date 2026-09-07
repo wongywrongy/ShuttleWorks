@@ -72,15 +72,37 @@ export function cardChip(status) {
   );
 }
 
+/** ISO UTC instant -> "5 Sep 2026, 18:00 UTC" (no JS helper importable from
+ * `app/lib` on this page-script tier, per the tier's own boundary — see the
+ * file banner). */
+export function formatWithdrawDeadline(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  }).format(date);
+}
+
 /** Quoted while awaiting, plain total after; nothing on withdrawn cards or
- * unpriced pages. Register per the mockup review, symbol-less per the tier. */
+ * unpriced pages. Register per the mockup review, symbol-less per the tier.
+ * E2: a still-open withdrawal deadline is appended with the tier's own
+ * middle-dot separator. */
 export function priceLine(card) {
   if (card.feeTotalCents === null || card.feeTotalCents === undefined) return null;
   if (card.status === 'withdrawn') return null;
+  const deadline = formatWithdrawDeadline(card.withdrawsUntil);
+  const suffix = deadline ? ` · withdrawal open until ${deadline}` : '';
   if (card.status === 'awaiting') {
-    return `Quoted ${formatCents(card.feeTotalCents)} · pay at the desk`;
+    return `Quoted ${formatCents(card.feeTotalCents)} · pay at the desk${suffix}`;
   }
-  return `Total ${formatCents(card.feeTotalCents)}`;
+  return `Total ${formatCents(card.feeTotalCents)}${suffix}`;
 }
 
 /** A line wears its own chip only when it disagrees with the card. */
@@ -90,6 +112,19 @@ export function lineChip(cardStatus, state) {
   if (state === 'awaiting' && cardStatus !== 'awaiting') return 'Awaiting confirmation';
   if (state === 'entered' && cardStatus === 'awaiting') return 'Entered';
   return null;
+}
+
+/** "View receipt" exists whenever the card names both a slug and the
+ * submission it represents — every card qualifies once the backend fills
+ * in `shortReference`, so this is really just the null-safety guard.
+ *
+ * V3-24-1: built from the SHORT REFERENCE, not the UUID. The receipt route
+ * accepts only that shape now, so a link built from `submissionId` would be
+ * a 404 — and the address bar an entrant arrives at is then the same string
+ * the page tells them to quote. */
+export function receiptHref(card) {
+  if (!card.slug || !card.shortReference) return null;
+  return `/e/${encodeURIComponent(card.slug)}/receipt/${encodeURIComponent(card.shortReference)}`;
 }
 
 /** "View results" exists only where the player page answers (§4): played
@@ -127,11 +162,16 @@ export function withdrawAffordance(line, emailVerified) {
 
 // ---- DOM ------------------------------------------------------------------
 
-const CHIP_TONE_CLASS = {
-  live: 'border-status-live/40 bg-status-live-bg text-status-live',
-  done: 'border-status-done/40 bg-status-done-bg text-status-done',
-  plain: 'border-rule-soft bg-surface-raised text-muted-foreground',
+/** Card status reads as a plain weighted word in its tone (ADR 0027: no pill, no dot). */
+const STATUS_TEXT_CLASS = {
+  live: 'text-status-live',
+  done: 'text-status-done',
+  plain: 'text-muted-foreground',
 };
+
+/** JS twin of `app/lib/ui.ts` `CHIP` — pinned equal by `tests/uiTwins.test.ts`. */
+const CHIP =
+  'inline-flex h-badge items-center rounded-xs border px-2.5 text-xs font-medium leading-none';
 
 function el(doc, tag, className, text) {
   const node = doc.createElement(tag);
@@ -140,55 +180,98 @@ function el(doc, tag, className, text) {
   return node;
 }
 
-function chipEl(doc, label, tone) {
+function statusEl(doc, label, tone) {
   return el(
     doc,
     'span',
-    `inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${CHIP_TONE_CLASS[tone] ?? CHIP_TONE_CLASS.plain}`,
+    `shrink-0 text-sm font-medium ${STATUS_TEXT_CLASS[tone] ?? STATUS_TEXT_CLASS.plain}`,
     label,
   );
+}
+
+function resultsLink(doc, href) {
+  const view = el(
+    doc,
+    'a',
+    'text-sm font-medium text-accent underline-offset-4 hover:underline',
+    'View results',
+  );
+  view.href = href;
+  return view;
+}
+
+function receiptLink(doc, href) {
+  const view = el(
+    doc,
+    'a',
+    'text-sm font-medium text-accent underline-offset-4 hover:underline',
+    'View receipt',
+  );
+  view.href = href;
+  return view;
 }
 
 function cardEl(doc, card, emailVerified) {
   const article = el(
     doc,
     'article',
-    'rounded-lg border border-rule-soft bg-surface-raised p-4 shadow-sm',
+    'rounded-lg border border-rule-soft bg-surface-raised',
   );
 
-  const head = el(doc, 'div', 'flex items-start justify-between gap-3');
+  const head = el(
+    doc,
+    'header',
+    'flex flex-wrap items-baseline justify-between gap-3 border-b border-rule-soft px-6 py-4',
+  );
   const title = el(doc, 'div', 'min-w-0');
   if (card.slug) {
     const link = el(
       doc,
       'a',
-      'font-display text-base font-bold tracking-tight text-foreground underline-offset-4 hover:underline',
+      'text-base font-semibold text-foreground hover:underline',
       card.tournamentName ?? card.slug,
     );
     link.href = `/e/${encodeURIComponent(card.slug)}`;
     title.appendChild(link);
   } else {
     title.appendChild(
-      el(doc, 'p', 'font-display text-base font-bold tracking-tight text-foreground',
+      el(doc, 'p', 'text-base font-semibold text-foreground',
         card.tournamentName ?? 'Tournament'),
     );
   }
   const metaParts = [card.orgName, card.venueName, formatDate(card.date)].filter(Boolean);
   if (metaParts.length > 0) {
     title.appendChild(
-      el(doc, 'p', 'mt-0.5 text-xs text-muted-foreground', metaParts.join(' · ')),
+      el(doc, 'p', 'mt-0.5 text-sm text-muted-foreground', metaParts.join(' · ')),
     );
   }
   head.appendChild(title);
-  const chip = cardChip(card.status);
-  head.appendChild(chipEl(doc, chip.label, chip.tone));
+  const status = cardChip(card.status);
+  head.appendChild(statusEl(doc, status.label, status.tone));
   article.appendChild(head);
 
-  const lines = el(doc, 'ul', 'mt-3 grid gap-1.5');
+  // One card holds every line this account submitted for the tournament,
+  // which can be several people (a parent entering two children). The
+  // footer carries the "View results" link when the card resolves to ONE
+  // player page; with several distinct pages each line keeps its own link,
+  // because a footer with two identical labels would name nobody.
+  const resultHrefs = [
+    ...new Set((card.events ?? []).map((line) => resultsHref(card, line)).filter(Boolean)),
+  ];
+  const footerHref = resultHrefs.length === 1 ? resultHrefs[0] : null;
+
+  const lines = el(doc, 'ul', 'px-6 divide-y divide-rule-soft');
   for (const line of card.events ?? []) {
-    const row = el(doc, 'li', 'flex flex-wrap items-center gap-x-2 gap-y-1 text-sm');
-    row.appendChild(el(doc, 'span', 'text-muted-foreground', `${line.eventCode} · ${line.discipline} · `));
-    row.appendChild(createPersonRef(doc, {
+    const row = el(
+      doc,
+      'li',
+      'flex flex-wrap items-baseline justify-between gap-4 py-2.5 text-sm text-foreground',
+    );
+    const lead = el(doc, 'span', 'min-w-0');
+    lead.appendChild(el(doc, 'span', 'font-medium', line.eventCode));
+    lead.appendChild(el(doc, 'span', 'text-muted-foreground', ` · ${line.discipline} · `));
+    row.appendChild(lead);
+    lead.appendChild(createPersonRef(doc, {
       slug: card.slug ?? '',
       identity: line.player?.identity ?? null,
       state: line.player?.resolution ?? 'dead',
@@ -196,8 +279,8 @@ function cardEl(doc, card, emailVerified) {
       className: 'font-medium',
     }));
     if (line.partner) {
-      row.appendChild(el(doc, 'span', 'text-muted-foreground', ' with '));
-      row.appendChild(createPersonRef(doc, {
+      lead.appendChild(el(doc, 'span', 'text-muted-foreground', ' with '));
+      lead.appendChild(createPersonRef(doc, {
         slug: card.slug ?? '',
         identity: line.partner.identity ?? null,
         state: line.partner.resolution ?? 'dead',
@@ -207,24 +290,48 @@ function cardEl(doc, card, emailVerified) {
     const own = lineChip(card.status, line.state);
     if (own) {
       row.appendChild(
-        el(doc, 'span', 'rounded-full border border-rule-soft px-2 py-0.5 text-xs text-muted-foreground', own),
+        el(doc, 'span', `${CHIP} border-rule-control text-muted-foreground`, own),
+      );
+    }
+    if (line.partnerInviteMailFailed) {
+      // V3-PE37.1: an honest statement, not a fake recovery action. The
+      // invite token is only ever stored hashed (invariant I5), so there is
+      // no link left to re-share, and no resend route exists — the truthful
+      // thing to say is what happened and what the entrant can still do
+      // about it themselves.
+      row.appendChild(
+        el(
+          doc,
+          'span',
+          'w-full text-xs text-status-attention',
+          'The invitation email to your partner could not be sent. Let them know directly.',
+        ),
       );
     }
     if (line.resultBadge) {
       row.appendChild(
-        el(doc, 'span', 'rounded-full border border-status-done/40 bg-status-done-bg px-2 py-0.5 text-xs font-medium text-status-done', line.resultBadge),
+        el(doc, 'span', `${CHIP} border-status-done text-status-done`, line.resultBadge),
+      );
+    }
+    // V3-24-1: a card folds every act this account made against one
+    // tournament, and the footer can only name one of them. A line from an
+    // OLDER act says so, because "quote your reference" is useless advice
+    // when the entrant holds two and the page shows one. A line from the
+    // card's own act stays silent — repeating the footer on every row is
+    // noise, not information.
+    if (line.shortReference && line.shortReference !== card.shortReference) {
+      row.appendChild(
+        el(
+          doc,
+          'span',
+          'text-xs text-muted-foreground',
+          `Reference ${line.shortReference}`,
+        ),
       );
     }
     const href = resultsHref(card, line);
-    if (href) {
-      const view = el(
-        doc,
-        'a',
-        'text-xs font-medium text-accent underline-offset-4 hover:underline',
-        'View results',
-      );
-      view.href = href;
-      row.appendChild(view);
+    if (href && !footerHref) {
+      row.appendChild(resultsLink(doc, href));
     }
     const affordance = withdrawAffordance(line, emailVerified);
     if (affordance?.kind === 'reason') {
@@ -239,8 +346,27 @@ function cardEl(doc, card, emailVerified) {
   article.appendChild(lines);
 
   const price = priceLine(card);
-  if (price) {
-    article.appendChild(el(doc, 'p', 'mt-3 text-sm text-muted-foreground', price));
+  const receiptHrefValue = receiptHref(card);
+  if (price || footerHref || receiptHrefValue || card.shortReference) {
+    const footer = el(
+      doc,
+      'footer',
+      'flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft px-6 py-3 text-xs text-muted-foreground',
+    );
+    if (price) footer.appendChild(el(doc, 'span', undefined, price));
+    // V3-24-1: the entrant's own handle on this entry, on the surface they
+    // reach for before the receipt. It is the same string the receipt page
+    // prints and the same one in the receipt link beside it.
+    if (card.shortReference) {
+      footer.appendChild(
+        el(doc, 'span', 'tabular-nums', `Reference ${card.shortReference}`),
+      );
+    }
+    const links = el(doc, 'span', 'flex items-center gap-3');
+    if (receiptHrefValue) links.appendChild(receiptLink(doc, receiptHrefValue));
+    if (footerHref) links.appendChild(resultsLink(doc, footerHref));
+    if (links.childNodes.length > 0) footer.appendChild(links);
+    article.appendChild(footer);
   }
   return article;
 }

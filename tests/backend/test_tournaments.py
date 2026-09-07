@@ -334,6 +334,32 @@ def test_state_put_then_get_roundtrip(client):
     assert get_r.json()["config"]["tournamentName"] == "A v1"
 
 
+def test_state_put_roundtrips_point_cap(client):
+    """TournamentConfig.pointCap (V3-13-2) mirrors Setup's `rules.pointCap`
+    onto the Engine Config's own schema — same bounds (1-200), optional,
+    default unset. Round-trips like every other scoring field."""
+    created = client.post("/tournaments", json={"name": "Point cap"}).json()
+    tid = created["id"]
+    payload = _basic_state("Point cap")
+    payload["config"]["pointCap"] = 30
+    put_r = client.put(f"/tournaments/{tid}/state", json=payload)
+    assert put_r.status_code == 200, put_r.text
+    assert put_r.json()["config"]["pointCap"] == 30
+
+    get_r = client.get(f"/tournaments/{tid}/state")
+    assert get_r.status_code == 200
+    assert get_r.json()["config"]["pointCap"] == 30
+
+
+def test_state_put_rejects_point_cap_out_of_bounds(client):
+    created = client.post("/tournaments", json={"name": "Point cap bounds"}).json()
+    tid = created["id"]
+    payload = _basic_state("Point cap bounds")
+    payload["config"]["pointCap"] = 201
+    put_r = client.put(f"/tournaments/{tid}/state", json=payload)
+    assert put_r.status_code == 422
+
+
 def test_state_put_updates_denormalised_name_on_summary(client):
     created = client.post("/tournaments", json={"name": "Old"}).json()
     tid = created["id"]
@@ -1198,3 +1224,121 @@ def test_backup_delete_removes_one_row_and_404s_for_an_unknown_name(client):
     assert filename not in [e["filename"] for e in remaining]
 
     assert client.delete(f"/tournaments/{tid}/state/backups/nope.json").status_code == 404
+
+
+# ---- Backup counts + change summary (V3-OC27.2) -------------------------
+
+
+def test_backup_entries_carry_counts_and_change_summary(client):
+    """Two backups minted in the same second must be distinguishable by
+    content, not just byte size or filename. `matchCount`/`entryCount` are
+    read straight off each stored snapshot; `changeSummary` diffs against
+    the next-OLDER backup (list is newest-first)."""
+    created = client.post("/tournaments", json={"name": "A"}).json()
+    tid = created["id"]
+
+    # `POST /tournaments` already seeds a non-empty `data` blob (the "A"
+    # config), so the FIRST PUT backs that up — only a brand-new, never-PUT
+    # tournament has nothing to snapshot.
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("v1"))
+
+    grown = _basic_state("v2")
+    grown["groups"] = [{"id": "g1", "name": "School A"}]
+    grown["players"] = [{"id": "p1", "name": "Ada", "groupId": "g1"}]
+    grown["matches"] = [
+        {"id": "m1", "sideA": ["p1"], "sideB": [], "durationSlots": 1}
+    ]
+    client.put(f"/tournaments/{tid}/state", json=grown)  # backs up "v1" (0/0)
+
+    entries = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+    assert len(entries) == 2
+    newest, oldest = entries  # newest-first: backup(v1), backup(seeded "A")
+    assert newest["matchCount"] == 0
+    assert newest["entryCount"] == 0
+    assert newest["changeSummary"] == "No change from previous snapshot"
+    assert oldest["changeSummary"] == "First recorded snapshot"
+
+    # One more write backs up "v2" (1 player, 1 match) — now distinguishable
+    # from both older rows by count and by summary alone.
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("v3"))
+    entries = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+    assert len(entries) == 3
+    newest = entries[0]
+    assert newest["matchCount"] == 1
+    assert newest["entryCount"] == 1
+    assert newest["changeSummary"] == "+1 match, +1 entrant since previous snapshot"
+    # No byte-delta prose and no filename baked into the summary field.
+    assert "KB" not in newest["changeSummary"] and "MB" not in newest["changeSummary"]
+    assert ".json" not in newest["changeSummary"]
+
+
+def test_backup_change_summary_reports_shrinkage_too(client):
+    created = client.post("/tournaments", json={"name": "A"}).json()
+    tid = created["id"]
+    client.put(f"/tournaments/{tid}/state", json=_basic_state("v0"))  # no backup
+    big = _basic_state("v1")
+    big["groups"] = [{"id": "g1", "name": "School A"}]
+    big["players"] = [
+        {"id": "p1", "name": "Ada", "groupId": "g1"},
+        {"id": "p2", "name": "Bo", "groupId": "g1"},
+    ]
+    client.put(f"/tournaments/{tid}/state", json=big)  # backs up "v0" (0 players)
+    small = _basic_state("v2")
+    small["groups"] = big["groups"]
+    small["players"] = [{"id": "p1", "name": "Ada", "groupId": "g1"}]
+    client.put(f"/tournaments/{tid}/state", json=small)  # backs up "v1" (2 players)
+
+    entries = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+    newest = entries[0]  # backs up "v1" (2 players) vs. "v0" (0)
+    assert newest["changeSummary"] == "+2 entrants since previous snapshot"
+
+
+# ---- Offline recovery (X R3): backups touch no network beyond the DB ----
+
+
+def test_backup_lifecycle_makes_no_outbound_network_call(client, monkeypatch):
+    """create / list / inspect(download) / restore / delete must all work
+    with the machine fully offline. The single-store architecture (CLAUDE.md:
+    "nothing in the write path touches the network") applies to recovery
+    too — a director stranded without internet must still be able to make
+    and use a backup. Guard `socket.socket.connect` (not socket construction,
+    which the ASGI test transport's own event-loop plumbing legitimately
+    uses for AF_UNIX pipes) so any attempt to dial a *non-loopback* address
+    during the lifecycle below fails the test."""
+    import socket as _socket
+
+    real_connect = _socket.socket.connect
+
+    def _guarded_connect(self, address, *args, **kwargs):
+        host = address[0] if isinstance(address, tuple) and address else None
+        if host not in (None, "127.0.0.1", "::1", "localhost"):
+            raise AssertionError(
+                f"backup lifecycle dialed out to {address!r} — offline "
+                "recovery requires the backup path to touch only the local "
+                "database"
+            )
+        return real_connect(self, address, *args, **kwargs)
+
+    monkeypatch.setattr(_socket.socket, "connect", _guarded_connect)
+    try:
+        created = client.post("/tournaments", json={"name": "A"}).json()
+        tid = created["id"]
+        client.put(f"/tournaments/{tid}/state", json=_basic_state("v1"))
+        manual = client.post(f"/tournaments/{tid}/state/backup").json()
+        assert manual["created"] is True
+        filename = manual["filename"]
+
+        listed = client.get(f"/tournaments/{tid}/state/backups").json()["backups"]
+        assert any(e["filename"] == filename for e in listed)
+
+        downloaded = client.get(f"/tournaments/{tid}/state/backups/{filename}")
+        assert downloaded.status_code == 200
+
+        restored = client.post(f"/tournaments/{tid}/state/restore/{filename}")
+        assert restored.status_code == 200
+
+        deleted = client.delete(f"/tournaments/{tid}/state/backups/{filename}")
+        assert deleted.status_code == 204
+    finally:
+        monkeypatch.setattr(_socket.socket, "connect", real_connect)
+

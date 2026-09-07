@@ -8,7 +8,7 @@
  * action is Archive / Unarchive in the danger zone.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { GeneralSettingsTab } from '../GeneralSettingsTab';
 import { apiClient } from '../../../api/client';
 import type { TournamentSummaryDTO } from '../../../api/dto';
@@ -63,12 +63,33 @@ describe('GeneralSettingsTab — lifecycle is display-only', () => {
     expect(screen.getByTestId('general-lifecycle')).toHaveTextContent(/archived/i);
   });
 
-  it('Save sends name and date only — never a lifecycle status', async () => {
+  it('links to canonical Setup editors without a competing save', () => {
     render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-    await waitFor(() => expect(vi.mocked(apiClient.updateTournament)).toHaveBeenCalled());
-    const body = vi.mocked(apiClient.updateTournament).mock.calls[0][1];
-    expect(body).toEqual({ name: 'Spring Meet', tournamentDate: '2026-05-15' });
-    expect(body).not.toHaveProperty('status');
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
+    expect(screen.queryByLabelText('Workspace name')).toBeNull();
+    expect(screen.getByText('Spring Meet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Edit tournament properties' })).toHaveAttribute('href', '/tournaments/t1/setup/general');
+    expect(screen.getByRole('link', { name: 'Edit dates' })).toHaveAttribute('href', '/tournaments/t1/setup/dates');
+    expect(apiClient.updateTournament).not.toHaveBeenCalled();
+  });
+});
+
+describe('V3-OC29.1: same conventions as Overview', () => {
+  it('labels the status row "Tournament status", not "Lifecycle"', () => {
+    render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
+    expect(screen.getByText('Tournament status')).toBeInTheDocument();
+    expect(screen.queryByText('Lifecycle')).toBeNull();
+  });
+
+  it('formats the tournament date with the shared human-readable formatter, not raw ISO', () => {
+    render(<GeneralSettingsTab tid="t1" summary={summaryWith({ tournamentDate: '2026-05-15' })} onSaved={noop} />);
+    expect(screen.queryByText('2026-05-15')).toBeNull();
+    expect(screen.getByText('Fri, May 15, 2026')).toBeInTheDocument();
+  });
+
+  it('points to Archive, not "use Archive below" retirement jargon', () => {
+    render(<GeneralSettingsTab tid="t1" summary={summaryWith()} onSaved={noop} />);
+    expect(screen.getByText('Archive this workspace to remove it from the active list.')).toBeInTheDocument();
+    expect(screen.queryByText(/To retire the workspace/)).toBeNull();
   });
 });

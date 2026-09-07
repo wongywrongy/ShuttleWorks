@@ -24,9 +24,10 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
     status: string;
     hasData?: boolean;
   }): string | undefined => {
-    if (m.status === 'enabled' && m.hasData) {
-      return 'This module has matches or draws. Clear its data before disabling it.';
-    }
+    // A module that has data is blocked by the server (409 MODULE_HAS_DATA)
+    // and the row already states that consequence via its impact line and
+    // "Review impact" action — no separate reason line here, and never an
+    // instruction to delete data in order to disable.
     if (m.status === 'enabled' && OPERATIONAL_IDS.has(m.id) && enabledOps <= 1) {
       return 'A workspace keeps at least one operational module enabled.';
     }
@@ -47,7 +48,7 @@ export function ModulesSettingsTab({ tid }: { tid: string }) {
             conditions in their head to read a list that will tell them
             anyway. Kept: what a module IS, which no row says. */}
         <p className={`mt-1 text-xs text-muted-foreground ${PAGE_BODY_WIDTH.prose}`}>
-          Each module is a product system inside this workspace.
+          Choose what this workspace can run, then finish its setup in the linked surface.
         </p>
       </div>
       <ul className="divide-y divide-border rounded border border-border">

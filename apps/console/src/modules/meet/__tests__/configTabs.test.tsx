@@ -94,7 +94,7 @@ describe('Meet Configuration (one merged surface)', () => {
     renderPage();
     expandConfigSections();
     expect(screen.getByLabelText('Score type')).toBeInTheDocument();
-    expect(screen.getByLabelText('Points per set')).toBeInTheDocument();
+    expect(screen.getByLabelText('Points per game')).toBeInTheDocument();
     expect(screen.getByLabelText('Match format')).toBeInTheDocument();
     expect(screen.getByLabelText('Deuce enabled')).toBeInTheDocument();
     expect(screen.getByLabelText('Rest between matches')).toBeInTheDocument();

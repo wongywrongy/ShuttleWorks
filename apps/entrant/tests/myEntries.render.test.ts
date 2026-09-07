@@ -61,7 +61,11 @@ describe('/e/me/entries — the session-aware shell', () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain('My entries');
-    expect(html).toContain('Sign in to see your entries');
+    // V3-PE38.1: the gate states the requirement once, with one action —
+    // no separate card heading duplicating "My entries" and no repeated
+    // "available after sign in" sentence.
+    expect(html).toContain('Sign in to view and manage your tournament entries.');
+    expect(html).not.toContain('Sign in to see your entries');
     expect(html).toContain('href="/e/login?next=/e/me/entries"');
     expect(html).not.toContain('id="my-entries-root"');
     expect(html).not.toContain('/e/assets/my-entries.js');
@@ -83,6 +87,14 @@ describe('/e/me/entries — the session-aware shell', () => {
     expect(html).toContain('Loading your entries.');
     expect(html).toContain('<script type="module" src="/e/assets/my-entries.js">');
     expect(html).toContain('<noscript>');
+    // V3-PE38.1: the sorting/organizer-confirmation explanation appears
+    // beside the actual list, not ahead of a gate that might not show one.
+    expect(html).toContain('newest first. The organizer');
+  });
+
+  it('does not show the list explanation ahead of the sign-in gate', async () => {
+    const html = await (await respond(PAGE, 200, '/e/me/entries')).text();
+    expect(html).not.toContain('newest first. The organizer');
   });
 
   it('says nothing personal in the document itself', async () => {

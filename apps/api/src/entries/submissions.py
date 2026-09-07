@@ -63,6 +63,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from db import short_reference
 from db.models import Entry, EntryPlayer, Submission
 from entries import lifecycle, money, partners
 from entries.entry_policy import NEEDS_REVIEW, NEEDS_REVIEW_PERSON, gender_flags
@@ -198,9 +199,11 @@ def find_for_account(
     """One act, by id, **for the account that made it** — or ``None``.
 
     The receipt door. The persist path answers ``303`` with
-    ``/e/{slug}/receipt/{submission_id}``, so a submission id travels in a
-    ``Location`` header and then sits in an address bar: it is a handle,
-    never a capability. Whoever writes the receipt loader must read through
+    ``/e/{slug}/receipt/{short_reference}`` (V3-24-1; it named the UUID
+    until then), so a submission's handle travels in a ``Location`` header
+    and then sits in an address bar: it is a handle, never a capability —
+    which is exactly why shortening it changed nothing about who may read
+    the act. Whoever writes the receipt loader must read through
     this function, because it is the only read that returns one act by id
     and there is no way to call it without naming the account — scoping a
     loader is then not something that can be forgotten, only something that
@@ -480,6 +483,20 @@ def _write(
     submission = Submission(
         tournament_id=tournament_id,
         account_id=account_id,
+        # V3-24-1: the handle the receipt prints and the entrant quotes.
+        # Minted here, at the one place a submission comes into existence,
+        # so there is no window in which an act exists without the name it
+        # is going to be known by. Uniqueness is checked against the table
+        # before the insert and enforced by
+        # ``uq_submissions_short_reference`` at it.
+        short_reference=short_reference.unique_reference(
+            lambda candidate: session.scalars(
+                select(Submission.id)
+                .where(Submission.short_reference == candidate)
+                .limit(1)
+            ).first()
+            is not None
+        ),
         idempotency_key=idempotency_key or None,
         # Q11: recorded at this instant, with the version they read.
         regulations_accepted_at=now,

@@ -110,7 +110,7 @@ export const meta: Route.MetaFunction = () => [
   {
     name: 'description',
     content:
-      `Badminton tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`,
+      `${BRAND.sportName} tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`,
   },
   { property: 'og:title', content: brandedTitle('Tournaments') },
   { property: 'og:type', content: 'website' },
@@ -123,18 +123,36 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
     <PlayShell>
       {/* Absence is the page not rendering the band — never an empty band
           with a placeholder in it (§2.1). */}
-      {nowStrip === null ? null : (
+      {nowStrip === null || filters.view === 'completed' ? null : (
         <NowStrip row={nowStrip.row} moreCount={nowStrip.moreCount} />
       )}
       <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-10">
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-          Tournaments
+        <h1 className="type-display text-[1.75rem] tracking-[-0.02em] text-foreground">
+          {filters.view === 'completed' ? 'Completed tournaments' : 'Tournaments'}
         </h1>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          {`Badminton tournaments taking entries through ${BRAND.productName}. Every entry is confirmed by the organizer.`}
+          {filters.view === 'completed'
+            ? 'Browse completed badminton tournaments and their published results.'
+            : `Find ${BRAND.sportName.toLowerCase()} tournaments, schedules, and results.`}
         </p>
 
-        <div className="mt-6 grid gap-4">
+        {/* v3-consolidated work package 26b: `min-w-0`. An implicit CSS
+            Grid track (no `grid-template-columns` here) sizes to the
+            widest ITEM's min-content, and a grid item defaults to
+            `min-width: auto` just like a flex item — so one long,
+            barely-breakable calendar row (an organizer's venue/locality
+            string with no good wrap point) was setting this whole
+            column's width, and `SeasonControls` right above it inherited
+            that same inflated width even though its own content had
+            nothing to do with it. Verified against a real running page:
+            this single class is what let a 320/390px document scroll
+            horizontally (plan §6 "Responsive/signage") — every other fix
+            attempted in this package for the same symptom (the search
+            box's own internal layout, the "Filters" popover's closed-state
+            display) was real but not sufficient on its own, because the
+            grid track itself, not any one child, was the thing refusing
+            to shrink. */}
+        <div className="mt-6 grid min-w-0 gap-4">
           <SeasonControls filters={filters} counts={counts} />
           {/* The empty states render INSTEAD of the calendar, and the
               filtered arm is NOT gated on `anyFilterActive`: §2.4 says a

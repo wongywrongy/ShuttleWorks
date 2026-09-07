@@ -55,7 +55,7 @@ export function SuggestionRow({
         className={`h-1.5 w-1.5 rounded-full ${KIND_DOT[s.kind]}`}
         aria-hidden="true"
       />
-      <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
         {KIND_EYEBROW[s.kind]}
       </span>
       <button

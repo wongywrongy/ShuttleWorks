@@ -2,6 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { SharingTab } from '../SharingTab';
 import { apiClient } from '../../../api/client';
+vi.mock('../../../hooks/useCanEdit', () => ({ useCanEdit: () => true }));
+// Cloud + a configured mail backend by default, so the existing email-mode
+// coverage below is unaffected; V3-OC25.1's capability-gating tests
+// override this per case.
+const mockUseAuth = vi.fn((): { authMode: 'local' | 'cloud'; user: { emailConfigured: boolean } } => ({
+  authMode: 'cloud',
+  user: { emailConfigured: true },
+}));
+vi.mock('../../../context/AuthContext', () => ({
+  useAuth: () => mockUseAuth(),
+}));
 
 vi.mock('../../../api/client', () => ({
   apiClient: {
@@ -19,6 +30,7 @@ vi.mock('../../../api/client', () => ({
 const entryPage = (over: Record<string, unknown> = {}) =>
   ({
     slug: 'spring-open',
+    audience: 'private',
     isOpen: true,
     entrantsPublished: false,
     drawsPublished: false,
@@ -55,7 +67,7 @@ describe('SharingTab', () => {
 
   it('shows the capability display link fetched from getDisplayToken', async () => {
     render(<SharingTab tid="t1" />);
-    const input = screen.getByLabelText('Public display link') as HTMLInputElement;
+    const input = screen.getByLabelText('Venue board link') as HTMLInputElement;
     await waitFor(() => expect(input.value).toContain('/display?token=tok-abc'));
     expect(apiClient.getDisplayToken).toHaveBeenCalledWith('t1');
     expect(input.value).not.toContain('?id=');
@@ -68,27 +80,27 @@ describe('SharingTab', () => {
    * outside that row. */
   it('Rotate link does NOT rotate on the first click: it arms', async () => {
     render(<SharingTab tid="t1" />);
-    const input = screen.getByLabelText('Public display link') as HTMLInputElement;
+    const input = screen.getByLabelText('Venue board link') as HTMLInputElement;
     await waitFor(() => expect(input.value).toContain('tok-abc'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate the public display link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
 
     expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
     expect(input.value).toContain('tok-abc');
     // Armed state names the consequence rather than repeating the label.
     expect(
-      screen.getByRole('button', { name: 'Confirm rotating the public display link' }),
+      screen.getByRole('button', { name: 'Confirm replacing the venue board link' }),
     ).toBeInTheDocument();
   });
 
   it('Rotate link swaps in the new token on the confirming second click', async () => {
     render(<SharingTab tid="t1" />);
-    const input = screen.getByLabelText('Public display link') as HTMLInputElement;
+    const input = screen.getByLabelText('Venue board link') as HTMLInputElement;
     await waitFor(() => expect(input.value).toContain('tok-abc'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate the public display link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Confirm rotating the public display link' }),
+      screen.getByRole('button', { name: 'Confirm replacing the venue board link' }),
     );
 
     await waitFor(() => expect(input.value).toContain('/display?token=tok-new'));
@@ -99,15 +111,15 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        (screen.getByLabelText('Public display link') as HTMLInputElement).value,
+        (screen.getByLabelText('Venue board link') as HTMLInputElement).value,
       ).toContain('tok-abc'),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rotate the public display link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
     fireEvent.keyDown(window, { key: 'Escape' });
 
     expect(
-      screen.getByRole('button', { name: 'Rotate the public display link' }),
+      screen.getByRole('button', { name: 'Replace the venue board link' }),
     ).toBeInTheDocument();
     expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
   });
@@ -116,7 +128,7 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        (screen.getByLabelText('Public display link') as HTMLInputElement).value,
+        (screen.getByLabelText('Venue board link') as HTMLInputElement).value,
       ).toContain('tok-abc'),
     );
 
@@ -126,8 +138,34 @@ describe('SharingTab', () => {
     const safeRow = screen.getByRole('button', { name: 'Copy' }).parentElement!;
     expect(within(safeRow).getByRole('button', { name: 'Open fullscreen' })).toBeInTheDocument();
     expect(
-      within(safeRow).queryByRole('button', { name: /rotate/i }),
+      within(safeRow).queryByRole('button', { name: /replace/i }),
     ).toBeNull();
+  });
+
+  // Package 16 (V3-OC22.2): the consequence next to Replace is the plan's
+  // exact sentence, present at rest (not only once armed), with no
+  // "deliberately" and no admonition.
+  it('states the replace consequence next to the control, at rest', async () => {
+    render(<SharingTab tid="t1" />);
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('Venue board link') as HTMLInputElement).value,
+      ).toContain('tok-abc'),
+    );
+    const replaceButton = screen.getByRole('button', { name: 'Replace the venue board link' });
+    expect(replaceButton.parentElement).toHaveTextContent(
+      'Replacing the link stops the old link from working.',
+    );
+    expect(screen.queryByText(/deliberately/i)).toBeNull();
+  });
+
+  // Package 16 (V3-OC22.2): scope="links" is composed directly under
+  // `DisplayConfig`'s own "Venue board" heading on `/publish/displays` — it
+  // must not render a second page heading for the same board.
+  it('scope="links" renders no page heading of its own (DisplayConfig owns it)', async () => {
+    render(<SharingTab tid="t1" scope="links" />);
+    await screen.findByLabelText('Venue board link');
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
   });
 
   it('hides the public display section when the token fetch fails (not owner)', async () => {
@@ -146,16 +184,18 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     const pub = screen.getByTestId('sharing-public');
     expect(pub).toHaveTextContent(/anyone with this link/i);
-    expect(within(pub).getByLabelText('Public display link')).toBeInTheDocument();
+    expect(within(pub).getByLabelText('Venue board link')).toBeInTheDocument();
     const inv = screen.getByTestId('sharing-invites');
     expect(within(inv).getByText(/operate this workspace/i)).toBeInTheDocument();
-    expect(within(inv).getByRole('button', { name: 'Create invite' })).toBeInTheDocument();
+    expect(within(inv).getByRole('button', { name: 'Send invitation' })).toBeInTheDocument();
     await waitFor(() => expect(apiClient.getDisplayToken).toHaveBeenCalled());
   });
 
-  it('Create invite calls createInvite then refetches the list', async () => {
+  it('creating an unaddressed invite requires selecting link sharing', async () => {
     render(<SharingTab tid="t1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create invite' }));
+    expect(screen.getByRole('button', { name: 'Send invitation' })).toBeDisabled();
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
     await waitFor(() =>
       expect(apiClient.createInvite).toHaveBeenCalledWith('t1', { role: 'operator' }),
     );
@@ -164,9 +204,9 @@ describe('SharingTab', () => {
 
   it('passes a non-empty email through to createInvite and clears the field', async () => {
     render(<SharingTab tid="t1" />);
-    const emailInput = screen.getByLabelText('Invite email (optional)') as HTMLInputElement;
+    const emailInput = screen.getByLabelText('Invite email') as HTMLInputElement;
     fireEvent.change(emailInput, { target: { value: '  coach@club.org  ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create invite' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
     await waitFor(() =>
       expect(apiClient.createInvite).toHaveBeenCalledWith('t1', {
         role: 'operator',
@@ -222,7 +262,7 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
 
   it('is absent when the workspace has no entry page', async () => {
     render(<SharingTab tid="t1" />);
-    await screen.findByLabelText('Public display link');
+    await screen.findByLabelText('Venue board link');
     expect(screen.queryByTestId('sharing-publication')).toBeNull();
   });
 
@@ -239,6 +279,8 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
     expect(boxes.every((b) => !(b as HTMLInputElement).checked)).toBe(true);
 
     fireEvent.click(within(card).getByLabelText(/Draws & seeded entries/));
+    expect(apiClient.patchEntryPagePublication).not.toHaveBeenCalled();
+    fireEvent.click(within(card).getByRole('button', { name: 'Save publication changes' }));
     await waitFor(() =>
       expect(apiClient.patchEntryPagePublication).toHaveBeenCalledWith('t1', {
         drawsPublished: true,
@@ -264,7 +306,8 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
     render(<SharingTab tid="t1" />);
 
     const card = await screen.findByTestId('sharing-publication');
-    fireEvent.click(within(card).getByLabelText(/Results/));
+    fireEvent.click(within(card).getByLabelText(/^Results/));
+    fireEvent.click(within(card).getByRole('button', { name: 'Save publication changes' }));
     await waitFor(() =>
       expect(apiClient.patchEntryPagePublication).toHaveBeenCalledWith('t1', {
         resultsPublished: false,
@@ -296,7 +339,100 @@ describe('SharingTab — a failed read is not an empty invite list', () => {
   it('NEGATIVE CONTROL: a real (empty) list still reads as empty', async () => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
     render(<SharingTab tid="t1" />);
-    expect(await screen.findByText(/no invite links yet/i)).toBeInTheDocument();
+    expect(await screen.findByText('No invitations sent yet.')).toBeInTheDocument();
     expect(screen.queryByTestId('invites-load-error')).toBeNull();
+  });
+});
+
+describe('publication transaction outcomes', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.patchEntryPagePublication).mockReset();
+    vi.mocked(apiClient.getEntryPage).mockResolvedValue(entryPage());
+  });
+  it('discards staged visibility changes without publishing', async () => {
+    render(<SharingTab tid="t1" scope="site" />);
+    const card = await screen.findByTestId('sharing-publication');
+    fireEvent.click(within(card).getByLabelText(/Entrant list/));
+    expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(within(card).getByLabelText(/Entrant list/)).not.toBeChecked();
+    expect(apiClient.patchEntryPagePublication).not.toHaveBeenCalled();
+  });
+  it('retains the draft and never announces success after a failed save', async () => {
+    vi.mocked(apiClient.patchEntryPagePublication).mockRejectedValue(new Error('offline'));
+    render(<SharingTab tid="t1" scope="site" />);
+    const card = await screen.findByTestId('sharing-publication');
+    fireEvent.click(within(card).getByLabelText(/Entrant list/));
+    fireEvent.click(screen.getByRole('button', { name: 'Save publication changes' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('not confirmed');
+    expect(within(card).getByLabelText(/Entrant list/)).toBeChecked();
+    expect(screen.queryByText('Publication settings saved.')).toBeNull();
+  });
+  it('distinguishes a failed read from an absent page and can retry', async () => {
+    vi.mocked(apiClient.getEntryPage).mockRejectedValueOnce(new Error('network'));
+    render(<SharingTab tid="t1" scope="site" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('current state is unknown');
+    expect(screen.queryByText(/No public page is configured/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByTestId('sharing-publication')).toBeInTheDocument();
+  });
+  it('requires connection and does not queue publication', async () => {
+    render(<SharingTab tid="t1" scope="site" />);
+    const card = await screen.findByTestId('sharing-publication');
+    // V3-OC20.1 gave the draws row's own detail text the word "Results" too
+    // (it now states scores appear only when Results is on), so the checkbox
+    // needs its exact accessible name rather than a loose substring match.
+    fireEvent.click(within(card).getByLabelText(/^Results/));
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    fireEvent(window, new Event('offline'));
+    expect(screen.getByRole('button', { name: 'Save publication changes' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('not queued');
+    expect(apiClient.patchEntryPagePublication).not.toHaveBeenCalled();
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    fireEvent(window, new Event('online'));
+  });
+});
+
+describe('V3-OC25.1: invitation mode matches what the server actually does', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
+    vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
+      token: 'tok-abc',
+      url: '/display?token=tok-abc',
+    } as never);
+    vi.mocked(apiClient.getEntryPage).mockRejectedValue(
+      Object.assign(new Error('404'), { response: { status: 404 } }),
+    );
+  });
+
+  it('local mode offers no email choice: link-only, with the link empty-state copy', async () => {
+    mockUseAuth.mockReturnValue({ authMode: 'local', user: { emailConfigured: false } });
+    render(<SharingTab tid="t1" />);
+    expect(screen.queryByLabelText('Send by email')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Invite email')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create share link' })).toBeInTheDocument();
+    expect(await screen.findByText('No invitation links created yet.')).toBeInTheDocument();
+  });
+
+  it('cloud mode without a configured mail backend also stays link-only', async () => {
+    mockUseAuth.mockReturnValue({ authMode: 'cloud', user: { emailConfigured: false } });
+    render(<SharingTab tid="t1" />);
+    expect(screen.queryByLabelText('Send by email')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create share link' })).toBeInTheDocument();
+  });
+
+  it('cloud mode with mail configured offers the choice, and empty-state text follows it', async () => {
+    mockUseAuth.mockReturnValue({ authMode: 'cloud', user: { emailConfigured: true } });
+    render(<SharingTab tid="t1" />);
+    expect(screen.getByLabelText('Send by email')).toBeInTheDocument();
+    expect(await screen.findByText('No invitations sent yet.')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
+    expect(await screen.findByText('No invitation links created yet.')).toBeInTheDocument();
+  });
+
+  it('uses "Invitations" as the section heading, not "Collaborator invites"', () => {
+    mockUseAuth.mockReturnValue({ authMode: 'cloud', user: { emailConfigured: true } });
+    render(<SharingTab tid="t1" />);
+    expect(within(screen.getByTestId('sharing-invites')).getByText('INVITATIONS')).toBeInTheDocument();
   });
 });

@@ -2,10 +2,10 @@
  * The two-state status chip (owner ruling on STOP-4): `Entries open
  * [— closes in Nd]` on the live ramp, `Entries closed` on the done ramp —
  * and NOTHING else: no Live, no Finished, no In-play until a real public
- * lifecycle signal exists. Sentence case and a full pill — the consumer
- * register of `StatusPill`'s token mapping, not the operator's uppercase
- * micro-label. The dot is decoration and hidden from AT; the text carries
- * the whole meaning. The component has no judgement of its own: the state
+ * lifecycle signal exists. Sentence case on a rectangular 4px chip — the
+ * consumer register of `StatusPill`'s token mapping, not the operator's
+ * uppercase micro-label. Colour + text only: no dot, nothing fully round
+ * (ADR 0027). The component has no judgement of its own: the state
  * arrives decided (`chipState`/`cardChipState`, `lib/phase.ts`).
  */
 import { STATUS_TONE } from '@scheduler/design-system/components';
@@ -22,13 +22,10 @@ export function StatusChip({ state }: { state: ChipState }) {
   const open = state.kind === 'entriesOpen';
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
+      className={`inline-flex h-badge shrink-0 items-center whitespace-nowrap rounded-xs border px-2.5 text-xs font-medium leading-none ${
         open ? chipTone('live') : chipTone('done')
       }`}
     >
-      {open ? (
-        <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${STATUS_TONE.live.dot}`} />
-      ) : null}
       {chipLabel(state)}
     </span>
   );

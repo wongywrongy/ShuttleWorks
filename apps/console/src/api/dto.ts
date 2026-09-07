@@ -22,6 +22,7 @@
 // whose divergence count is already zero). A generated alias cannot drift, so
 // these two need no parity entry - see api/__tests__/dtoParity.test.ts.
 import type { components } from './dto.generated';
+import type { MatchIdentity } from '../platform/domain/matchIdentity';
 
 // Tournament Configuration
 export interface TournamentConfig {
@@ -70,6 +71,10 @@ export interface TournamentConfig {
   setsToWin?: number; // 1 (best of 1), 2 (best of 3), or 3 (best of 5)
   pointsPerSet?: number; // 11, 15, or 21
   deuceEnabled?: boolean; // Win by 2 in deuce (up to 30 for 21-point sets)
+  // Mirrors Setup's `rules.pointCap` (ruling C3, V3-13-2) onto the Engine
+  // Config schema so the two surfaces echo the same operator-set cap.
+  // Not read by the engine — see core/schemas.py's TournamentConfig comment.
+  pointCap?: number | null;
   // ---- Public TV display ------------------------------------------
   // How the public ``/display`` page renders the courts view.
   //
@@ -509,6 +514,11 @@ export interface TournamentStateDTO {
   standings?: MeetStandingRowDTO[];
 }
 
+/** Authenticated backup download may include the bracket engine sidecar. */
+export type BackupSnapshotDTO = TournamentStateDTO & {
+  bracket_session?: { assignments?: unknown[] } | null;
+};
+
 // Canonical workflow-first Setup facade. These types intentionally mirror the
 // section-oriented API rather than leaking the legacy state-blob shape into
 // the Setup product. Section data is open because each section has a distinct
@@ -561,6 +571,13 @@ export interface TournamentSetupDTO {
   sections: SetupSectionStateDTO[];
 }
 
+export interface TournamentActivityFieldChangeDTO {
+  key: string;
+  label: string;
+  old?: unknown;
+  new?: unknown;
+}
+
 export interface TournamentActivityEntryDTO {
   id: string;
   occurredAt: string;
@@ -569,10 +586,13 @@ export interface TournamentActivityEntryDTO {
   action: string;
   target: string;
   summary: string;
+  fields: TournamentActivityFieldChangeDTO[];
+  payloadHash?: string | null;
 }
 
 export interface TournamentActivityFeedDTO {
   entries: TournamentActivityEntryDTO[];
+  retentionLimit: number;
 }
 
 // ---- Proposal pipeline (two-phase commit) -------------------------------
@@ -697,6 +717,14 @@ export interface BackupEntryDTO {
    *  director asked for it). Only auto rows rotate (WSB-3), so the list says
    *  which is which. Optional for older payloads. */
   origin?: 'auto' | 'manual';
+  /** Meaningful counts read off the stored snapshot (V3-OC27.2), so two
+   *  backups minted in the same second are distinguishable by content, not
+   *  just byte size. Optional for older payloads/tests. */
+  matchCount?: number;
+  entryCount?: number;
+  /** One-line diff against the next-older backup — never a byte delta or the
+   *  filename. "First recorded snapshot" for the oldest backup on record. */
+  changeSummary?: string;
 }
 
 export interface BackupListDTO {
@@ -714,6 +742,11 @@ export interface AuthorityStatusDTO {
   oldest_pending_at: string | null;
   blocked_operations: number;
   last_blocked_error_code: string | null;
+  /** Operations a cloud sync agent has ever acknowledged for this workspace
+   * (any epoch). Console writes never reach the sync outbox, so this is the
+   * only honest evidence a sync pipeline exists — a UI must not claim
+   * "synced" / "cloud copy up to date" unless this is > 0. */
+  acknowledged_operations: number;
 }
 
 /** Evidence retained when an event-node operation cannot be safely applied.
@@ -935,6 +968,10 @@ interface MatchMetricsDTO {
   /** Courts with nothing playing on them. `null` when the workspace has no
    *  court count to subtract from — an unknown is not zero. */
   courtsFree?: number | null;
+  /** Courts with two or more matches claiming them as currently in play
+   *  (contract §4.1) — a disputed court contributes here and to neither
+   *  `playing` nor `courtsFree`. Defaults to 0 for older payloads. */
+  disputedCourts?: number;
 }
 
 /** One upcoming match for the inspector's "Next up" list. `status` is
@@ -951,6 +988,10 @@ export interface NextMatchDTO {
    *  (ADR 0006). Optional for older payloads. */
   matchId?: string | null;
   source?: 'meet' | 'bracket' | null;
+  /** Decomposed identity coordinates; labels are formatted at the UI seam. */
+  identity?: MatchIdentity | null;
+  sideA?: string | null;
+  sideB?: string | null;
 }
 
 export interface WorkspaceSignalsDTO {
@@ -1051,6 +1092,10 @@ export interface UserDTO {
   emailVerified: boolean;
   isBootstrap: boolean;
   authMode: 'local' | 'cloud';
+  /** Whether the server's email seam can actually deliver off-host (the
+   *  ``smtp`` backend, vs. the local ``console`` backend that only logs).
+   *  Gates whether the console offers "send by email" invitations. */
+  emailConfigured: boolean;
 }
 
 /** The workspace's public display capability link (owner-gated mint/rotate).
@@ -1063,6 +1108,7 @@ export interface DisplayTokenDTO {
 /** The stored entry page as the operator sees it (SP-P7 adds the
  *  publication gates; the Sharing tab's card reads and flips them). */
 export interface EntryPageDTO {
+  audience: 'private' | 'unlisted' | 'public';
   slug: string;
   isOpen: boolean;
   introText: string | null;
@@ -1085,6 +1131,7 @@ export interface EntryPageDTO {
 /** PATCH body for the publication card — patch semantics: only the flags
  *  the operator actually toggled travel. */
 export interface EntryPagePublicationPatchDTO {
+  audience?: 'private' | 'unlisted' | 'public';
   entrantsPublished?: boolean;
   drawsPublished?: boolean;
   resultsPublished?: boolean;
@@ -1160,7 +1207,11 @@ type MatchAction =
   | 'retire_match'
   | 'uncall'
   | 'assign_court'
-  | 'postpone_match';
+  | 'postpone_match'
+  // Court-dispute resolution (contract §4.2). Payload carries
+  // chosenMatchKey/displacedMatchKeys/action/note; `match_id` on the
+  // envelope IS chosenMatchKey.
+  | 'resolve_court';
 
 /**
  * Body of ``POST /tournaments/{tid}/commands``. The ``id`` is the

@@ -21,9 +21,13 @@ vi.mock('../../../api/client', () => ({
   },
 }));
 
-// Signed-out: the form renders instead of redirecting.
+// Signed-out (the default for every test below): the form renders instead
+// of redirecting. Individual tests override this to check the signed-in /
+// local-mode-bootstrap path (V3 consolidated plan §7 evidence gap: operator
+// sign-in — the wall must never show once a session already exists).
+const mockUseAuth = vi.fn(() => ({ session: null as { user: unknown } | null, refresh: vi.fn() }));
 vi.mock('../../../context/AuthContext', () => ({
-  useAuth: () => ({ session: null, refresh: vi.fn() }),
+  useAuth: () => mockUseAuth(),
 }));
 
 function renderAt(path = '/login') {
@@ -39,6 +43,17 @@ describe('LoginPage', () => {
     vi.mocked(apiClient.register).mockReset();
     vi.mocked(apiClient.login).mockReset();
     vi.mocked(apiClient.resetPassword).mockReset();
+    mockUseAuth.mockReturnValue({ session: null, refresh: vi.fn() });
+  });
+
+  it('OC01: a local-mode bootstrap (or any signed-in) session never sees the sign-in wall', () => {
+    mockUseAuth.mockReturnValue({
+      session: { user: { id: '0', email: 'local@dev' } },
+      refresh: vi.fn(),
+    });
+    renderAt();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
   });
 
   it('preserves query and hash in the auth return destination', () => {

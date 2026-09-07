@@ -1,5 +1,12 @@
 import type { MatchStatus } from '../../../platform/domain/match';
 import type { MatchIdentity } from '../../../platform/domain/matchIdentity';
+import {
+  courtsFree as courtOccupancyFree,
+  deriveCourtStates,
+  disputedCourtCount,
+  occupiedCourtCount,
+  occupiesCourtNow,
+} from '../../../platform/domain/courtOccupancy';
 import type { OpsBlock } from '../opsBlock';
 import type { BoardChip } from './boardPlacements';
 import { fromEngineStatus, deriveTimeliness, can, type RunStatus, type Timeliness } from './runMachine';
@@ -61,7 +68,16 @@ export function toRunMatches(
   });
 }
 
-export interface CourtLane { court: number; now?: RunMatch; next?: RunMatch; later?: RunMatch; depth: number; }
+export interface CourtLane {
+  court: number;
+  now?: RunMatch;
+  next?: RunMatch;
+  later?: RunMatch;
+  /** More than one live/called match claims this court. Operations must
+   * resolve this explicitly; callers must not silently pick one. */
+  conflict?: RunMatch[];
+  depth: number;
+}
 
 /**
  * Lane precedence: what is HAPPENING on a court outranks what was merely
@@ -72,10 +88,9 @@ export interface CourtLane { court: number; now?: RunMatch; next?: RunMatch; lat
  * browser pass, Nashville QF1 on C4).
  *
  * Two live matches on one court is not a legal floor state (a court plays
- * one match at a time), so this ranks rather than errors: playing beats
- * called, and the earlier planned slot breaks any remaining tie. That keeps
- * the derivation total and deterministic — the desk still gets full controls
- * on the more-live of the two, and clearing it promotes the other.
+ * one match at a time), so it is retained as an explicit conflict rather than
+ * ranked into a silently selected current match. A single live match still
+ * outranks scheduled work; the earlier planned slot breaks remaining ties.
  */
 const LANE_RANK: Record<RunStatus, number> = { playing: 0, called: 1, scheduled: 2, done: 3 };
 
@@ -104,7 +119,22 @@ export function deriveCourtLanes(
       .sort((a, b) => LANE_RANK[a.status] - LANE_RANK[b.status]
         || (a.plannedSlot ?? Infinity) - (b.plannedSlot ?? Infinity)
         || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-    const nowRaw = lane[0];
+    // A called match is a queued call and may legitimately coexist with the
+    // match currently playing on that court. Only duplicate playing records
+    // are a court DISPUTE in the contract's sense (§4.1, `occupiesCourtNow` —
+    // the authority also used by `deriveSummary` below and the backend twin);
+    // multiple called records with no match yet playing are a narrower,
+    // lane-local assignment problem (nobody is actually on the court, but two
+    // calls have gone out for it) and are kept as an additional, documented
+    // lane-level conflict so the desk still sees it before the players arrive.
+    const playing = lane.filter((m) => occupiesCourtNow(m.status));
+    const called = lane.filter((m) => m.status === 'called');
+    const live = playing.length > 1 ? playing : playing.length === 0 && called.length > 1 ? called : [];
+    // A court cannot have two current matches. Preserve every conflicting
+    // record for the operator and leave `now` empty so no consequential
+    // action is accidentally applied to an arbitrary winner.
+    const conflict = live.length > 1 ? live : undefined;
+    const nowRaw = conflict ? undefined : lane[0];
     let now: RunMatch | undefined;
     if (nowRaw) {
       const timeliness: Timeliness = running
@@ -116,7 +146,15 @@ export function deriveCourtLanes(
         : 'ontime';
       now = { ...nowRaw, timeliness, late: timeliness !== 'ontime' };
     }
-    return { court, now, next: lane[1], later: lane[2], depth: lane.length };
+    const remaining = conflict ? lane.filter((m) => !live.includes(m)) : lane.slice(1);
+    return {
+      court,
+      now,
+      next: remaining[0],
+      later: remaining[1],
+      conflict,
+      depth: lane.length,
+    };
   });
 }
 
@@ -236,29 +274,46 @@ export function restShortKeys(
   return flagged;
 }
 
-export interface RunSummary { done: number; total: number; playing: number; courtsFree: number; late: number; }
+export interface RunSummary {
+  done: number;
+  total: number;
+  /** Courts in state `occupied` — a COURT count, not a match count (§4.1,
+   * D3). A disputed court contributes to `disputedCourts` instead. */
+  playing: number;
+  courtsFree: number;
+  late: number;
+  /** Courts where two or more matches currently claim the same court.
+   * Neither free nor occupied; excluded from both of those counts (D2/D3). */
+  disputedCourts: number;
+}
 
 export function deriveSummary(
   matches: RunMatch[],
   lanes: CourtLane[],
   liveChips: BoardChip[],
 ): RunSummary {
+  // One authority for the three-value court state (contract §4.3), shared
+  // with the backend's `shared/court_occupancy.py` — replaces this file's
+  // own courtsFree rule (D2) and the "disputed court counts as two playing
+  // matches" bug (D3). `lanes.length` is the configured court count: every
+  // court has a lane, even an empty one.
+  const states = deriveCourtStates(
+    matches
+      .filter((m) => m.court != null)
+      .map((m) => ({ id: m.id, status: m.status, court: m.court })),
+  );
   return {
     done: matches.filter((m) => m.status === 'done').length,
     total: matches.length,
-    playing: matches.filter((m) => m.status === 'playing').length,
-    // R-L, Option B: a court is FREE when nothing is in progress on it.
-    //
-    // This used to be `l.now == null` — no match ASSIGNED — which made a court
-    // holding a 14:00 match unfree at 09:00, and produced the 2026-08-19
-    // report's headline contradiction: the band read "0 PLAYING · 0 COURTS
-    // FREE" beside four cards that each said "SCHEDULED · 14:00". Worse, it
-    // was the second definition of one metric: `workspace_signals.py` computes
-    // `courtCount - |courts with a playing match|` for the Hub inspector and
-    // the Overview, so the same workspace was 0 free here and 4 free there.
-    // One definition now, and it is the server's — which is also what a caller
-    // looking for somewhere to send players means by the word.
-    courtsFree: lanes.filter((l) => l.now?.status !== 'playing').length,
+    playing: occupiedCourtCount(states),
+    disputedCourts: disputedCourtCount(states),
+    // R-L, Option B: a court is FREE when nothing is in progress on it — and,
+    // per §4.1, a DISPUTED court is not free either. `workspace_signals.py`
+    // computes the identical `courtCount - |claimed courts|` for the Hub
+    // inspector and the Overview; this is now the same computation, not a
+    // second definition of one metric (the 2026-08-19 report's headline
+    // contradiction).
+    courtsFree: courtOccupancyFree(lanes.length, states),
     // Late now MIRRORS the live board exactly (Task 2 `buildLiveChips`): every
     // court-assigned scheduled/called chip past its planned slot, NOT the old
     // Now-only/running-gated lane rule. The time axis shows lateness directly,

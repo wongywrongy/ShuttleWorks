@@ -116,11 +116,19 @@ store action or add a cross-store bridge. So "intended clean interface" means "t
 name, an owner, and a typed payload, enforced by a test" — with any push-transport or
 boundary-lint enforcement called out as an explicit, out-of-scope future.
 
+A fourth page in this folder is not a seam but a **vocabulary** contract: it fixes the meaning,
+label, missing-data fallback and single authority for every operational state, identity, time and
+formatting decision the two tiers share — see
+[State, identity, time and formatting](/reference/contracts/state-and-formatting) and
+[ADR 0029](/explanation/decisions/0029-state-and-formatting-contract).
+
 Read the three seam pages next.
 
 ## See also
 
 - [Meet → Operations (Seam A)](/reference/contracts/meet-operations) · [Bracket → Operations (Seam B)](/reference/contracts/bracket-operations) · [Operations → Display (Seam D)](/reference/contracts/operations-display)
+- [State, identity, time and formatting](/reference/contracts/state-and-formatting) — the vocabulary contract
+- [The match card family](/reference/contracts/match-card) — the match presentation contract (data shape, primitives, renderers, fixtures)
 - [Data flow](/explanation/architecture/data-flow) — the whole-system seam picture · [System overview](/explanation/architecture/system-overview)
 - [ADR 0009 — Universal match contract](/explanation/decisions/0009-universal-match-contract) · [ADR 0006 — Unified scheduling core](/explanation/decisions/0006-unified-scheduling-core)
 - [Glossary](/reference/glossary) — seam, module, contract, and the rest of the vocabulary · [Operational scenarios](/explanation/architecture/operational-scenarios) — the seams in a day's flow

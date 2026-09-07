@@ -182,6 +182,12 @@ def enqueue(
     Returns ``(job, created)``. Stripe idempotency semantics: a resubmit
     with a previously seen ``idempotency_key`` returns the original job
     (whatever its state) with ``created=False`` and inserts nothing.
+    The key is scoped to the WORKSPACE (SEC, 2026-09-07): it is chosen by
+    the caller, so a global lookup let an operator on workspace A pass a
+    key already used on workspace B and receive B's job — schedule result
+    included — from ``POST /tournaments/A/solve-jobs``, a cross-tenant read
+    through a header. ``uq_solve_jobs_idempotency_key`` is composite over
+    ``(tournament_id, idempotency_key)`` for the same reason.
     Raises :class:`ActiveSolveJobConflict` when another job for this
     ``(tournament_id, type_)`` is still active; the partial unique index
     ``uq_solve_jobs_active`` backstops the rare concurrent-submit race
@@ -190,7 +196,10 @@ def enqueue(
     """
     if idempotency_key:
         existing = session.execute(
-            select(SolveJob).where(SolveJob.idempotency_key == idempotency_key)
+            select(SolveJob).where(
+                SolveJob.tournament_id == tournament_id,
+                SolveJob.idempotency_key == idempotency_key,
+            )
         ).scalar_one_or_none()
         if existing is not None:
             return existing, False

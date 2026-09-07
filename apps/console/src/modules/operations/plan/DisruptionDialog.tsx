@@ -17,7 +17,7 @@ import { useTournamentStore } from '../../../store/tournamentStore';
 import { useUiStore } from '../../../store/uiStore';
 import { useProposals } from '../../../hooks/useProposals';
 import { formatSlotTime } from '../../../lib/time';
-import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../../lib/utils';
 import {
   formatMatchIdentity,
   meetMatchIdentityFromStored,
@@ -169,9 +169,9 @@ export function DisruptionDialog({
               key={t}
               type="button"
               onClick={() => setType(t)}
-              className={`${INTERACTIVE_BASE} rounded-full px-3 py-1 text-xs ${
+              className={`${INTERACTIVE_BASE} rounded-sm px-3 py-1 text-xs ${
                 type === t
-                  ? 'bg-accent text-accent-ink shadow-glow hover:brightness-110'
+                  ? `bg-accent text-accent-ink ${ACCENT_PRESS}`
                   : 'bg-muted text-muted-foreground hover:bg-muted/40'
               }`}
             >
@@ -253,7 +253,7 @@ export function DisruptionDialog({
                 </div>
               )}
               {!closureTemporary && (
-                <div className="mt-1 text-2xs text-muted-foreground">
+                <div className="mt-1 text-xs text-muted-foreground">
                   Closes the court for the rest of the day. Use the
                   director "Reopen court" action to restore it.
                 </div>

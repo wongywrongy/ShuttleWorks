@@ -95,7 +95,7 @@ export function InlineSearch({
           <button
             type="button"
             onClick={() => onQueryChange('')}
-            className={`${INTERACTIVE_BASE_QUIET} absolute right-1 inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground`}
+            className={`${INTERACTIVE_BASE_QUIET} absolute right-1 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground`}
             aria-label="Clear search"
           >
             <X aria-hidden="true" className="h-3 w-3" />
@@ -110,7 +110,7 @@ export function InlineSearch({
 
       {/* Result count + clear */}
       {(resultCount || canClear) && (
-        <div className="ml-auto flex items-center gap-2 text-2xs text-muted-foreground">
+        <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
           {resultCount && (
             <span className="tabular-nums">
               {resultCount.shown === resultCount.total
@@ -122,7 +122,7 @@ export function InlineSearch({
             <button
               type="button"
               onClick={onClearAll}
-              className={`${INTERACTIVE_BASE_QUIET} rounded border border-border px-1.5 py-0.5 text-2xs text-muted-foreground hover:text-foreground`}
+              className={`${INTERACTIVE_BASE_QUIET} rounded border border-border px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground`}
             >
               Clear
             </button>
@@ -136,7 +136,7 @@ export function InlineSearch({
 function FilterGroup({ group }: { group: FilterChipGroup }) {
   return (
     <div role="group" aria-label={group.label} className="inline-flex items-center gap-1">
-      <span className="text-2xs uppercase tracking-wider text-muted-foreground">
+      <span className="text-xs uppercase tracking-wider text-muted-foreground">
         {group.label}
       </span>
       <div className="inline-flex flex-wrap items-center gap-1">
@@ -149,7 +149,7 @@ function FilterGroup({ group }: { group: FilterChipGroup }) {
               geometry="segment"
               semantics="pressed"
               onClick={() => group.onToggle(opt.id)}
-              className="inline-flex h-6 items-center px-2 py-0 text-2xs font-medium"
+              className="inline-flex h-6 items-center px-2 py-0 text-xs font-medium"
             >
               {opt.label}
             </ActiveChoice>

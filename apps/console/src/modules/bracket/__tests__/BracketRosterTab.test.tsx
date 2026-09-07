@@ -267,7 +267,9 @@ describe('BracketRosterTab — events badges', () => {
     expect(rows).toHaveLength(5);
     const row = screen.getByTestId('roster-row-p-long');
     expect(row).toHaveAttribute('data-strict-row', 'true');
-    expect(row).toHaveClass('h-7', 'max-h-7');
+    // V3-OC14.1/X8: the roster floor is 36px (`strictRowHeight="roster"`),
+    // not the table's 28px default — was 'h-7', 'max-h-7'.
+    expect(row).toHaveClass('h-9', 'max-h-9');
     const playerCell = within(row).getByTitle(longName);
     expect(playerCell).toHaveAttribute('data-elastic-column', 'player');
     expect(playerCell).toHaveClass('overflow-hidden', 'whitespace-nowrap');
@@ -531,5 +533,23 @@ describe('BracketRosterTab — multi-event entry', () => {
     expect(
       within(panel).queryByTestId('event-entered-WS'),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('BracketRosterTab — sort visibility (V3-OC14.1)', () => {
+  it('opens with an explicit, visible sort on Player rather than raw insertion order', () => {
+    render(<BracketRosterTab />);
+    const header = screen.getByRole('columnheader', { name: /Player/i });
+    expect(header).toHaveAttribute('aria-sort', 'ascending');
+  });
+
+  it('changes the sort through the existing header button, no new toolbar', () => {
+    render(<BracketRosterTab />);
+    const sortButton = screen.getByRole('button', { name: /Player:.*Activate to sort descending/i });
+    fireEvent.click(sortButton);
+    expect(screen.getByRole('columnheader', { name: /Player/i })).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    );
   });
 });

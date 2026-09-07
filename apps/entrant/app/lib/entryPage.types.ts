@@ -52,6 +52,8 @@ export interface EntryEventDTO {
   /** R12's birth-year trigger, computed server-side so the form and the write
    * agree about which events need a year. */
   ageBracketed: boolean;
+  /** Number of registration rows received for this event. */
+  registrationCount?: number;
   entryCount: number;
 }
 

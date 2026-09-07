@@ -112,14 +112,20 @@ describe('SP-P9 bracket invariants', () => {
     expect(bracketHeight(3, 16)).toBeGreaterThanOrEqual(850);
   });
 
-  it('pins two-line nodes, CSS-grid braces, and the absence of measured connectors', () => {
+  // V3-PE10.1: a bracket-node article gained a third grid row (a small
+  // visible match-number reference above the two sides), so the fixed
+  // strings this test pins moved from a two-row `44px` node to a three-row
+  // `58px` one. The underlying invariant — a fixed CSS-grid geometry, no
+  // measured layout, no `<svg>` — is unchanged; only the exact literals are.
+  it('pins three-row nodes, CSS-grid braces, and the absence of measured connectors', () => {
     const card = read(resolve(APP, 'components/MatchCard.tsx'));
     const draw = read(resolve(APP, 'routes/draw.tsx'));
     const css = read(resolve(APP, 'app.css'));
-    expect(card).toContain('h-[44px]');
-    expect(card).toContain('grid-rows-2');
-    expect(card).toContain('truncate');
-    expect(card).toContain('Opponent beaten: ');
+    expect(card).toContain('min-h-[58px]');
+    expect(card).toContain('grid-rows-[auto_auto_auto]');
+    expect(card).toContain('break-words');
+    expect(card).not.toContain('truncate');
+    expect(card).not.toContain('Opponent beaten: ');
     expect(css).toContain('.bracket-link-slot::before');
     expect(css).toContain('.bracket-link-slot::after');
     expect(css).toContain('height: 50%');

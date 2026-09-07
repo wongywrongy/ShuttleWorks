@@ -113,7 +113,7 @@ test('keeps the entrant SSR list tied to every createServer test and partitions 
   const unit = all.filter((name) => !ssr.includes(name));
 
   expect(ssr).toEqual(discoveredSsr);
-  expect(ssr).toHaveLength(21);
+  expect(ssr).toHaveLength(23);
   expect(new Set([...unit, ...ssr])).toEqual(new Set(all));
   expect(unit).not.toEqual([]);
   expect(new Set(unit).size + new Set(ssr).size).toBe(all.length);
@@ -200,6 +200,9 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
     'utf8',
   );
   const runner = readFileSync(join(REPO_ROOT, 'tests/e2e/run-console-contracts.sh'), 'utf8');
+  // The runner is a thin wrapper since v3 plan package 01; the seed and the
+  // structural check live in the shared fixture script it execs.
+  const fixture = readFileSync(join(REPO_ROOT, 'tools/fixture-up.sh'), 'utf8');
   const interaction = readFileSync(
     join(REPO_ROOT, 'tests/e2e/tests/console-browser-contracts.spec.ts'),
     'utf8',
@@ -232,14 +235,17 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   expect(e2eTestFiles()).toEqual([
     '10-entrant-r11-evidence.spec.ts',
     '11-public-bracket-geometry.spec.ts',
+    'console-a11y.spec.ts',
     'console-browser-contracts.spec.ts',
+    'entrant-a11y.spec.ts',
   ]);
   expect(interaction).toMatch(/E2E_TAIPEI_TID/);
   expect(interaction).toMatch(/E2E_KOREA_TID/);
   expect(interaction).toMatch(/E2E_DISPLAY_TOKEN/);
   expect(interaction).not.toMatch(/test\.skip/);
-  expect(runner).toMatch(/--tournament T029 --tournament T030/);
-  expect(runner).toMatch(/check-console-fixture\.py/);
+  expect(runner).toMatch(/tools\/fixture-up\.sh/);
+  expect(fixture).toMatch(/--tournament T029 --tournament T030/);
+  expect(fixture).toMatch(/check-console-fixture\.py/);
   expect(ci).toContain('bash tests/e2e/run-console-contracts.sh');
   expect(setup).toMatch(/E2E_REQUIRE_PLAY/);
   expect(setup).toMatch(/npm_lifecycle_event/);
@@ -258,6 +264,8 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
 test('waits for the entrant origin only for entrant evidence', () => {
   expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:entrant-evidence' })).toBe(true);
   expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:console-contracts' })).toBe(false);
+  expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:console-a11y' })).toBe(false);
+  expect(requiresEntrantOrigin({ npm_lifecycle_event: 'test:entrant-a11y' })).toBe(true);
   expect(requiresEntrantOrigin({ E2E_REQUIRE_PLAY: '1' })).toBe(true);
   expect(
     requiresEntrantOrigin({

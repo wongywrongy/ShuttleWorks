@@ -2593,7 +2593,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/e/api/me/submissions/{submission_id}": {
+    "/e/api/me/submissions/{reference}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2603,8 +2603,14 @@ export interface paths {
         /**
          * Submission Receipt
          * @description Return the complete receipt for one act owned by the current account.
+         *
+         *     The path segment is the submission's short reference (V3-24-1) — the
+         *     same string the receipt page shows and the browser's address bar
+         *     carries. The parameter is named for what it is: it stopped being the
+         *     row's id, and a route that still said ``submission_id`` would be
+         *     describing the old wire to everyone who reads the OpenAPI document.
          */
-        get: operations["submission_receipt_e_api_me_submissions__submission_id__get"];
+        get: operations["submission_receipt_e_api_me_submissions__reference__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2757,48 +2763,6 @@ export interface paths {
          *     imported/demo tournaments do not need a second, competing player list.
          */
         get: operations["players_index_e_api_page__slug__players_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/e/api/page/{slug}/seeds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Seeds
-         * @description Seeds are draw facts (§3.5) — gated by ``draws_published``.
-         */
-        get: operations["seeds_e_api_page__slug__seeds_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/e/api/page/{slug}/winners": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Winners
-         * @description Winner and runner-up per event as results complete (§3.6) — result
-         *     data, so gated by ``results_published``. Partial state is fine: an
-         *     undecided event reports ``decided: false``.
-         */
-        get: operations["winners_e_api_page__slug__winners_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3072,6 +3036,11 @@ export interface paths {
          *     way — the caller learns nothing they did not already know about their
          *     own account, and an entrant who clicks twice is not shown an error for
          *     succeeding.
+         *
+         *     This route is session-gated, not enumeration-sensitive (R10 only binds
+         *     signup and reset-request): unlike those, it is safe to tell the caller
+         *     the truth about whether the mail actually sent, via a query flag on the
+         *     redirect the "sent" page reads (``verify.tsx``).
          */
         post: operations["resend_verification_e_account_resend_verification_post"];
         delete?: never;
@@ -3680,11 +3649,38 @@ export interface components {
             target: string;
             /** Summary */
             summary: string;
+            /** Fields */
+            fields?: components["schemas"]["ActivityFieldChange"][];
+            /** Payloadhash */
+            payloadHash?: string | null;
         };
         /** ActivityFeed */
         ActivityFeed: {
             /** Entries */
             entries: components["schemas"]["ActivityEntry"][];
+            /**
+             * Retentionlimit
+             * @default 200
+             */
+            retentionLimit: number;
+        };
+        /**
+         * ActivityFieldChange
+         * @description One changed field, named and valued for an operator (ruling R2).
+         *
+         *     ``old``/``new`` are whatever JSON-safe value the section payload
+         *     carries for that key (``model_dump(mode="json")``) — never redacted,
+         *     since everything here was already operator-visible before the change.
+         */
+        ActivityFieldChange: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Old */
+            old?: unknown | null;
+            /** New */
+            new?: unknown | null;
         };
         /**
          * Advisory
@@ -3846,6 +3842,11 @@ export interface components {
             blocked_operations: number;
             /** Last Blocked Error Code */
             last_blocked_error_code?: string | null;
+            /**
+             * Acknowledged Operations
+             * @default 0
+             */
+            acknowledged_operations: number;
         };
         /** AvailabilityWindow */
         AvailabilityWindow: {
@@ -3874,6 +3875,21 @@ export interface components {
              * @default auto
              */
             origin: string;
+            /**
+             * Matchcount
+             * @default 0
+             */
+            matchCount: number;
+            /**
+             * Entrycount
+             * @default 0
+             */
+            entryCount: number;
+            /**
+             * Changesummary
+             * @default First recorded snapshot
+             */
+            changeSummary: string;
         };
         /** BackupListDTO */
         BackupListDTO: {
@@ -4443,6 +4459,53 @@ export interface components {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
         };
+        /** DisplayMatchScoreDTO */
+        DisplayMatchScoreDTO: {
+            /** Sidea */
+            sideA: number;
+            /** Sideb */
+            sideB: number;
+        };
+        /**
+         * DisplayMatchStateDTO
+         * @description The board's own ``/match-states`` wire shape (D4).
+         *
+         *     This used to be ``operations.match_state_routes.MatchStateDTO`` verbatim
+         *     — including that DTO's four-value ``MatchStateStatusLiteral``
+         *     (``scheduled | called | started | finished``) and its
+         *     ``coerce_unknown_status`` validator, which silently maps anything else,
+         *     ``retired`` included, to ``scheduled``. That vocabulary belongs to the
+         *     PUT route's legacy wire input; it is not total over the canonical match
+         *     states (``db.models.MatchStatus``) and this public projection must not
+         *     repeat the drop. This DTO's ``status`` is instead exactly
+         *     ``shared.match_vocabulary.CANONICAL_TO_LEGACY``'s value set — bidirectional
+         *     and total, ``retired`` included — so a retired match reads as *Retired*
+         *     on the board rather than reappearing as *Scheduled*.
+         */
+        DisplayMatchStateDTO: {
+            /** Matchid */
+            matchId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "scheduled" | "called" | "started" | "finished" | "retired";
+            /** Calledat */
+            calledAt?: string | null;
+            /** Actualstarttime */
+            actualStartTime?: string | null;
+            /** Actualendtime */
+            actualEndTime?: string | null;
+            score?: components["schemas"]["DisplayMatchScoreDTO"] | null;
+            /** Notes */
+            notes?: string | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Originalslotid */
+            originalSlotId?: number | null;
+            /** Originalcourtid */
+            originalCourtId?: number | null;
+        };
         /**
          * DisplayStateDTO
          * @description The meet board's projection of the workspace state blob (F-DM-30).
@@ -4548,6 +4611,11 @@ export interface components {
             kind: string;
             /** Size */
             size: number;
+            /**
+             * Drawparticipantcount
+             * @default 0
+             */
+            drawParticipantCount: number;
             /** Hasconsolation */
             hasConsolation: boolean;
             matchCoverage: components["schemas"]["MatchCoverageDTO"];
@@ -4997,6 +5065,12 @@ export interface components {
             slug: string;
             /** Isopen */
             isOpen: boolean;
+            /**
+             * Audience
+             * @default private
+             * @enum {string}
+             */
+            audience: "private" | "unlisted" | "public";
             /** Introtext */
             introText?: string | null;
             /** Regulationstext */
@@ -5085,6 +5159,8 @@ export interface components {
             drawsPublished?: boolean | null;
             /** Resultspublished */
             resultsPublished?: boolean | null;
+            /** Audience */
+            audience?: ("private" | "unlisted" | "public") | null;
         };
         /**
          * EntryPageUpsertDTO
@@ -5238,6 +5314,11 @@ export interface components {
             ageBracketed: boolean;
             /** Entrycount */
             entryCount: number;
+            /**
+             * Registrationcount
+             * @default 0
+             */
+            registrationCount: number;
         };
         /** EventIn */
         EventIn: {
@@ -5384,6 +5465,8 @@ export interface components {
         ExportedSubmissionDTO: {
             /** Tournamentname */
             tournamentName?: string | null;
+            /** Shortreference */
+            shortReference: string;
             /** Submittedat */
             submittedAt: string;
             /** Feetotalcents */
@@ -5788,7 +5871,7 @@ export interface components {
          *     ``_SELF_NOOP_ACTIONS`` in ``repositories/local.py``).
          * @enum {string}
          */
-        MatchAction: "call_to_court" | "start_match" | "finish_match" | "retire_match" | "uncall" | "assign_court" | "postpone_match";
+        MatchAction: "call_to_court" | "start_match" | "finish_match" | "retire_match" | "uncall" | "assign_court" | "postpone_match" | "resolve_court";
         /** MatchActionIn */
         MatchActionIn: {
             /**
@@ -5891,6 +5974,11 @@ export interface components {
             playing: number;
             /** Courtsfree */
             courtsFree?: number | null;
+            /**
+             * Disputedcourts
+             * @default 0
+             */
+            disputedCourts: number;
         };
         /**
          * MatchMove
@@ -5942,6 +6030,23 @@ export interface components {
             sideA: number;
             /** Sideb */
             sideB: number;
+        };
+        /**
+         * MatchSideDTO
+         * @description One side of a match — the operator-wire twin of the public ``Side``.
+         *
+         *     ``persons`` and ``unresolved`` are NOT mutually exclusive (match-card
+         *     contract §2.1): a partially-known doubles side carries both — see
+         *     ``team_side`` and the ``pending_member`` note in the module docstring.
+         */
+        MatchSideDTO: {
+            /** Persons */
+            persons?: components["schemas"]["PersonRefDTO"][];
+            unresolved?: components["schemas"]["UnresolvedSideDTO"] | null;
+            /** Seed */
+            seed?: number | null;
+            /** Participantkey */
+            participantKey?: string | null;
         };
         /** MatchStateDTO */
         MatchStateDTO: {
@@ -6085,9 +6190,16 @@ export interface components {
              * @default false
              */
             canWithdraw: boolean;
+            /** Shortreference */
+            shortReference: string;
             /** Resultbadge */
             resultBadge?: string | null;
             partner?: components["schemas"]["PersonReferenceDTO"] | null;
+            /**
+             * Partnerinvitemailfailed
+             * @default false
+             */
+            partnerInviteMailFailed: boolean;
         };
         /** MyTournamentCardDTO */
         MyTournamentCardDTO: {
@@ -6119,6 +6231,12 @@ export interface components {
             submittedAt: string;
             /** Events */
             events: components["schemas"]["MyEntryLineDTO"][];
+            /** Submissionid */
+            submissionId: string;
+            /** Shortreference */
+            shortReference: string;
+            /** Withdrawsuntil */
+            withdrawsUntil?: string | null;
         };
         /** NamedDTO */
         NamedDTO: {
@@ -6150,6 +6268,14 @@ export interface components {
             matchId?: string | null;
             /** Source */
             source?: ("meet" | "bracket") | null;
+            /** Identity */
+            identity?: {
+                [key: string]: unknown;
+            } | null;
+            /** Sidea */
+            sideA?: string | null;
+            /** Sideb */
+            sideB?: string | null;
         };
         /**
          * NodeResultDTO
@@ -6344,8 +6470,17 @@ export interface components {
         PartnerAcceptedDTO: {
             /** Entryid */
             entryId: string;
+            /** Tournamentname */
+            tournamentName?: string | null;
             /** Eventcode */
             eventCode: string;
+            /**
+             * Discipline
+             * @default
+             */
+            discipline: string;
+            /** Entrantname */
+            entrantName: string;
             /** State */
             state: string;
         };
@@ -6370,6 +6505,21 @@ export interface components {
              * @default false
              */
             askBirthYear: boolean;
+        };
+        /**
+         * PersonRefDTO
+         * @description One resolved (or dead) person reference on the operator wire.
+         *
+         *     Unlike the public ``PersonReferenceDTO`` there is no publication gate
+         *     here — the operator always sees the stored name. ``id`` is the
+         *     roster/participant key the side's ``participantKey`` also carries;
+         *     it is optional because a legacy or hand-entered name may have none.
+         */
+        PersonRefDTO: {
+            /** Id */
+            id?: string | null;
+            /** Name */
+            name: string;
         };
         /**
          * PersonReferenceDTO
@@ -6449,6 +6599,8 @@ export interface components {
             dependencies: string[];
             slot_a: components["schemas"]["BracketSlotOut"];
             slot_b: components["schemas"]["BracketSlotOut"];
+            /** Sides */
+            sides?: components["schemas"]["MatchSideDTO"][];
             /** Segment */
             segment?: string | null;
             /** Played On */
@@ -6555,15 +6707,17 @@ export interface components {
             localTime?: string | null;
             /** Courtlabel */
             courtLabel?: string | null;
-            /**
-             * Status
-             * @default scheduled
-             */
-            status: string;
+            /** Status */
+            status?: string | null;
             /** Durationminutes */
             durationMinutes?: number | null;
             /** Updatedat */
             updatedAt?: string | null;
+            /**
+             * Scorespublished
+             * @default true
+             */
+            scoresPublished: boolean;
         };
         /** PlayerMatchSideDTO */
         PlayerMatchSideDTO: {
@@ -6578,6 +6732,7 @@ export interface components {
             winner: boolean;
             /** Seed */
             seed?: number | null;
+            unresolved?: components["schemas"]["PublicUnresolvedSideDTO"] | null;
         };
         /** PlayerPageDTO */
         PlayerPageDTO: {
@@ -6710,6 +6865,43 @@ export interface components {
             id?: string | null;
             /** Name */
             name: string;
+        };
+        /**
+         * PublicUnresolvedSideDTO
+         * @description Why a side has no (or an incomplete) resolved person — the public
+         *     twin of ``shared/sides.py``'s ``UnresolvedSideDTO`` (match-card §2.1).
+         *
+         *     Same field NAMES as the operator wire so one client model reads both
+         *     tiers, with two deliberate differences:
+         *
+         *     * ``reference`` carries the FORMATTED human match reference ("QF 3"),
+         *       not a raw play-unit id. The public tier has no ``matchIdentity.ts`` to
+         *       resolve one, so the reference and the legacy ``placeholder`` sentence
+         *       are spelled by one function (``_feeder_reference``) off one locator —
+         *       two spellings of one reference would be the D16 failure over again.
+         *     * ``known`` is always EMPTY here. The side's own ``persons`` (or, on
+         *       ``SideDTO``, the ``TeamDTO`` the client joins by ``participantKey``)
+         *       is the known set, and it has already been through the publication and
+         *       erasure gates in ``_participant_people``. Projecting the same people a
+         *       second time would put two gated copies of one identity on one wire,
+         *       free to diverge. The field is kept so the shape matches the contract
+         *       and the operator wire.
+         */
+        PublicUnresolvedSideDTO: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "bye" | "pending_member" | "winner_of" | "loser_of" | "withheld" | "undetermined";
+            /** Known */
+            known?: components["schemas"]["PersonReferenceDTO"][];
+            /**
+             * Missing
+             * @default 0
+             */
+            missing: number;
+            /** Reference */
+            reference?: string | null;
         };
         /**
          * PublicationDTO
@@ -7078,12 +7270,8 @@ export interface components {
             discipline?: string | null;
             /** Roundlabel */
             roundLabel?: string | null;
-            /**
-             * Status
-             * @default scheduled
-             * @enum {string}
-             */
-            status: "scheduled" | "called" | "live" | "delayed" | "completed" | "walkover" | "retired" | "cancelled";
+            /** Status */
+            status?: ("scheduled" | "called" | "live" | "delayed" | "completed" | "walkover" | "retired" | "cancelled") | null;
             /** Scheduleddate */
             scheduledDate?: string | null;
             /** Scheduledtime */
@@ -7172,6 +7360,7 @@ export interface components {
             persons?: components["schemas"]["PersonReferenceDTO"][];
             /** Placeholder */
             placeholder?: string | null;
+            unresolved?: components["schemas"]["PublicUnresolvedSideDTO"] | null;
         };
         /**
          * SchoolImpact
@@ -7204,6 +7393,15 @@ export interface components {
          * @description One calendar row (SP-P8 §3): tournament-level facts ONLY — no entrant
          *     data, no entry counts, no pricing. The key-set test in
          *     ``test_season_listing.py`` reddens on any added field.
+         *
+         *     V3-PE01.2/PE01.3 additions: ``closesAt`` + ``timeZone`` carry the exact
+         *     tournament-timezone instant the tier's "Entries close …" primary copy
+         *     needs (a relative "closes in Nd" alone gives no durable deadline once a
+         *     screenshot outlives the day it was taken) — the tier's own
+         *     ``formatMomentInZone`` (D11) does the rendering, this DTO only supplies
+         *     the wire moment and the zone name. ``locality`` is a best-effort
+         *     city/country line derived from the free-text venue address so a
+         *     discovery row states where a tournament is without opening it.
          */
         SeasonRowDTO: {
             /** Slug */
@@ -7222,38 +7420,19 @@ export interface components {
             status: string;
             /** Closesindays */
             closesInDays?: number | null;
+            /** Closesat */
+            closesAt?: string | null;
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timeZone: string;
+            /** Locality */
+            locality?: string | null;
             /** Drawspublished */
             drawsPublished: boolean;
             /** Winnerspublished */
             winnersPublished: boolean;
-        };
-        /** SeedLineDTO */
-        SeedLineDTO: {
-            /** Seed */
-            seed: number;
-            /** Persons */
-            persons?: components["schemas"]["PersonReferenceDTO"][];
-            /** Club */
-            club?: string | null;
-        };
-        /** SeedsDTO */
-        SeedsDTO: {
-            /** Published */
-            published: boolean;
-            /**
-             * Events
-             * @default []
-             */
-            events: components["schemas"]["SeedsEventDTO"][];
-        };
-        /** SeedsEventDTO */
-        SeedsEventDTO: {
-            /** Eventcode */
-            eventCode: string;
-            /** Discipline */
-            discipline: string;
-            /** Seeds */
-            seeds: components["schemas"]["SeedLineDTO"][];
         };
         /** SegmentDTO */
         SegmentDTO: {
@@ -7352,6 +7531,7 @@ export interface components {
             feederNodeKey?: string | null;
             /** Feedertake */
             feederTake?: ("winner" | "loser") | null;
+            unresolved?: components["schemas"]["PublicUnresolvedSideDTO"] | null;
         };
         /** SignupResponse */
         SignupResponse: {
@@ -7549,6 +7729,8 @@ export interface components {
         SubmissionReceiptDTO: {
             /** Submissionid */
             submissionId: string;
+            /** Shortreference */
+            shortReference: string;
             /** Slug */
             slug?: string | null;
             /** Tournamentname */
@@ -7843,6 +8025,8 @@ export interface components {
             pointsPerSet?: number | null;
             /** Deuceenabled */
             deuceEnabled?: boolean | null;
+            /** Pointcap */
+            pointCap?: number | null;
             /** Tvdisplaymode */
             tvDisplayMode?: ("auto" | "strip" | "grid" | "list") | null;
             /** Tvaccent */
@@ -8129,6 +8313,39 @@ export interface components {
             /** Userid */
             userId: string;
         };
+        /**
+         * UnresolvedSideDTO
+         * @description Why a side has no (or an incomplete) resolved person.
+         *
+         *     One flat model rather than six ``kind``-tagged classes: the frontend
+         *     switches on ``kind`` exactly as the match-card contract's
+         *     ``UnresolvedSide`` union describes, and Pydantic serializes the unused
+         *     fields as absent (they carry ``None``/empty defaults), so the wire shape
+         *     for each kind matches the union member the contract names.
+         *
+         *     ``reference`` (for ``winner_of`` / ``loser_of``) is the RAW machine id of
+         *     the feeder play unit, not a formatted human reference — the console's
+         *     ``matchIdentity.ts`` / ``bracketLabels.ts`` stay the one authority for
+         *     that spelling (state-and-formatting §6.3, D16) and resolve this id to
+         *     "Winner of QF1" themselves, exactly as they already do for
+         *     ``slot.feeder_play_unit_id`` today.
+         */
+        UnresolvedSideDTO: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "bye" | "pending_member" | "winner_of" | "loser_of" | "withheld" | "undetermined";
+            /** Known */
+            known?: components["schemas"]["PersonRefDTO"][];
+            /**
+             * Missing
+             * @default 0
+             */
+            missing: number;
+            /** Reference */
+            reference?: string | null;
+        };
         /** UserDTO */
         UserDTO: {
             /** Id */
@@ -8152,6 +8369,11 @@ export interface components {
              * @default local
              */
             authMode: string;
+            /**
+             * Emailconfigured
+             * @default false
+             */
+            emailConfigured: boolean;
         };
         /**
          * ValidateMoveRequest
@@ -8279,39 +8501,6 @@ export interface components {
             nowIso?: string | null;
             /** Timebudgetsec */
             timeBudgetSec?: number | null;
-        };
-        /** WinnersDTO */
-        WinnersDTO: {
-            /** Published */
-            published: boolean;
-            /**
-             * Events
-             * @default []
-             */
-            events: components["schemas"]["WinnersEventDTO"][];
-        };
-        /** WinnersEventDTO */
-        WinnersEventDTO: {
-            /** Eventcode */
-            eventCode: string;
-            /** Discipline */
-            discipline: string;
-            /** Decided */
-            decided: boolean;
-            winner?: components["schemas"]["HonorDTO"] | null;
-            runnerUp?: components["schemas"]["HonorDTO"] | null;
-            /**
-             * Semifinalists
-             * @default []
-             */
-            semifinalists: components["schemas"]["HonorDTO"][];
-            /** Finalscore */
-            finalScore?: number[][] | null;
-            /**
-             * Finalists
-             * @default []
-             */
-            finalists: components["schemas"]["HonorDTO"][];
         };
         /**
          * WithdrawRequest
@@ -12209,12 +12398,12 @@ export interface operations {
             };
         };
     };
-    submission_receipt_e_api_me_submissions__submission_id__get: {
+    submission_receipt_e_api_me_submissions__reference__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                submission_id: string;
+                reference: string;
             };
             cookie?: never;
         };
@@ -12396,68 +12585,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlayersDTO"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    seeds_e_api_page__slug__seeds_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeedsDTO"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    winners_e_api_page__slug__winners_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WinnersDTO"];
                 };
             };
             /** @description Validation Error */
@@ -13179,7 +13306,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: components["schemas"]["MatchStateDTO"];
+                        [key: string]: components["schemas"]["DisplayMatchStateDTO"];
                     };
                 };
             };

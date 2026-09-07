@@ -44,7 +44,7 @@ import logging
 import re
 import uuid
 from typing import Optional, Type
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.exceptions import RequestValidationError
@@ -230,6 +230,11 @@ _OPTIONAL_TEXT = frozenset({"displayName", "phone"})
 # ever made.
 _SAFE_NEXT = re.compile(r"^/e/[A-Za-z0-9/_.~-]*$")
 
+# The literal prefix the pattern above anchors on, named so ``next_target``
+# can rebuild an accepted destination from a constant rather than returning
+# the string it was handed (2026-09-07).
+_SAFE_NEXT_PREFIX = "/e/"
+
 
 def is_form_post(request: Request) -> bool:
     return (
@@ -300,11 +305,28 @@ def next_target(raw: Optional[str], fallback: str) -> str:
     anything else is discarded for the fallback. Matching beats stripping
     because a stripper has to anticipate every encoding and a matcher does
     not.
+
+    2026-09-07: the accepted value is rebuilt from its parsed components
+    rather than handed back as the caller's own string. The allowlist above
+    already refuses anything that is not a relative ``/e/`` path — the
+    character class excludes ``:``, ``?`` and ``#``, so a match cannot carry
+    a scheme, an authority, a query or a fragment — and the split below
+    therefore rejects nothing the regex accepts. It is a second, independent
+    statement of the same invariant (the browser must stay on this origin) in
+    a shape a static analyser can follow: CodeQL's ``py/url-redirection``
+    does not recognise a regex allowlist as a sanitiser, and an open-redirect
+    alert on a login route is not a finding to leave standing while the
+    reasoning lives only in a docstring.
     """
     value = str(raw or "")
     if ".." in value or not _SAFE_NEXT.match(value):
         return fallback
-    return value
+    parts = urlsplit(value)
+    if parts.scheme or parts.netloc or parts.query or parts.fragment:
+        return fallback
+    if not parts.path.startswith(_SAFE_NEXT_PREFIX):
+        return fallback
+    return _SAFE_NEXT_PREFIX + parts.path[len(_SAFE_NEXT_PREFIX) :]
 
 
 async def _payload(request: Request) -> dict:
@@ -512,13 +534,17 @@ def _auth_error(exc: AuthError):
     return http_error(status.HTTP_400_BAD_REQUEST, code, exc.message)
 
 
-def _mail(to: str, subject: str, body: str) -> None:
-    """Send, and never let the outcome reach the caller's response.
+def _mail(to: str, subject: str, body: str) -> bool:
+    """Send, and never let a *raised* delivery failure reach the caller.
 
-    Delivery failure must not become an oracle — neither for account
-    existence (a 500 on the found branch and a 202 on the other is the same
-    leak the uniform body exists to prevent) nor for infrastructure. The
-    exception is logged, which is where an operator can act on it.
+    The route still never became an existence oracle from this — the
+    signup/reset paths that must stay enumeration-safe (R10) ignore the
+    returned bool entirely and always answer with the same body/redirect on
+    both branches. Routes that are NOT enumeration-sensitive (session-gated,
+    like resend-verification) may use the returned bool to tell the entrant
+    the truth about whether their mail was actually sent, rather than
+    silently claiming success. The exception is still logged either way,
+    which is where an operator can act on it.
 
     Imported inside the function, matching ``identity/auth_routes.py``: the
     email seam pulls ``smtplib`` and this module is imported at app start.
@@ -527,15 +553,17 @@ def _mail(to: str, subject: str, body: str) -> None:
 
     try:
         send_email(to=to, subject=subject, body=body)
+        return True
     except Exception:
         log.exception("entrant mail delivery failed (%s)", subject)
+        return False
 
 
-def _send_verification(account, token: str) -> None:
+def _send_verification(account, token: str) -> bool:
     # PUBLIC tier (SP-HOST-1 D-9). An entrant has no console account and no
     # Access seat; a verify link on the operator host is unopenable.
     origin = settings.play_origin
-    _mail(
+    return _mail(
         account.email,
         f"Confirm your email for {PRODUCT_NAME} entries",
         (
@@ -879,19 +907,24 @@ def resend_verification(
     way — the caller learns nothing they did not already know about their
     own account, and an entrant who clicks twice is not shown an error for
     succeeding.
+
+    This route is session-gated, not enumeration-sensitive (R10 only binds
+    signup and reset-request): unlike those, it is safe to tell the caller
+    the truth about whether the mail actually sent, via a query flag on the
+    redirect the "sent" page reads (``verify.tsx``).
     """
     account = repo.get_entrant_identity(uuid.UUID(entrant.id))
+    sent_ok = True
     if account is not None and not account.email_verified:
         token = repo.execute_transaction(
             entrant_service.issue_verification_token, account
         )
-        _send_verification(account, token)
+        sent_ok = _send_verification(account, token)
     if is_form_post(request):
-        return RedirectResponse(
-            url=_VERIFY_SENT_PAGE, status_code=status.HTTP_303_SEE_OTHER
-        )
+        target = _VERIFY_SENT_PAGE if sent_ok else f"{_VERIFY_SENT_PAGE}?ok=0"
+        return RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
     response.status_code = status.HTTP_202_ACCEPTED
-    return {"status": "accepted"}
+    return {"status": "accepted", "mailSent": sent_ok}
 
 
 @router.post(
@@ -960,8 +993,18 @@ def request_entrant_password_reset(
             repo.execute_transaction(_record_failures, ip_key)
 
     if is_form_post(request):
+        # The TTL is a fixed configuration value, identical on both the
+        # found and not-found branch — carrying it here lets the SSR page
+        # state the real duration instead of a hardcoded guess, without
+        # becoming an enumeration signal (R10 is unaffected: every request
+        # gets the same query value regardless of whether the address
+        # exists).
+        ttl_query = urlencode(
+            {"ttlMinutes": int(settings.reset_token_ttl_minutes)}
+        )
         return RedirectResponse(
-            url=_RESET_SENT_PAGE, status_code=status.HTTP_303_SEE_OTHER
+            url=f"{_RESET_SENT_PAGE}?{ttl_query}",
+            status_code=status.HTTP_303_SEE_OTHER,
         )
     response.status_code = status.HTTP_202_ACCEPTED
     return {"status": "accepted"}

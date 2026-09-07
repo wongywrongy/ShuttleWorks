@@ -38,7 +38,7 @@ export function DraggablePlayerChip({
       <span className="min-w-0 flex-1 break-words">{player.name || '(unnamed)'}</span>
       <span
         className={[
-          'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-sm px-1 text-3xs tabular-nums',
+          'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-sm px-1 text-xs tabular-nums',
           heavy
             ? 'bg-status-warning-bg text-status-warning ring-1 ring-status-warning/40'
             : 'text-muted-foreground',

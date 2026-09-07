@@ -84,3 +84,20 @@ describe('GlobalSettingsPage nav', () => {
     expect(screen.queryByTestId('global-settings-select')).not.toBeInTheDocument();
   });
 });
+
+describe('V3-OC04.1: local-mode Profile leads with sign-in, not a dead edit form', () => {
+  it('renders the sign-in prompt above the read-only fields, and hides Save', () => {
+    mount();
+    expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Change photo' })).not.toBeInTheDocument();
+
+    const prompt = screen.getByText('Sign in with an account to edit your profile.');
+    const nameField = screen.getByLabelText('Full name');
+    // DOCUMENT_POSITION_FOLLOWING (4): the field comes after the prompt.
+    expect(
+      prompt.compareDocumentPosition(nameField) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(nameField).toBeDisabled();
+  });
+});

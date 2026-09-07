@@ -35,6 +35,13 @@ export const DELAYED_MULTIPLIER = 2.5;
  */
 export const STALE_MS = 240_000;
 
+/** Whole minutes since the last successful sync, floored at 1 — the caption
+ *  says "a few minutes" for nothing shorter than a minute rather than
+ *  claiming "0 minutes behind". */
+function ageMinutes(ageMs: number): number {
+  return Math.max(1, Math.round(ageMs / 60_000));
+}
+
 /**
  * Derive the spectator-facing freshness state from the age (in ms) of
  * the last *successful* sync and the hook's poll cadence. Stale takes
@@ -53,5 +60,15 @@ export function deriveFreshness(ageMs: number, pollMs: number): FreshnessState {
  * no connection/network framing, no operator vocabulary
  * (reconnect/offline/server/backend). See `freshness.test.ts` for the
  * guard that pins this.
+ *
+ * Takes the age of the last successful sync (ms) so the copy says HOW
+ * stale the board is (V3-OC24.2: "the board's freshness must be truthful
+ * and stays unambiguous across midnight") rather than a fixed "a few
+ * minutes" regardless of whether the last sync was 4 minutes or 4 hours
+ * ago. Was a plain string constant before package 17; callers pass
+ * `now - lastSyncedAt`.
  */
-export const STALE_CAPTION = 'Results may be a few minutes behind.';
+export function staleCaption(ageMs: number): string {
+  const minutes = ageMinutes(ageMs);
+  return `Results may be ${minutes} minute${minutes === 1 ? '' : 's'} behind.`;
+}

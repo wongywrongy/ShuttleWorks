@@ -30,7 +30,8 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { useLiveTracking } from '../../hooks/useLiveTracking';
 import { formatSlotTime } from '../../lib/time';
 import { useDisplaySync } from './publicDisplay/useDisplaySync';
-import { STALE_CAPTION } from './publicDisplay/freshness';
+import { staleCaption, STALE_MS } from './publicDisplay/freshness';
+import { formatDateTime } from '../../lib/formatDateTime';
 import { useFullscreen } from './publicDisplay/useFullscreen';
 import { formatTournamentDate } from './publicDisplay/helpers';
 import { FullscreenButton } from './publicDisplay/FullscreenButton';
@@ -41,6 +42,12 @@ import { StandingsView } from './publicDisplay/StandingsView';
 import { DEFAULT_DWELL_SECONDS, rotationSlides, slideAt } from './publicDisplay/rotation';
 import { CourtsView } from './publicDisplay/CourtsView';
 import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
+import {
+  deriveCourtStates,
+  deriveDisputes,
+  occupiesCourtNow,
+  type OccupancyMatchLike,
+} from '../../platform/domain/courtOccupancy';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
 import { orderCourts, visibleCourts, defaultColumns, autoLayout } from './publicDisplay/courtLayout';
 import { standingsPlacement } from './publicDisplay/standingsLayout';
@@ -58,6 +65,21 @@ import { formatMatchIdentity, meetMatchIdentityFromStored } from '../../platform
 
 /** How long the NOW CALLING strip holds before the board moves on. */
 const NOW_CALLING_DWELL_MS = 8_000;
+
+/**
+ * The board is supposed to render the TOURNAMENT timezone (state-and-
+ * formatting contract §7.1/§7.4, D13, V3-OC24.2), never the viewer's own
+ * browser zone — a board in one hall and a phone checking it from another
+ * time zone must read the same clock. No timezone reaches this page's wire
+ * data today: neither `TournamentConfig` (the `config` this page hydrates)
+ * nor `ScheduleDTO` carries a `timeZone` field, unlike `TournamentSummaryDTO`
+ * (which the in-shell Settings tabs read separately). Falling back to UTC
+ * and LABELING it (§7.2's documented fallback: "14:30 UTC", never a silent
+ * local-time assumption) is the honest behavior until that field is wired
+ * through the display projection — see docs/audits/v3-consolidated/reports/
+ * 17-signage.md and debt-log.md for the follow-up.
+ */
+const BOARD_TIME_ZONE = 'UTC';
 
 function getMatchCode(match: { id: string; eventRank?: string | null; matchNumber?: number | null }): string {
   const identity = meetMatchIdentityFromStored({
@@ -119,11 +141,10 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
   // Fullscreen toggle + F-key shortcut. See ./publicDisplay/useFullscreen.ts.
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
 
-  const currentTime = now.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  // `clock_with_zone` (state-and-formatting §7.1): time-of-day + zone
+  // abbreviation, tournament-tz-aware — see BOARD_TIME_ZONE's doc comment
+  // for why that is 'UTC', labeled, rather than the browser's own zone.
+  const currentTime = formatDateTime(now.toISOString(), 'clock_with_zone', BOARD_TIME_ZONE);
 
   const playerNames = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
   const matchMap = useMemo(() => new Map(matches.map((m) => [m.id, m])), [matches]);
@@ -147,18 +168,36 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
   // Indexing helpers we'll reuse below. O(1) by-matchId lookups so the
   // courts / standings derivations don't re-scan the full matchesByStatus
   // array on every tick.
+  //
+  // Disputed-court derivation redirects to the one authority (D1) — this
+  // page keeps no conflict detector of its own. Only `started` (playing)
+  // matches feed the desk-window occupancy/dispute answer; `called` never
+  // creates a dispute (§4.1: `called` is outside occupancy-now for
+  // counting/conflict purposes) and only fills a court neither occupied
+  // nor disputed by a playing match.
   const matchesByCourt = useMemo(() => {
+    const playingMatches: OccupancyMatchLike[] = matchesByStatus.started.map((a) => ({
+      id: a.matchId,
+      status: 'playing',
+      court: matchStates[a.matchId]?.actualCourtId ?? a.courtId,
+    }));
+    const states = deriveCourtStates(playingMatches);
     const active = new Map<number, string>();
-    const called = new Map<number, string>();
-    for (const a of matchesByStatus.started) {
-      const courtId = matchStates[a.matchId]?.actualCourtId ?? a.courtId;
-      active.set(courtId, a.matchId);
+    for (const match of playingMatches) {
+      if (match.court != null && states.get(match.court) === 'occupied') {
+        active.set(match.court, match.id);
+      }
     }
+    const conflicts = new Map<number, string[]>();
+    for (const dispute of deriveDisputes(playingMatches)) {
+      conflicts.set(dispute.courtId, dispute.claims.map((claim) => claim.matchKey));
+    }
+    const called = new Map<number, string>();
     for (const a of matchesByStatus.called) {
       const courtId = matchStates[a.matchId]?.actualCourtId ?? a.courtId;
-      if (!active.has(courtId)) called.set(courtId, a.matchId);
+      if (!active.has(courtId) && !conflicts.has(courtId)) called.set(courtId, a.matchId);
     }
-    return { active, called };
+    return { active, called, conflicts };
   }, [matchesByStatus.started, matchesByStatus.called, matchStates]);
 
   // ---- Relative Now/Next/Later lanes (task 8) --------------------------
@@ -183,10 +222,20 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
       }));
   }, [schedule, matchStates]);
 
-  const nowIds = useMemo(
-    () => new Set<string>([...matchesByCourt.active.values(), ...matchesByCourt.called.values()]),
-    [matchesByCourt],
-  );
+  // D19: the board's "now" window is deliberately WIDER than the desk's —
+  // `called` counts as "now" here too, so a court does not read empty
+  // during the walk-to-court gap — via the named, documented
+  // `nowWindow: 'board'` parameter on the shared occupancy authority,
+  // rather than an undocumented, board-local union.
+  const nowIds = useMemo(() => {
+    const candidates: { id: string; status: 'playing' | 'called' }[] = [
+      ...matchesByStatus.started.map((a) => ({ id: a.matchId, status: 'playing' as const })),
+      ...matchesByStatus.called.map((a) => ({ id: a.matchId, status: 'called' as const })),
+    ];
+    return new Set(
+      candidates.filter((c) => occupiesCourtNow(c.status, 'board')).map((c) => c.id),
+    );
+  }, [matchesByStatus.started, matchesByStatus.called]);
 
   const lanes = useMemo(() => assignLanes(laneItems, nowIds), [laneItems, nowIds]);
 
@@ -217,6 +266,7 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
       match: (typeof matches)[number] | null;
       state: (typeof matchStates)[string] | null;
       status: 'active' | 'called' | 'empty';
+      conflictMatches?: (typeof matches)[number][];
       // The Next/Later lane preview for this court (if any). On an EMPTY
       // court it replaces an inert "Available" placeholder with relative
       // "Next"/"Later" labels; on an occupied one the card shows just the
@@ -239,6 +289,17 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
       };
 
       const activeId = matchesByCourt.active.get(courtId);
+      const conflictIds = matchesByCourt.conflicts.get(courtId);
+      if (conflictIds?.length) {
+        courts.push({
+          courtId,
+          match: null,
+          state: null,
+          status: 'empty',
+          conflictMatches: conflictIds.map((id) => matchMap.get(id)).filter((m): m is (typeof matches)[number] => !!m),
+        });
+        continue;
+      }
       if (activeId) {
         courts.push({
           courtId,
@@ -413,9 +474,10 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
   const tvDisplayMode: 'auto' | 'grid' | 'list' = storedMode === 'strip' ? 'auto' : storedMode;
 
   // ---- TV sizing + accent knobs (per-tournament) -----------------------
-  // Shared with DisplayPreview — see publicDisplay/tvSizing.ts for the
-  // single source of truth (previously duplicated verbatim in both
-  // files; extracted as part of task 7 to remove that drift risk).
+  // See publicDisplay/tvSizing.ts for the single source of truth
+  // (previously duplicated verbatim across board renderers; extracted as
+  // part of task 7 to remove that drift risk. The sample-data DisplayPreview
+  // swatch that also shared it was dead code, removed in package 16).
   const tvAccent = resolveTvAccent(config.tvAccent);
   const tvCardSize = config.tvCardSize ?? 'auto';
   const tvShowScores = config.tvShowScores !== false;
@@ -505,17 +567,21 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
               nowMs={now.getTime()}
             />
             {lastSyncedAt ? (
-              <span
+              // `datetime` (date + clock, tournament tz) rather than the
+              // bare time-of-day this used to render: V3-OC24.2's exact
+              // finding was "Updated 04:07 AM" with no date, unreadable
+              // across midnight on a board left running overnight. The
+              // machine-readable `diagnostic` ISO value goes on `<time>`
+              // per state-and-formatting §7.1.
+              <time
                 data-testid="display-last-updated"
+                dateTime={formatDateTime(new Date(lastSyncedAt).toISOString(), 'diagnostic') ?? undefined}
                 className="whitespace-nowrap text-xs text-muted-foreground"
-                title={`Last updated ${new Date(lastSyncedAt).toLocaleString()}`}
+                title={`Last updated ${formatDateTime(new Date(lastSyncedAt).toISOString(), 'deadline', BOARD_TIME_ZONE)}`}
               >
                 Updated{' '}
-                {new Date(lastSyncedAt).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
+                {formatDateTime(new Date(lastSyncedAt).toISOString(), 'datetime', BOARD_TIME_ZONE)}
+              </time>
             ) : null}
           </div>
           {/* Venue render keeps the clock and nothing else (TV-8): nobody is
@@ -552,7 +618,12 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
                   they showed. */}
               {hybrid ? <BoardSwitch to="bracket" /> : null}
             </div>
-            <div className="tabular-nums text-2xl text-muted-foreground">{currentTime}</div>
+            {/* Signage clock floor: >= 40px (match-card contract §4.4,
+                initial target pending package 27's physical validation).
+                `text-5xl` is 48px, comfortably clearing it. */}
+            <time dateTime={now.toISOString()} className="tabular-nums text-5xl text-muted-foreground">
+              {currentTime}
+            </time>
             {preview ? <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} /> : null}
           </div>
         </div>
@@ -595,7 +666,13 @@ export function MeetDisplayPage({ hybrid = false, preview = false }: { hybrid?: 
             {view === 'courts' && (
               <>
                 {freshness === 'stale' && (
-                  <div className="mb-4 text-center text-base text-muted-foreground">{STALE_CAPTION}</div>
+                  <div className="mb-4 text-center text-base text-muted-foreground">
+                    {/* V3-OC24.2: says HOW old, not a fixed "a few minutes"
+                        regardless of actual age. `lastSyncedAt` is non-null
+                        whenever freshness is 'stale' (useDisplaySync only
+                        derives 'stale' from an aged successful sync). */}
+                    {staleCaption(lastSyncedAt ? now.getTime() - lastSyncedAt : STALE_MS)}
+                  </div>
                 )}
                 <div className={freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}>{courtsViewNode}</div>
               </>

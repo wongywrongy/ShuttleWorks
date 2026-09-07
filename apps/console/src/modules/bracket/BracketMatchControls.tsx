@@ -273,7 +273,7 @@ function SidePlayers({
             return (
               <div key={id} className="rounded-sm border border-border px-3 py-2 text-xs text-muted-foreground">
                 <span className={emphasis ? 'font-semibold' : ''}>{name}</span>
-                <span className="ml-1.5 text-2xs text-muted-foreground">Not on roster</span>
+                <span className="ml-1.5 text-xs text-muted-foreground">Not on roster</span>
               </div>
             );
           }

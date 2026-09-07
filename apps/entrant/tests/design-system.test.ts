@@ -24,14 +24,14 @@ test('the Tailwind config loads the design-system CommonJS preset and scans its 
     { from: undefined },
   );
 
-  // `bg-brand` and `shadow-glow` appear ONLY inside the design system's
+  // `bg-brand` and `text-brand-ink` appear ONLY inside the design system's
   // Button.tsx (`variant="brand"`), never in this package's own source. If the
-  // preset stopped loading, `shadow-glow` would not exist as a utility at all;
+  // preset stopped loading, `text-brand-ink` would not exist as a utility at all;
   // if the design-system content glob were dropped, neither class would be
   // emitted. Both are the failure mode CLAUDE.md's tailwind.config.js comment
   // describes: "any class used ONLY inside a shared component silently no-ops."
   expect(result.css).toContain('.bg-brand');
-  expect(result.css).toContain('.shadow-glow');
+  expect(result.css).toContain('.text-brand-ink');
 });
 
 test('a design-system primitive renders under SSR with the stylesheet linked', async () => {
@@ -45,5 +45,5 @@ test('a design-system primitive renders under SSR with the stylesheet linked', a
   // externalizing it, and that the primitive is SSR-safe (spec §5).
   expect(body).toContain('>design system</button>');
   expect(body).toContain('bg-brand');
-  expect(body).toContain('shadow-glow');
+  expect(body).toContain('text-brand-ink');
 });

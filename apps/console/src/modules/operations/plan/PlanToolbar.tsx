@@ -7,7 +7,7 @@
  *   solve group   — Generate meet / Re-plan day (armed re-solve; hardened
  *                   copy once the day is live) · Re-optimize remaining
  *                   (frozen-horizon, live day's verb — pins started/finished,
- *                   solves around bracket windows) · Schedule next round
+ *                   solves around bracket windows) · Schedule N unscheduled matches
  *   proposals     — Report a problem (repair) · Director tools ·
  *                   Re-plan, stay close (warm restart)
  *   exports       — meet XLSX + bracket JSON/CSV/ICS behind one Export menu
@@ -34,7 +34,7 @@ import { apiClient } from '../../../api/client';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { exportScheduleXlsx } from '../exports/scheduleXlsx';
 import { PickerPopover } from '../../../components/control-plane';
-import { INTERACTIVE_BASE } from '../../../lib/utils';
+import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../../lib/utils';
 import type { WorkspacePhase } from '../../../platform/domain/lifecycle';
 import { opsPlanMode } from '../lifecycleMatrix';
 import type { PlanDialog } from './planDialogs';
@@ -43,7 +43,7 @@ const schedBtnBase =
   `${INTERACTIVE_BASE} inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-sm px-2.5 py-1 text-xs ` +
   `font-medium disabled:cursor-not-allowed disabled:opacity-50`;
 const commitBtn =
-  `${schedBtnBase} bg-accent text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`;
+  `${schedBtnBase} bg-accent text-accent-ink ${ACCENT_PRESS}`;
 const solveBtn =
   `${schedBtnBase} border border-border-control bg-card text-foreground hover:bg-muted/40`;
 const solveArmedBtn =
@@ -62,6 +62,11 @@ export interface PlanToolbarProps {
    *  loaded — undefined makes the solve hook fetch its own (D1). */
   bracketWindows: number[][] | undefined;
   schedulableCount: number;
+  /** Bracket play units still unscheduled but NOT eligible — an unresolved
+   *  feeder round or a missing side. V3-OC18.2: when the schedule action's
+   *  prerequisite is unmet the toolbar names it instead of the button
+   *  simply vanishing with no explanation. Zero when unknown/not applicable. */
+  blockedCount?: number;
   onOpenScheduleNext: () => void;
   planFinalized: boolean;
   planFinalizePending: boolean;
@@ -75,6 +80,7 @@ export function PlanToolbar({
   bracketEnabled,
   bracketWindows,
   schedulableCount,
+  blockedCount = 0,
   onOpenScheduleNext,
   planFinalized,
   planFinalizePending,
@@ -110,7 +116,7 @@ export function PlanToolbar({
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="plan-toolbar">
       {review ? (
-        <span data-testid="plan-review-note" className="text-2xs text-muted-foreground">
+        <span data-testid="plan-review-note" className="text-xs text-muted-foreground">
           Day complete · reviewing the plan it ran
         </span>
       ) : (
@@ -170,7 +176,7 @@ export function PlanToolbar({
                 </button>
               ) : null}
               {schedule && !reSolve.armed && !generating ? (
-                <span data-testid="ops-replan-note" className="text-2xs text-muted-foreground">
+                <span data-testid="ops-replan-note" className="text-xs text-muted-foreground">
                   A schedule is in place; Re-plan day replaces it.
                 </span>
               ) : null}
@@ -183,9 +189,26 @@ export function PlanToolbar({
               className={solveBtn}
               onClick={onOpenScheduleNext}
               data-testid="ops-schedule-next"
+              // V3-OC18.2 (minimal fix — full treatment package 12):
+              // `schedulableCount` is every eligible unscheduled play unit
+              // (both sides known, no court yet, feeders resolved) across
+              // the whole bracket, not specifically "the next round" — the
+              // old label implied a narrower scope than the number measures.
+              title="Every match whose players are known and whose feeders are resolved, but which has no court or time yet"
             >
-              Schedule next round ({schedulableCount})
+              Schedule {schedulableCount} unscheduled match{schedulableCount === 1 ? '' : 'es'}
             </button>
+          ) : bracketEnabled && blockedCount > 0 ? (
+            // V3-OC18.2: nothing is eligible yet, but matches ARE waiting —
+            // name the prerequisite instead of the action disappearing with
+            // no explanation of why there is nothing to schedule.
+            <span
+              data-testid="ops-schedule-next-blocked"
+              className="text-xs text-muted-foreground"
+              title="These matches are missing a side or waiting on a predecessor's result"
+            >
+              {blockedCount} match{blockedCount === 1 ? '' : 'es'} waiting on a result before they can be scheduled
+            </span>
           ) : null}
 
           {meetEnabled && schedule ? (
@@ -306,9 +329,10 @@ export function PlanToolbar({
               !canEdit
                 ? READ_ONLY_MESSAGE
                 : planFinalized
-                  ? 'Press to un-ready the plan'
-                  : undefined
+                ? 'Press to un-ready the plan'
+                : 'Mark the full generated schedule ready for live operations'
             }
+            aria-label={planFinalized ? 'Plan ready. Press to un-ready the plan' : 'Mark the full schedule ready for live operations'}
             data-testid="ops-plan-finalize-toggle"
           >
             {planFinalized ? 'Plan ready ✓' : 'Mark plan ready'}

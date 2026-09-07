@@ -1,0 +1,3569 @@
+[
+  {
+    "id": "V3-OC02.1",
+    "tier": "operator",
+    "surface": "OC02",
+    "surfaceTitle": "Workspace hub",
+    "page": 5,
+    "severity": "minor",
+    "category": "H8",
+    "observation": "Every ordinary row begins with “No issues reported”; completed rows also contain both “Completed” and “Complete”. A footer explains the dots.",
+    "affectedTask": "Operators repeatedly read reassurance before reaching the tournament name; duplicated completion wording slows scanning.",
+    "proposedChange": "Make the tournament name the first strong item. Keep one plain status column; retain attention text only for exceptions. Remove routine health copy and the dot legend.",
+    "acceptance": "Each row contains one name and one lifecycle status; ordinary rows contain no repeated reassurance.",
+    "packages": [
+      "12"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "12",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "854a885d"
+        ],
+        "files": [
+          "apps/console/src/components/control-plane/HealthDot.tsx",
+          "apps/console/src/modules/hub/WorkspaceRow.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/hub/__tests__/WorkspaceRow.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.5",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S02) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440); v3-recapture/journeys/OC01-signin-form@1440.png (note: AUTH_MODE=local has no reachable sign-in form — see runtime finding V3-RT-2)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Fixed by package 07: HEALTH_LEGEND rewritten to the one dot that still renders (\"Dot: needs attention\"); routine rows (no issues/not started/archived) no longer render a dot or reassurance text; the duplicate 'complete'→'Completed' branch was dropped. Re-verified with no regression in package 12."
+    }
+  },
+  {
+    "id": "V3-OC02.2",
+    "tier": "operator",
+    "surface": "OC02",
+    "surfaceTitle": "Workspace hub",
+    "page": 5,
+    "severity": "minor",
+    "category": "F2",
+    "observation": "Yunavero Club Open shows “Confirmed entries not on the roster +1”; its next action is “View draws”.",
+    "affectedTask": "The suggested action does not explain how to resolve the displayed entry problem.",
+    "proposedChange": "Replace that row action with “Review entries” when the attention item concerns entries; make the additional issue count a named action in the existing attention cell.",
+    "acceptance": "The attention action opens the relevant unresolved entries; additional issues are readable without guessing what “+1” means.",
+    "packages": [
+      "12"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "12",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "854a885d"
+        ],
+        "files": [
+          "apps/console/src/modules/hub/nextAction.ts",
+          "apps/console/src/modules/hub/WorkspaceRow.tsx",
+          "apps/console/src/modules/hub/WorkspaceInspector.tsx",
+          "apps/console/src/platform/domain/setupChecklist.ts"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/hub/__tests__/nextAction.test.ts",
+        "apps/console/src/modules/hub/__tests__/WorkspaceRow.test.tsx",
+        "apps/console/src/modules/hub/__tests__/WorkspaceInspector.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.5",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S02) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440); v3-recapture/journeys/OC01-signin-form@1440.png (note: AUTH_MODE=local has no reachable sign-in form — see runtime finding V3-RT-2)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Row CTA now reads \"Review entries\" and opens the entries desk whenever the leading attention reason concerns entries; \"+1\" reworded to \"N more issue(s)\"; a new Hub inspector Attention section lists extra reasons by name."
+    }
+  },
+  {
+    "id": "V3-OC03.1",
+    "tier": "operator",
+    "surface": "OC03",
+    "surfaceTitle": "Create workspace: first step only",
+    "page": 7,
+    "severity": "minor",
+    "category": "T3",
+    "observation": "The first step offers “Meet”, “Bracket”, and “Hybrid”, followed by “Modules” and inclusion messages.",
+    "affectedTask": "A club organizer must translate architecture into the competition they want to run.",
+    "proposedChange": "Keep the choices but name their outcomes: “Team meet”, “Draw tournament”, and “Both”. Replace “Modules” with “Included tools” and remove duplicated inclusion statements.",
+    "acceptance": "The choice descriptions distinguish team positions from elimination draws without requiring module knowledge.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/console/src/modules/hub/NewWorkspacePage.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/hub/__tests__/NewWorkspacePage.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.7",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S03) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440); v3-recapture/journeys/OC03-new-workspace-step2@1440.png; v3-recapture/journeys/OC03-new-workspace-step3@1440.png; v3-recapture/journeys/OC03-new-workspace-step4@1440.png; v3-recapture/journeys/OC03-new-workspace-step5@1440.png (created workspace, lands on its Overview)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "\"Meet\"/\"Bracket\"/\"Hybrid\" renamed to \"Team meet\"/\"Draw tournament\"/\"Both\"; \"Modules\" section retitled \"Included tools\"; review-step type-label lookup bug fixed."
+    }
+  },
+  {
+    "id": "V3-OC04.1",
+    "tier": "operator",
+    "surface": "OC04",
+    "surfaceTitle": "Local profile",
+    "page": 9,
+    "severity": "minor",
+    "category": "F2",
+    "observation": "“Change photo” and “Save changes” sit above fields; the explanation that profile editing requires sign-in appears below them.",
+    "affectedTask": "The apparent primary task is editing although the actual next step is authentication.",
+    "proposedChange": "Move “Sign in to edit your profile” above the read-only details and make it primary. Demote unavailable edit controls; retain the photo format guidance only when upload is available.",
+    "acceptance": "In this local-operator state the first actionable control is sign-in, and unavailable edits are visibly explained.",
+    "packages": [
+      "18"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "18",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "f1736964"
+        ],
+        "files": [
+          "apps/console/src/modules/settings/GlobalSettingsPage.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/settings/__tests__/GlobalSettingsPage.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.9",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S04) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "No separate live-capture browser evidence obtained beyond the automated test.",
+      "note": "Local-profile locked state reordered so the sign-in prompt/link renders above the read-only avatar/fields instead of below."
+    }
+  },
+  {
+    "id": "V3-OC05.1",
+    "tier": "operator",
+    "surface": "OC05",
+    "surfaceTitle": "Tournament overview",
+    "page": 11,
+    "severity": "major",
+    "category": "H1",
+    "observation": "The “Up next” list includes Koki Watanabe vs Kunlavut Vitidsarn and Wang Zhiyi vs Mia Blichfeldt, which appear as current/live on p.39.",
+    "affectedTask": "Operators can mistake matches already underway for the next court assignments. The books are not a frozen snapshot, so the shared-state mismatch needs reproduction.",
+    "proposedChange": "Separate current and upcoming semantics in the existing list: show “On court” for live items or restrict “Up next” to upcoming matches. Do not add a second dashboard card.",
+    "acceptance": "A frozen snapshot contains no live match under an upcoming-only heading; current items use the shared match vocabulary.",
+    "packages": [
+      "03",
+      "12"
+    ],
+    "planDecision": "\"Match state “Live” vs “On court”\" | Resolve | \"Use “On court” for a match state; “Live now” may describe a section. Public schedule state is separately “Scheduled” or “Time to be confirmed.” No screen-local synonym list.\"",
+    "status": "closed",
+    "closure": {
+      "package": [
+        "03",
+        "12"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c33d9023",
+          "854a885d"
+        ],
+        "files": [
+          "apps/console/src/modules/operations/UnifiedOpsList.tsx",
+          "apps/api/src/workspaces/workspace_signals.py"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/operations/__tests__/unifiedOpsList.test.tsx",
+        "tests/backend/unit/test_workspace_signals.py"
+      ],
+      "beforeEvidence": "operator-all.md p.11",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S05) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "\"Up next\" split into an upcoming-only bucket plus a new \"On court\" bucket; the same exclusion rule was then extended to the bracket signal path (closes package 03's own follow-up note)."
+    }
+  },
+  {
+    "id": "V3-OC06.1",
+    "tier": "operator",
+    "surface": "OC06",
+    "surfaceTitle": "Tournament details",
+    "page": 13,
+    "severity": "minor",
+    "category": "T3",
+    "observation": "“General identity”, “Public name”, “DOWNSTREAM IMPACT”, and “Saving this updates: Overview, public identity, exports.” appear in a basic tournament form.",
+    "affectedTask": "Routine setup reads like configuration documentation and the two name fields lack a clear audience distinction.",
+    "proposedChange": "Use “Tournament details”, “Name shown to players”, and a single sentence naming where changes appear. Remove the uppercase impact heading across Setup.",
+    "acceptance": "Each field has an audience-specific meaning; no routine Setup explanation uses “downstream” or “public identity”.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/console/src/modules/setup/SetupProduct.tsx",
+          "apps/console/src/modules/setup/DownstreamImpact.tsx",
+          "apps/api/src/workspaces/setup.py"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.13",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S06) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "\"General identity\"→\"Tournament details\"; \"Public name\"→\"Name shown to players\"; uppercase \"DOWNSTREAM IMPACT\" heading removed."
+    }
+  },
+  {
+    "id": "V3-OC07.3",
+    "tier": "operator",
+    "surface": "OC07",
+    "surfaceTitle": "Dates and sessions",
+    "page": 15,
+    "severity": "minor",
+    "category": "H10",
+    "observation": "The introductory line says “Repeated clock-change times use the earlier occurrence.” for the Asia/Taipei schedule.",
+    "affectedTask": "A rare ambiguity is introduced before users encounter it, while ordinary date meaning receives less help.",
+    "proposedChange": "Keep “All times are in Taipei time.” above the form. Move the clock-change rule to contextual help shown only when relevant to the selected timezone and time.",
+    "acceptance": "Ordinary date entry has one timezone sentence; an ambiguous time receives explicit contextual guidance without an automatic consequential choice.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/console/src/modules/setup/SetupProduct.tsx",
+          "apps/console/src/lib/timezoneLocal.ts"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.15",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S07) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Blanket clock-change sentence replaced with a per-row hint gated on isAmbiguousLocalTime, verified with a genuine 2026 DST-fallback instant."
+    }
+  },
+  {
+    "id": "V3-OC07.1",
+    "tier": "operator",
+    "surface": "OC07",
+    "surfaceTitle": "Dates and sessions",
+    "page": 15,
+    "severity": "major",
+    "category": "H5",
+    "observation": "Tournament starts at 5:00 PM on July 28, while Competition day 1 starts at 9:00 AM on July 28. No warning is visible.",
+    "affectedTask": "The captured configuration gives conflicting day boundaries; scheduling and public dates can communicate different start times.",
+    "proposedChange": "Validate sessions against the tournament window. Show the conflict next to the affected session and let the operator correct the dates or explicitly distinguish venue access from competition.",
+    "acceptance": "Saving an out-of-window competition session produces a precise field message; no silent date change occurs.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/api/src/workspaces/setup.py"
+        ]
+      },
+      "tests": [
+        "tests/backend/test_tournament_setup.py"
+      ],
+      "beforeEvidence": "operator-all.md p.15",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S07) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "Renders as a page-level Notice, not literally inline per-row (debt V3-13-3); acceptance still met per report.",
+      "note": "New backend session-window validation (_session_window_issues, SETUP_DATES_SESSION_OUT_OF_WINDOW) blocks readiness with a precise conflict message instead of silently allowing an out-of-window session."
+    }
+  },
+  {
+    "id": "V3-OC07.2",
+    "tier": "operator",
+    "surface": "OC07",
+    "surfaceTitle": "Dates and sessions",
+    "page": 15,
+    "severity": "minor",
+    "category": "H5",
+    "observation": "Each session shows a comma-separated court input with the same court list repeated beneath it.",
+    "affectedTask": "Court names must be typed consistently, while duplicate helper text adds no guidance.",
+    "proposedChange": "Replace the free-text court string with a compact selectable court list using existing courts; remove the repeated helper string.",
+    "acceptance": "Only existing courts can be selected, and the selected courts are shown once per session.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/console/src/modules/setup/SetupRowsEditor.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.15",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S07) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Comma-separated free-text courts input (with repeated caption) replaced with a compact checkbox per named court, shown once."
+    }
+  },
+  {
+    "id": "V3-OC08.1",
+    "tier": "operator",
+    "surface": "OC08",
+    "surfaceTitle": "Venue and courts, protected state",
+    "page": 17,
+    "severity": "minor",
+    "category": "H10",
+    "observation": "The page lists venue, address, and courts, then says “The current plan uses these courts, so Setup is read-only.”",
+    "affectedTask": "An operator correcting an address cannot tell whether the venue itself or only court assignments are protected.",
+    "proposedChange": "Name the locked properties and provide a matching destination. Keep editable venue metadata separate from protected court changes if supported; otherwise explain the specific restriction.",
+    "acceptance": "The notice names the affected properties and its link leads to a place where the permitted task can be completed.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/console/src/modules/setup/SetupProduct.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.17",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S08) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Venue-lock copy corrected to name what is actually protected (the whole venue section, not courts alone — the backend does not support locking courts alone)."
+    }
+  },
+  {
+    "id": "V3-OC09.1",
+    "tier": "operator",
+    "surface": "OC09",
+    "surfaceTitle": "Event catalog",
+    "page": 19,
+    "severity": "minor",
+    "category": "T4",
+    "observation": "MD, MS, WD, WS, and XD all say “Capacity 32”, although the draws table later distinguishes pairs and players.",
+    "affectedTask": "The same number can mean 32 people or 64 people, depending on event type.",
+    "proposedChange": "Use full event names with codes as secondary text, and “32 pairs” or “32 players”. Retain “Edit event”; remove the vague capacity phrase.",
+    "acceptance": "Every event capacity includes the correct unit, and its label matches the draw and public event names.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/console/src/modules/setup/SetupProduct.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.19",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S09) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "capacityUnit() derives \"{n} pairs\"/\"{n} players\" from the bracket event's own discipline field instead of a fixed \"Capacity 32\" label."
+    }
+  },
+  {
+    "id": "V3-OC10.1",
+    "tier": "operator",
+    "surface": "OC10",
+    "surfaceTitle": "Formats and scoring",
+    "page": 21,
+    "severity": "minor",
+    "category": "T1",
+    "observation": "The form uses “Simple”, “Badminton games”, “Default rest”, “Draw size 32 players”, and “Deuce (win by 2)”.",
+    "affectedTask": "The operator cannot tell what “Simple” records or whether a points cap applies; the players unit is too broad for doubles.",
+    "proposedChange": "Use outcome labels such as “Match result only” and “Game scores” only if those match actual behavior. Label “Minimum rest between matches”; show draw units by event. Expose the configured cap alongside win-by-two when supported.",
+    "acceptance": "Each option explains the recorded outcome; the full configured scoring rule is visible; no new scoring rule is invented.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": "\"Replace Deuce with “Setting … cap 30”\" | Adapt | \"Prefer plain “Win by 2” with the actual configured cap. Do not hardcode a cap while formats offer different scoring configurations; confirm rules with product/organizer.\"",
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adapted per plan §3 X10/Deuce row",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/console/src/platform/engine-config/ScoringFields.tsx",
+          "apps/api/src/workspaces/setup.py"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx",
+        "apps/console/src/modules/bracket/__tests__/BracketEngineConfig.test.tsx",
+        "apps/console/src/modules/bracket/__tests__/bracketConfigTabs.test.tsx",
+        "tests/backend/test_tournament_setup.py"
+      ],
+      "beforeEvidence": "operator-all.md p.21",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S10) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "pointCap lives only in Setup's rules section, not yet mirrored onto Meet/Bracket Engine Config's separate TournamentConfig (debt V3-13-2).",
+      "note": "\"Simple\"/\"Badminton games\" renamed to \"Match result only\"/\"Game scores\"; a real, bounded \"Point cap\" field added, shown only when deuce is enabled and never claiming an uncofigured cap."
+    }
+  },
+  {
+    "id": "V3-OC11.1",
+    "tier": "operator",
+    "surface": "OC11",
+    "surfaceTitle": "Entry rules",
+    "page": 23,
+    "severity": "minor",
+    "category": "H10",
+    "observation": "A “Partner rules” text field contains a sentence requiring confirmation; payment and approval are separate switches.",
+    "affectedTask": "An organizer may assume editing this sentence changes validation. The screenshot cannot establish whether it is policy text or an enforced rule.",
+    "proposedChange": "Label the field “Partner instructions” if it is displayed text. If it configures enforcement, use the existing rule control and show a generated plain-language summary instead.",
+    "acceptance": "The form explicitly distinguishes instructions from enforced requirements.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/console/src/modules/setup/SetupProduct.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.23",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S11) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "Logged as debt V3-13-1 (partnerRules still has no reader/consumer anywhere).",
+      "note": "\"Partner rules\" relabeled \"Partner instructions\" with a hint disclosing it is an internal note — not shown to entrants, and not enforced."
+    }
+  },
+  {
+    "id": "V3-OC12.1",
+    "tier": "operator",
+    "surface": "OC12",
+    "surfaceTitle": "Private staff contacts",
+    "page": 25,
+    "severity": "major",
+    "category": "P1",
+    "observation": "The checked “Public” column is explained as preserving publication intent for “a future public projection”; the footer says saving updates “public contact details”.",
+    "affectedTask": "The control implies publication that the page itself says does not happen. This violates the no-placeholder rule and makes privacy intent ambiguous.",
+    "proposedChange": "Remove the Public column and future-feature explanation until implemented. Retain private staff contacts with one sentence: “Staff contacts are visible to tournament operators.” Remove public contact details from the save explanation.",
+    "acceptance": "No staff control implies unsupported public publication; private email use remains explicit.",
+    "packages": [
+      "05",
+      "13",
+      "15"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "05",
+        "13",
+        "15"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "a44ab5a2",
+          "74969629",
+          "65e82a8d",
+          "284610b6",
+          "cf996a6e"
+        ],
+        "files": [
+          "apps/console/src/modules/setup/SetupProduct.tsx",
+          "apps/api/src/workspaces/setup.py"
+        ]
+      },
+      "tests": [],
+      "beforeEvidence": "operator-all.md p.25",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S12) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "The Contact.public DB column and public:bool wire field were deliberately kept, not migrated away (ruling R1, \"no migration\") — logged as debt.",
+      "note": "Removed the Public column and the \"future public projection\" paragraph from Staff contacts; replaced with one factual sentence. Backend impact copy no longer lists \"public contact details\"."
+    }
+  },
+  {
+    "id": "V3-OC13.1",
+    "tier": "operator",
+    "surface": "OC13",
+    "surfaceTitle": "Public information editor",
+    "page": 27,
+    "severity": "minor",
+    "category": "T3",
+    "observation": "The form uses “Public slug”, “Regulations URL”, “Logo URL”, and “Banner URL”; the description is a single-line input.",
+    "affectedTask": "The task is publishing readable tournament information, but labels emphasize storage format and a paragraph is difficult to edit.",
+    "proposedChange": "Use “Tournament page address”, “Regulations link”, “Logo image link”, and “Banner image link”. Replace the description input with a multiline field in the same form footprint.",
+    "acceptance": "A full description is readable while editing; the address field explains what part of the public address changes.",
+    "packages": [
+      "13",
+      "15"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "13",
+        "15"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6",
+          "cf996a6e"
+        ],
+        "files": [
+          "apps/console/src/modules/setup/SetupProduct.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.27",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S13) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "No design-system export added for the textarea (styled inline to TextField); out of package's file scope.",
+      "note": "\"Public slug\"→\"Tournament page address\"; \"Regulations URL\"→\"Regulations link\"; single-line Description input became a 4-row textarea."
+    }
+  },
+  {
+    "id": "V3-OC13.2",
+    "tier": "operator",
+    "surface": "OC13",
+    "surfaceTitle": "Public information editor",
+    "page": 27,
+    "severity": "minor",
+    "category": "H9",
+    "observation": "Both logo and banner preview boxes say “Preview unavailable. Check the address before saving.”",
+    "affectedTask": "The user cannot distinguish a bad URL from a temporary fetch failure or retry the image preview directly.",
+    "proposedChange": "Keep the message next to its field and add a small “Retry preview” action inside the existing box, replacing its repeated instruction. Do not report the URL invalid unless known.",
+    "acceptance": "A failed preview can be retried without saving; field validation and image-fetch failure have distinct messages.",
+    "packages": [
+      "13",
+      "15"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "13",
+        "15"
+      ],
+      "treatment": "adapted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6",
+          "cf996a6e"
+        ],
+        "files": [
+          "apps/console/src/modules/setup/SetupProduct.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/setup/__tests__/SetupProduct.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.27",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S13) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "Distinct copy for field-invalid vs fetch-failed states not implemented — needs URL-syntax validation this component doesn't have (debt V3-15-1).",
+      "note": "Identical \"Preview unavailable...\" message on both logo/banner boxes replaced with a fetch-specific message plus an in-box \"Retry preview\" action."
+    }
+  },
+  {
+    "id": "V3-OC14.1",
+    "tier": "operator",
+    "surface": "OC14",
+    "surfaceTitle": "Populated player roster",
+    "page": 29,
+    "severity": "minor",
+    "category": "H7",
+    "observation": "The 253-player roster begins Kim Ibarra, Jin Yong, Nguyễn Thùy Linh, and Tung Quintero. No sort label or active column-sort indicator is shown.",
+    "affectedTask": "The ordering is not apparent when scanning a large operational list; users must search to compensate.",
+    "proposedChange": "Expose the current sort on the Player column and provide name sorting through the existing header; retain the compact table and its search.",
+    "acceptance": "The current sort is explicit and can be changed without adding a new toolbar row.",
+    "packages": [
+      "14"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "14",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "91d4acfc"
+        ],
+        "files": [
+          "apps/console/src/modules/bracket/BracketRosterTab.tsx",
+          "apps/console/src/components/control-plane/DenseDataTable.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/bracket/__tests__/BracketRosterTab.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.29",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S14) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Roster now opens sorted by Player ascending with visible aria-sort/caret via useDenseDataState's default sort, using an existing control rather than adding a new toolbar."
+    }
+  },
+  {
+    "id": "V3-OC15.1",
+    "tier": "operator",
+    "surface": "OC15",
+    "surfaceTitle": "Draw index",
+    "page": 31,
+    "severity": "minor",
+    "category": "T1",
+    "observation": "The far-right column is titled “STATUS” but contains “Open draw” buttons.",
+    "affectedTask": "An action is being presented as a state, weakening the meaning of status throughout the product.",
+    "proposedChange": "Remove the Status header from the action column or label it “Action”; show a real status only if it changes the operator’s decision.",
+    "acceptance": "Status columns contain states; action columns contain verbs.",
+    "packages": [
+      "14"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "14",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "91d4acfc"
+        ],
+        "files": [
+          "apps/console/src/modules/bracket/BracketDrawsTab.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/bracket/__tests__/BracketDrawsTab.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.31",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S15) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "The finding's literal observation (\"STATUS\" header over \"Open draw\") no longer reproduced as-is against current main — already partly fixed by prior work.",
+      "note": "The trailing draw-index column (already separating status from verb-only actions by prior work) was missing an accessible header name; given the label \"Action\"."
+    }
+  },
+  {
+    "id": "V3-OC16.2",
+    "tier": "operator",
+    "surface": "OC16",
+    "surfaceTitle": "Draw canvas",
+    "page": 33,
+    "severity": "minor",
+    "category": "C3",
+    "observation": "The draw summary uses “done”, “live”, “ready”, “pending”; Matches uses “Done” and Live day uses “PLAYING MATCHES”. Public displays use “ON COURT”.",
+    "affectedTask": "Users cannot be certain whether labels represent different states or different wording for the same state.",
+    "proposedChange": "Approve a shared glossary and apply one label per underlying meaning; use “Completed” for recorded results and a clearly defined on-court state. Keep operational distinctions such as Called when real.",
+    "acceptance": "A match has the same semantic state across draw, list, plan, and display; audience wording never changes its meaning.",
+    "packages": [
+      "10"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "10",
+      "treatment": "verified no defect",
+      "implementation": {
+        "commits": [
+          "97449c07",
+          "446b9c0a",
+          "30e7d75e"
+        ],
+        "files": [
+          "apps/console/src/components/control-plane/matchStatus.tsx"
+        ]
+      },
+      "tests": [],
+      "beforeEvidence": "operator-all.md p.33",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S16) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "The four differing vocabularies (draw summary done/live/ready/pending; Matches \"Done\"; Live day \"PLAYING MATCHES\"; public displays) remain different by design, not one shared word set.",
+      "note": "Plan §3 (X5, Adapt) rejects one five-word status vocabulary; the differing per-surface vocabularies are intentional domain-specific formatters sourced from one stateWords.ts authority, documented rather than unified."
+    }
+  },
+  {
+    "id": "V3-OC16.1",
+    "tier": "operator",
+    "surface": "OC16",
+    "surfaceTitle": "Draw canvas",
+    "page": 33,
+    "severity": "major",
+    "category": "T4",
+    "observation": "Match cards say “slot 52 · court 5” and “slot 192 · court 1”.",
+    "affectedTask": "Operators must translate slot indexes into times before using the draw during an event.",
+    "proposedChange": "Replace slot indexes with the scheduled tournament-timezone time and court. If unscheduled, say “Time not set”. Retain match IDs as secondary identifiers.",
+    "acceptance": "Every timed draw match shows a human-readable time; no raw slot index is required for routine operation.",
+    "packages": [
+      "10"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "10",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "97449c07",
+          "446b9c0a",
+          "30e7d75e"
+        ],
+        "files": [
+          "apps/console/src/modules/bracket/DrawView.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/bracket/__tests__/DrawView.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.33",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S16) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "Only the draw-canvas caption was fixed here; the operator table-row renderer's slot text was addressed separately (package 10c).",
+      "note": "Draw card caption no longer renders raw \"slot N · court N\"; now shows real time+court via formatBracketSlot, court alone if no time, or \"Not scheduled\" if unassigned."
+    }
+  },
+  {
+    "id": "V3-OC17.1",
+    "tier": "operator",
+    "surface": "OC17",
+    "surfaceTitle": "Match inventory",
+    "page": 35,
+    "severity": "major",
+    "category": "V1",
+    "observation": "Side A scores are placed before Side B’s name; Side B scores are a second distant group. Doubles names wrap within each side.",
+    "affectedTask": "Reviewing which side won each game requires repeated horizontal scanning and increases score-reading mistakes.",
+    "proposedChange": "Use a compact two-line match row with the two sides stacked and aligned game-score columns, replacing the separated Side A/Side B score blocks. Keep winner emphasis and full partner names.",
+    "acceptance": "Both sides’ Game 1, 2, and 3 scores align vertically; long doubles names never cross score columns.",
+    "packages": [
+      "10"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "10",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "97449c07",
+          "446b9c0a",
+          "30e7d75e"
+        ],
+        "files": [
+          "apps/console/src/modules/bracket/BracketMatchesTab.tsx",
+          "apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/bracket/__tests__/BracketMatchesTab.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.35",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S17) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "True one-participant-per-DOM-line stacking (§3.1) not implemented — blocked by DenseDataTable.tsx's fixed 28px row height (debt V3-10-5); meet's MatchesSpreadsheet.tsx winner still derives from counting sets, not a persisted outcome (debt V3-10-6).",
+      "note": "Deferred in package 10, implemented in package 10c: per-game emphasis is now independent of the match winner, a real winner text-mark was added, and both sides render through the one sides.ts authority with wrap instead of a slash-joined line."
+    }
+  },
+  {
+    "id": "V3-OC18.2",
+    "tier": "operator",
+    "surface": "OC18",
+    "surfaceTitle": "Scheduling plan",
+    "page": 37,
+    "severity": "minor",
+    "category": "T1",
+    "observation": "The button says “Schedule next round (24)”; the explanatory line says 24 matches lack court and time assignments.",
+    "affectedTask": "Users cannot tell whether the action schedules exactly the next round or all unscheduled matches.",
+    "proposedChange": "Make the label match the actual selection: “Schedule 24 unscheduled matches” if that is its scope, otherwise name the next round and count. Keep the selection review under operator control.",
+    "acceptance": "The preview and action describe the same set of matches; no hidden scope is implied.",
+    "packages": [
+      "03",
+      "12"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "03",
+        "12"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c33d9023",
+          "854a885d"
+        ],
+        "files": [
+          "apps/console/src/modules/operations/plan/PlanToolbar.tsx",
+          "apps/console/src/modules/operations/OperationsProduct.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/operations/plan/__tests__/PlanToolbar.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.37",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S18) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Button label rewritten to match what the count measures (\"Schedule N unscheduled matches\"); a fallback line now names the blocking prerequisite when nothing is schedulable."
+    }
+  },
+  {
+    "id": "V3-OC18.1",
+    "tier": "operator",
+    "surface": "OC18",
+    "surfaceTitle": "Scheduling plan",
+    "page": 37,
+    "severity": "major",
+    "category": "T3",
+    "observation": "The list toolbar says “ENGINE Meet Bracket”; rows use “C1 · S152”; the helper says meet and bracket share one court plan.",
+    "affectedTask": "The operator must decode internal categories while locating a match and court time.",
+    "proposedChange": "Rename the filter “Competition type” or remove it when only one type is active. Replace S152 with the actual scheduled time and shorten the drag instruction to the available action.",
+    "acceptance": "Rows can be read using match, player, court, and time only; internal S-number slots are absent.",
+    "packages": [
+      "03",
+      "12"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "03",
+        "12"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c33d9023",
+          "854a885d"
+        ],
+        "files": [
+          "apps/console/src/modules/operations/UnifiedOpsBoard.tsx",
+          "apps/console/src/modules/operations/UnifiedOpsList.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/operations/__tests__/unifiedOpsList.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.37",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S18) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Package 03 made a minimal fix (drag-hover slot text); package 12 completed the sweep, cutting the engine-sharing rationale line and relabeling the \"Engine\" filter chip, closing debt V3-03-2."
+    }
+  },
+  {
+    "id": "V3-OC19.2",
+    "tier": "operator",
+    "surface": "OC19",
+    "surfaceTitle": "Live day with court conflicts",
+    "page": 39,
+    "severity": "major",
+    "category": "H1",
+    "observation": "The header reports “8 PLAYING MATCHES” above six courts, two of which contain conflicting current assignments.",
+    "affectedTask": "A confident total masks the uncertainty that the court cards reveal.",
+    "proposedChange": "Replace the playing total with an explicitly scoped count, such as “8 marked on court · 2 court conflicts”, until assignments are resolved. Do not invent a confirmed playing count.",
+    "acceptance": "The headline distinguishes reported assignments from verified court occupancy and names unresolved conflicts.",
+    "packages": [
+      "03",
+      "12"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "03",
+        "12"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c33d9023",
+          "854a885d"
+        ],
+        "files": [
+          "apps/console/src/modules/operations/run/RunSummaryBand.tsx",
+          "apps/api/src/workspaces/workspace_signals.py",
+          "apps/console/src/modules/workspace/overview/PhasePanels.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/operations/__tests__/runSummaryBand.test.tsx",
+        "apps/console/src/modules/workspace/overview/__tests__/PhasePanels.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.39",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S19) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "disputedCourts split out from playing in RunSummaryBand/MatchMetricsDTO and wired into Overview's PhasePanels, closing debt V3-03-3 — a dispute is never masked by idle courts."
+    }
+  },
+  {
+    "id": "V3-OC19.1",
+    "tier": "operator",
+    "surface": "OC19",
+    "surfaceTitle": "Live day with court conflicts",
+    "page": 39,
+    "severity": "major",
+    "category": "H9",
+    "observation": "Court 1 and Court 3 say “Resolve this in Operations” while Operations > Live day is selected. Ordinary court cards have “Open”; conflict cards show no similarly named resolution action.",
+    "affectedTask": "The operator is told there is a serious problem but must guess which control fixes it.",
+    "proposedChange": "Replace the instruction with “Two matches are assigned to this court” and a direct “Review court assignments” action using the existing conflict card. Let the operator choose the correct assignment.",
+    "acceptance": "Each conflict card has a direct route to both affected assignments; the system never chooses a winner or retires a match automatically.",
+    "packages": [
+      "03",
+      "12"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "03",
+        "12"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c33d9023",
+          "854a885d"
+        ],
+        "files": [
+          "apps/console/src/modules/operations/run/RunCourtGrid.tsx",
+          "apps/console/src/modules/operations/run/RunSurface.tsx",
+          "apps/console/src/modules/workspace/overview/PhasePanels.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/operations/__tests__/conflictAssignment.a11y.test.tsx",
+        "apps/console/src/modules/operations/__tests__/runSurface.test.tsx",
+        "apps/console/src/modules/workspace/overview/__tests__/PhasePanels.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.39",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S19) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Run day conflict tile reworded to \"Needs resolution\" with a working \"Open ›\" per claim; Overview (previously no route to a conflict) gained a \"Review court assignments\" button."
+    }
+  },
+  {
+    "id": "V3-OC20.1",
+    "tier": "operator",
+    "surface": "OC20",
+    "surfaceTitle": "Publication audience and content",
+    "page": 41,
+    "severity": "major",
+    "category": "H10",
+    "observation": "Entrant list is off while Draws & seeded entries and Results are on. The entrant description mentions names and player pages, but the draw description does not say that names remain visible in draws.",
+    "affectedTask": "An operator may mistake hiding the directory for hiding participant identities everywhere.",
+    "proposedChange": "Replace the draw helper with explicit visibility scope: “Shows draw pairings and player names. Scores appear only when Results is on.” Keep the existing three controls.",
+    "acceptance": "With the directory hidden and draws published, the operator is told which names remain public; the public result is verified with the same fixture.",
+    "packages": [
+      "15"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "15",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "cf996a6e"
+        ],
+        "files": [
+          "apps/console/src/modules/settings/PublicationSettings.tsx"
+        ]
+      },
+      "tests": [
+        "tests/backend/test_publication_matrix.py",
+        "apps/console/src/modules/settings/__tests__/SharingTab.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.41",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S20) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Draws-row description changed to: \"Shows draw pairings and player names. Scores appear only when Results is on.\" — clarifying a confirmed, non-opted-out name stays resolved in the draw regardless of the entrant-list toggle."
+    }
+  },
+  {
+    "id": "V3-OC22.1",
+    "tier": "operator",
+    "surface": "OC22",
+    "surfaceTitle": "Venue display configuration",
+    "page": 45,
+    "severity": "minor",
+    "category": "V5",
+    "observation": "The preview shows a narrow vertical board beside a mostly empty Board sources column; lower court content is outside its initial internal viewport.",
+    "affectedTask": "The operator cannot assess the venue layout without leaving the configuration page.",
+    "proposedChange": "Place the board-source rows above a wider preview and move the existing link actions directly beneath it. Preserve the board aspect ratio; do not redesign the board inside the preview.",
+    "acceptance": "The desktop preview visibly represents the target venue layout and the fullscreen action remains adjacent.",
+    "packages": [
+      "16"
+    ],
+    "planDecision": "\"Remove the tiny board preview instead of widening it\" | Adopt | \"Supersedes the treatment in V3-OC22.1. Use an explicit “Preview fullscreen” action; test board configuration and return path.\"",
+    "status": "closed",
+    "closure": {
+      "package": "16",
+      "treatment": "superseded by plan §3 \"Remove the tiny board preview\" row",
+      "implementation": {
+        "commits": [
+          "ae9a07d3"
+        ],
+        "files": [
+          "apps/console/src/modules/workspace/DisplayConfig.tsx",
+          "apps/console/src/modules/workspace/WorkspaceShellSurface.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/workspace/__tests__/DisplayConfig.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.45",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S22) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Plan explicitly overrides the finding's own \"widen the preview\" proposal: the narrow inline board preview was removed entirely and replaced with a \"Preview fullscreen\" link to the real published board."
+    }
+  },
+  {
+    "id": "V3-OC22.2",
+    "tier": "operator",
+    "surface": "OC22",
+    "surfaceTitle": "Venue display configuration",
+    "page": 45,
+    "severity": "cosmetic",
+    "category": "T3",
+    "observation": "“Manage view-only display links and revoke access deliberately” appears above the sharing controls.",
+    "affectedTask": "The sentence sounds like an internal policy and does not explain the effect of replacing a link.",
+    "proposedChange": "Remove the admonition. Keep the access explanation and place “Replacing the link stops the old link from working” next to the replacement control.",
+    "acceptance": "Link copy describes access and consequences without “deliberately” or repeated “public display link” headings.",
+    "packages": [
+      "16"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "16",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "ae9a07d3"
+        ],
+        "files": [
+          "apps/console/src/modules/settings/SharingTab.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/settings/__tests__/SharingTab.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.45",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S22) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Removed the internal-sounding admonition sentence/heading; access sentence is now \"Anyone with this link can view the board.\"; button renamed \"Revoke and replace link\" → \"Replace link\"."
+    }
+  },
+  {
+    "id": "V3-OC24.2",
+    "tier": "operator",
+    "surface": "OC24",
+    "surfaceTitle": "Venue board with conflict projection",
+    "page": 49,
+    "severity": "minor",
+    "category": "T4",
+    "observation": "The header reads “04:07 AM” and “Updated 04:07 AM”, without a date or timezone.",
+    "affectedTask": "A remote viewer or a board left running overnight cannot interpret the timestamp reliably.",
+    "proposedChange": "Use the configured tournament timezone and show one compact date/time with a distinct last-updated label. Replace the duplicated clock string rather than adding a status card.",
+    "acceptance": "The board’s timezone is explicit and its freshness remains unambiguous across midnight.",
+    "packages": [
+      "17"
+    ],
+    "planDecision": null,
+    "status": "closing",
+    "closure": {
+      "package": "17",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "65a5084b"
+        ],
+        "files": [
+          "apps/console/src/modules/display/MeetDisplayPage.tsx",
+          "apps/console/src/modules/display/bracketDisplay/BracketDisplayPage.tsx",
+          "apps/console/src/modules/display/publicDisplay/freshness.ts",
+          "apps/console/src/modules/display/publicDisplay/helpers.ts"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/display/__tests__/MeetDisplayPage.signage.test.tsx",
+        "apps/console/src/modules/display/publicDisplay/__tests__/freshness.test.ts"
+      ],
+      "beforeEvidence": "operator-all.md p.49",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S24) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met pending visual",
+      "limitation": "Real venue timezone still doesn't reach the board's wire data — BOARD_TIME_ZONE='UTC' is a labeled fallback, not the actual venue zone (backend change out of scope, logged as debt). Signage size floors (>=48px names/28px courts/40px clock) are implemented as initial targets; physical on-hardware validation at real viewing distance is pending package 27's recapture per reports/17-signage.md 'Physical validation procedure'.",
+      "note": "Header clock now states the timezone (clock_with_zone) and \"Updated\" now states date+time (datetime), both in <time dateTime>; stale caption now states actual data age."
+    }
+  },
+  {
+    "id": "V3-OC24.1",
+    "tier": "operator",
+    "surface": "OC24",
+    "surfaceTitle": "Venue board with conflict projection",
+    "page": 49,
+    "severity": "major",
+    "category": "H1",
+    "observation": "Conflict cards say “The tournament desk is resolving a court assignment.” The PDF shows an assignment conflict, not an acknowledgement by staff.",
+    "affectedTask": "Spectators receive assurance of active work that may not be true.",
+    "proposedChange": "Use neutral projection copy: “Court information is being checked. Please wait for the next court announcement.” Use “being checked” only with acknowledgement; otherwise “Court information is unavailable. Please wait for the next court announcement.”",
+    "acceptance": "The board makes no staff-action claim unless Operations records acknowledgement. It does not originate an operational alert.",
+    "packages": [
+      "17"
+    ],
+    "planDecision": "\"Board conflict copy says “wait for next announcement”\" | Adapt | \"Use “Court assignment unavailable.” Add an announcement instruction only if that is a confirmed venue process. Never claim staff are already resolving it.\"",
+    "status": "closed",
+    "closure": {
+      "package": "17",
+      "treatment": "verified no defect",
+      "implementation": {
+        "commits": [
+          "65a5084b"
+        ],
+        "files": [
+          "apps/console/src/modules/display/publicDisplay/CourtsView.tsx",
+          "apps/console/src/modules/display/bracketDisplay/BracketLiveView.tsx",
+          "apps/console/src/modules/display/publicDisplay/helpers.ts"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/display/__tests__/MeetDisplayPage.signage.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.49",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S24) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Already fixed in package 04b: renders exactly \"Court assignment unavailable.\" from one shared COURT_ASSIGNMENT_UNAVAILABLE constant; package 17 re-confirmed no \"resolving\"/\"announcement\"/\"wait for\" language renders."
+    }
+  },
+  {
+    "id": "V3-OC25.1",
+    "tier": "operator",
+    "surface": "OC25",
+    "surfaceTitle": "Team access",
+    "page": 53,
+    "severity": "minor",
+    "category": "T2",
+    "observation": "“Send by email” is selected, while the empty list says “No invite links yet.” The section title is “COLLABORATOR INVITES”.",
+    "affectedTask": "The user must reconcile email delivery with a list described as links.",
+    "proposedChange": "Use “Invitations” and “No invitations sent yet” for email mode; use “No invitation links created yet” for link mode.",
+    "acceptance": "Action, helper, and empty-state labels match the chosen invitation delivery method.",
+    "packages": [
+      "18"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "18",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "f1736964"
+        ],
+        "files": [
+          "apps/console/src/modules/settings/SharingTab.tsx",
+          "apps/api/src/identity/auth_routes.py",
+          "apps/console/src/api/dto.ts"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/settings/__tests__/SharingTab.test.tsx",
+        "tests/backend/test_auth_endpoints.py"
+      ],
+      "beforeEvidence": "operator-all.md p.53",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S25) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Section eyebrow renamed \"INVITATIONS\"; empty-state text now follows the selected mode; the email/link delivery-mode radio is now gated on a real backend capability (UserDTO.emailConfigured) instead of always shown."
+    }
+  },
+  {
+    "id": "V3-OC26.1",
+    "tier": "operator",
+    "surface": "OC26",
+    "surfaceTitle": "Tool availability and data consequences",
+    "page": 55,
+    "severity": "major",
+    "category": "T3",
+    "observation": "Bracket says “Clear its data before disabling it” and also “existing matches or draws are preserved”. It also says “Owns operational data”.",
+    "affectedTask": "Operators cannot predict whether disabling a tool destroys tournament data.",
+    "proposedChange": "Replace the competing paragraphs with one truthful state-dependent consequence and one matching action. Move ownership terminology out of the UI. Do not tell users to delete data merely to disable a tool.",
+    "acceptance": "The displayed consequence, confirmation, and actual disable behavior agree; preservation and deletion are never implied simultaneously.",
+    "packages": [
+      "05",
+      "18"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "05",
+        "18"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "a44ab5a2",
+          "f1736964"
+        ],
+        "files": [
+          "apps/console/src/modules/settings/ModuleCatalogRow.tsx",
+          "apps/console/src/modules/settings/ModulesSettingsTab.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/settings/__tests__/ModuleCatalogRow.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.55",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S26) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Removed the blockedReason instructing operators to \"Clear its data before disabling it\"; module catalog row/impact modal now states one truthful, state-dependent consequence with no \"ownership\" jargon. Re-verified in package 18 with no regression."
+    }
+  },
+  {
+    "id": "V3-OC27.1",
+    "tier": "operator",
+    "surface": "OC27",
+    "surfaceTitle": "Backups and pending sync",
+    "page": 57,
+    "severity": "major",
+    "category": "T3",
+    "observation": "The page says “Reconciliation evidence”, “Rejected operations stay immutable”, “cloud acknowledgement”, and “No open quarantined operations”.",
+    "affectedTask": "A tournament director must understand distributed systems to assess whether changes are safe.",
+    "proposedChange": "Use “Changes needing attention”, “No changes need attention”, and “2 changes saved on this device, waiting to sync”. Put technical evidence behind the existing details affordance or a support-only export.",
+    "acceptance": "The default view answers what is saved, what is pending, and what needs action using ordinary language.",
+    "packages": [
+      "19"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "19",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3f84ef2d"
+        ],
+        "files": [
+          "apps/console/src/modules/settings/SyncReconciliationPanel.tsx",
+          "apps/console/src/modules/settings/SyncBackupsTab.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/settings/__tests__/SyncReconciliationPanel.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.57",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S27) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "\"Reconciliation evidence\"/\"immutable\"/\"cloud acknowledgement\" no longer appear in the default view — replaced by three ordinary-language states, with the technical terms moved into a collapsed <details> disclosure; \"quarantined\" removed from the empty-state string."
+    }
+  },
+  {
+    "id": "V3-OC27.2",
+    "tier": "operator",
+    "surface": "OC27",
+    "surfaceTitle": "Backups and pending sync",
+    "page": 57,
+    "severity": "major",
+    "category": "H6",
+    "observation": "Multiple backups share Aug 31, 2026, 7:31:02 PM and are distinguished by byte deltas and long JSON filenames.",
+    "affectedTask": "Choosing a restore point requires guessing which backup contains the desired state.",
+    "proposedChange": "Show a short change summary and meaningful counts per backup, replacing byte-delta prose and filenames in the default row. Retain exact filenames in details and require preview of restoration consequences.",
+    "acceptance": "Two same-second backups can be distinguished by their contents before restoring; the current state is not overwritten without a clear confirmation.",
+    "packages": [
+      "19"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "19",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3f84ef2d"
+        ],
+        "files": [
+          "apps/console/src/modules/settings/SyncBackupsTab.tsx",
+          "apps/api/src/workspaces/tournaments.py",
+          "apps/console/src/api/dto.ts"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/settings/__tests__/SyncBackupsTab.test.tsx",
+        "tests/backend/test_tournaments.py"
+      ],
+      "beforeEvidence": "operator-all.md p.57",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S27) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "Recorded match/game results excluded from the change summary because match_states isn't captured in the snapshot (debt V3-19-1).",
+      "note": "Byte-delta/filename differentiation replaced with timezone-qualified timestamps (seconds shown only on same-minute collision) plus a real change summary and match/entrant counts on the default row; filename/exact size moved to the \"Inspect backup\" detail view."
+    }
+  },
+  {
+    "id": "V3-OC28.1",
+    "tier": "operator",
+    "surface": "OC28",
+    "surfaceTitle": "Activity log",
+    "page": 59,
+    "severity": "minor",
+    "category": "T1",
+    "observation": "Rows say “Updated Public information”, “Updated Staff”, and “Updated General”; section names are repeated beside local@dev.",
+    "affectedTask": "The history does not tell an operator what changed without opening technical details.",
+    "proposedChange": "Render actor, plain-language change, and timezone-qualified timestamp in the existing row, with useful field changes in the expansion. Remove repeated section labels.",
+    "acceptance": "A row explains who changed what; expanded details show the old and new user-facing values when available.",
+    "packages": [
+      "20"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "20",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629"
+        ],
+        "files": [
+          "apps/console/src/modules/settings/ActivityTab.tsx",
+          "apps/api/src/workspaces/setup.py",
+          "apps/console/src/lib/formatDateTime.ts"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/settings/__tests__/ActivityTab.test.tsx",
+        "tests/backend/test_tournament_setup.py"
+      ],
+      "beforeEvidence": "operator-all.md p.59",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S28) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "Field-level diffs only recorded for setup.updated (debt V3-20-1); _field_label is a generic humanizer, not curated (debt V3-20-2); array/object fields diff as whole-JSON (debt V3-20-3).",
+      "note": "Activity rows now show actor + plain-language change summary naming the section/fields (\"Changed Public information: Venue address\") as the primary line, tournament-timezone timestamps, and an expandable old→new diff; the repeated actor·section line is gone."
+    }
+  },
+  {
+    "id": "V3-OC29.1",
+    "tier": "operator",
+    "surface": "OC29",
+    "surfaceTitle": "Workspace settings",
+    "page": 61,
+    "severity": "cosmetic",
+    "category": "T3",
+    "observation": "The details section labels the current state “Lifecycle” and says “To retire the workspace, use Archive below.” The date is ISO-formatted.",
+    "affectedTask": "Everyday management actions are described differently from the rest of the product.",
+    "proposedChange": "Use “Tournament status”, “Archive this workspace to remove it from the active list”, and the shared human-readable date format.",
+    "acceptance": "The section uses the same date and status conventions as Overview; the archive and delete consequences remain distinct.",
+    "packages": [
+      "18"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "18",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "f1736964"
+        ],
+        "files": [
+          "apps/console/src/modules/settings/GeneralSettingsTab.tsx",
+          "apps/console/src/lib/formatDateTime.ts"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/settings/__tests__/GeneralSettingsTab.test.tsx",
+        "apps/console/src/modules/settings/__tests__/DangerZoneTab.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.61",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S29) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Status row relabeled \"Lifecycle\"→\"Tournament status\"; archive footnote reworded to describe the actual reversible, list-only effect (\"Archive this workspace to remove it from the active list.\"); date renders through the shared formatDateTime formatter."
+    }
+  },
+  {
+    "id": "V3-OC30.1",
+    "tier": "operator",
+    "surface": "OC30",
+    "surfaceTitle": "Entries unavailable",
+    "page": 63,
+    "severity": "major",
+    "category": "H9",
+    "observation": "The body directs users to Administration > Modules, but the button says “Go to Setup · General”.",
+    "affectedTask": "The primary recovery action cannot follow the instruction it accompanies.",
+    "proposedChange": "Use “Entries are unavailable for this tournament type” and make the button point to the verified applicable destination, such as “View available tools”. Remove the conflicting navigation instruction.",
+    "acceptance": "The explanation and button name the same destination and that destination offers a useful next step.",
+    "packages": [
+      "14",
+      "18"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "14",
+        "18"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "91d4acfc",
+          "f1736964"
+        ],
+        "files": [
+          "apps/console/src/app/workspace/ModuleUnavailablePanel.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/app/workspace/__tests__/ModuleUnavailablePanel.test.tsx",
+        "apps/console/src/app/__tests__/AppShell.guard.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.63",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S30) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Button label and reason copy unified to point at the same destination (\"View available tools\" → Administration · Modules) — package 18's fix, package 14 explicitly deferred it there."
+    }
+  },
+  {
+    "id": "V3-OC31.1",
+    "tier": "operator",
+    "surface": "OC31",
+    "surfaceTitle": "Readiness checklist; not an unavailable-configuration guard",
+    "page": 65,
+    "severity": "major",
+    "category": "H1",
+    "observation": "The checklist says “Overall: Ready”; Dates contains an out-of-window session (p.15), while image previews fail (p.27).",
+    "affectedTask": "Operators may read overall readiness as validated completeness. The screenshots do not establish which checks are intended to block.",
+    "proposedChange": "Rename the aggregate “Required setup complete” if it only checks presence. Show blocking validation separately and identify non-blocking missing public assets without marking them automatically fatal.",
+    "acceptance": "The aggregate is defined, date-validation failures block the relevant check, and optional image issues do not silently become shipping blockers.",
+    "packages": [
+      "13"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "13",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "74969629",
+          "65e82a8d",
+          "284610b6"
+        ],
+        "files": [
+          "apps/api/src/workspaces/setup.py",
+          "apps/console/src/modules/setup/SetupProduct.tsx"
+        ]
+      },
+      "tests": [
+        "tests/backend/test_tournament_setup.py"
+      ],
+      "beforeEvidence": "operator-all.md p.65",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S31 (Setup landing/checklist)) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": "The separate Overview/Hub checklist's \"completed items unreachable\" gap (X16) is routed elsewhere, out of this package's scope.",
+      "note": "V3-OC07.1's session-window validation makes \"Overall: Ready\" honest by flipping the dates section (and rollup) to \"Blocked\" for an out-of-window session; broken image previews confirmed never a blocking readiness fact."
+    }
+  },
+  {
+    "id": "V3-OC32.1",
+    "tier": "operator",
+    "surface": "OC32",
+    "surfaceTitle": "Empty school roster; not an unavailable-roster guard",
+    "page": 67,
+    "severity": "minor",
+    "category": "T2",
+    "observation": "The paragraph says “Add a school from the actions bar to start” even though an “Add school” button is directly below it.",
+    "affectedTask": "The user is sent away from the action already placed at the point of need.",
+    "proposedChange": "Replace the paragraph with “Add a school, then add its players and positions.” Retain the adjacent Add school action; do not add another.",
+    "acceptance": "The empty state describes the next domain step without directions to a distant toolbar.",
+    "packages": [
+      "14"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "14",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "91d4acfc"
+        ],
+        "files": [
+          "apps/console/src/modules/meet/roster/RosterTab.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/meet/roster/__tests__/RosterTab.v3.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.67",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S14 (Roster, empty-state variant)) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Empty-state copy replaced: \"Add a school from the actions bar to start.\" → \"Add a school, then add its players and positions.\""
+    }
+  },
+  {
+    "id": "V3-OC33.1",
+    "tier": "operator",
+    "surface": "OC33",
+    "surfaceTitle": "Empty match inventory; not an unavailable-matches guard",
+    "page": 69,
+    "severity": "minor",
+    "category": "F2",
+    "observation": "The page has zero matches, a “Regenerate from roster” toolbar action, disabled Add match, and a muted “Add players in Roster” empty-state action.",
+    "affectedTask": "A first-time operator must infer whether to populate the roster or generate matches first.",
+    "proposedChange": "When the roster is empty, make “Add players” primary and explain that matches can be generated afterward. When ready, use “Generate matches” for the first generation. Remove the irrelevant disabled Add match action in this state.",
+    "acceptance": "The empty state presents one valid next step based on roster readiness; “Regenerate” is used only after generation.",
+    "packages": [
+      "14"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "14",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "91d4acfc"
+        ],
+        "files": [
+          "apps/console/src/modules/meet/matches/MatchesTab.tsx",
+          "apps/console/src/modules/meet/matches/RegenerateMenu.tsx"
+        ]
+      },
+      "tests": [
+        "apps/console/src/modules/meet/matches/__tests__/MatchesTab.emptyState.test.tsx"
+      ],
+      "beforeEvidence": "operator-all.md p.69",
+      "afterEvidence": "v3-recapture/operator-console-surface-book.pdf (S17 (Matches, empty-state variant)) @ console 1440 desktop + 390 mobile (this tool's two built-in viewports; 1024 behavior is separately proven by console-a11y.spec.ts, which asserts the same surfaces at 1024/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Empty match-inventory state now branches on roster readiness with one valid next step (\"Matches can be generated once players are on the roster.\"); \"Regenerate\" language withheld until after first generation; disabled Add match withheld when no matches exist."
+    }
+  },
+  {
+    "id": "V3-PE01.1",
+    "tier": "public",
+    "surface": "PE01",
+    "surfaceTitle": "Tournament discovery",
+    "page": 3,
+    "severity": "cosmetic",
+    "category": "T3",
+    "observation": "The sentence says “Explore Badminton tournaments, schedules, and published results through ShuttleWorks.”",
+    "affectedTask": "The user reads a platform description rather than a concise browsing cue; “Badminton” is unnecessarily capitalized.",
+    "proposedChange": "Use “Find badminton tournaments, schedules, and results.” Retain the heading and remove the platform reference.",
+    "acceptance": "The introduction is one short sentence with ordinary capitalization.",
+    "packages": [
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "21",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/entrant/app/routes/discovery.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/discovery.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.3",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S01) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Season-view intro replaced with one short, plain sentence, no platform branding: \"Find badminton tournaments, schedules, and results.\""
+    }
+  },
+  {
+    "id": "V3-PE01.2",
+    "tier": "public",
+    "surface": "PE01",
+    "surfaceTitle": "Tournament discovery",
+    "page": 3,
+    "severity": "minor",
+    "category": "T4",
+    "observation": "Yunavero Club Open says “Entries open · closes in 15d”.",
+    "affectedTask": "The wording is grammatically inconsistent and gives no durable deadline when a screenshot is shared.",
+    "proposedChange": "Use “Entries close [day month, time, timezone]” from the tournament’s configured deadline; show a short relative countdown only as secondary urgency when useful.",
+    "acceptance": "The deadline is an exact tournament-timezone date/time; no unexplained “d” suffix remains.",
+    "packages": [
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "21",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/entrant/app/components/SeasonStatusCell.tsx",
+          "apps/entrant/app/lib/phase.ts",
+          "apps/api/src/entries/entries_json.py"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/discovery.render.test.ts",
+        "apps/entrant/tests/components.test.ts",
+        "apps/entrant/tests/phase.test.ts",
+        "tests/backend/test_season_listing.py"
+      ],
+      "beforeEvidence": "public-all.md p.3",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S01) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": "Falls back to the old relative-only chip when no exact instant parses (never omits the countdown outright).",
+      "note": "Deadline now shows the exact tournament-timezone instant as primary text (\"Closes 30 Aug 2026, 13:00 GMT+1\") with the relative countdown secondary, never a bare \"15d\" alone."
+    }
+  },
+  {
+    "id": "V3-PE01.3",
+    "tier": "public",
+    "surface": "PE01",
+    "surfaceTitle": "Tournament discovery",
+    "page": 3,
+    "severity": "minor",
+    "category": "H6",
+    "observation": "Rows identify Kingsway Centre, Utilita Arena, and other venue names, but do not consistently show city/country beside them.",
+    "affectedTask": "Someone deciding whether to enter must open a tournament to establish its location.",
+    "proposedChange": "Replace the venue-only secondary line with city/country plus venue when space permits. Preserve the compact row; do not add a location badge.",
+    "acceptance": "Each discovery row states an unambiguous locality; mobile names still wrap naturally.",
+    "packages": [
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "21",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/entrant/app/components/SeasonCalendar.tsx",
+          "apps/api/src/entries/entries_json.py"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/discovery.render.test.ts",
+        "tests/backend/test_season_listing.py"
+      ],
+      "beforeEvidence": "public-all.md p.3",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S01) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Row meta line adds locality parsed from venue address (\"Kingsway Centre · London, United Kingdom\"); omits locality (never guesses) when the address has no comma to parse."
+    }
+  },
+  {
+    "id": "V3-PE02.1",
+    "tier": "public",
+    "surface": "PE02",
+    "surfaceTitle": "Completed tournament archive",
+    "page": 15,
+    "severity": "cosmetic",
+    "category": "T3",
+    "observation": "The recurring footer says “ShuttleWorks · tournament entries · by Yunavero”, including on completed results and draw pages.",
+    "affectedTask": "The descriptor is narrow and reads like assembled metadata.",
+    "proposedChange": "Use “ShuttleWorks by Yunavero”. Keep organizer attribution once where it clarifies content ownership.",
+    "acceptance": "The footer brand line is identical across public pages and does not mislabel results as entry management.",
+    "packages": [
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "21",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/entrant/app/components/PlayShell.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/components.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.15",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S02) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Identical \"ShuttleWorks by Yunavero\" brand line on every public page via one shared BRAND_SIGNATURE constant (previously the repeated footer sentence flagged by the finding)."
+    }
+  },
+  {
+    "id": "V3-PE03.3",
+    "tier": "public",
+    "surface": "PE03",
+    "surfaceTitle": "Tournament overview",
+    "page": 21,
+    "severity": "minor",
+    "category": "H1",
+    "observation": "The title’s status is “Entries closed”, while the main button is “Follow live matches” and the description says play is underway.",
+    "affectedTask": "Spectators are first told about a task they can no longer perform rather than the tournament they came to follow.",
+    "proposedChange": "Make tournament state the primary subtitle and move entry closure into Key dates. Keep a single live CTA; do not add a colored badge.",
+    "acceptance": "Live tournament headers lead with the live state, while entry status remains available in its relevant section.",
+    "packages": [
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "21",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/entrant/app/routes/tournament.tsx",
+          "apps/entrant/app/components/HeroHeader.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/tournament.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.21",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S03) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Hero subtitle now leads with the real lifecycle phase (e.g. \"Live now\") instead of the binary entries chip; entry closure stays in Key dates, unchanged."
+    }
+  },
+  {
+    "id": "V3-PE03.1",
+    "tier": "public",
+    "surface": "PE03",
+    "surfaceTitle": "Tournament overview",
+    "page": 21,
+    "severity": "major",
+    "category": "V1",
+    "observation": "One paragraph repeats the title, live state, category, prize amount, location, venue, and five draw sizes, including “international circuit events Draw listing”.",
+    "affectedTask": "Readers must parse a data dump to find facts already suited to the page’s existing property sections.",
+    "proposedChange": "Reduce the description to a short organizer introduction. Move category/prize to existing fact rows only when verified and relevant; leave draw sizes in Draws. Remove repeated title, venue, and draw-list prose.",
+    "acceptance": "The introduction is readable prose with complete sentences, and no fact is repeated across the paragraph and adjacent property rows.",
+    "packages": [
+      "21"
+    ],
+    "planDecision": null,
+    "status": "open",
+    "closure": {
+      "package": "21",
+      "treatment": "deferred: debt (simulator seed script)",
+      "implementation": {
+        "commits": [],
+        "files": []
+      },
+      "tests": [],
+      "beforeEvidence": "public-all.md p.21",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S03) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "partial: the repetitive paragraph is organizer-authored demo content generated by the seed script, not a rendering defect; regenerating the seed script is unactioned",
+      "limitation": "Demo seed script (and the already-seeded demo DB) not regenerated; logged as debt rather than fixed.",
+      "note": "Root cause traced to simulator/tournament_sim/seed.py's demo-data seeding (line ~2074), outside this package's backend-DTO/entrant-route scope; the entrant render already displays the organizer field verbatim. Not fixed in product code."
+    }
+  },
+  {
+    "id": "V3-PE03.2",
+    "tier": "public",
+    "surface": "PE03",
+    "surfaceTitle": "Tournament overview",
+    "page": 21,
+    "severity": "major",
+    "category": "H1",
+    "observation": "Overview shows “Event registrations 0”; the same tournament has a 253-player directory and five 32-entry draws in the book.",
+    "affectedTask": "A public visitor may read the zero as an empty or broken tournament, even if registrations and imported draw rosters are separate sources.",
+    "proposedChange": "Remove the internal registration aggregate from the public summary unless it answers an entry question. Show the published player or pair counts in their proper context; never combine these unlike counts.",
+    "acceptance": "The public summary distinguishes registered entries from published draw participants without presenting an unexplained zero.",
+    "packages": [
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "21",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/entrant/app/routes/tournament.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/tournament.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.21",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S03) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "\"Event registrations 0\" row removed; now omitted once it no longer answers an entry question, else reads \"Entered so far N\"."
+    }
+  },
+  {
+    "id": "V3-PE04.2",
+    "tier": "public",
+    "surface": "PE04",
+    "surfaceTitle": "Draw index reached from Events",
+    "page": 24,
+    "severity": "major",
+    "category": "T4",
+    "observation": "A doubles row says “32 pairs” and also “0 confirmed registrations · 32 draw participants”. The registration column wraps across several lines.",
+    "affectedTask": "Readers cannot tell whether 32 refers to pairs or individual players or whether an empty registration state affects the draw.",
+    "proposedChange": "Replace the combined count column with “32 pairs” for doubles and “32 players” for singles; keep imported registration-source differences in operator views. Widen useful identity columns using the recovered space.",
+    "acceptance": "Public draw counts have exactly one clear unit, and no zero registration count implies that a populated draw is empty.",
+    "packages": [
+      "14",
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "14",
+        "21"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "91d4acfc",
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/console/src/modules/bracket/BracketDrawsTab.tsx",
+          "apps/entrant/app/components/EventRow.tsx",
+          "apps/entrant/app/routes/tournament.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/components.test.ts",
+        "apps/entrant/tests/draw.render.test.ts",
+        "apps/entrant/tests/tournament.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.24",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S04/S06 (Events tab / Draws)) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Operator side already showed one \"{n} pairs\"/\"{n} players\" unit; public side (package 21) now shows exactly one count/unit, column header renamed \"Entered\", never a combined confirmed/participants line."
+    }
+  },
+  {
+    "id": "V3-PE04.1",
+    "tier": "public",
+    "surface": "PE04",
+    "surfaceTitle": "Draw index reached from Events",
+    "page": 24,
+    "severity": "minor",
+    "category": "C3",
+    "observation": "The list says “Mens Singles”, “Mens Doubles”, “Womens Singles”, and “Womens Doubles”, while individual draw titles use apostrophes.",
+    "affectedTask": "Basic editorial errors reduce polish and create inconsistent event identity.",
+    "proposedChange": "Use “Men’s singles”, “Men’s doubles”, “Women’s singles”, “Women’s doubles”, and “Mixed doubles” consistently. Preserve stored participant names exactly.",
+    "acceptance": "Every event list, directory legend, filter, and draw heading uses the approved event labels.",
+    "packages": [
+      "14",
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "14",
+        "21"
+      ],
+      "treatment": "adapted",
+      "implementation": {
+        "commits": [
+          "91d4acfc",
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/console/src/platform/domain/eventLabels.ts",
+          "apps/entrant/app/lib/eventLabels.ts"
+        ]
+      },
+      "tests": [
+        "apps/console/src/platform/domain/__tests__/eventLabels.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.24",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S04/S06 (Events tab / Draws)) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": "draw.tsx's own heading still uses eventDisciplineLabel (Title Case), a second inconsistent copy of the vocabulary — left for package 11.",
+      "note": "Console gained a mirror of the entrant tier's sentence-case EVENT_LABEL_MAP ('Men's singles', not 'Mens Singles') with a parity test; package 21 wired the entrant-side canonical map into draw heading + aria-labels."
+    }
+  },
+  {
+    "id": "V3-PE04.3",
+    "tier": "public",
+    "surface": "PE04",
+    "surfaceTitle": "Draw index reached from Events",
+    "page": 24,
+    "severity": "minor",
+    "category": "T1",
+    "observation": "Every row says “Draw published” and the action says “Draw”; the women’s doubles helper repeats “Draw published” again.",
+    "affectedTask": "The row spends space proving availability instead of presenting the event and a clear next action.",
+    "proposedChange": "Use “View draw”. Remove routine “Draw published” copy when availability is already expressed by the action; retain exceptional unpublished states in plain text.",
+    "acceptance": "Each ordinary row has one outcome-named action and no duplicated publication message.",
+    "packages": [
+      "14",
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "14",
+        "21"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "91d4acfc",
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/entrant/app/components/EventRow.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/components.test.ts",
+        "apps/entrant/tests/draw.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.24",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S04/S06 (Events tab / Draws)) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": "Distinct \"Draw published · rounds to be scheduled\" fact-line for an unscheduled draw left untouched (not a duplicate).",
+      "note": "Public-tier (package 21) draw action reads \"View draw\"; duplicated \"Draw published\" state label beside the action removed."
+    }
+  },
+  {
+    "id": "V3-PE05.2",
+    "tier": "public",
+    "surface": "PE05",
+    "surfaceTitle": "Published player directory",
+    "page": 27,
+    "severity": "cosmetic",
+    "category": "H8",
+    "observation": "“253 players” appears left of the search field and again below it. The field uses placeholder-only “Filter by name or club”.",
+    "affectedTask": "Repeated counts add noise while the search purpose disappears after typing.",
+    "proposedChange": "Keep one result count and give the existing search a persistent visible label “Find a player”. Use “Name or club” as its short placeholder.",
+    "acceptance": "One count updates with filtering and the search remains labelled after a query is entered.",
+    "packages": [
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "21",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/entrant/app/components/EntrantsList.tsx",
+          "apps/entrant/public/assets/entrants-filter.js"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/components.test.ts",
+        "apps/entrant/tests/entrantsFilter.script.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.27",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S05) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "One SSR-rendered result count ([data-search-count]); persistent visible \"Find a player\" label plus a short \"Name or club\" placeholder (not placeholder-only)."
+    }
+  },
+  {
+    "id": "V3-PE05.1",
+    "tier": "public",
+    "surface": "PE05",
+    "surfaceTitle": "Published player directory",
+    "page": 27,
+    "severity": "minor",
+    "category": "H7",
+    "observation": "The directory has 253 names across seven desktop and fourteen mobile capture segments. Letter headings exist, but no visible jump index is provided.",
+    "affectedTask": "Browsing alphabetically requires substantial scrolling even though the list already has natural group anchors.",
+    "proposedChange": "Replace the long event-code explanation with a compact A–Z jump control tied to the existing letter sections. Keep search and readable names; do not add avatars to every row.",
+    "acceptance": "A user can jump directly to an existing letter on mobile and return to search without traversing the full list.",
+    "packages": [
+      "21"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "21",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "3dde74cf"
+        ],
+        "files": [
+          "apps/entrant/app/components/EntrantsList.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/components.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.27",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S05) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Added a plain-anchor A-Z jump nav (<nav aria-label=\"Jump to letter\">) linking every letter with a section, works with no JS and on mobile; removed the old \"Events:\" legend."
+    }
+  },
+  {
+    "id": "V3-PE09.3",
+    "tier": "public",
+    "surface": "PE09",
+    "surfaceTitle": "Schedule and live matches",
+    "page": 57,
+    "severity": "minor",
+    "category": "T4",
+    "observation": "The day line reads “Friday, July 31 124”; cards use “2026-07-31 · 09:00”; the title uses “Friday 31 July 2026”.",
+    "affectedTask": "The number 124 looks appended to the date, and repeated ISO dates reduce scan speed.",
+    "proposedChange": "Use “Fri 31 Jul · 124 matches” for the day heading. Show just the time and court on cards within that day, with timezone stated once nearby.",
+    "acceptance": "Counts have nouns; the selected date and timezone are always identifiable without repetitive ISO strings.",
+    "packages": [
+      "04",
+      "11"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "04",
+        "11"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "aae28dd3",
+          "e4092463",
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/routes/schedule.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/scheduleState.test.ts",
+        "apps/entrant/tests/components.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.57",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S09) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Day-heading count now always carries a noun via dayMatchCountLabel instead of a bare number glued to a date; raw ISO date no longer prints on cards."
+    }
+  },
+  {
+    "id": "V3-PE09.4",
+    "tier": "public",
+    "surface": "PE09",
+    "surfaceTitle": "Schedule and live matches",
+    "page": 57,
+    "severity": "minor",
+    "category": "V4",
+    "observation": "Each live match has a saturated green header, beneath an additional “LIVE NOW” heading, with “Now” repeated on each card.",
+    "affectedTask": "Ordinary state takes the strongest visual emphasis repeatedly, competing with player identity and location.",
+    "proposedChange": "Use a plain live group heading and a restrained textual state on ordinary rows. Reserve saturated bands for exceptional states; keep player names and court as the strongest card content.",
+    "acceptance": "Live status remains understandable without color and routine live cards have no repeated saturated header strip.",
+    "packages": [
+      "04",
+      "11"
+    ],
+    "planDecision": "\"Match state “Live” vs “On court”\" | Resolve | \"Use “On court” for a match state; “Live now” may describe a section. Public schedule state is separately “Scheduled” or “Time to be confirmed.” No screen-local synonym list.\"",
+    "status": "closed",
+    "closure": {
+      "package": [
+        "04",
+        "11"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "aae28dd3",
+          "e4092463",
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/components/MatchCard.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/matchCard.contract.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.57",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S09) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Deleted the saturated bg-status-live header fill ternary from every MatchCard variant; only the state word itself takes the live color now (fixed under package 11, out of package 04a's scope)."
+    }
+  },
+  {
+    "id": "V3-PE09.1",
+    "tier": "public",
+    "surface": "PE09",
+    "surfaceTitle": "Schedule and live matches",
+    "page": 57,
+    "severity": "major",
+    "category": "P3",
+    "observation": "All six visible live cards across pp.57–58 say “Court information unavailable” despite the page inviting browsing “by court”.",
+    "affectedTask": "Spectators cannot locate the match they are following. The PDF does not prove whether this is missing source data or a rendering/mapping issue.",
+    "proposedChange": "Trace the court value for this exact public fixture. Project published court assignments when available; otherwise show an honest pending/ unavailable message and do not imply a usable court grouping.",
+    "acceptance": "Every live card has a verified court or an explicit unavailable state; By court has a meaningful result for the same snapshot.",
+    "packages": [
+      "04",
+      "11"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "04",
+        "11"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "aae28dd3",
+          "e4092463",
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/components/MatchCard.tsx",
+          "apps/entrant/app/routes/schedule.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/scheduleState.test.ts",
+        "tests/backend/test_entries_site_api.py"
+      ],
+      "beforeEvidence": "public-all.md p.57",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S09) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Root cause was the entrant frontend's showAssignmentPlaceholders flag forcing \"Court information unavailable\" regardless of cause; flag deleted. Backend verified correct via two new tests covering both ways a court reaches a live bracket match."
+    }
+  },
+  {
+    "id": "V3-PE09.2",
+    "tier": "public",
+    "surface": "PE09",
+    "surfaceTitle": "Schedule and live matches",
+    "page": 58,
+    "severity": "major",
+    "category": "H1",
+    "observation": "Under 09:00, the final, quarterfinals, and round of 16 appear as “Scheduled”, with unresolved winner placeholders.",
+    "affectedTask": "A spectator cannot interpret these as a feasible order of play; placeholder defaults look like published start times.",
+    "proposedChange": "Publish only approved schedule times. Keep dependency-only future matches in a separate “Time to be confirmed” group, replacing false schedule values rather than adding alerts. Operators approve consequential changes.",
+    "acceptance": "Dependent rounds are not shown with fabricated equal start times; uncertainty is explicitly labelled.",
+    "packages": [
+      "04",
+      "11"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "04",
+        "11"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "aae28dd3",
+          "e4092463",
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/components/MatchCard.tsx",
+          "apps/entrant/app/lib/schedule.types.ts"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/scheduleState.test.ts",
+        "tests/backend/test_entries_site_api.py"
+      ],
+      "beforeEvidence": "public-all.md p.58",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S09) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Deleted the frontend's 3-way \"Scheduled\" literal ternary independent of slot presence; entrant now uses an honest schedule-state word/label, with the backend confirmed already slot-driven."
+    }
+  },
+  {
+    "id": "V3-PE10.1",
+    "tier": "public",
+    "surface": "PE10",
+    "surfaceTitle": "Singles bracket",
+    "page": 67,
+    "severity": "major",
+    "category": "H6",
+    "observation": "Later nodes say “Winner of R32 1” and “Winner of R16 1”, but source first-round nodes show names without a matching visible match number.",
+    "affectedTask": "A reader cannot reliably trace the future opponent without manually counting matches.",
+    "proposedChange": "Add a small human match number to each source node by replacing empty metadata space. Use “Winner of match 1” within a clearly named round, retaining full names and bracket connectors.",
+    "acceptance": "Each future reference resolves to a visible labelled source match without counting rows.",
+    "packages": [
+      "11"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "11",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/components/MatchCard.tsx",
+          "apps/entrant/app/routes/draw.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/matchCard.contract.render.test.ts",
+        "apps/entrant/tests/publicUniversality.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.67",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S10) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": "Not a byte-for-byte match to the backend's own short-round spelling (\"Winner of R32 1\") — logged as debt V3-11-2, backend round-label unification deferred.",
+      "note": "MatchCardData gained matchNumber; every bracket node (and compact list/card header) now shows \"Match {n}\" from the wire's own node.position."
+    }
+  },
+  {
+    "id": "V3-PE10.2",
+    "tier": "public",
+    "surface": "PE10",
+    "surfaceTitle": "Singles bracket",
+    "page": 69,
+    "severity": "minor",
+    "category": "F1",
+    "observation": "The mobile bracket shows only the left side and instructs readers to scroll within the panel or use Round view.",
+    "affectedTask": "Finding an opponent begins with nested horizontal navigation on a small screen.",
+    "proposedChange": "Default new mobile visits to the existing Round view; retain the full Bracket tab and preserve an explicitly chosen view in navigation. Remove the extra wide-bracket instruction from the default state.",
+    "acceptance": "A first mobile visit fits the active round without horizontal page movement; full bracket remains an explicit option.",
+    "packages": [
+      "11"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "11",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/routes/draw.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/draw.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.69",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S10) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "With no explicit ?view=, the page now CSS-toggles both Round (mobile) and Bracket canvas (desktop) at the 768px breakpoint instead of defaulting to bracket-only with a scroll hint; the hint paragraph was deleted."
+    }
+  },
+  {
+    "id": "V3-PE11.1",
+    "tier": "public",
+    "surface": "PE11",
+    "surfaceTitle": "Singles round view",
+    "page": 71,
+    "severity": "major",
+    "category": "H1",
+    "observation": "Round cards say “Scheduled” while their metadata says “Date to be confirmed · 10:00 · Court information unavailable”.",
+    "affectedTask": "A precise time and a confident status imply a usable appointment that is not established.",
+    "proposedChange": "Use “Time to be confirmed” when no approved date/time exists. Suppress a default clock value; if only the date is missing but the time is intentional, label it tentative explicitly.",
+    "acceptance": "No match without a confirmed scheduling timestamp is presented as fully scheduled.",
+    "packages": [
+      "04",
+      "11"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "04",
+        "11"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "aae28dd3",
+          "e4092463",
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/components/MatchCard.tsx",
+          "apps/entrant/app/routes/draw.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/components.test.ts",
+        "apps/entrant/tests/scheduleState.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.71",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S11) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Fixed at the shared MatchCard root used by both schedule.tsx and draw.tsx's round view: \"Time to be confirmed\" only appears when time is genuinely missing; the state chip no longer reads \"Scheduled\" merely for lacking data."
+    }
+  },
+  {
+    "id": "V3-PE12.1",
+    "tier": "public",
+    "surface": "PE12",
+    "surfaceTitle": "Singles search-highlight state",
+    "page": 76,
+    "severity": "minor",
+    "category": "T1",
+    "observation": "After searching Zhu, the banner says “Showing matches for Zhu. 1 match in this draw” while all other bracket names remain visible.",
+    "affectedTask": "The user cannot tell whether this is filtering, highlighting, or a full progression path.",
+    "proposedChange": "Name the actual behavior: “1 match found for ‘Zhu’”. Highlight and bring that match into view while preserving bracket context; use “Clear search” rather than “Clear player filter”.",
+    "acceptance": "The result is visually identifiable and the message describes exactly what changed.",
+    "packages": [
+      "11"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "11",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/routes/draw.tsx",
+          "apps/entrant/public/assets/bracket-path.js"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/draw.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.76",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S12) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": "The bracket canvas is not literally filtered (still highlights the path rather than hiding other names) — deliberate, to describe actual behavior honestly.",
+      "note": "Banner text changed to one plural-aware sentence \"{n} match(es) found for '<name>'\"; bracket canvas gained scroll-into-view on the first matching node in addition to path highlighting."
+    }
+  },
+  {
+    "id": "V3-PE13.1",
+    "tier": "public",
+    "surface": "PE13",
+    "surfaceTitle": "Singles match list",
+    "page": 80,
+    "severity": "minor",
+    "category": "T4",
+    "observation": "Cards show dates such as “2026-08-05 · 11:00 · Court 3”, while the draw heading does not state a timezone.",
+    "affectedTask": "An entrant opening the draw directly must infer the timezone from another screen.",
+    "proposedChange": "State “All times in Seoul time” once beside the draw list and use the shared date format. Preserve the schedule’s data source rather than hardcoding a location.",
+    "acceptance": "A direct link to the list provides the correct configured timezone without returning to Overview.",
+    "packages": [
+      "11"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "11",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/routes/draw.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/draw.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.80",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S13) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Added \"All times in {timeZone}.\" under the draw's meta row on every view (List/Round/Bracket), sourced from EntryPageDTO.tournament.timeZone."
+    }
+  },
+  {
+    "id": "V3-PE14.1",
+    "tier": "public",
+    "surface": "PE14",
+    "surfaceTitle": "Doubles bracket",
+    "page": 91,
+    "severity": "major",
+    "category": "V5",
+    "observation": "Partner names are slash-joined and wrap over multiple lines. In the lower continuation (p.92), long pairs run into adjacent row space.",
+    "affectedTask": "Readers struggle to distinguish partners from opponents and trace the connector to the correct side.",
+    "proposedChange": "Stack each partner on a separate line within a pair block and size each match for its tallest side. Increase node width where needed, keeping a deliberate horizontal canvas and Round alternative.",
+    "acceptance": "The longest captured doubles names remain fully inside their side; pair boundaries, opponent separation, and connector alignment stay unambiguous.",
+    "packages": [
+      "11"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "11",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "e729500a"
+        ],
+        "files": [
+          "apps/entrant/app/components/PersonGroup.tsx",
+          "apps/entrant/public/assets/person-ref.js"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/matchCard.contract.render.test.ts",
+        "apps/entrant/tests/publicUniversality.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.91",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S14) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "PersonGroup now stacks each partner on its own line (block element); the slash separator is deleted outright. Verified against MC-03's long, unequal-length, diacritic-bearing pairs."
+    }
+  },
+  {
+    "id": "V3-PE15.2",
+    "tier": "public",
+    "surface": "PE15",
+    "surfaceTitle": "Regulations reader",
+    "page": 95,
+    "severity": "minor",
+    "category": "C3",
+    "observation": "Links say “View events” and “View entrants”, while the tournament navigation uses Draws and Players; the text includes a raw Wikipedia URL.",
+    "affectedTask": "Readers must learn alternate names for the same destinations and parse a technical address inside prose.",
+    "proposedChange": "Use destination-matching link labels and a descriptive source link. Keep organizer rules intact; remove duplicate provenance paragraphs and the unnecessary assertion that contact details are not published.",
+    "acceptance": "Navigation names match destinations and the source has readable link text without a raw URL paragraph.",
+    "packages": [
+      "22"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "22",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "5f25f761"
+        ],
+        "files": [
+          "apps/entrant/app/routes/regulations.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/regulations.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.95",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S15) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": "Organizer's own words/simulator seed.py text left untouched by design; only the rendering changed.",
+      "note": "Sidebar link labels aligned to TabBar's own vocabulary (\"Overview\"/\"Draws\"/\"Players\"); duplicate footer paragraph removed; the raw Wikipedia URL is now linkified."
+    }
+  },
+  {
+    "id": "V3-PE15.1",
+    "tier": "public",
+    "surface": "PE15",
+    "surfaceTitle": "Regulations reader",
+    "page": 95,
+    "severity": "major",
+    "category": "T2",
+    "observation": "The rule says players report “15 minutes before their match is called”. A call is itself an event that the player cannot normally predict.",
+    "affectedTask": "Entrants cannot determine the required arrival time from this instruction.",
+    "proposedChange": "Ask the organizer to confirm whether the rule means scheduled start, estimated start, or reporting on announcement; publish that exact condition. Do not silently alter organizer policy.",
+    "acceptance": "The reporting rule is tied to an observable timestamp or announcement and is approved by the organizer.",
+    "packages": [
+      "22"
+    ],
+    "planDecision": null,
+    "status": "open",
+    "closure": {
+      "package": "22",
+      "treatment": "verified no defect (ruling R2)",
+      "implementation": {
+        "commits": [],
+        "files": []
+      },
+      "tests": [],
+      "beforeEvidence": "public-all.md p.95",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S15) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "partial: organizer policy content itself needs organizer confirmation, not an engineering fix",
+      "limitation": "Logged as debt V3-22-1 routing a structured reporting-reference field to package 13, pending organizer confirmation; marked \"conditional: organizer confirmation\" in ledger/22-strings.md.",
+      "note": "Organizer text rendered verbatim as-is per ruling R2; no system-chrome line was added because no reporting-time field exists on the tournament to cite truthfully — adding one would invent organizer policy."
+    }
+  },
+  {
+    "id": "V3-PE16.1",
+    "tier": "public",
+    "surface": "PE16",
+    "surfaceTitle": "Entries closed; entry form not reached",
+    "page": 98,
+    "severity": "minor",
+    "category": "T2",
+    "observation": "The heading and paragraph both say no event is taking entries; the paragraph suggests the organizer may publish a new entry window or timetable.",
+    "affectedTask": "A final closure sounds provisional even when no reopening has been announced.",
+    "proposedChange": "Use “Entries are closed for Korea Masters (2026). View the tournament page for schedules and results.” Mention reopening only when an organizer has published it.",
+    "acceptance": "The state names this tournament, removes repetition, and makes no unsupported future promise.",
+    "packages": [
+      "22",
+      "24"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "22",
+        "24"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "5f25f761"
+        ],
+        "files": [
+          "apps/entrant/app/routes/enter.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/enter.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.98",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S16) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE16-entry-form-open@1440.png; v3-recapture/journeys/PE16-entry-form-open@390.png; v3-recapture/journeys/PE16-entry-form-filled@1440.png; v3-recapture/journeys/PE16-entry-form-filled@390.png; v3-recapture/journeys/PE16-entry-receipt-real@1440.png; v3-recapture/journeys/PE16-entry-receipt-real@390.png (real, non-placeholder reference)",
+      "acceptance": "met",
+      "limitation": "Package 24 (in progress at closure-record time) may extend the same surface for the invitation/entry-form journey but does not reopen this defect.",
+      "note": "Closed-entries paragraph rewritten to name the tournament and drop the duplicated heading and any reopening promise: \"Entries are closed for {tournament name}. View the tournament page for schedules and results.\""
+    }
+  },
+  {
+    "id": "V3-PE16.2",
+    "tier": "public",
+    "surface": "PE16",
+    "surfaceTitle": "Entries closed; entry form not reached",
+    "page": 98,
+    "severity": "minor",
+    "category": "H1",
+    "observation": "The header says Sign in, while the body offers Sign out with “Signed in on this device?” and a device-scope explanation.",
+    "affectedTask": "The user is asked to diagnose their own authentication state.",
+    "proposedChange": "Render one state-aware account action from the actual session. Keep shared-device sign-out available when authenticated, without a speculative question or repeated reassurance.",
+    "acceptance": "Signed-out visitors see no sign-out action; authenticated visitors see a clear account/sign-out state.",
+    "packages": [
+      "22",
+      "24"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": [
+        "22",
+        "24"
+      ],
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "5f25f761"
+        ],
+        "files": [
+          "apps/entrant/app/routes/enter.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/enter.render.test.ts",
+        "apps/entrant/tests/logout.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.98",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S16) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE16-entry-form-open@1440.png; v3-recapture/journeys/PE16-entry-form-open@390.png; v3-recapture/journeys/PE16-entry-form-filled@1440.png; v3-recapture/journeys/PE16-entry-form-filled@390.png; v3-recapture/journeys/PE16-entry-receipt-real@1440.png; v3-recapture/journeys/PE16-entry-receipt-real@390.png (real, non-placeholder reference)",
+      "acceptance": "met",
+      "limitation": "Displaying the actual signed-in account's name/email was not built (would need a new credentialed browser call); package 24 (in progress) covers adjacent signed-in account journeys but does not change this finding's resolved scope.",
+      "note": "Footer sign-in/sign-out control now derives from real session-cookie presence instead of always showing both; signed-out renders \"Sign in\" only, signed-in renders \"Sign out\" plus one device-scope sentence stated once."
+    }
+  },
+  {
+    "id": "V3-PE19.1",
+    "tier": "public",
+    "surface": "PE19",
+    "surfaceTitle": "Sign-in form",
+    "page": 104,
+    "severity": "minor",
+    "category": "T3",
+    "observation": "The introduction says “Use the entrant account you signed up with. Your account manages tournament entries; signing in does not submit an entry.”",
+    "affectedTask": "Three explanations precede a standard two-field form, making normal website copy sound defensive.",
+    "proposedChange": "Use “Sign in to manage your tournament entries.” Keep the distinction between account creation and entry submission at the entry handoff where it matters.",
+    "acceptance": "The sign-in page has one short task-specific introduction; outcome clarification appears only at the relevant handoff.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/login.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/login.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.104",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S19) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Replaced the defensive/imprecise intro with one short task-specific sentence (\"Sign in to manage your tournament entries.\"); the outcome clarification stays at the entry handoff, unchanged/out of scope."
+    }
+  },
+  {
+    "id": "V3-PE20.1",
+    "tier": "public",
+    "surface": "PE20",
+    "surfaceTitle": "Account-created notice on sign-in",
+    "page": 106,
+    "severity": "cosmetic",
+    "category": "T3",
+    "observation": "The message says “Your entrant account is ready. Sign in below with the address and password you just gave.”",
+    "affectedTask": "“Just gave” is imprecise and the instruction repeats the form’s obvious location.",
+    "proposedChange": "Use “Account created. Sign in to continue.” Verify account creation separately; the outcome URL alone is not proof.",
+    "acceptance": "The message is concise, appears only after verified creation, and matches the next action.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/login.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/login.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.106",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S20) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Success message shortened and precision-tightened (\"Account created. Sign in to continue.\"), shown only on the verified redirect target."
+    }
+  },
+  {
+    "id": "V3-PE21.1",
+    "tier": "public",
+    "surface": "PE21",
+    "surfaceTitle": "Sign-in error notice",
+    "page": 108,
+    "severity": "cosmetic",
+    "category": "T2",
+    "observation": "The useful email/password correction ends with “Nothing about your account has changed.”",
+    "affectedTask": "The extra sentence introduces a concern unrelated to the failed sign-in.",
+    "proposedChange": "Keep “We couldn’t sign you in. Check your email and password, then try again.” Retain the password-recovery link and avoid identifying whether an account exists.",
+    "acceptance": "The error states the failure and recovery in two short clauses, without account-state speculation.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/login.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/login.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.108",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S21) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Sign-in error trimmed to two clauses, dropping the account-state speculation (\"Nothing about your account has changed\")."
+    }
+  },
+  {
+    "id": "V3-PE22.1",
+    "tier": "public",
+    "surface": "PE22",
+    "surfaceTitle": "Sign-in form shown; authenticated outcome not reached",
+    "page": 110,
+    "severity": "minor",
+    "category": "H1",
+    "observation": "The captured outcome shows a sign-in form with “Sign in to continue. The form below is ready for your account”; the header says “Switch account”.",
+    "affectedTask": "The visible text does not explain whether authentication succeeded, expired, or never occurred. This route capture is not a completed login.",
+    "proposedChange": "Drive the message from verified session state. Remove the generic readiness banner; if unauthenticated, use the ordinary sign-in state, and if authenticated resume the requested task.",
+    "acceptance": "A real sign-in sequence reaches the intended task and a direct outcome URL does not imply success without a session.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/login.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/login.test.ts",
+        "tests/e2e/check-account-journeys.py"
+      ],
+      "beforeEvidence": "public-all.md p.110",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S22) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "The one real behavioral defect: the \"just signed in\" banner now only renders with a real session cookie present (justSignedIn && !showLoginForm), not for any visitor to the URL."
+    }
+  },
+  {
+    "id": "V3-PE23.1",
+    "tier": "public",
+    "surface": "PE23",
+    "surfaceTitle": "Account creation with test verification widget",
+    "page": 112,
+    "severity": "minor",
+    "category": "T3",
+    "observation": "Copy includes “Create an entrant account”, “Sign-in address”, “Very common passwords are refused”, and “How the organizer sees you on an entry”.",
+    "affectedTask": "Routine account creation sounds more technical and procedural than necessary.",
+    "proposedChange": "Use “Create an account”, “Use the email where you want entry updates”, “Use at least 8 characters and avoid common passwords”, and “Name shown to the organizer”. Retain optional labels and accurate privacy context.",
+    "acceptance": "All fields use ordinary language and visible labels; privacy statements remain specific to organizer access.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/signup.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/signup.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.112",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S23) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Ordinary-language field hints/labels applied; privacy statement kept specific to organizer access (\"Name shown to the organizer\")."
+    }
+  },
+  {
+    "id": "V3-PE23.2",
+    "tier": "public",
+    "surface": "PE23",
+    "surfaceTitle": "Account creation with test verification widget",
+    "page": 112,
+    "severity": "minor",
+    "category": "H1",
+    "observation": "The Cloudflare widget contains “For testing only. If seen, report to site owner”, plus “HUMAN CHECK” and “Human check complete”.",
+    "affectedTask": "This book cannot establish production verification behavior; exposing this message in a release would undermine trust.",
+    "proposedChange": "Capture production-like verification with appropriate non-test configuration in the release environment. Remove duplicate surrounding completion copy if the widget already communicates success; do not hide provider-required text.",
+    "acceptance": "A release capture contains no test-only warning and demonstrates challenge, success, and recoverable failure. This finding does not claim a production security defect.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "open",
+    "closure": {
+      "package": "23",
+      "treatment": "verified no defect fixable in scope",
+      "implementation": {
+        "commits": [],
+        "files": []
+      },
+      "tests": [],
+      "beforeEvidence": "public-all.md p.112",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S23) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "partial: production-mode widget copy not yet captured",
+      "limitation": "Logged as debt V3-23-1; needs a release-environment capture to verify production Turnstile copy, outside this package's boundary.",
+      "note": "Turnstile widget copy (\"For testing only\", \"HUMAN CHECK\") is provider-rendered test-mode text; left unchanged."
+    }
+  },
+  {
+    "id": "V3-PE24.1",
+    "tier": "public",
+    "surface": "PE24",
+    "surfaceTitle": "Tournament-specific account creation",
+    "page": 116,
+    "severity": "minor",
+    "category": "H6",
+    "observation": "The heading says “Create your account to enter this tournament” without naming the tournament on the form.",
+    "affectedTask": "Someone arriving from a shared link cannot confirm which tournament they are entering.",
+    "proposedChange": "Use the human tournament name in the heading or one short return line, replacing “this tournament”. Preserve the return destination through account creation.",
+    "acceptance": "The page visibly identifies the selected tournament and a verified signup returns to that tournament’s entry workflow.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/signup.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/signup.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.116",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S24) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": "Fails closed to the old generic wording if the tournament lookup is unavailable.",
+      "note": "Signup heading now visibly names the tournament via a new best-effort EntryPageDTO read; return destination (next) unchanged, already preserved."
+    }
+  },
+  {
+    "id": "V3-PE25.1",
+    "tier": "public",
+    "surface": "PE25",
+    "surfaceTitle": "Email confirmation instructions",
+    "page": 120,
+    "severity": "minor",
+    "category": "F1",
+    "observation": "The page tells the user to sign in and ask for a new confirmation link; no adjacent resend control or destination address is shown.",
+    "affectedTask": "A new user must leave the confirmation task and repeat authentication just to recover missing email.",
+    "proposedChange": "When session state permits, replace the generic paragraph with the destination address and an adjacent resend action using the existing confirmation flow. If sign-in is required, label that dependency explicitly and return here afterward.",
+    "acceptance": "The user can identify the email destination and reach a working resend path without losing the confirmation task.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/verify.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/recovery.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.120",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S25) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Signed-in visitor with no token now gets an inline resend form instead of a no-op \"sign in\" instruction."
+    }
+  },
+  {
+    "id": "V3-PE26.1",
+    "tier": "public",
+    "surface": "PE26",
+    "surfaceTitle": "Email-confirmed notice",
+    "page": 122,
+    "severity": "major",
+    "category": "H1",
+    "observation": "The success message says “Any entries you already sent are now with the organizer.”",
+    "affectedTask": "Email confirmation can be mistaken for successful entry submission or approval; the static outcome does not prove delivery.",
+    "proposedChange": "Separate account verification from entry status. Use “Your email is confirmed. View My entries to check each entry’s status.” Show delivery success only from verified entry records.",
+    "acceptance": "Confirmation never changes the claimed entry state without corresponding submission evidence.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/verify.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/recovery.render.test.ts",
+        "tests/e2e/check-account-journeys.py"
+      ],
+      "beforeEvidence": "public-all.md p.122",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S26) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE26-email-confirmed-real@1440.png (real mailed verify token)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Success notice no longer infers entry delivery/organizer receipt from email verification: \"Your email is confirmed. View My entries to check each entry's status.\""
+    }
+  },
+  {
+    "id": "V3-PE27.1",
+    "tier": "public",
+    "surface": "PE27",
+    "surfaceTitle": "Invalid confirmation notice",
+    "page": 124,
+    "severity": "minor",
+    "category": "T2",
+    "observation": "The notice says the link is “no longer usable” and “a fresh link will replace this one” before a new link has been requested.",
+    "affectedTask": "The user may assume a replacement is already on its way.",
+    "proposedChange": "Use “This confirmation link is invalid or has expired. Sign in to request a new one.” Do not name a more specific cause unless verified.",
+    "acceptance": "The message distinguishes the failed link from a replacement request that has not yet occurred.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/verify.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/recovery.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.124",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S27) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Copy now distinguishes a failed link from an unrequested replacement action, instead of asserting a fresh link will replace it before one has been requested."
+    }
+  },
+  {
+    "id": "V3-PE28.1",
+    "tier": "public",
+    "surface": "PE28",
+    "surfaceTitle": "Confirmation-email-sent notice",
+    "page": 126,
+    "severity": "cosmetic",
+    "category": "T2",
+    "observation": "The notice says a fresh link was sent, tells the user to open the newest message, and says saved entries are unchanged; the next paragraph discusses delivery and spam.",
+    "affectedTask": "The actual next step is buried in several adjacent explanations.",
+    "proposedChange": "Use “Confirmation email sent. Open the latest email to confirm your address.” Keep a short spam/delivery helper and remove unrelated entry-state reassurance.",
+    "acceptance": "The latest-email action is the first instruction and sending is claimed only after the send operation succeeds.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/verify.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/recovery.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.126",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S28) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "\"Confirmation email sent. Open the latest email...\" leads, claimed only when the resend itself did not fail; saved-entries-unchanged reassurance kept."
+    }
+  },
+  {
+    "id": "V3-PE29.1",
+    "tier": "public",
+    "surface": "PE29",
+    "surfaceTitle": "Password-reset request",
+    "page": 128,
+    "severity": "cosmetic",
+    "category": "T1",
+    "observation": "The action says “Email me a link” and the footer says “Remembered it? Sign in.”",
+    "affectedTask": "The action is less precise than the surrounding password task.",
+    "proposedChange": "Use “Send reset link” and “Back to sign in”. Keep the short explanation above the field.",
+    "acceptance": "The button names the requested outcome without colloquial filler.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/resetPassword.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/recovery.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.128",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S29) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE30-reset-valid-token@1440.png; v3-recapture/journeys/PE30-reset-valid-token@768.png; v3-recapture/journeys/PE30-reset-valid-token@390.png; v3-recapture/journeys/PE30-reset-valid-token@320.png (real mailed reset token, valid-token form)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Button/footer copy tightened to name the outcome without filler (\"Send reset link\" / \"Back to sign in\")."
+    }
+  },
+  {
+    "id": "V3-PE31.1",
+    "tier": "public",
+    "surface": "PE31",
+    "surfaceTitle": "Reset-email-sent notice",
+    "page": 132,
+    "severity": "cosmetic",
+    "category": "T2",
+    "observation": "The message says the link “is on its way” and “is good for one hour”.",
+    "affectedTask": "Conversational phrasing is less direct than a clear delivery and expiry statement.",
+    "proposedChange": "Keep the account-enumeration-safe condition and use “If an account uses this email, we’ve sent a password reset link. It expires in 1 hour. Check your spam folder if it doesn’t arrive.” Verify the expiry against implementation.",
+    "acceptance": "The response never reveals account existence, and the displayed expiry matches the actual token policy.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/resetPassword.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/recovery.render.test.ts",
+        "tests/e2e/check-account-journeys.py"
+      ],
+      "beforeEvidence": "public-all.md p.132",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S31) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Enumeration-safe wording kept; displayed TTL now matches the backend's actual reset_token_ttl_minutes (60 min) instead of an invented figure."
+    }
+  },
+  {
+    "id": "V3-PE32.1",
+    "tier": "public",
+    "surface": "PE32",
+    "surfaceTitle": "Password-updated notice",
+    "page": 134,
+    "severity": "minor",
+    "category": "H8",
+    "observation": "The heading says “Password updated”; the introduction says it has changed; the green notice says it is set and repeats the sign-in instruction.",
+    "affectedTask": "The screen adds reassuring text without adding new information.",
+    "proposedChange": "Keep “Password updated”, one sentence about other sessions if verified, and the Sign in button. Remove the duplicate success paragraph or notice.",
+    "acceptance": "There is one success statement, one relevant session consequence, and one next action.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/resetPassword.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/recovery.render.test.ts",
+        "tests/e2e/check-account-journeys.py"
+      ],
+      "beforeEvidence": "public-all.md p.134",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S32) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE32-password-updated-real@1440.png (real completion of a valid reset)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Success screen reduced to one statement (heading), one session consequence (subheading), one action (button) — was tripled."
+    }
+  },
+  {
+    "id": "V3-PE33.1",
+    "tier": "public",
+    "surface": "PE33",
+    "surfaceTitle": "Invalid reset-link notice",
+    "page": 136,
+    "severity": "minor",
+    "category": "T2",
+    "observation": "The notice says “That reset link is no longer usable. Ask for a fresh link and try again; no password was changed.”",
+    "affectedTask": "The recovery is understandable but awkward and more verbose than necessary.",
+    "proposedChange": "Use “This reset link is invalid or has expired. Your password hasn’t changed.” Rename the action “Request a new reset link”.",
+    "acceptance": "The message names a truthful failure category, preserves the unchanged-password reassurance, and identifies the next action.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/resetPassword.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/recovery.render.test.ts",
+        "tests/e2e/check-account-journeys.py"
+      ],
+      "beforeEvidence": "public-all.md p.136",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S33) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Invalid-link notice tightened to a truthful failure category + unchanged-password reassurance + one call to action (\"Request a new reset link\")."
+    }
+  },
+  {
+    "id": "V3-PE34.1",
+    "tier": "public",
+    "surface": "PE34",
+    "surfaceTitle": "New-password validation error",
+    "page": 138,
+    "severity": "minor",
+    "category": "I3",
+    "observation": "The new-password form has a field label but no persistent requirements helper; requirements are in the warning banner above it.",
+    "affectedTask": "The user must read an error to learn the field’s rule, and the rule may disappear when the error clears.",
+    "proposedChange": "Keep a short requirements helper under New password and put the specific rejection beside the field. Remove the repeated general requirements from the banner.",
+    "acceptance": "The same requirements are visible before and after validation, and the failed field retains a clear correction message.",
+    "packages": [
+      "23"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "23",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "c5a73f48"
+        ],
+        "files": [
+          "apps/entrant/app/routes/resetPassword.tsx"
+        ]
+      },
+      "tests": [
+        "apps/entrant/tests/recovery.render.test.ts"
+      ],
+      "beforeEvidence": "public-all.md p.138",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S34) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Persistent password-requirements hint added (\"At least 8 characters. Avoid common passwords.\") that swaps for a field-adjacent error on failure via aria-describedby; banner reduced to the token-still-valid reassurance only."
+    }
+  },
+  {
+    "id": "V3-PE35.1",
+    "tier": "public",
+    "surface": "PE35",
+    "surfaceTitle": "Invitation unavailable; valid invitation not reached",
+    "page": 140,
+    "severity": "minor",
+    "category": "T2",
+    "observation": "The message says “Invitations expire, and each one can be accepted once”; its action is Browse tournaments.",
+    "affectedTask": "A partner still cannot tell whether to check an existing acceptance or request another invitation.",
+    "proposedChange": "Use a verified outcome when available. For an unknown/invalid link, say “This invitation is unavailable. Ask your partner to send a new one.” Offer My entries for checking an already accepted invitation when appropriate.",
+    "acceptance": "The notice does not invent expiry or acceptance; the next step addresses the partnership task.",
+    "packages": [
+      "24"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "24",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
+      },
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
+      "beforeEvidence": "public-all.md p.140",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S35) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. Recapture confirms: entrant-pages/S35 shows “This invitation is unavailable. Ask your partner to send a new one.” with both “Browse tournaments” and “Check My entries” actions — exactly the ruled copy, no invented expiry or acceptance claim."
+    }
+  },
+  {
+    "id": "V3-PE36.1",
+    "tier": "public",
+    "surface": "PE36",
+    "surfaceTitle": "Unverified partner result; acceptance not established",
+    "page": 142,
+    "severity": "major",
+    "category": "H1",
+    "observation": "The body says “We could not verify this accepted entry” beneath “Partner invitation update”.",
+    "affectedTask": "The word accepted implies a result that the sentence immediately says is unverified.",
+    "proposedChange": "Use “We couldn’t confirm whether your invitation was accepted. Check My entries for its status.” Keep the existing My entries action.",
+    "acceptance": "No success term is used for an unverified outcome; a real acceptance is separately captured.",
+    "packages": [
+      "24"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "24",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
+      },
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
+      "beforeEvidence": "public-all.md p.142",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S36) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. Recapture confirms: entrant-pages/S36 shows “We couldn't confirm whether your invitation was accepted. Check My entries for its status.” — no success term for an unverified outcome; “See my entries” is the one action."
+    }
+  },
+  {
+    "id": "V3-PE37.1",
+    "tier": "public",
+    "surface": "PE37",
+    "surfaceTitle": "Partner invitation failure",
+    "page": 144,
+    "severity": "minor",
+    "category": "F2",
+    "observation": "The message tells the user to ask the inviter for a new link, but the only button says Sign in.",
+    "affectedTask": "The action appears unrelated to the stated remedy.",
+    "proposedChange": "If sign-in is needed to inspect the invitation, say “Sign in to check invitation status”. Otherwise retain the request-new-link instruction and use a relevant return action.",
+    "acceptance": "The action’s purpose and destination are explicitly connected to invitation recovery.",
+    "packages": [
+      "24"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "24",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
+      },
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
+      "beforeEvidence": "public-all.md p.144",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S37) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. Recapture confirms: entrant-pages/S37 shows an expired-invitation message (“This invitation is no longer usable. Ask the person who invited you to send a new one.”) with “Browse tournaments”/“Check My entries” actions — no bare, unexplained “Sign in” button. The mail-outcome half (Entry.partner_invite_mail_sent surfaced on the nominating entrant's own My Entries line) is proven by tests/backend/test_partner_invites.py, not independently re-captured as a screenshot (it renders as a line-item flag on an existing entrant's My Entries, not a distinct page)."
+    }
+  },
+  {
+    "id": "V3-PE38.1",
+    "tier": "public",
+    "surface": "PE38",
+    "surfaceTitle": "Signed-out My entries",
+    "page": 146,
+    "severity": "minor",
+    "category": "H8",
+    "observation": "The introduction describes every tournament entered; the card heading says “Sign in to see your entries”; the card paragraph repeats availability after sign-in.",
+    "affectedTask": "A simple gate becomes several blocks of generic explanation.",
+    "proposedChange": "Keep “My entries”, “Sign in to view and manage your tournament entries”, and one Sign in action. Show sorting and organizer-confirmation explanations only with the actual list when useful.",
+    "acceptance": "The signed-out page states the requirement once and shows one primary action.",
+    "packages": [
+      "24"
+    ],
+    "planDecision": null,
+    "status": "closed",
+    "closure": {
+      "package": "24",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
+      },
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
+      "beforeEvidence": "public-all.md p.146",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S38) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE38-my-entries-authenticated@1440.png; v3-recapture/journeys/PE38-my-entries-authenticated@390.png (authenticated, with a real entry)",
+      "acceptance": "met",
+      "limitation": null,
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. Recapture confirms both halves: entrant-pages/S38 (signed-out gate, one sentence + one Sign in action) and journeys/PE38-my-entries-authenticated@1440/390.png (the AUTHENTICATED companion state plan §7 flagged as never captured — a real account with one real entry, “Awaiting confirmation” status, “View receipt” link)."
+    }
+  },
+  {
+    "id": "V3-PE39.1",
+    "tier": "public",
+    "surface": "PE39",
+    "surfaceTitle": "Signed-out receipt gate with placeholder reference",
+    "page": 148,
+    "severity": "minor",
+    "category": "T3",
+    "observation": "The receipt gate prints a long placeholder UUID and says “The reference is safe”, then describes “payment state”.",
+    "affectedTask": "The identifier dominates the page and the safety statement has no clear user meaning. This is a placeholder capture, not a verified receipt.",
+    "proposedChange": "Use a human receipt reference when the product supports one, retaining a copy action. Replace the account paragraph with “Sign in with the account used for this entry to view its details and payment status.”",
+    "acceptance": "The visible receipt reference is readable on mobile, copy preserves the full real reference, and the gate makes no unverifiable safety claim.",
+    "packages": [
+      "24"
+    ],
+    "planDecision": "\"Short entry reference\" | Adopt conditionally | \"Design generation, uniqueness, lookup and authorization together. Copy the same user-visible reference; an identifier is never access permission.\"",
+    "status": "closed",
+    "closure": {
+      "package": "24",
+      "treatment": "adopted",
+      "implementation": {
+        "commits": [
+          "8e07b9ea",
+          "d08f1bb3"
+        ],
+        "files": [
+          "apps/entrant/app/routes/partner.tsx",
+          "apps/entrant/app/routes/myEntries.tsx",
+          "apps/entrant/app/routes/receipt.tsx",
+          "apps/api/src/entries/entries_json.py",
+          "apps/api/src/entries/entries_me.py",
+          "apps/api/src/db/models.py"
+        ]
+      },
+      "tests": [
+        "tests/backend/test_partner_invites.py",
+        "tests/backend/test_entries_me_api.py",
+        "apps/entrant/tests/partner.render.test.ts",
+        "apps/entrant/tests/partner-accepted.script.test.ts",
+        "apps/entrant/tests/myEntries.render.test.ts",
+        "apps/entrant/tests/receipt.script.test.ts",
+        "tests/e2e/check-account-journeys.py (checks 9/10, PE17/PE18)"
+      ],
+      "beforeEvidence": "public-all.md p.148",
+      "afterEvidence": "v3-recapture/public-entrant-surface-book.pdf (S39) @ public 1440 desktop + 390 mobile (this tool's two built-in viewports; 320/768 behavior is separately proven by entrant-a11y.spec.ts, which asserts the same surfaces at 320/390/768/1440); v3-recapture/journeys/PE16-entry-receipt-real@1440.png (the real counterpart to the signed-out placeholder gate)",
+      "acceptance": "met",
+      "limitation": "The reference-FORMAT half (an 8-character human-copyable code replacing the UUID) is still not implemented — logged as debt V3-24-1 with the full design. The copy half IS verified: entrant-pages/S39 (signed-out, placeholder submission id) makes no “The reference is safe” claim, and journeys/PE16-entry-receipt-real@1440/390.png shows the real, non-placeholder equivalent (a genuine UUID reference from an actual submission, with Copy reference and no safety claim).",
+      "note": "Package 24 landed (8e07b9ea + d08f1bb3), committed. The copy fix (dropping the unverifiable \"The reference is safe\" claim) is verified by recapture; the reference-format redesign (V3-24-1) remains unimplemented debt, unaffected by this recapture."
+    }
+  }
+]

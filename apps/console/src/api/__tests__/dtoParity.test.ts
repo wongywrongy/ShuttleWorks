@@ -99,6 +99,7 @@ const ALIASES: Record<string, string> = {
   SetupSectionStateDTO: 'SetupSectionState',
   TournamentActivityEntryDTO: 'ActivityEntry',
   TournamentActivityFeedDTO: 'ActivityFeed',
+  TournamentActivityFieldChangeDTO: 'ActivityFieldChange',
   TournamentSetupDTO: 'TournamentSetup',
 };
 
@@ -110,6 +111,8 @@ const ALIASES: Record<string, string> = {
  *  test below is what holds it to reality in BOTH directions - a shape that
  *  GAINS a wire twin must be promoted out of here into a real pair. */
 const UNPAIRED: Record<string, string> = {
+  BackupSnapshotDTO:
+    'Authenticated backup download sidecar. `bracket_session` is present in backup files but intentionally absent from the generic OpenAPI TournamentStateDTO response contract.',
   SetScore:
     'Client-local set score. Wire candidate twin `MatchScore` is field-identical ({sideA, sideB}); aliasing it is a naming ruling and is deliberately not forced in P0.',
   SolverProgressEvent:

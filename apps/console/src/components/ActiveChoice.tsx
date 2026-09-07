@@ -67,7 +67,10 @@ export function ActiveChoice({
     active
       ? 'bg-action-primary text-text-on-accent focus-visible:ring-text-on-accent'
       : 'text-foreground hover:bg-surface-hover focus-visible:ring-ring',
-    disabled ? 'cursor-not-allowed opacity-60' : '',
+    // Token-based disabled treatment (not opacity — a11y-inspection sweep,
+    // WP-06/X1): a disabled ActiveChoice still renders through the same
+    // active/inactive fill branch above, so this only needs to mute the ink.
+    disabled ? 'cursor-not-allowed text-muted-foreground' : '',
     className,
   ]
     .filter(Boolean)

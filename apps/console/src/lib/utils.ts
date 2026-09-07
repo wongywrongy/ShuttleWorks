@@ -15,6 +15,17 @@
  *   clicked" across every surface identically.
  * - select-none prevents accidental text selection on double-click.
  */
+/**
+ * The accent (primary) press chrome for hand-rolled buttons that cannot be
+ * the shared `Button` yet: the curated one-construction treatment (ADR
+ * 0027) — 1px border, the `--shadow-hard` offset, sinks 3px on press. Pair
+ * with `bg-accent text-accent-ink`. Composes with INTERACTIVE_BASE.
+ */
+export const ACCENT_PRESS =
+  "border border-action-primary-hover shadow " +
+  "transition-[transform,box-shadow,background-color,color,opacity] duration-fast ease-out-quick " +
+  "hover:bg-action-primary-hover active:translate-y-[3px] active:shadow-none disabled:shadow-none"
+
 export const INTERACTIVE_BASE =
   "transition-[background-color,color,box-shadow,transform,opacity] duration-fast ease-brand " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
@@ -36,14 +47,13 @@ export { EYEBROW_CLASS } from "@scheduler/design-system/components"
  * 1:1 onto Figma text styles). Same rationale as EYEBROW_CLASS: a type
  * step needs one definition, not a convention.
  *
- * TEXT_MUTED_* are the secondary/annotation ladder (2xs → xs → sm).
+ * TEXT_MUTED_* are the secondary/annotation ladder (xs → sm).
  * TEXT_TITLE / TEXT_TITLE_SM are panel and row headings.
  * TEXT_EMPHASIS is inline emphasis inside muted context.
  *
  * These are the exact strings that were previously hand-copied; adopt
  * them when touching a file, don't reflow whole surfaces for the swap.
  */
-export const TEXT_MUTED_2XS = "text-2xs text-muted-foreground"
 export const TEXT_MUTED_XS = "text-xs text-muted-foreground"
 export const TEXT_MUTED_SM = "text-sm text-muted-foreground"
 export const TEXT_TITLE = "text-base font-semibold text-foreground"
@@ -80,3 +90,18 @@ export const INTERACTIVE_BASE_QUIET =
   "active:opacity-80 " +
   "disabled:cursor-not-allowed disabled:opacity-60 " +
   "select-none"
+
+/**
+ * The one separator per context (v3 consolidated plan, package 28): a middot
+ * for inline metadata ("Updated 2h ago · Meet"), never a slash, bullet, or
+ * em dash. Pairs of names/sides are the documented exception and stay owned
+ * by the side authority (`platform/domain/sides.ts`), not this constant.
+ */
+export const INLINE_METADATA_SEPARATOR = " · "
+
+/**
+ * The separator for a navigation breadcrumb or an inline "go to" action
+ * affordance ("Open ›"). Never used for inline metadata — see
+ * INLINE_METADATA_SEPARATOR above.
+ */
+export const BREADCRUMB_SEPARATOR = "›"

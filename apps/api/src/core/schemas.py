@@ -140,6 +140,11 @@ class TournamentConfig(StrictModel):
     setsToWin: Optional[int] = Field(None, ge=1, le=3)
     pointsPerSet: Optional[int] = Field(None, ge=11, le=30)
     deuceEnabled: Optional[bool] = None
+    # UI metadata mirroring Setup's `rules.pointCap` (ruling C3, V3-13-2) so
+    # the Engine Config tab echoes the same operator-set cap — same bounds
+    # as the Setup field. Not read by the engine; see setup.py's RulesSection
+    # docstring for the "no built-in cap" rule this projects.
+    pointCap: Optional[int] = Field(None, ge=1, le=200)
     # Public TV display mode (UI-only metadata; preserved across PUT).
     # "strip" is RETIRED as a choice (SP-CONSOLE-2 DC-1) but stays accepted:
     # it was the default, so every workspace that never touched the setting
@@ -895,12 +900,14 @@ class EntryPagePublicationPatchDTO(StrictModel):
     entrantsPublished: Optional[bool] = None
     drawsPublished: Optional[bool] = None
     resultsPublished: Optional[bool] = None
+    audience: Optional[Literal["private", "unlisted", "public"]] = None
 
 
 class EntryPageDTO(BaseModel):
     """The stored entry page as the operator sees it back."""
     slug: str
     isOpen: bool
+    audience: Literal["private", "unlisted", "public"] = "private"
     introText: Optional[str] = None
     regulationsText: Optional[str] = None
     waiverRequired: bool
@@ -925,6 +932,7 @@ class EntryPageDTO(BaseModel):
         return cls(
             slug=row.slug,
             isOpen=bool(row.is_open),
+            audience=row.audience,
             introText=row.intro_text,
             regulationsText=row.regulations_text,
             waiverRequired=bool(row.waiver_required),

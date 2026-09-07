@@ -47,8 +47,9 @@ const WS = process.env.WS_ID ?? "a86a39b3-0eb4-4c12-9106-5ff1bd1e5aa2";
 const SLUG = process.env.SLUG ?? "2026-korea-masters-t030";
 const DRAW_KEY = process.env.DRAW_KEY ?? "MS";
 const DOUBLES_DRAW_KEY = process.env.DOUBLES_DRAW_KEY ?? "MD";
-const SUBMISSION_ID =
-  process.env.SUBMISSION_ID ?? "11111111-1111-4111-8111-111111111111";
+// V3-24-1: the receipt path segment is an eight-character reference, and the
+// route 404s anything else — a UUID default here would capture a 404 page.
+const SUBMISSION_ID = process.env.SUBMISSION_ID ?? "H4KJ29QW";
 const DISPLAY_TOKEN = process.env.DISPLAY_TOKEN ?? "";
 const AUTH_ME_URL = process.env.AUTH_ME_URL ?? "";
 const PLAYER_KEY = process.env.PLAYER_KEY ?? "";
@@ -290,6 +291,14 @@ const VIEWPORTS = [
 const esc = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// For text interpolated INSIDE an attribute value. `esc` alone leaves quotes
+// intact, so a label containing `"` closes the attribute and everything after
+// it is parsed as markup (2026-09-07, CodeQL
+// js/incomplete-html-attribute-sanitization). Both quote forms are escaped so
+// the helper is correct in single- and double-quoted attributes alike.
+const escAttr = (s) =>
+  esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
 const artifactStem = outPath.slice(0, -extname(outPath).length);
 const manifestPath = `${artifactStem}.manifest.json`;
 const runningPath = `${artifactStem}.running.json`;
@@ -335,7 +344,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
   const viewportRuns = {};
   let note = "";
   for (const [vpName, width, height] of VIEWPORTS) {
-    const ctx = await browser.newContext({ viewport: { width, height } });
+    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, reducedMotion: "reduce" });
     const page = await ctx.newPage();
     if (tier === "console") {
       await page.route("**/api/auth/me", async (route) => {
@@ -371,14 +380,21 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
       await page.waitForLoadState("load", { timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(SETTLE_MS);
       await page.evaluate(() => document.fonts.ready).catch(() => {});
-      shots[vpName] = (await page.screenshot({ fullPage: true })).toString(
-        "base64",
-      );
+      const documentHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, window.innerHeight));
+      shots[vpName] = [];
+      for (let top = 0; top < documentHeight; top += height) {
+        const segmentHeight = Math.min(height, documentHeight - top);
+        const png = await page.screenshot({ fullPage: true, animations: "disabled", clip: { x: 0, y: top, width, height: segmentHeight } });
+        shots[vpName].push({ png: png.toString("base64"), top, height: segmentHeight, width });
+      }
       viewportRuns[vpName] = {
         ok: (res?.status() ?? 0) < 400,
         httpStatus: res?.status() ?? 0,
         finalUrl: page.url(),
         consoleErrors: errors,
+        viewport: { width, height, deviceScaleFactor: 2 },
+        documentHeight,
+        segments: shots[vpName].length,
       };
       if ((res?.status() ?? 0) >= 400) {
         viewportRuns[vpName].error = `HTTP ${res.status()}`;
@@ -411,7 +427,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
     durationMs: Date.now() - surfaceStartedAt,
     viewports: viewportRuns,
   };
-  cards.push({ ref, label, path, description, note, shots });
+  cards.push({ ref, label, path, description, note, shots, viewportRuns });
   runState.completedSurfaces = surfaceIndex + 1;
   runState.updatedAt = new Date().toISOString();
   runState.surfaces.push(surfaceRun);
@@ -426,78 +442,67 @@ const title =
     ? `${brand.productName} operator console — full surface report`
     : `Public site (${brand.publicProductName}) — full surface report`;
 
+const reviewFocus = (label) => {
+  if (/Publish|Sharing|partner|receipt|outcome/i.test(label)) return "Check that the visible outcome is supported by saved state. Can the reader understand access, consequences, failure and recovery without knowing backend steps?";
+  if (/Setup|settings|Administration/i.test(label)) return "Check field grouping, labels, help, ownership, save/discard feedback and disabled-state explanations. Identify duplicate decisions and unnecessary handoffs.";
+  if (/Draw|Match|Schedule|Operations|Display/i.test(label)) return "Check participant and score alignment, match references, tournament time basis, court assignment, scanning hierarchy and contained scrolling. Colour must not be the only state signal.";
+  return "Check the primary task and action, reading order, text contrast, empty/error states and mobile reflow. Flag technical language that does not help the reader decide.";
+};
+const pages = cards.flatMap((card, index) => VIEWPORTS.flatMap(([viewport]) =>
+  (card.shots[viewport]?.length ? card.shots[viewport] : [null]).map((shot, segment, all) => ({ card, index, viewport, shot, segment, count: all.length }))));
 const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<title>${esc(title)}</title>
+<html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>
-  body { font: 14px/1.55 -apple-system, "Segoe UI", sans-serif; color:#1a1d23; margin:0; background:#f6f7f9; }
-  header, main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
-  header { padding: 40px 24px 8px; }
-  h1 { font-size: 24px; margin: 0 0 6px; }
-  .meta { color:#5a6172; font-size:13px; max-width: 80ch; }
-  .toc { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 20px; margin:20px 0; }
-  .toc ul { margin:6px 0 0; padding-left:18px; columns:2; }
-  .toc li { font-size:13px; margin:3px 0; }
-  .shot { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:16px 16px 12px; margin:20px 0; break-inside:avoid; }
-  .shot h2 { font-size:15px; margin:0 0 3px; }
-  .shot .description { font-size:13px; color:#3c4250; margin:0 0 5px; }
-  .shot .path { font-size:12px; color:#5a6172; margin:0 0 4px; }
-  .shot .note { font-size:12px; color:#3c4250; margin:0 0 12px; }
-  .err { color:#b42318; font-weight:600; }
-  code { background:#f2f4f7; padding:1px 4px; border-radius:3px; font-size:12px; }
-  .pair { display:grid; grid-template-columns: 1fr 320px; gap:14px; align-items:start; }
-  .pair img { width:100%; border:1px solid #e5e7eb; border-radius:4px; display:block; }
-  .cap { font-size:11px; color:#7a8194; margin:4px 0 0; }
-  @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } .toc ul { columns:1; } }
-  @page { size: A3 landscape; margin: 10mm; }
+  * { box-sizing:border-box; }
+  body { font:15px/1.5 Arial,sans-serif;color:#18202b;background:#eef1f5;margin:0; }
+  h1 {font-size:30px;line-height:1.2;margin:0 0 16px;} h2 {font-size:21px;margin:0 0 8px;}
+  p {margin:8px 0;} a {color:#174dbc;} code {font:12px monospace;overflow-wrap:anywhere;}
+  .cover,.index,.sheet {background:white;max-width:1500px;margin:24px auto;padding:36px;}
+  .eyebrow {font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#475569;}
+  .meta,.path {font-size:12px;color:#475569;} .err {color:#9c2424;}
+  .guide {max-width:100ch;} .index ul {columns:2;padding-left:20px;} .index li {font-size:13px;margin:6px 0;break-inside:avoid;}
+  .frame {display:flex;gap:28px;align-items:flex-start;margin-top:16px;}
+  .frame img {display:block;width:100%;height:auto;border:1px solid #cbd5e1;}
+  .desktop .capture {width:100%;} .desktop aside {display:none;}
+  .mobile .capture {width:390px;flex-shrink:0;} aside {max-width:580px;padding:20px;border-top:2px solid #dbe2eb;}
+  .focus {font-size:13px;margin-top:10px;} .caption {font-size:12px;color:#475569;}
+  @page {size:A3 landscape;margin:12mm;}
   @media print {
-    body { background:#fff; }
-    header, main { max-width:none; padding:0; }
-    header { padding:0; }
-    .toc { break-after:page; page-break-after:always; }
-    .shot {
-      box-sizing:border-box;
-      height:255mm;
-      overflow:hidden;
-      border:0;
-      border-radius:0;
-      margin:0;
-      padding:0;
-      break-before:page;
-      break-inside:avoid;
-      page-break-before:always;
-      page-break-inside:avoid;
-    }
-    .pair { grid-template-columns:minmax(0, 1fr) 300px; }
-    .pair img { max-height:220mm; object-fit:contain; object-position:top left; }
+    body {background:white;font-size:13px;}
+    .cover,.index,.sheet {max-width:none;margin:0;padding:0;break-after:page;}
+    .sheet:last-child {break-after:auto;}
+    .cover,.index {min-height:245mm;}
+    .sheet {height:258mm;break-inside:avoid;}
+    h2 {font-size:18px;margin-bottom:4px;} p {margin:4px 0;}
+    .frame {margin-top:10px;}
+    .desktop .capture {width:330mm;}
+    .mobile .capture {width:94mm;}
+    .path,.caption {font-size:10px;}
   }
 </style></head><body>
-<header>
-  <h1>${esc(title)}</h1>
-  <p class="meta">Captured ${new Date().toISOString()} from <code>${esc(normalizedBase)}</code>.
-  Desktop 1440&times;900 and mobile 390&times;844, full-page. Workspace <code>${esc(WS)}</code>;
-  public tournament <code>${esc(SLUG)}</code>. Generated by
-  <code>tools/surface-capture.mjs</code>.</p>
-  <div class="toc"><strong>${cards.length} surfaces</strong>
-    <ul>${cards.map((c, i) => `<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join("")}</ul>
-  </div>
-</header>
-<main>
-${cards
-  .map(
-    (c, i) => `<section class="shot" id="s${i}">
-  <h2>${esc(c.ref)} · ${esc(c.label)}</h2>
-  <p class="description">${esc(c.description)}</p>
-  <p class="path"><code>${esc(c.path)}</code></p>
-  <p class="note">${c.note}</p>
-  <div class="pair">
-    <div>${c.shots.desktop ? `<img src="data:image/png;base64,${c.shots.desktop}" alt="${esc(c.label)} desktop">` : "<em>no desktop capture</em>"}<p class="cap">desktop 1440&times;900</p></div>
-    <div>${c.shots.mobile ? `<img src="data:image/png;base64,${c.shots.mobile}" alt="${esc(c.label)} mobile">` : "<em>no mobile capture</em>"}<p class="cap">mobile 390&times;844</p></div>
-  </div>
-</section>`,
-  )
-  .join("\n")}
-</main></body></html>`;
+<section class="cover">
+<p class="eyebrow">ShuttleWorks · UI / UX review evidence · edition 2</p>
+<h1>${esc(title)}</h1>
+<p>Captured ${new Date().toISOString()} from <code>${esc(normalizedBase)}</code>.</p>
+<div class="guide">
+<h2>How to read this book</h2>
+<p>Each surface keeps its S-number. Desktop and mobile have separate sheets; long documents continue in numbered vertical segments rather than shrinking to fit. Screenshots are captured at 2× pixel density. PDF text and links remain selectable; screenshot text is raster evidence.</p>
+<p><strong>Review context:</strong> ${tier === 'console' ? 'Operator console, using the demo operator identity. Primary tasks are tournament setup, participant management, planning, live court control and deliberate publication.' : 'Public and entrant site, using a fresh signed-out browser. Primary tasks are finding an event, reading draws and schedules, registering and managing an entry.'}</p>
+<p><strong>State matters:</strong> these are route captures, not completed journeys. Outcome URLs, missing invitation tokens and placeholder receipt IDs do not prove a successful action. Redirects, signed-out prompts and access refusals are evidence of the state actually reached. HTTP 200 alone is not a functional pass.</p>
+<p><strong>Design direction:</strong> preserve readable match identity and stored participant names; use restrained semantic colour, flat ordinary surfaces, consistent property panels and explicit saved/unsaved feedback. Backend terms belong in the UI only when they help a user make a decision.</p>
+<p><strong>Annotate:</strong> cite surface ID, viewport and segment, then state the observed problem, affected task, severity, proposed change and measurable acceptance criterion. Distinguish a visual observation from an interaction hypothesis.</p>
+<p><strong>Further validation:</strong> keyboard/focus order, screen-reader output, dark theme, form errors, authenticated entry outcomes, offline recovery and physical venue viewing distance require separate testing. Internal scroll panels, horizontal canvases and virtualized regions show their initial visible position only. Document continuations do not scroll these panels.</p>
+<p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; reduced motion. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Timing is live demo data, not a frozen cross-surface snapshot. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
+</div></section>
+<section class="index"><h1>Surface index</h1><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>
+${pages.map(({card:c,index,viewport,shot,segment,count})=>`<section class="sheet ${viewport}" ${viewport==='desktop'&&segment===0?`id="s${index}"`:''}>
+<p class="eyebrow">${esc(c.ref)} · ${viewport} · segment ${segment+1} / ${count}</p>
+<h2>${esc(c.label)}</h2><p>${esc(c.description)}</p>
+<p class="path">Requested <code>${esc(c.path)}</code> · ${esc(`HTTP ${c.viewportRuns[viewport]?.httpStatus ?? "unavailable"} · final ${c.viewportRuns[viewport]?.finalUrl ?? "unavailable"} · ${c.viewportRuns[viewport]?.consoleErrors?.length ?? 0} console errors`)}</p>
+<div class="frame"><div class="capture">${shot?`<img src="data:image/png;base64,${shot.png}" alt="${escAttr(c.label)} ${escAttr(viewport)} segment ${segment+1}"><p class="caption">${shot.width} CSS px wide · document y=${shot.top}–${shot.top+shot.height} · 2× capture. ${segment?'Continuation of the same page; top navigation may be outside this segment.':'Initial document position; no interactive controls changed.'}</p>`:'<p class="err">Capture unavailable. Consult the manifest; do not treat this as an empty product state.</p>'}</div>
+<aside><h2>Reviewer notes</h2><p>${esc(reviewFocus(c.label))}</p><p>Compare this surface with its desktop sheets. Review at a comfortable zoom; printed screenshot size is not the physical target size.</p><p>Record: observation → user impact → proposed treatment → acceptance criterion.</p></aside></div>
+<p class="focus"><strong>Review focus:</strong> ${esc(reviewFocus(c.label))}</p></section>`).join('')}
+</body></html>`;
 
 const htmlPath =
   extname(outPath) === ".pdf" ? outPath.replace(/\.pdf$/, ".html") : outPath;
@@ -512,6 +517,9 @@ if (extname(outPath) === ".pdf") {
   });
   await reportPage.setContent(html, { waitUntil: "load", timeout: 120000 });
   await reportPage.emulateMedia({ media: "print", reducedMotion: "reduce" });
+  const clippedSheets = await reportPage.locator('.sheet').evaluateAll((sheets) =>
+    sheets.flatMap((sheet, index) => sheet.scrollHeight > sheet.clientHeight + 2 ? [index + 1] : []));
+  if (clippedSheets.length) throw new Error(`Review-book content exceeds its sheets: ${clippedSheets.join(', ')}`);
   await reportPage.pdf({
     path: outPath,
     format: "A3",
@@ -551,7 +559,7 @@ const manifest = {
     html: htmlPath,
     pdf: extname(outPath) === ".pdf" ? outPath : null,
   },
-  expectedPdfPages: extname(outPath) === ".pdf" ? cards.length + 1 : null,
+  expectedPdfPages: extname(outPath) === ".pdf" ? pages.length + 2 : null,
   failedViewports,
 };
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

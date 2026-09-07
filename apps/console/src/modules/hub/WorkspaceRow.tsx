@@ -17,8 +17,8 @@ import {
   COL_PRIORITY_CLASS_FLEX,
   type OverflowItem,
 } from '../../components/control-plane';
-import { StatusPill } from '../../components/StatusPill';
 import { lifecycleChip } from '../../platform/domain/lifecycle';
+import { HEALTH_WORD } from '../../components/control-plane/HealthDot';
 import { attentionReasons, workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { eventDate, type HubGroupId } from './hubGrouping';
@@ -52,8 +52,15 @@ function AttentionCell({ tournament }: { tournament: TournamentSummaryDTO }) {
           title={reasons.map((r) => r.label).join(' · ')}
         >
           {first.label}
+          {/* V3-OC02.2: "+1" required decoding what the count meant. Naming
+              it ("1 more issue") is readable without opening anything; the
+              row itself already opens the inspector's full list (below) on
+              click, so no separate control is needed here. */}
           {reasons.length > 1 ? (
-            <span className="text-muted-foreground"> +{reasons.length - 1}</span>
+            <span className="text-muted-foreground">
+              {' '}
+              · {reasons.length - 1} more issue{reasons.length - 1 === 1 ? '' : 's'}
+            </span>
           ) : null}
         </span>
       ) : null}
@@ -131,6 +138,16 @@ export function WorkspaceRow({
   onDelete,
 }: RowProps) {
   const health = workspaceHealth(tournament);
+  // X16/V3-OC02.1 (v3 consolidated, package 07): 'complete' used to render
+  // here as "Completed" AND again as the lifecycle badge's "Complete" a few
+  // pixels away — the same fact twice. The badge (or, when it is
+  // suppressed, the facet strip's "Complete · N") already carries it, so
+  // this label now only covers phases the badge never does.
+  const phaseLabel = tournament.signals?.phase === 'live'
+    ? 'Live now'
+    : tournament.signals?.phase === 'ready'
+      ? 'Ready'
+      : null;
   const action = rowActionFor(tournament, group);
   // Console-mock adoption (2026-08-13): the row states its lifecycle where
   // the operator scans, not just in the inspector. Shared precedence
@@ -140,7 +157,6 @@ export function WorkspaceRow({
   const badge = showLifecycleBadge
     ? lifecycleChip(tournament.signals?.phase, tournament.status)
     : null;
-  const receded = group === 'past';
   // "Set date" (and any reason-coded setup step) is the attention-y next
   // action — it warms to amber; Open/View results stay quiet.
   const attention = action.kind === 'set-date';
@@ -176,7 +192,6 @@ export function WorkspaceRow({
         // strangling the name; see the `min-w-[12rem]` floor below.
         'group flex min-h-[40px] cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-2sm @container/table',
         'transition-colors duration-fast ease-brand',
-        receded ? 'opacity-80 hover:opacity-100' : '',
         selected
           ? 'bg-bg-elev shadow-[inset_2px_0_0_hsl(var(--accent))]'
           : 'hover:bg-muted/40',
@@ -185,10 +200,19 @@ export function WorkspaceRow({
       {/* NAME leads — the row's anchor, and the only thing on it at full
           weight. Everything to its right is metadata or an affordance. */}
       <span className="flex min-w-[12rem] flex-1 items-center gap-2.5">
-        <HealthDot health={health} />
-        {/* The dot is `aria-hidden` (it has a title, which AT ignores on a
-            span), so the one state worth interrupting a scan for gets words. */}
-        {health === 'attention' ? <span className="sr-only">Needs attention</span> : null}
+        {/* R4 (v3 consolidated, package 07): a routine health state ("No
+            issues reported", "Not started yet", "Archived") is reassurance,
+            not signal — it repeated on every row (V3-OC02.1) and the dot
+            never carried meaning on its own anyway. Only the exception
+            (`attention`) earns a dot, and it always ships with the words
+            that say what is wrong, never the dot alone. */}
+        {health === 'attention' ? (
+          <>
+            <HealthDot health={health} />
+            <span className="text-xs text-status-warning-fg">{HEALTH_WORD[health]}</span>
+          </>
+        ) : null}
+        {phaseLabel ? <span className="shrink-0 text-xs font-medium text-foreground">{phaseLabel}</span> : null}
         {/* Wraps, never ellipsises: the name is the row's only identifying
             fact, and the row's `flex-wrap` + the 12rem floor above give it the
             width to wrap at WORD boundaries — wrapping is necessary, not
@@ -197,10 +221,8 @@ export function WorkspaceRow({
           {tournament.name || 'Untitled'}
         </span>
         {badge ? (
-          <span data-testid="row-lifecycle" className="shrink-0">
-            <StatusPill tone={badge.tone} dot={badge.tone === 'green'}>
-              {badge.text}
-            </StatusPill>
+          <span data-testid="row-lifecycle" className="shrink-0 text-xs text-muted-foreground">
+            {badge.text}
           </span>
         ) : null}
       </span>

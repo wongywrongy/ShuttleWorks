@@ -141,6 +141,21 @@ class BackupEntryDTO(BaseModel):
     #: has to say which is which — a row the operator cannot lose reads
     #: differently from one that will age out on its own.
     origin: str = "auto"
+    #: Meaningful counts read straight out of the stored snapshot (V3-OC27.2):
+    #: two backups minted in the same second are otherwise indistinguishable
+    #: except by byte size and filename. ``matchCount``/``entryCount`` cover
+    #: both Meet and Bracket kinds, since a workspace snapshot only ever
+    #: populates one side. Result counts are deliberately NOT included here:
+    #: recorded scores live in ``match_states``, a separate table that is not
+    #: part of the snapshot payload, so a past backup has no result count to
+    #: report without re-deriving live state — see docs/reference/debt-log.md.
+    matchCount: int = 0
+    entryCount: int = 0
+    #: One-line diff against the next-older backup for this workspace
+    #: ("+3 matches, 2 entrants" / "No change from previous snapshot" /
+    #: "First recorded snapshot"). Never byte deltas or the filename — those
+    #: stay in the detail affordance (inspect / download).
+    changeSummary: str = "First recorded snapshot"
 
 
 class BackupListDTO(BaseModel):
@@ -256,6 +271,8 @@ def _counts_for(
     # Bracket-side phase/nextUp inputs: resolved play-unit ids (8th) and the
     # Swiss rounds-still-pending flag (9th — two small queries internally).
     bresolved = repo.brackets.resolved_unit_ids_by_tournament(ids)
+    bidentity = repo.brackets.list_match_identity_by_tournament(ids)
+    bparticipant_names = repo.brackets.list_participant_names_by_tournament(ids)
     swiss_pending = repo.brackets.swiss_pending_by_tournament(ids)
     # E4 (Phase 9): the entries rows, as a 10th grouped read, counted HERE
     # rather than in the repository — ``shared`` sits above persistence, so a
@@ -279,6 +296,8 @@ def _counts_for(
             match_states=mstates.get(tid, 0),
             match_status_by_id=mstatuses.get(tid, {}),
             bracket_resolved_ids=bresolved.get(tid, set()),
+            bracket_units=bidentity.get(tid, {}),
+            bracket_participant_names=bparticipant_names.get(tid, {}),
             swiss_pending=swiss_pending.get(tid, False),
             entries=entry_facts.get(tid),
         )
@@ -286,12 +305,65 @@ def _counts_for(
     }
 
 
-def _backup_entry(row) -> BackupEntryDTO:
+def _snapshot_counts(snapshot: Optional[dict]) -> tuple[int, int]:
+    """``(matchCount, entryCount)`` cheaply read off a stored backup payload.
+
+    Combines Meet and Bracket shapes because a snapshot only ever populates
+    one side for a given workspace kind; the unused side is always ``[]``/
+    absent, so summing is equivalent to picking the populated one.
+    """
+    data = snapshot if isinstance(snapshot, dict) else {}
+    matches = data.get("matches") or []
+    bracket_session = data.get("bracket_session") or {}
+    bracket_assignments = (
+        bracket_session.get("assignments") if isinstance(bracket_session, dict) else None
+    ) or []
+    match_count = (
+        (len(matches) if isinstance(matches, list) else 0)
+        + (len(bracket_assignments) if isinstance(bracket_assignments, list) else 0)
+    )
+    players = data.get("players") or []
+    bracket_players = data.get("bracketPlayers") or []
+    entry_count = (
+        (len(players) if isinstance(players, list) else 0)
+        + (len(bracket_players) if isinstance(bracket_players, list) else 0)
+    )
+    return match_count, entry_count
+
+
+def _change_summary(match_count: int, entry_count: int, previous: Optional[dict]) -> str:
+    """Plain-language diff against the next-older backup (V3-OC27.2).
+
+    ``previous`` is ``None`` for the oldest backup on record for this
+    workspace — that is a fact worth saying, not an empty string.
+    """
+    if previous is None:
+        return "First recorded snapshot"
+    prev_matches, prev_entries = _snapshot_counts(previous)
+    delta_matches = match_count - prev_matches
+    delta_entries = entry_count - prev_entries
+    parts: list[str] = []
+    if delta_matches:
+        noun = "match" if abs(delta_matches) == 1 else "matches"
+        parts.append(f"{delta_matches:+d} {noun}")
+    if delta_entries:
+        noun = "entrant" if abs(delta_entries) == 1 else "entrants"
+        parts.append(f"{delta_entries:+d} {noun}")
+    if not parts:
+        return "No change from previous snapshot"
+    return ", ".join(parts) + " since previous snapshot"
+
+
+def _backup_entry(row, previous_snapshot: Optional[dict] = None) -> BackupEntryDTO:
+    match_count, entry_count = _snapshot_counts(row.snapshot)
     return BackupEntryDTO(
         filename=row.filename,
         sizeBytes=row.size_bytes,
         modifiedAt=row.created_at.isoformat(),
         origin=row.origin,
+        matchCount=match_count,
+        entryCount=entry_count,
+        changeSummary=_change_summary(match_count, entry_count, previous_snapshot),
     )
 
 
@@ -1082,8 +1154,17 @@ def list_tournament_backups(
     repo: LocalRepository = Depends(get_repository),
 ):
     _resolve_tournament(tournament_id, repo)
+    # Newest-first (created_at DESC, id DESC — see the repo's ordering note),
+    # so each row's "previous" (next-older) snapshot is the following entry.
     rows = repo.backups.list_for_tournament(tournament_id)
-    return BackupListDTO(backups=[_backup_entry(r) for r in rows])
+    entries = [
+        _backup_entry(
+            row,
+            previous_snapshot=rows[index + 1].snapshot if index + 1 < len(rows) else None,
+        )
+        for index, row in enumerate(rows)
+    ]
+    return BackupListDTO(backups=entries)
 
 
 @router.post(

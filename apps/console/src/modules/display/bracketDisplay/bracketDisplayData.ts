@@ -8,29 +8,55 @@ import type {
   PlayUnitDTO,
   Participant,
 } from '../../../api/bracketDto';
-import { assignLanes } from '../publicDisplay/courtLanes';
+import { formatSideCondensed, sideFromWire, type Side } from '../../../platform/domain/sides';
 
-/** Resolve a play-unit side to a participant display name. Prefers the
- *  direct slot participant id, falls back to the resolved member ids
- *  (`side_a`/`side_b`), and returns an em dash when the slot is still a
- *  feeder / unfilled. */
+/** The one participant-per-line label the "To be decided" sentinel a board
+ *  reader (`isImminentMatch` below) matches against. Kept as a named export
+ *  so a caller never has to spell the sides.ts label text itself. */
+export const UNDETERMINED_SIDE_LABEL = 'To be decided';
+
+/** Build a `Side` (match-card contract §2.1 / state-and-formatting §6.1)
+ *  from a bracket play-unit. The wire's own structured `sides` wins where it
+ *  is present (v3 package 29: a doubles pair arrives as TWO persons, and a
+ *  pair one member short as `pending_member`); the slot/direct-id derivation
+ *  below is the fallback for a payload minted before that field. A resolved
+ *  slot participant wins over the direct member list; an unfilled slot with
+ *  no direct members is `undetermined` — never a raw `'–'` (D14). */
+function sideFromPlayUnit(
+  pu: PlayUnitDTO,
+  side: 'a' | 'b',
+  participants: Participant[],
+): Side {
+  const wire = pu.sides?.[side === 'a' ? 0 : 1];
+  if (wire) return sideFromWire(wire);
+  const slot = side === 'a' ? pu.slot_a : pu.slot_b;
+  const direct = side === 'a' ? pu.side_a : pu.side_b;
+  if (slot.participant_id) {
+    const p = participants.find((x) => x.id === slot.participant_id);
+    if (p) {
+      return { persons: [{ id: p.id, name: p.name }], unresolved: null, seed: null, participantKey: p.id };
+    }
+  }
+  if (direct && direct.length) {
+    return {
+      persons: direct.map((id) => ({ id, name: participants.find((x) => x.id === id)?.name ?? id })),
+      unresolved: null,
+      seed: null,
+      participantKey: direct.join('|'),
+    };
+  }
+  return { persons: [], unresolved: { kind: 'undetermined' }, seed: null, participantKey: null };
+}
+
+/** Resolve a play-unit side to a display string at the board's CONDENSED
+ *  density (match-card §3.2): one line, ' / '-joined, using the fixed
+ *  unresolved-side label ("To be decided") rather than a raw em dash. */
 export function sideLabel(
   pu: PlayUnitDTO,
   side: 'a' | 'b',
   participants: Participant[],
 ): string {
-  const slot = side === 'a' ? pu.slot_a : pu.slot_b;
-  const direct = side === 'a' ? pu.side_a : pu.side_b;
-  if (slot.participant_id) {
-    const p = participants.find((x) => x.id === slot.participant_id);
-    if (p) return p.name;
-  }
-  if (direct && direct.length) {
-    return direct
-      .map((id) => participants.find((x) => x.id === id)?.name ?? id)
-      .join(' / ');
-  }
-  return '–';
+  return formatSideCondensed(sideFromPlayUnit(pu, side, participants));
 }
 
 export interface LiveRow {
@@ -38,7 +64,8 @@ export interface LiveRow {
   court: number;
   sideA: string;
   sideB: string;
-  status: 'on-court' | 'next';
+  status: 'on-court' | 'next' | 'conflict' | 'empty';
+  matchRef?: string;
 }
 
 /** What a spectator can see happening: the bracket matches on court right
@@ -58,29 +85,35 @@ export interface LiveRow {
 export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
   const puById = new Map(data.play_units.map((u) => [u.id, u]));
   const open = data.assignments.filter((a) => !a.finished);
-  const started = new Set(open.filter((a) => a.started).map((a) => a.play_unit_id));
-  const lanes = assignLanes(
-    open.map((a) => ({ id: a.play_unit_id, court: a.court_id, plannedSlot: a.slot_id })),
-    started,
-  );
-  return open
-    .map((a): LiveRow | null => {
-      const pu = puById.get(a.play_unit_id);
-      const lane = lanes.get(a.play_unit_id);
-      if (!pu || (lane !== 'now' && lane !== 'next')) return null;
-      return {
+  const byCourt = new Map<number, typeof open>();
+  for (const assignment of open) {
+    const list = byCourt.get(assignment.court_id) ?? [];
+    list.push(assignment);
+    byCourt.set(assignment.court_id, list);
+  }
+  const rows: LiveRow[] = [];
+  for (const court of [...byCourt.keys()].sort((a, b) => a - b)) {
+    const assignments = (byCourt.get(court) ?? []).sort((a, b) => a.slot_id - b.slot_id || a.play_unit_id.localeCompare(b.play_unit_id));
+    const playing = assignments.filter((a) => a.started);
+    const visible = playing.length > 1
+      ? playing.map((assignment) => ({ assignment, status: 'conflict' as const }))
+      : playing.length === 1
+        ? [{ assignment: playing[0], status: 'on-court' as const }, ...(assignments.filter((a) => !a.started).slice(0, 1).map((assignment) => ({ assignment, status: 'next' as const })))]
+        : assignments.slice(0, 1).map((assignment) => ({ assignment, status: 'next' as const }));
+    for (const { assignment, status } of visible) {
+      const pu = puById.get(assignment.play_unit_id);
+      if (!pu) continue;
+      rows.push({
         puId: pu.id,
-        court: a.court_id,
+        court: assignment.court_id,
         sideA: sideLabel(pu, 'a', data.participants),
         sideB: sideLabel(pu, 'b', data.participants),
-        // The lane decides INCLUSION; `started` decides the label. Two
-        // started matches on one court is a data anomaly, but labelling the
-        // second one "Next" would be a claim about a match already playing.
-        status: a.started ? 'on-court' : 'next',
-      };
-    })
-    .filter((r): r is LiveRow => r !== null)
-    .sort((x, y) => x.court - y.court || (x.status === y.status ? 0 : x.status === 'on-court' ? -1 : 1));
+        status,
+        matchRef: assignment.play_unit_id,
+      });
+    }
+  }
+  return rows;
 }
 
 /** "Final" / "Semifinal" / "Quarterfinal" / "Round N" for a round position.

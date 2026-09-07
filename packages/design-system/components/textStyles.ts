@@ -7,7 +7,7 @@
  */
 
 /**
- * The micro-label treatment: 10px, semibold, uppercase, wide tracking.
+ * The micro-label treatment: 12px, semibold, uppercase, tracked.
  *
  * COLOUR IS NOT INCLUDED — append your own (`text-muted-foreground` for a
  * plain label, a status token for a state pill). That separation is what
@@ -25,5 +25,10 @@
  * the element has to be something other than a `<span>` (a `<th>`, an
  * `<h3>`, a `<td>` group row) or when the colour is state-derived.
  * (Console code keeps importing it from `lib/utils`, which re-exports this.)
+ *
+ * Raised from 11px/0.08em to the 12px caption floor with tracking loosened
+ * to 0.06em (v3 consolidated plan, package 07, ruling R1) — the old size sat
+ * below the product's own type-ladder minimum for anything that carries
+ * words rather than a single glyph.
  */
-export const EYEBROW_CLASS = 'text-2xs font-semibold uppercase tracking-[0.08em]';
+export const EYEBROW_CLASS = 'text-xs font-semibold uppercase tracking-[0.06em]';

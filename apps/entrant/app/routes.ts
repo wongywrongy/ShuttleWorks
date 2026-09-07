@@ -4,7 +4,7 @@ import { type RouteConfig, index, route } from '@react-router/dev/routes';
  * Explicit route config, not file-system conventions. The entrant surface is
  * small and its URL shapes are load-bearing (SP-P6-2 §3: /e/ discovery,
  * /e/{slug} tournament page, /e/{slug}/enter entry flow,
- * /e/{slug}/receipt/{submissionId}, /account/{signup,login,logout} owned by
+ * /e/{slug}/receipt/{reference}, /account/{signup,login,logout} owned by
  * FastAPI) — they read better declared in one place than encoded in
  * filenames.
  */
@@ -134,7 +134,7 @@ export default [
   //
   // The 303 target of POST /e/api/submit/{slug}: a GET, so a reload of the
   // success page re-reads instead of re-posting the entry.
-  route(':slug/receipt/:submissionId', 'routes/receipt.tsx'),
+  route(':slug/receipt/:reference', 'routes/receipt.tsx'),
   // The entry flow, on its own page off the hub scroll (SP-P6-2 §3, G0
   // approved). `enter` is a sub-segment of `:slug`, so it shadows no
   // workspace slug and needs no backend reservation.

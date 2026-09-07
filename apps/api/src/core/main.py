@@ -17,7 +17,7 @@ from display import display as display_api  # SP-CLOUD-2 — capability-token sp
 from entries import entries_json as entries_json_api  # SP-PROGRAM-1 Phase 6 — the entrant tier's JSON surface
 from entries import entries_me as entries_me_api  # SP-P7 — the signed-in entrant's own record
 from entries import entries_routes as entries_api  # SP-E1-1 — the operator's Entries desk
-from entries import entries_site as entries_site_api  # SP-P7 — public draws/seeds/winners/player pages
+from entries import entries_site as entries_site_api  # SP-P7 — public draws/player pages
 from entries import partner_routes as partner_invites_api  # E3 (Phase 8) — the doubles partner invite
 from identity import auth_routes as auth_api  # SP-CLOUD-2 — self-hosted accounts + cookie sessions
 from identity import entrants_routes as entrants_api  # SP-E1-2 — the entrant principal's auth surface

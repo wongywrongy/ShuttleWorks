@@ -127,25 +127,28 @@ const CSRF = { 'X-ShuttleWorks-CSRF': '1' };
  * Not a shortcut — it is the receipt route's documented property, exercised.
  * `receipt.tsx` performs NO account-scoped read (node holds no entrant
  * credential and must not grow one), so the page is assembled from the public
- * projection, the query string and the UUID in the path. Any well-formed UUID
- * therefore renders the identical page, which is exactly what
+ * projection, the query string and the reference in the path. Any well-formed
+ * reference therefore renders the identical page, which is exactly what
  * `entrant/tests/receipt.test.ts` pins. That makes the receipt reachable here
- * without seeding an entry, and a v4-shaped literal keeps it obvious that no
- * real submission is being impersonated.
+ * without seeding an entry.
+ *
+ * V3-24-1 made the handle an eight-character reference instead of a UUID, so
+ * the literal changed shape with it — the route validates the new shape and
+ * refuses the old one, which is what would have made this page 404.
  */
-const RECEIPT_ID = '00000000-0000-4000-8000-000000000000';
+const RECEIPT_ID = 'H4KJ29QW';
 
 /**
  * Every public page a signed-out visitor can reach, as `(name, path)` of a
  * seeded slug. `?tab=` panels count as separate pages: the tournament route
- * renders one server-side panel per tab (no JS), so Events is a different
+ * renders one server-side panel per tab (no JS), so Draws is a different
  * document from Overview and a different thing to lay out.
  */
 const PAGES = (slug: string) =>
   [
     ['discovery', '/e/'],
     ['tournament-overview', `/e/${slug}`],
-    ['tournament-events', `/e/${slug}?tab=events`],
+    ['tournament-draws', `/e/${slug}?tab=draws`],
     ['enter', `/e/${slug}/enter`],
     ['receipt', `/e/${slug}/receipt/${RECEIPT_ID}?totalCents=5500`],
     ['signup', '/e/signup'],
@@ -464,8 +467,8 @@ test.describe('entrant app — R11 evidence', () => {
    * control).
    *
    * The seed creates three entry EVENTS and no entries, so Overview,
-   * Schedule / Live, and Events must be tabs while Entrants is absent from
-   * the document — not greyed, not "no entrants yet", absent. Schedule / Live
+   * Schedule, and Draws must be tabs while Entrants is absent from
+   * the document — not greyed, not "no entrants yet", absent. Schedule
    * is a universal route even before matches exist; `visibleTabs` is
    * unit-tested as a pure function. What is asserted here is that the running
    * page obeys both rules, and that a `?tab=` naming a gated-off panel falls
@@ -481,7 +484,7 @@ test.describe('entrant app — R11 evidence', () => {
     // readers and that name is the contract, so this breaks if the labelling
     // regresses too.
     const tabs = page.locator('nav[aria-label="Tournament sections"] a');
-    await expect(tabs).toHaveText(['Overview', 'Schedule / Live', 'Events']);
+    await expect(tabs).toHaveText(['Overview', 'Schedule', 'Draws']);
 
     // The panel, not just the tab: asking for the gated-off one must land on
     // Overview, which is the intro text and the card grid.

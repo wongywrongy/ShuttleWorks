@@ -9,18 +9,24 @@
  * locked `<Row>`; the Sets-only dependents (points / match format / deuce)
  * sit in an indented, dimmed group when score type is Simple.
  */
-import { Row, Seg, Toggle } from './SettingsControls';
+import { Row, Seg, Toggle, NumberWithSuffix } from './SettingsControls';
 
 export interface ScoringValue {
   scoringFormat: 'simple' | 'badminton';
   pointsPerSet: number;
   setsToWin: number;
   deuceEnabled: boolean;
+  /** Ruling C3 (state-and-formatting §5.1): the only cap the product
+   *  actually enforces is whatever an operator configures here — there is
+   *  no built-in "cap 30". `null` means uncapped (the stored schema is
+   *  `ge=1`, so `0` is a display-only sentinel, never a saved value),
+   *  matching Setup's `rules.pointCap` field this mirrors (V3-13-2). */
+  pointCap: number | null;
 }
 
 const SCORE_TYPE_OPTIONS = [
-  { value: 'simple' as const, label: 'Simple' },
-  { value: 'badminton' as const, label: 'Sets' },
+  { value: 'simple' as const, label: 'Match result only' },
+  { value: 'badminton' as const, label: 'Game scores' },
 ];
 
 const MATCH_FORMAT_OPTIONS = [
@@ -72,13 +78,13 @@ export function ScoringFields({
         aria-disabled={isSimple}
       >
         <Row
-          label="Points per set"
+          label="Points per game"
           control={
             <Seg
               value={value.pointsPerSet}
               onChange={(v) => onChange({ pointsPerSet: v })}
               options={POINTS_PER_SET_OPTIONS}
-              ariaLabel="Points per set"
+              ariaLabel="Points per game"
               disabled={isSimple}
             />
           }
@@ -104,8 +110,24 @@ export function ScoringFields({
               ariaLabel="Deuce enabled"
             />
           }
-          last
+          last={!value.deuceEnabled}
         />
+        {value.deuceEnabled ? (
+          <Row
+            label="Point cap"
+            control={
+              <NumberWithSuffix
+                value={value.pointCap ?? 0}
+                onChange={(v) => onChange({ pointCap: v > 0 ? v : null })}
+                suffix={(value.pointCap ?? 0) > 0 ? 'pts' : '(0 = no cap)'}
+                min={0}
+                max={200}
+                ariaLabel="Point cap"
+              />
+            }
+            last
+          />
+        ) : null}
       </div>
     </>
   );

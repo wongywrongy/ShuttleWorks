@@ -144,13 +144,25 @@ beforeEach(() => {
   });
 });
 
+describe("BracketDrawsTab — action column header (V3-OC15.1)", () => {
+  it("names the trailing action column 'Action', separate from Status", () => {
+    renderDraws();
+    expect(
+      screen.getByRole("columnheader", { name: "Action" }),
+    ).toBeInTheDocument();
+    // Status stays its own column and never carries a verb like "Open draw".
+    const statusHeader = screen.getByRole("columnheader", { name: "Status" });
+    expect(statusHeader).toBeInTheDocument();
+  });
+});
+
 describe("BracketDrawsTab — draw rows", () => {
   it("renders a row per draw with format, size, and entered meta", () => {
     mockBracketData = makeBracketData({ participantCount: 3, bracketSize: 8 });
     renderDraws();
     const row = screen.getByTestId("bracket-draw-row-MS");
     expect(within(row).getByText("Single elimination")).toBeInTheDocument();
-    expect(within(row).getByText("3/8")).toBeInTheDocument();
+    expect(within(row).getByText(/3\/8/)).toBeInTheDocument();
   });
 
   it("renders exactly one line for a singleton draw", () => {
@@ -188,14 +200,14 @@ describe("BracketDrawsTab — draw rows", () => {
     mockBracketData = makeBracketData({ participantCount: 3, bracketSize: 8 });
     renderDraws();
     const row = screen.getByTestId("bracket-draw-row-MS");
-    expect(within(row).getByText("3/8")).toHaveClass("text-status-warning");
+    expect(within(row).getByText(/3\/8/)).toHaveClass("text-status-warning");
   });
 
   it("renders the entered count muted once the draw is full", () => {
     mockBracketData = makeBracketData({ participantCount: 4, bracketSize: 4 });
     renderDraws();
     const row = screen.getByTestId("bracket-draw-row-MS");
-    expect(within(row).getByText("4/4")).not.toHaveClass("text-status-warning");
+    expect(within(row).getByText(/4\/4/)).not.toHaveClass("text-status-warning");
   });
 
   it("shows an empty state with a New draw action when there are no draws", () => {

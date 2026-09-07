@@ -158,5 +158,66 @@ def test_cloud_mode_refuses_console_email_backend(monkeypatch):
         email_backend="smtp",
         smtp_host="smtp.example.com",
         ops_token="an-ops-token",
+        turnstile_site_key="0x4AAAAAAAsite",
+        turnstile_secret_key="0x4AAAAAAAsecret",
     )
     assert ok.email_backend == "smtp"
+
+
+def _cloud(**overrides):
+    """A complete cloud config, overridable one field at a time."""
+    from core.config import Settings
+
+    base = dict(
+        environment="cloud",
+        database_url="postgresql://u:p@db/x",
+        auth_mode="cloud",
+        session_cookie_secure=True,
+        email_backend="smtp",
+        smtp_host="smtp.example.com",
+        ops_token="an-ops-token",
+        turnstile_site_key="0x4AAAAAAAsite",
+        turnstile_secret_key="0x4AAAAAAAsecret",
+    )
+    base.update(overrides)
+    return Settings(**base)
+
+
+def test_cloud_mode_refuses_cloudflare_turnstile_test_keys():
+    """SEC 2026-09-07: the always-pass DUMMY pair is the shipped default.
+
+    Deliberate for development and CI — the real code path runs without a
+    network call — but in cloud it is bot protection that is present,
+    green, and inert: entrant signup would accept any token a flood cared
+    to send. A forgotten key looks identical to a working one at runtime,
+    so it has to be caught at startup.
+    """
+    with pytest.raises(ValueError, match="TURNSTILE_SECRET_KEY"):
+        _cloud(turnstile_secret_key="1x0000000000000000000000000000000AA")
+    # The always-BLOCK and token-spent secrets are test keys too.
+    with pytest.raises(ValueError, match="TURNSTILE_SECRET_KEY"):
+        _cloud(turnstile_secret_key="2x0000000000000000000000000000000AA")
+    with pytest.raises(ValueError, match="TURNSTILE_SECRET_KEY"):
+        _cloud(turnstile_secret_key="3x0000000000000000000000000000000AA")
+    with pytest.raises(ValueError, match="TURNSTILE_SITE_KEY"):
+        _cloud(turnstile_site_key="1x00000000000000000000AA")
+    with pytest.raises(ValueError, match="TURNSTILE_SITE_KEY"):
+        _cloud(turnstile_site_key="3x00000000000000000000FF")
+    # Blank is the same failure mode by another route.
+    with pytest.raises(ValueError, match="TURNSTILE_SECRET_KEY"):
+        _cloud(turnstile_secret_key="")
+
+
+def test_cloud_mode_accepts_real_looking_turnstile_keys():
+    ok = _cloud()
+    assert ok.turnstile_secret_key == "0x4AAAAAAAsecret"
+
+
+def test_local_mode_keeps_the_turnstile_test_keys():
+    """The default pair must stay usable locally and in CI -- that is what
+    lets the verification path run for real without a third party."""
+    from core.config import Settings
+
+    local = Settings()
+    assert local.turnstile_secret_key == "1x0000000000000000000000000000000AA"
+    assert local.turnstile_site_key == "1x00000000000000000000AA"

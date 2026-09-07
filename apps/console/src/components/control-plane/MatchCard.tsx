@@ -77,7 +77,7 @@ export function ScoreLane({
       className="inline-flex items-center justify-end gap-0.5 text-xs tabular-nums text-foreground"
     >
       {reason ? (
-        <span className="mr-1 rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="mr-1 rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {REASON_BADGE[reason]}
         </span>
       ) : null}
@@ -118,7 +118,7 @@ function CardSide({
       >
         {names}
         {reason ? (
-          <span className="ml-1.5 rounded-sm bg-muted px-1 align-middle text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="ml-1.5 rounded-sm bg-muted px-1 align-middle text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {REASON_BADGE[reason]}
           </span>
         ) : null}
@@ -184,7 +184,7 @@ function ResultSideBlock({
       <div className="min-w-0 flex-1">{rows}</div>
       {rail ? <span className="shrink-0">{rail}</span> : null}
       {reason ? (
-        <span className="shrink-0 rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="shrink-0 rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {REASON_BADGE[reason]}
         </span>
       ) : null}
@@ -223,7 +223,7 @@ export function ResultSides({
   railA,
   railB,
   sets = [],
-  winner = null,
+  winner,
   reasonSide = null,
   reason = null,
   meta,
@@ -237,13 +237,18 @@ export function ResultSides({
   railA?: ReactNode;
   railB?: ReactNode;
   sets?: SetPair[];
-  winner?: 'A' | 'B' | null;
+  /** The authoritative match winner (match-card contract §3.5): comes from
+   *  `outcome.winner`, NEVER from counting `sets` — a retirement or a
+   *  walkover can contradict the point totals by construction. `null` while
+   *  the match is unfinished; the caller must not fall back to
+   *  `setsWinner(sets)` (deleted from this component). */
+  winner: 'A' | 'B' | null;
   reasonSide?: 'A' | 'B' | null;
   reason?: MatchReason | null;
   meta?: ReactNode;
   'data-testid'?: string;
 }) {
-  const won = winner ?? setsWinner(sets);
+  const won = winner;
   return (
     <div data-testid={testId} className="min-w-0">
       <div className="flex flex-col divide-y divide-border/60">
@@ -265,7 +270,7 @@ export function ResultSides({
         />
       </div>
       {meta ? (
-        <div className="mt-0.5 border-t border-border pt-1 text-2xs text-muted-foreground">
+        <div className="mt-0.5 border-t border-border pt-1 text-xs text-muted-foreground">
           {meta}
         </div>
       ) : null}
@@ -279,7 +284,7 @@ export function MatchCard({
   chipA,
   chipB,
   sets = [],
-  winner = null,
+  winner,
   reasonSide = null,
   reason = null,
   meta,
@@ -292,9 +297,11 @@ export function MatchCard({
   chipA?: ReactNode;
   chipB?: ReactNode;
   sets?: SetPair[];
-  /** Explicit winner when the caller knows it (bracket `winner_side`);
-   *  falls back to counting sets. */
-  winner?: 'A' | 'B' | null;
+  /** The authoritative match winner (match-card contract §3.5): comes from
+   *  `outcome.winner`, NEVER from counting `sets` (`winner ?? setsWinner(sets)`
+   *  is deleted — a retirement or walkover can contradict the point totals
+   *  by construction). `null` while `outcome.kind === 'in_play'`. */
+  winner: 'A' | 'B' | null;
   /** Which side the `reason` badge attaches to (the affected side). */
   reasonSide?: 'A' | 'B' | null;
   reason?: MatchReason | null;
@@ -302,7 +309,7 @@ export function MatchCard({
   className?: string;
   'data-testid'?: string;
 }) {
-  const won = winner ?? setsWinner(sets);
+  const won = winner;
   return (
     <div data-testid={testId} className={`min-w-0 ${className}`}>
       <CardSide
@@ -322,7 +329,7 @@ export function MatchCard({
         reason={reasonSide === 'B' ? reason : null}
       />
       {meta ? (
-        <div className="mt-1 border-t border-border pt-1 text-2xs text-muted-foreground">
+        <div className="mt-1 border-t border-border pt-1 text-xs text-muted-foreground">
           {meta}
         </div>
       ) : null}

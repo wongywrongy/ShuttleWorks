@@ -1,4 +1,4 @@
-"""The SP-P7 public-site projections: draws, seeds, winners, player pages.
+"""The SP-P7 public-site projections: draws, player pages, schedule.
 
 The claims that matter, in the order the spec states them:
 
@@ -69,6 +69,7 @@ def _make_workspace(client, name="Draws Open", slug="draws-open", kind="meet", *
                 tournament_id=uuid.UUID(tid),
                 slug=slug,
                 is_open=True,
+                audience="public",
                 **flags,
             )
         )
@@ -298,6 +299,7 @@ def test_the_draws_index_lists_the_draw_with_exact_card_keys(client, bracket_pag
         "roundCount",
         "champions",
         "finalists",
+        "drawParticipantCount",
         "remainingMatchCount",
         "historical",
         "sourceUrl",
@@ -691,6 +693,111 @@ def test_the_tree_renders_rounds_seeds_schedule_and_placeholders(client, bracket
     assert [side["feederTake"] for side in final["sides"]] == ["winner", "winner"]
 
 
+def test_the_tree_carries_the_discriminated_unresolved_reason(client, bracket_page):
+    """V3-11-1: the public wire states WHY a side has no name, as a `kind` a
+    renderer switches on — not as a sentence it has to parse. The formatted
+    `reference` comes off the same locator the legacy `placeholder` uses, so
+    the two can never disagree (D16)."""
+    body = client.get(f"/e/api/page/{bracket_page['slug']}/draws/MS").json()
+    (segment,) = body["segments"]
+    (final,) = segment["rounds"][1]["matches"]
+    assert [side["unresolved"] for side in final["sides"]] == [
+        {"kind": "winner_of", "known": [], "missing": 0, "reference": "SF 1"},
+        {"kind": "winner_of", "known": [], "missing": 0, "reference": "SF 2"},
+    ]
+
+    # A resolved side has no reason at all — the persons ARE the answer, and
+    # they are reached through `participantKey` -> `teams`.
+    sf1, _sf2 = segment["rounds"][0]["matches"]
+    assert [side["unresolved"] for side in sf1["sides"]] == [None, None]
+
+
+def test_approved_slot_with_unresolved_predecessor_still_reads_scheduled(
+    client, bracket_page
+):
+    """Contract §3.1: a pending participant does not make a slot pending. A
+    match whose second side is "Winner of QF1" and whose slot is approved
+    is publicly Scheduled with its time (V3-PE09.2: the reverse — showing
+    "Scheduled" with no approved time at all — is the actual defect)."""
+    slug = bracket_page["slug"]
+    body = client.get(f"/e/api/page/{slug}/matches").json()
+    items = {item["matchKey"]: item for item in body["items"]}
+    sf1 = items["MS:MS-R0-0"]
+    assert sf1["status"] == "scheduled"
+    assert sf1["scheduledTime"] == "10:30"
+    assert sf1["court"] == 1
+
+    final = items["MS:MS-R1-0"]
+    assert final["status"] == "scheduled"
+    # The final has no approved slot yet — the "scheduled" wire status here
+    # is a *match*-state default (nobody's called it, nobody's played it),
+    # not a schedule-domain claim; the schedule domain's own answer is
+    # carried separately in scheduledTime, which the entrant tier's
+    # ``schedulePublicState`` reads to say "Time to be confirmed".
+    assert final["scheduledTime"] is None
+    assert [side["placeholder"] for side in final["sides"]] == [
+        "Winner of SF 1",
+        "Winner of SF 2",
+    ]
+
+
+def test_courts_reach_live_bracket_matches_assigned_directly(client, bracket_page):
+    """V3-PE09.1: a directly-assigned match that is then started must
+    publish its real court, not withhold it."""
+    tid, slug = bracket_page["tid"], bracket_page["slug"]
+    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
+    rounds = _units_by_round(state)
+    sf0 = rounds[0][0]
+    r = client.post(
+        f"/tournaments/{tid}/bracket/match-action",
+        json={"id": str(uuid.uuid4()), "play_unit_id": sf0["id"], "action": "start"},
+        headers=CSRF,
+    )
+    assert r.status_code == 200, r.text
+    body = client.get(f"/e/api/page/{slug}/matches").json()
+    item = next(item for item in body["items"] if item["matchKey"] == f"MS:{sf0['id']}")
+    assert item["status"] == "live"
+    assert item["court"] == 1
+
+
+def test_courts_reach_live_bracket_matches_assigned_via_solver_commit(client):
+    """V3-PE09.1 root cause investigation: a match started straight off a
+    solver-committed round (never touching the direct /assign endpoint,
+    which is how a normal "schedule next round" flow plays out) must still
+    publish its court — the ``_merge_live_bracket_courts`` fallback in
+    ``_schedule_runtime_snapshot`` is exactly the mechanism that backfills
+    it from the bracket session's own assignment when Operations has not
+    (yet) materialized a Match row for this play unit."""
+    tid = _make_workspace(client, draws_published=True, entrants_published=True)
+    ada = _seed_person(tid, "Ada Chen", "Riverside BC")
+    bo = _seed_person(tid, "Bo Lee", "Northside SC")
+    participants = [
+        {"id": f"entry-{ada}", "name": "Ada Chen", "seed": 1},
+        {"id": f"entry-{bo}", "name": "Bo Lee", "seed": 2},
+        {"id": "P3", "name": "Cass Doe"},
+        {"id": "P4", "name": "Dev Roy"},
+    ]
+    state = _se4_bracket(client, tid, participants)
+    slug = "draws-open"
+    sf0 = _units_by_round(state)[0][0]
+    committed = client.post(
+        f"/tournaments/{tid}/bracket/schedule-next/commit",
+        json={"assignments": [{"play_unit_id": sf0["id"], "slot_id": 3, "court_id": 1}]},
+        headers=CSRF,
+    )
+    assert committed.status_code == 200, committed.text
+    started = client.post(
+        f"/tournaments/{tid}/bracket/match-action",
+        json={"id": str(uuid.uuid4()), "play_unit_id": sf0["id"], "action": "start"},
+        headers=CSRF,
+    )
+    assert started.status_code == 200, started.text
+    body = client.get(f"/e/api/page/{slug}/matches").json()
+    item = next(item for item in body["items"] if item["matchKey"] == f"MS:{sf0['id']}")
+    assert item["status"] == "live"
+    assert item["court"] == 1
+
+
 def test_results_off_hides_scores_and_resolved_advancement(client, bracket_page):
     """§7's core trap. A recorded semifinal must not reach the public draw
     in ANY form while results are unpublished — no score, no winner mark,
@@ -775,62 +882,6 @@ def test_rr_standings_ride_the_detail_with_history_pills(client):
     assert all(pill in ("W", "L") for row in detail["standings"] for pill in row["history"])
     (segment,) = detail["segments"]
     assert segment["rounds"][0]["label"] == "Round 1"
-
-
-# ---- seeds (§3.5) ---------------------------------------------------------
-
-
-def test_seeds_are_gated_by_draws_and_ordered(client, bracket_page):
-    body = client.get(f"/e/api/page/{bracket_page['slug']}/seeds").json()
-    assert body["published"] is True
-    (event,) = body["events"]
-    assert [line["seed"] for line in event["seeds"]] == [1, 2]
-    assert [p["identity"]["name"] for p in event["seeds"][0]["persons"]] == ["Ada Chen"]
-    assert event["seeds"][0]["club"] == "Riverside BC"
-
-    _set_flags(bracket_page["tid"], draws_published=False)
-    assert client.get(f"/e/api/page/{bracket_page['slug']}/seeds").json() == {
-        "published": False,
-        "events": [],
-    }
-
-
-# ---- winners (§3.6) -------------------------------------------------------
-
-
-def test_winners_gate_then_populate_as_the_draw_decides(client, bracket_page):
-    tid, slug = bracket_page["tid"], bracket_page["slug"]
-    assert client.get(f"/e/api/page/{slug}/winners").json() == {
-        "published": False,
-        "events": [],
-    }
-
-    _set_flags(tid, results_published=True)
-    (event,) = client.get(f"/e/api/page/{slug}/winners").json()["events"]
-    assert event["decided"] is False and event["winner"] is None
-
-    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
-    rounds = _units_by_round(state)
-    _record(client, tid, rounds[0][0], winner="A")
-    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
-    _record(client, tid, _units_by_round(state)[0][1], winner="B")
-    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
-    _record(client, tid, _units_by_round(state)[1][0], winner="A")
-
-    (event,) = client.get(f"/e/api/page/{slug}/winners").json()["events"]
-    assert event["decided"] is True
-    assert event["winner"] is not None and event["runnerUp"] is not None
-    assert len(event["semifinalists"]) == 2
-    assert set(event["winner"]) == {"persons", "club"}
-    assert set(event) == {
-        "eventCode", "discipline", "decided", "winner", "runnerUp",
-        "semifinalists", "finalScore", "finalists",
-    }
-    assert all(
-        set(person) == {"identity", "resolution", "label"}
-        and set(person["identity"]) == {"id", "name"}
-        for person in event["winner"]["persons"]
-    )
 
 
 # ---- player pages (§3.3) --------------------------------------------------

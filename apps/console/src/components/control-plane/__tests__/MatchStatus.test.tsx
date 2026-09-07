@@ -38,12 +38,14 @@ describe('X6 status ink budget — MatchStatus', () => {
     },
   );
 
-  it('live renders as a chip with a dot — the only routine container', () => {
+  it('live renders as a chip — the only routine container', () => {
     const { container } = render(<MatchStatus status="live" />);
     expect(container).toHaveTextContent(STATUS_LABEL.live);
     const chip = chipIn(container);
     expect(chip).not.toBeNull();
-    // The leading swatch dot — LIVE must be findable at scan speed.
-    expect(chip!.querySelector('[class*="rounded-full"]')).not.toBeNull();
+    // Colour + text only (ADR 0027): the chip carries no dot and is not a
+    // fully-round pill. LIVE is findable at scan speed by its tinted ground.
+    expect(chip!.querySelector('[class*="rounded-full"]')).toBeNull();
+    expect(chip!.className).not.toContain('rounded-full');
   });
 });

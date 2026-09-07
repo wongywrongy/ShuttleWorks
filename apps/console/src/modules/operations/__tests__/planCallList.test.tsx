@@ -23,7 +23,7 @@ describe('PlanCallList', () => {
     render(
       <PlanCallList
         blocks={[
-          blk({ id: 'late', slot: 4 }),
+          blk({ id: 'late', slot: 4, status: 'started' }),
           blk({ id: 'b-first', slot: 0, source: 'bracket', key: 'bracket:b-first' }),
           blk({ id: 'a-first', slot: 0 }),
         ]}
@@ -40,6 +40,10 @@ describe('PlanCallList', () => {
       'plan-call-row-meet:a-first',
       'plan-call-row-meet:late',
     ]);
+    expect(rows[0]).toHaveTextContent('Scheduled');
+    // Shared match-state vocabulary (contract §2): a `started` match reads
+    // "On court", never the deleted screen-local "Playing".
+    expect(rows[2]).toHaveTextContent('On court');
     // feasibility band: count, courts, and the honest end estimate
     expect(screen.getByTestId('plan-feasibility-band').textContent).toMatch(
       /3 matches across 3 courts.*ends ~T5/,

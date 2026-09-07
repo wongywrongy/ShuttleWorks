@@ -17,6 +17,7 @@
  */
 import { Link } from 'react-router-dom';
 import type { NextMatchDTO } from '../../api/dto';
+import { formatMatchIdentity } from '../../platform/domain/matchIdentity';
 
 export function NextUpList({
   items,
@@ -30,6 +31,9 @@ export function NextUpList({
   return (
     <div className="flex flex-col gap-[3px]">
       {items.map((n, i) => {
+        const label = n.identity
+          ? formatMatchIdentity(n.identity, n.matchId ?? undefined)
+          : n.code;
         const body = (
           <>
             {/* LAY-2: the slot was a flat `w-9` (36px), sized for a meet rank
@@ -48,20 +52,29 @@ export function NextUpList({
                 first replacement. So the slot has a MINIMUM and no maximum —
                 a long code takes the width it needs and wraps at its hyphens
                 if the row ever runs out. */}
-            <span className="min-w-9 shrink-0 break-words text-xs font-semibold sw-num text-foreground">
-              {n.code}
+            <span className="min-w-0 flex-1 break-words text-sm font-medium text-foreground">
+              {n.sideA || n.sideB ? (
+                <><span>{n.sideA || 'TBD'}</span><span className="px-1 text-muted-foreground">vs</span><span>{n.sideB || 'TBD'}</span></>
+              ) : label}
             </span>
-            <span className="min-w-0 flex-1 break-words text-2xs sw-num text-muted-foreground">
-              {[n.timeLabel, n.courtLabel].filter(Boolean).join(' · ')}
+            <span className="min-w-9 shrink-0 break-words text-2xs sw-num text-muted-foreground">
+              {!n.sideA && !n.sideB
+                ? [n.timeLabel, n.courtLabel].filter(Boolean).join(' · ')
+                : [label, n.timeLabel, n.courtLabel].filter(Boolean).map((value, index) => (
+                <span key={`${value}-${index}`}>
+                  {index > 0 ? <span aria-hidden> · </span> : null}
+                  <span>{value}</span>
+                </span>
+              ))}
             </span>
           </>
         );
         const href = linkFor?.(n) ?? null;
         return href ? (
           <Link
-            key={`${n.code}-${i}`}
+            key={`${label}-${i}`}
             to={href}
-            data-testid={`next-up-open-${n.code}`}
+            data-testid={`next-up-open-${label}`}
             className="group flex items-center gap-2.5 rounded-lg bg-surface-card px-2.5 py-2 transition-colors duration-fast ease-brand hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             {body}
@@ -74,7 +87,7 @@ export function NextUpList({
           </Link>
         ) : (
           <div
-            key={`${n.code}-${i}`}
+            key={`${label}-${i}`}
             className="flex items-center gap-2.5 rounded-lg bg-surface-card px-2.5 py-2"
           >
             {body}

@@ -10,6 +10,21 @@ on:
   pull_request:
   push:
 
+# Least privilege for the whole workflow (2026-09-07 hardening), matching
+# security.yml. The default GITHUB_TOKEN is write-all on a repository whose
+# settings have not been changed, so a workflow that says nothing hands every
+# `npm ci` postinstall script and every third-party action in the graph a token
+# that can push to the default branch, open releases and publish packages. None
+# of the jobs below writes anything back to GitHub: they lint, typecheck, test,
+# parse the compose stacks and upload one failure artifact (artifact upload is
+# served by the runtime's own credential, not by these scopes). `contents:
+# read` is therefore the full requirement, and any job that later needs more —
+# a SARIF upload wants `security-events: write`, a PR comment wants
+# `pull-requests: write` — grants it at the JOB level, where the reviewer can
+# see which one job holds it, rather than by widening this block.
+permissions:
+  contents: read
+
 jobs:
   docs:
     name: Documentation (paths + links)
@@ -227,6 +242,15 @@ jobs:
           # dead value). `config -q` only parses, so nothing here checks the
           # semantics; `entrant/tests/deployStacks.test.ts` does.
           SMTP_HOST: smtp.example.test
+          # Both became `${VAR:?}` in the self-host stack on 2026-09-07
+          # (SEC-0907-1): the API refuses to start under ENVIRONMENT=cloud on
+          # a blank key or on Cloudflare's always-pass test pair, so the old
+          # test-key fallback only moved the failure later. These are dummy
+          # PARSE values — deliberately not the Cloudflare test keys, which
+          # the API rejects by value, so nothing here can be copied into a
+          # deployment and appear to work.
+          TURNSTILE_SITE_KEY: dummy-turnstile-site-key
+          TURNSTILE_SECRET_KEY: dummy-turnstile-secret-key
           SW_WORKER_PASSWORD: dummy-password
           PRIMARY_TAILNET_HOST: 100.64.0.1
           # The release stack intentionally has no mutable `latest` default.

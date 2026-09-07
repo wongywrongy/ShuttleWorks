@@ -120,7 +120,7 @@ def _resolve(repo: LocalRepository, slug: str) -> Tuple[EntryPage, Tournament]:
         _scalar_one_or_none,
         select(EntryPage).where(EntryPage.slug == slug),
     )
-    if page is None or not page.is_open:
+    if page is None or not page.is_open or page.audience == "private":
         raise _not_found()
     tournament = repo.tournaments.get_by_id(page.tournament_id)
     if tournament is None:

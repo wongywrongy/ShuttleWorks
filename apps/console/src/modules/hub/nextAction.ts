@@ -12,7 +12,36 @@ const REASON_DESTINATION: Record<string, string> = {
   NOT_SCHEDULED: 'operations/plan',
   NO_DATE: 'setup/dates',
   NO_VENUE: 'setup/venue',
+  ENTRIES_CLOSING_SOON: 'participants/entries',
+  UNRESOLVED_PAIRS: 'participants/entries',
+  AT_CAP_WITH_WAITLIST: 'participants/entries',
+  ENTRIES_NOT_COMMITTED: 'participants/entries',
+  COMMITTED_ENTRY_WITHDREW: 'participants/entries',
+  UNPAID_ENTRIES: 'participants/entries',
 };
+
+/** Attention codes the desk can only resolve at the entries desk (V3-OC02.2).
+ *  A workspace can be fully played out (phase `complete`) and still have an
+ *  entries loose end — "View draws"/"View results" does not route there, so
+ *  the row's next action must name the entries problem instead of the
+ *  play-side review surface once one of these is the leading reason. */
+const ENTRIES_ATTENTION_CODES = new Set(Object.keys(REASON_DESTINATION).filter((code) =>
+  REASON_DESTINATION[code] === 'participants/entries',
+));
+
+/** "Review entries" when the leading attention reason concerns entries —
+ *  V3-OC02.2: the row used to offer "View draws" for a completed bracket
+ *  with an unresolved entries reason ("Confirmed entries not on the
+ *  roster"), which does not open anything that helps. Null when the leading
+ *  reason (if any) is not entries-shaped, so callers fall through to their
+ *  ordinary phase/group action. */
+function entriesReviewAction(t: TournamentSummaryDTO): RowAction | null {
+  const first = attentionReasons(t)[0];
+  if (first && ENTRIES_ATTENTION_CODES.has(first.code)) {
+    return { label: 'Review entries', kind: 'open', segment: 'participants/entries' };
+  }
+  return null;
+}
 
 /** The primary next action for a workspace — the first mapped attention reason,
  *  else "Open". Pure; degrades to Open when signals are absent. */
@@ -51,15 +80,21 @@ export function rowActionFor(t: TournamentSummaryDTO, group: HubGroupId): RowAct
     if (phase === 'live')
       return { label: 'Open live day', kind: 'open', segment: 'operations/live' };
     if (phase === 'complete')
-      return br
-        ? { label: 'View draws', kind: 'results', segment: 'competition/draws' }
-        : { label: 'View results', kind: 'results', segment: 'competition/results' };
+      return (
+        entriesReviewAction(t) ??
+        (br
+          ? { label: 'View draws', kind: 'results', segment: 'competition/draws' }
+          : { label: 'View results', kind: 'results', segment: 'competition/results' })
+      );
   }
   if (group === 'undated') return { label: 'Set date', kind: 'set-date' };
   if (group === 'past')
-    return br
-      ? { label: 'View draws', kind: 'results', segment: 'competition/draws' }
-      : { label: 'View results', kind: 'results', segment: 'competition/results' };
+    return (
+      entriesReviewAction(t) ??
+      (br
+        ? { label: 'View draws', kind: 'results', segment: 'competition/draws' }
+        : { label: 'View results', kind: 'results', segment: 'competition/results' })
+    );
   const next = nextActionFor(t);
   return {
     label: next.reasonCode ? next.label : 'Open workspace',

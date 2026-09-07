@@ -99,13 +99,16 @@ const DRAW_COLUMNS: BandedListColumn[] = [
   // be the crush victim again.
   { label: "Code", className: "w-28 shrink-0" },
   { label: "Format", className: "min-w-[11rem] flex-1", priority: 3 },
-  { label: "Size", className: "w-12 shrink-0 text-right", priority: 2 },
-  { label: "Entered", className: "w-16 shrink-0 text-right" },
+  { label: "Size", className: "w-28 shrink-0 text-right", priority: 2 },
+  { label: "Entered", className: "w-32 shrink-0 text-right" },
   { label: "Progress", className: "w-20 shrink-0" },
   { label: "Status", className: "w-20 shrink-0 text-right" },
   // `ml-auto` keeps the action cluster on the right edge in the narrow case
-  // where Format has yielded and no column is growing.
-  { label: "", className: "ml-auto w-40 shrink-0" },
+  // where Format has yielded and no column is growing. Named "Action"
+  // (V3-OC15.1) — an unlabeled trailing column had no accessible name, and
+  // "Status" must stay reserved for actual states (Draft/Generated), never
+  // an action verb like "Open draw".
+  { label: "Action", className: "ml-auto w-36 shrink-0 text-right" },
 ];
 
 /** Content floor for the draws dock, derived from DRAW_COLUMNS. The old
@@ -138,6 +141,14 @@ export function BracketDrawsTab() {
   }, [searchParams, setSearchParams]);
 
   const events = data?.events ?? [];
+  useEffect(() => {
+    const eventId = searchParams.get("event");
+    if (!eventId || !events.some((event) => event.id === eventId)) return;
+    setConfigFor(eventId);
+    const next = new URLSearchParams(searchParams);
+    next.delete("event");
+    setSearchParams(next, { replace: true });
+  }, [events, searchParams, setSearchParams]);
   const configEvent = configFor
     ? events.find((e) => e.id === configFor)
     : undefined;
@@ -326,7 +337,7 @@ export function BracketDrawsTab() {
           data-testid="bracket-new-draw"
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground`}
         >
-          ＋ New draw
+          New draw
         </button>
       </ActionsBar>
 
@@ -343,7 +354,7 @@ export function BracketDrawsTab() {
                   onClick={() => setCreating(true)}
                   className={`${INTERACTIVE_BASE} inline-flex h-8 items-center gap-1 rounded-sm bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity duration-fast ease-brand hover:opacity-90`}
                 >
-                  ＋ New draw
+                  New draw
                 </button>
               }
             />
@@ -395,7 +406,7 @@ export function BracketDrawsTab() {
                     role="cell"
                     className={`${colClass(DRAW_COLUMNS[2])} whitespace-nowrap text-xs text-muted-foreground sw-num`}
                   >
-                    {row.targetSize}
+                    {row.targetSize} {isDoublesCode(row.ev.discipline) ? 'pairs' : 'players'}
                   </span>
                   <span
                     role="cell"
@@ -405,7 +416,7 @@ export function BracketDrawsTab() {
                         : "text-muted-foreground"
                     }`}
                   >
-                    {row.partCount}/{row.targetSize}
+                    {row.partCount}/{row.targetSize} {isDoublesCode(row.ev.discipline) ? 'pairs' : 'players'}
                   </span>
                   <span
                     role="cell"
@@ -578,7 +589,7 @@ function DrawProgressCell({ counts }: { counts: DrawCounts }) {
       className="text-xs text-foreground sw-num"
       data-testid="draw-progress"
     >
-      {counts.done}/{total}
+      {counts.done}/{total} matches played
     </span>
   );
 }
@@ -594,7 +605,7 @@ function DrawProgressCell({ counts }: { counts: DrawCounts }) {
 function DrawStatusCell({ status }: { status: BracketEventStatus }) {
   if (status === "draft") {
     return (
-      <span className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
+      <span className="text-xs uppercase tracking-[0.06em] text-muted-foreground">
         ○ Draft
       </span>
     );
@@ -686,7 +697,7 @@ function ActionCell({
         </Button>
       ) : (
         <Button
-          variant="brand"
+          variant="ghost"
           size="xs"
           onClick={onOpenDraw}
           data-testid={`bracket-open-draw-${row.ev.id}`}
@@ -769,7 +780,7 @@ function splitFieldPayload(
 }
 
 const FIELD_LABEL_CLASS =
-  "mb-1 block text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground";
+  "mb-1 block text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground";
 const FIELD_INPUT_CLASS =
   "w-full rounded-sm border border-border bg-bg-elev px-2 py-1.5 text-sm";
 
@@ -795,7 +806,7 @@ function FieldInput({
         <span className="min-w-0">
           <span className="block text-sm">{field.label}</span>
           {field.help && (
-            <span className="block text-2xs text-muted-foreground">
+            <span className="block text-xs text-muted-foreground">
               {field.help}
             </span>
           )}
@@ -819,7 +830,7 @@ function FieldInput({
           ))}
         </select>
         {field.help && (
-          <span className="mt-1 block text-2xs text-muted-foreground">
+          <span className="mt-1 block text-xs text-muted-foreground">
             {field.help}
           </span>
         )}
@@ -840,7 +851,7 @@ function FieldInput({
         className={`${FIELD_INPUT_CLASS} sw-num`}
       />
       {field.help && (
-        <span className="mt-1 block text-2xs text-muted-foreground">
+        <span className="mt-1 block text-xs text-muted-foreground">
           {field.help}
         </span>
       )}
@@ -906,7 +917,7 @@ function FormatCard({
           {descriptor.label}
         </span>
         {!descriptor.implemented && (
-          <span className="ml-auto shrink-0 text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="ml-auto shrink-0 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             Planned
           </span>
         )}
@@ -1042,7 +1053,7 @@ function NewDrawModal({
             {errors.id && (
               <span
                 role="alert"
-                className="mt-1 block text-2xs text-destructive"
+                className="mt-1 block text-xs text-destructive"
               >
                 {errors.id}
               </span>
@@ -1064,7 +1075,7 @@ function NewDrawModal({
             {errors.discipline && (
               <span
                 role="alert"
-                className="mt-1 block text-2xs text-destructive"
+                className="mt-1 block text-xs text-destructive"
               >
                 {errors.discipline}
               </span>

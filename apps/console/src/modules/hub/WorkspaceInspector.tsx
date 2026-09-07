@@ -35,7 +35,7 @@ import { eventDate, temporalGroupOf } from './hubGrouping';
 import { DetailPanel } from '../../components/control-plane/DetailPanel';
 import { NextUpList } from '../../components/control-plane/NextUpList';
 import { SetupChecklist } from '../../components/control-plane/SetupChecklist';
-import { buildChecklist } from '../../platform/domain/setupChecklist';
+import { buildChecklist, STEP_REASON_CODE } from '../../platform/domain/setupChecklist';
 
 /** One metric tile in the "This workspace" triplet. */
 function MetricTile({
@@ -52,7 +52,7 @@ function MetricTile({
   return (
     <div className="bg-surface-screen p-2.5">
       <div className={`text-lg font-bold leading-tight sw-num ${color}`}>{value}</div>
-      <div className="text-2xs text-text-muted">{label}</div>
+      <div className="text-xs text-text-muted">{label}</div>
     </div>
   );
 }
@@ -117,11 +117,19 @@ export function WorkspaceInspector({
   // to the Ready/Needs-setup fallback, which only applies when the
   // lifecycle itself says nothing.
   const lifecycle = lifecycleBadge(tournament.signals?.phase, tournament.status);
-  const pill: { text: string; tone: 'green' | 'amber' | 'idle' | 'done' } | null =
+  // R3 (v3 consolidated plan, package 07): "Ready" and the lifecycle's
+  // Archived/Complete are ordinary domain facts, not exceptions — they
+  // render as plain ink (`routine`). "Needs setup" is the one state that
+  // still earns a tinted container, because it is the exception the
+  // director is meant to notice.
+  const pill: { text: string; tone: 'routine' | 'amber' } | null =
     lifecycle
-      ? lifecycleChip(tournament.signals?.phase, tournament.status)
+      ? (() => {
+          const chip = lifecycleChip(tournament.signals?.phase, tournament.status);
+          return chip ? { text: chip.text, tone: 'routine' as const } : null;
+        })()
       : pillReady
-        ? { text: 'Ready', tone: 'green' }
+        ? { text: 'Ready', tone: 'routine' }
         : { text: 'Needs setup', tone: 'amber' };
   const pct = readiness ? Math.round((readiness.ready / readiness.total) * 100) : 0;
 
@@ -159,7 +167,7 @@ export function WorkspaceInspector({
         eyebrow="This workspace"
         right={
           tournament.signals && pill ? (
-            <StatusPill tone={pill.tone} dot className="shrink-0">
+            <StatusPill tone={pill.tone} className="shrink-0">
               {pill.text}
             </StatusPill>
           ) : null
@@ -216,6 +224,28 @@ export function WorkspaceInspector({
         ) : null}
       </DetailPanel.Section>
 
+      {/* V3-OC02.2: the row's Attention cell only shows the first reason plus
+          a "N more issues" count — this is where "more" resolves to actual
+          names, not a guess. SP-UI-1's merge still holds: a reason already
+          stated as a checklist step's subline (below) is not repeated here —
+          only reasons the checklist has no step for (e.g. entries reasons)
+          get a line of their own. */}
+      {(() => {
+        const checklistCodes = new Set(Object.values(STEP_REASON_CODE));
+        const unlisted = todos.filter((r) => !checklistCodes.has(r.code));
+        return unlisted.length > 0 ? (
+          <DetailPanel.Section eyebrow="Attention" testId="inspector-attention">
+            <ul className="space-y-1" data-testid="inspector-attention-list">
+              {unlisted.map((r) => (
+                <li key={r.code} className="text-xs text-status-warning-fg">
+                  {r.label}
+                </li>
+              ))}
+            </ul>
+          </DetailPanel.Section>
+        ) : null;
+      })()}
+
       {steps.length > 0 ? (
         <DetailPanel.Section
           eyebrow="Readiness"
@@ -264,7 +294,7 @@ export function WorkspaceInspector({
               </span>
               <span
                 className={[
-                  'text-2xs capitalize',
+                  'text-xs capitalize',
                   m.status === 'enabled' ? 'text-text-secondary font-medium' : 'text-text-muted',
                 ].join(' ')}
               >

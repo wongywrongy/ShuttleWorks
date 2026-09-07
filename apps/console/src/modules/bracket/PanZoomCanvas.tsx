@@ -22,11 +22,22 @@ import {
 
 const MIN_SCALE = 0.2;
 const MAX_SCALE = 2;
-const READABLE_SCALE = 0.65;
+// Names are the primary draw content; never open the canvas at a postage
+// stamp scale merely to fit every round in one viewport.
+const READABLE_SCALE = 0.9;
 const CANVAS_GUTTER = 24;
 const CANVAS_TOP_INSET = 52;
 const clamp = (n: number, lo: number, hi: number) =>
   Math.min(Math.max(n, lo), hi);
+
+/** Keep the first round reachable from a left gutter when the draw overflows;
+ * center smaller canvases so compact draws still feel balanced. */
+export function readableOffset(viewportWidth: number, contentWidth: number, scale: number): number {
+  const renderedWidth = contentWidth * scale;
+  return renderedWidth <= viewportWidth - CANVAS_GUTTER * 2
+    ? (viewportWidth - renderedWidth) / 2
+    : CANVAS_GUTTER;
+}
 
 export function PanZoomCanvas({
   children,
@@ -107,12 +118,12 @@ export function PanZoomCanvas({
     if (!content || !vp || content.scrollWidth === 0) return;
     const widthScale =
       (vp.clientWidth - CANVAS_GUTTER * 2) / content.scrollWidth;
-    // Do not repeat the old "postage stamp" failure. Large draws open around
-    // two-thirds scale with the Final centered; the canvas is built to pan.
+    // Large draws remain intentionally wider than the viewport; round jumps
+    // and panning provide access while names stay near native size.
     const s = clamp(Math.max(widthScale, READABLE_SCALE), MIN_SCALE, 1);
     setT({
       s,
-      x: (vp.clientWidth - content.scrollWidth * s) / 2,
+      x: readableOffset(vp.clientWidth, content.scrollWidth, s),
       y: CANVAS_TOP_INSET,
     });
   };
@@ -210,7 +221,7 @@ export function PanZoomCanvas({
                     key={i}
                     type="button"
                     onClick={() => focusRound(i)}
-                    className="rounded-sm px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
+                    className="rounded-sm px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors duration-fast ease-brand hover:bg-muted/60 hover:text-foreground"
                   >
                     {label}
                   </button>

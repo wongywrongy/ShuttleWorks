@@ -15,7 +15,7 @@
  * why this is its own tested helper rather than a shared extraction.
  */
 import { describe, expect, it } from 'vitest';
-import { assignLanes, type LaneItem } from '../courtLanes';
+import { assignLanes, currentMatchesByCourt, type LaneItem } from '../courtLanes';
 
 function item(id: string, court: number, plannedSlot: number): LaneItem {
   return { id, court, plannedSlot };
@@ -89,5 +89,12 @@ describe('assignLanes', () => {
 
     expect(lanes.get('solo')).toBe('next');
     expect(lanes.size).toBe(1);
+  });
+
+  it('does not select one of two live records as now', () => {
+    const items = [item('a', 1, 0), item('b', 1, 1), item('next', 1, 2)];
+    const lanes = assignLanes(items, new Set(['a', 'b']));
+    expect([...lanes.values()]).not.toContain('now');
+    expect(currentMatchesByCourt(items, new Set(['a', 'b'])).conflicts.get(1)).toEqual(['a', 'b']);
   });
 });

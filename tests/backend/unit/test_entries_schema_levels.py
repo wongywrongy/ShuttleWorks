@@ -359,13 +359,24 @@ def test_no_natural_key_is_unique_at_any_level(session):
     """The claim R13 makes verbatim, asserted as an absence.
 
     Every unique index in the entries family is enumerated and checked
-    against the two the rulings actually authorise: the submission-level
-    idempotency key (D4) and the entry-page slug. Anything else appearing
-    here is a natural key that acquired uniqueness by accident.
+    against the ones the rulings actually authorise: the submission-level
+    idempotency key (D4), the entry-page slug, and the submission's short
+    reference. Anything else appearing here is a natural key that acquired
+    uniqueness by accident.
+
+    The third one is not a counter-example to R13's claim, and the
+    distinction is the whole point of the claim: a natural key is something
+    a HUMAN supplies and might legitimately repeat (a name, an email, a
+    name-and-event pair), which is why uniqueness on one turns a real-world
+    coincidence into a 409. ``short_reference`` (V3-24-1) is minted by the
+    server from a random alphabet, describes nothing about the entrant, and
+    is unique because that is its entire job — a code that named two
+    submissions would be useless as a reference rather than merely strict.
     """
     authorised = {
         "uq_submissions_tournament_account_idempotency_key",
         "uq_entry_pages_slug",
+        "uq_submissions_short_reference",
     }
     found = {
         ix.name

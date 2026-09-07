@@ -41,12 +41,14 @@ describe('PublishProduct', () => {
     expect(screen.queryByRole('navigation', { name: 'Publish sections' })).toBeNull();
   });
 
-  it('keeps publication checkboxes on Site only (SWP-11)', () => {
+  it('redirects the publication relay to Site', () => {
     renderAt('/tournaments/t1/publish/draws-results');
-    expect(screen.queryByTestId('sharing-site')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Publication toggles live on Site/ })).toHaveAttribute(
-      'href',
-      '/tournaments/t1/publish/site',
-    );
+    expect(screen.getByTestId('sharing-site')).toBeInTheDocument();
+    expect(screen.queryByTestId('publish-draws-results')).toBeNull();
+  });
+  it('redirects sharing links to Displays with one canonical link owner', () => {
+    renderAt('/tournaments/t1/publish/links');
+    expect(screen.getByTestId('display-config')).toBeInTheDocument();
+    expect(screen.getByTestId('sharing-links')).toBeInTheDocument();
   });
 });

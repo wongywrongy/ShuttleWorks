@@ -4,8 +4,9 @@
  * Renders the queue in the exact order passed by the surface (do NOT re-sort).
  * Position is meaningful: each row shows `#{i+1}`.
  *
- * Design language mirrors the Run board: a compact M/B source square, an
- * UPPERCASE tabular match code, then the sides. Selection matches the board.
+ * Design language mirrors the Run board: an UPPERCASE tabular match code,
+ * then the sides. Selection matches the board; the row data-source attribute
+ * keeps the engine identity available to tooling without a repeated badge.
  */
 import type { CSSProperties } from 'react';
 import type { RunMatch } from '../runtime/runModel';
@@ -15,21 +16,7 @@ import { EYEBROW_CLASS } from '../../../lib/utils';
 import { STATE_WORD } from '../../../lib/stateWords';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
-import { MODULE_LABELS } from '../../../platform/product-shell/types';
 import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
-
-// ── source label + square tint (M=meet azure, B=bracket violet) ───────────
-// One vocabulary for the engine, everywhere on this surface: the square shows
-// the INITIAL of the same word the row's tooltip and the inspector's
-// `SourceChip` spell out. The inspector used to say "BRKT" beside a "B".
-const SOURCE_LABEL: Record<'meet' | 'bracket', string> = {
-  meet: MODULE_LABELS.meet,
-  bracket: MODULE_LABELS.bracket,
-};
-const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
-  meet: 'bg-module-meet/15 text-module-meet',
-  bracket: 'bg-module-bracket/15 text-module-bracket',
-};
 
 // Why an ineligible row can't be sent, in the terms of its own engine —
 // `RunMatch.eligible` means "both sides known" for meet and "every feeder
@@ -104,15 +91,6 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
               #{i + 1}
             </span>
 
-            {/* Source initial square */}
-            <span
-              aria-hidden
-              title={SOURCE_LABEL[match.source]}
-              className={`inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-xs text-[9px] font-semibold sw-num ${SOURCE_SQUARE[match.source]}`}
-            >
-              {SOURCE_LABEL[match.source][0]}
-            </span>
-
             {/* Match code — tabular */}
             <span className="w-16 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">
               {formatMatchIdentity(match.identity, match.id)}
@@ -123,7 +101,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
                 tablet it runs on. */}
             <span className="min-w-[10rem] flex-1 break-words text-sm">
               {match.sideA}
-              <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
+              <span className="px-1.5 text-xs uppercase tracking-[0.06em] text-muted-foreground">
                 v
               </span>
               {match.sideB}
@@ -214,7 +192,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
                   e.stopPropagation();
                   onSend(match.key);
                 }}
-                className={`flex-shrink-0 rounded-sm px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-opacity duration-fast ease-brand hover:text-accent focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:text-ink-faint ${
+                className={`flex-shrink-0 rounded-sm px-1.5 py-1 text-xs font-medium text-muted-foreground transition-opacity duration-fast ease-brand hover:text-accent focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:text-ink-faint ${
                   isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                 }`}
               >
@@ -227,7 +205,7 @@ export function RunQueue({ queue, selectedKey, onSelect, lateKeys, busyKeys, res
                 Empty on purpose: reserving the height NOW means the rows don't
                 reflow the day the reason text ships. Aligned under the sides
                 column (past #n's w-6 + gap-3). */}
-            <div aria-hidden className="min-h-4 pl-9 text-2xs text-muted-foreground" />
+            <div aria-hidden className="min-h-4 pl-9 text-xs text-muted-foreground" />
           </li>
         );
       })}

@@ -74,7 +74,7 @@ from core.form_csrf import FORM_FIELD, PLAY_CSRF_COOKIE
 from core.form_csrf import form_csrf_token as _form_csrf
 from core.tournament_phase import TournamentPhase, derive_tournament_phase
 from core.demo_clock import utcnow as _demo_utcnow
-from db.models import EntryEvent, EntryPage, Org, Tournament
+from db.models import Entry, EntryEvent, EntryPage, Org, Tournament
 from repositories import LocalRepository, get_repository
 # SP-REORG-1 R1: the three throttle symbols this module uses are
 # infrastructure, not identity. Importing them from core is what deletes
@@ -91,6 +91,20 @@ log = logging.getLogger("scheduler.entries.entries_json")
 
 def _record_entry_attempt(session, throttle_key: str) -> None:
     throttle.throttle_record_entry(session, throttle_key)
+
+
+def _record_invite_mail_outcome(session, entry_id, tournament_id, sent: bool) -> None:
+    """Persist whether a partner invite actually sent (V3-PE37.1).
+
+    A short, separate transaction rather than folding this onto the
+    submission write: the mail send happens AFTER that commit (see the call
+    site), so there is no open transaction left to extend, and re-reading the
+    row by its compound key is cheaper than threading a live ORM instance
+    across the boundary.
+    """
+    entry = session.get(Entry, (tournament_id, entry_id))
+    if entry is not None:
+        entry.partner_invite_mail_sent = sent
 
 
 def _create_submission_and_charge(
@@ -167,8 +181,8 @@ def _entries_have_closed(events, now) -> bool:
     return not any(_event_is_open(ev, now) for ev in events)
 
 
-def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: str) -> None:
-    """Mail one doubles invite.
+def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: str) -> bool:
+    """Mail one doubles invite. Returns whether it actually sent.
 
     **The body names the inviter and the event and nothing else.** It goes to
     an address a stranger typed into a form, so it must not disclose anything
@@ -178,6 +192,14 @@ def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: st
 
     Delivery failure is logged, never raised: a submission that succeeded
     must not 500 because a mail server was slow, and the desk can re-send.
+
+    The bool return is not currently carried onto the submission's redirect:
+    that Location is deliberately outcome-independent (see the call site's
+    comment on ``result.replayed``) so a retried post lands on the same URL
+    as the original. There is also no entrant-facing resend action for a
+    partner invite yet (no edit-entry route exists), so there is nowhere
+    truthful to point a "the invite failed" notice today — logging here is
+    where an operator can act on it until that exists (tracked as debt).
     """
     from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
     from core.email import send_email
@@ -201,8 +223,10 @@ def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: st
                 f"\n\n{BRAND_SIGNATURE}"
             ),
         )
+        return True
     except Exception:
         log.exception("entries: partner invite delivery failed")
+        return False
 
 
 # ---- DTOs ----------------------------------------------------------------
@@ -271,6 +295,8 @@ class EventDTO(BaseModel):
     # write agree about which events need a year.
     ageBracketed: bool
     entryCount: int
+    # Registered entry rows, explicitly distinct from draw participants.
+    registrationCount: int = 0
 
 
 class EntrantRowDTO(BaseModel):
@@ -439,11 +465,12 @@ def entry_page_projection(
                 str(bool(page.entrants_published)),
                 str(bool(page.draws_published)),
                 str(bool(page.results_published)),
+                str(page.audience),
             )
         ).encode("utf-8")
     ).hexdigest()[:24]
     response.headers["ETag"] = f'"{page_revision}"'
-    response.headers["Cache-Control"] = "public, max-age=30"
+    response.headers["Cache-Control"] = "public, no-cache"
     if request.headers.get("If-None-Match") in {page_revision, f'"{page_revision}"'}:
         return Response(status_code=304, headers={"ETag": f'"{page_revision}"'})  # type: ignore[return-value]
     entrant, token = _optional_entrant(request, repo)
@@ -553,6 +580,7 @@ def entry_page_projection(
                 isOpen=_event_is_open(ev, now),
                 ageBracketed=_is_age_bracketed(ev),
                 entryCount=counts.get(ev.id, 0),
+                registrationCount=counts.get(ev.id, 0),
             )
             for ev in events
         ],
@@ -632,7 +660,17 @@ def entrant_config() -> EntrantConfigDTO:
 class SeasonRowDTO(BaseModel):
     """One calendar row (SP-P8 §3): tournament-level facts ONLY — no entrant
     data, no entry counts, no pricing. The key-set test in
-    ``test_season_listing.py`` reddens on any added field."""
+    ``test_season_listing.py`` reddens on any added field.
+
+    V3-PE01.2/PE01.3 additions: ``closesAt`` + ``timeZone`` carry the exact
+    tournament-timezone instant the tier's "Entries close …" primary copy
+    needs (a relative "closes in Nd" alone gives no durable deadline once a
+    screenshot outlives the day it was taken) — the tier's own
+    ``formatMomentInZone`` (D11) does the rendering, this DTO only supplies
+    the wire moment and the zone name. ``locality`` is a best-effort
+    city/country line derived from the free-text venue address so a
+    discovery row states where a tournament is without opening it.
+    """
 
     slug: str
     name: Optional[str] = None
@@ -642,6 +680,12 @@ class SeasonRowDTO(BaseModel):
     eventCount: int
     status: str
     closesInDays: Optional[int] = None
+    # The same instant `closesInDays` counts down to, as the pinned
+    # "%Y-%m-%d %H:%M UTC" wire moment (`_moment`) — present only while the
+    # row is `entries_open`, mirroring `closesInDays` exactly.
+    closesAt: Optional[str] = None
+    timeZone: str = "UTC"
+    locality: Optional[str] = None
     drawsPublished: bool
     winnersPublished: bool
 
@@ -660,6 +704,33 @@ class SeasonListDTO(BaseModel):
     tournaments: List[SeasonRowDTO]
     counts: SeasonCountsDTO
     now: Optional[NowStripDTO] = None
+
+
+def _locality(address: Optional[str]) -> Optional[str]:
+    """A best-effort "City, Country" line out of a free-text venue address
+    (V3-PE01.3). There is no structured city/country column (D2) — organizers
+    type one address string — so this is a heuristic over the common
+    "…, City, Country" convention, not a parser: it takes the LAST TWO
+    comma-separated segments, which is where locality sits in that
+    convention, and returns `None` rather than a guess when the address
+    carries no comma (rule 4: omit, never invent).
+
+    A second, unrelated convention shows up in the same free-text field: some
+    callers (the demo simulator's seed data, at least — V3-26-7) pack an
+    itinerary into it as "<place>; <date range>; <draw format>", e.g.
+    "Asan, South Korea; 4-9 August; 32MS/32WS/32MD/32WD/32XD" for the T030
+    fixture. The place always sits before the first ";" in that convention,
+    so a semicolon split narrows the input to the place BEFORE the
+    comma-based extraction runs — a no-op for addresses that never had a
+    semicolon.
+    """
+    if not address:
+        return None
+    place = address.split(";", 1)[0].strip()
+    parts = [part.strip() for part in place.split(",") if part.strip()]
+    if len(parts) < 2:
+        return None
+    return f"{parts[-2]}, {parts[-1]}"
 
 
 @router.get("/pages", response_model=SeasonListDTO)
@@ -683,7 +754,7 @@ def entry_page_list(
         select(EntryPage, Tournament, Org)
         .join(Tournament, Tournament.id == EntryPage.tournament_id)
         .outerjoin(Org, Org.id == Tournament.org_id)
-        .where(EntryPage.is_open.is_(True)),
+        .where(EntryPage.is_open.is_(True), EntryPage.audience == "public"),
     )
     tids = [t.id for _, t, _ in listed]
     events_by_tid: Dict[uuid.UUID, list] = {}
@@ -708,6 +779,22 @@ def entry_page_list(
             results_published=bool(page.results_published),
             now=now,
         )
+        # The exact instant `closes_in_days` counts down to (V3-PE01.2) — the
+        # same "nearest open-event deadline" `closes_in_days` above already
+        # derives, restated as the pinned wire moment rather than a day
+        # count. `None` whenever `closes_in_days` is (closed, or open with no
+        # deadline set), so the tier never pairs a countdown with no exact
+        # date or vice versa.
+        open_deadlines = [
+            ev.closes_at
+            for ev in events
+            if ev.closes_at is not None and _event_is_open(ev, now)
+        ]
+        closes_at = (
+            _moment(min(open_deadlines))
+            if closes_in_days is not None and open_deadlines
+            else None
+        )
         rows.append(SeasonRowDTO(
             slug=page.slug,
             name=tournament.name,
@@ -721,13 +808,16 @@ def entry_page_list(
             eventCount=len(events),
             status=status,
             closesInDays=closes_in_days,
+            closesAt=closes_at,
+            timeZone=getattr(tournament, "time_zone", None) or "UTC",
+            locality=_locality(page.venue_address),
             drawsPublished=bool(page.draws_published),
             winnersPublished=bool(page.results_published),
         ))
     rows.sort(key=lambda r: (r.date is None, r.date or "", r.slug))
 
     live = [r for r in rows if r.status == "in_progress_live"]
-    response.headers["Cache-Control"] = "public, max-age=30"
+    response.headers["Cache-Control"] = "public, no-cache"
     return SeasonListDTO(
         tournaments=rows,
         counts=SeasonCountsDTO(
@@ -1281,12 +1371,24 @@ async def submit_entry_json(
     # lose by being fast; re-sending is cheap and un-sending is impossible.
     # A replay mints nothing, so a retried post does not re-mail anybody.
     for entry, token in result.invites:
-        _send_partner_invite(
+        sent = _send_partner_invite(
             entry=entry,
             token=token,
             tournament_name=tournament.name,
             inviter=entrant.display_name or entrant.email,
         )
+        # V3-PE37.1: the mail outcome is now durable on the nominating
+        # entry, so `entries_me.my_entries` can tell the entrant the truth
+        # instead of only logging it for an operator (package 05 debt,
+        # "Partner-invite delivery failure has no entrant-facing recovery
+        # path"). A failure here must not fail the submission that already
+        # succeeded — swallow, same posture as `_send_partner_invite` itself.
+        try:
+            repo.execute_transaction(
+                _record_invite_mail_outcome, entry.id, tournament.id, sent
+            )
+        except Exception:
+            log.exception("entries: could not persist partner invite mail outcome")
     # 303, not 302: the browser must re-issue as GET. A replay redirects to
     # the SAME receipt — a retrying client that saw a different answer would
     # conclude its first attempt had failed.
@@ -1307,9 +1409,18 @@ async def submit_entry_json(
     # A tournament that priced nothing has not declared its entries free, so
     # the key is absent rather than ``0``: ``None`` stringified would read as a
     # total of "None", and a zero would be a claim about money nobody made.
+    #
+    # V3-24-1: the path segment is the submission's SHORT REFERENCE, not its
+    # UUID. It is the string the receipt prints under "Reference" and the one
+    # the entrant reads back to an organizer, so it is also the one in the
+    # address bar — an entrant who can see two different identifiers for one
+    # entry has been given a puzzle instead of a receipt. A replay answers
+    # the same submission and therefore the same reference, so the Location
+    # is still byte-identical to the original's.
     total_cents = result.submission.fee_total_cents
     query = "" if total_cents is None else f"?{urlencode({'totalCents': total_cents})}"
+    reference = quote(result.submission.short_reference, safe="")
     return RedirectResponse(
-        url=f"/e/{quote(page.slug, safe='')}/receipt/{result.submission.id}{query}",
+        url=f"/e/{quote(page.slug, safe='')}/receipt/{reference}{query}",
         status_code=303,
     )

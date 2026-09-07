@@ -10,7 +10,7 @@
 import { useMemo, useState } from 'react';
 import type { OpsBlock } from './opsBlock';
 import type { OperationalAction } from './operationalWriteback';
-import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
+import { EYEBROW_CLASS, INTERACTIVE_BASE, ACCENT_PRESS } from '../../lib/utils';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../lib/selectableRow';
 import { STATE_WORD } from '../../lib/stateWords';
 import { InlineSearch } from '../../components/InlineSearch';
@@ -31,11 +31,11 @@ interface Props {
 
 const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm border border-border ` +
-  `bg-card px-2 py-0.5 text-2xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground ` +
+  `bg-card px-2 py-0.5 text-xs font-medium text-card-foreground hover:bg-muted/40 hover:text-foreground ` +
   `disabled:cursor-not-allowed disabled:opacity-50`;
 const primaryBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center rounded-sm bg-accent px-2 py-0.5 ` +
-  `text-2xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`;
+  `text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:cursor-not-allowed disabled:opacity-50`;
 
 function RowActions({
   b,
@@ -76,7 +76,7 @@ function RowActions({
   }
   // bracket
   if (!assigned) {
-    return <span className="text-2xs text-muted-foreground">awaiting court</span>;
+    return <span className="text-xs text-muted-foreground">awaiting court</span>;
   }
   if (!b.started) {
     return (
@@ -101,6 +101,13 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
   const [query, setQuery] = useState('');
   const [sources, setSources] = useState<Set<string>>(() => new Set());
 
+  // V3-OC18.1: a filter chip for a category the list never varies on is
+  // internal bookkeeping dressed as a control (X16) — a single-engine
+  // workspace has nothing for "Match type" to narrow. The chip renders only
+  // once both engines are actually present in the list.
+  const sourcesPresent = useMemo(() => new Set(blocks.map((b) => b.source)), [blocks]);
+  const showMatchTypeFilter = sourcesPresent.size > 1;
+
   // Search matches the row's code AND its player names — finding "where is
   // Aiden playing next" is the desk's real lookup. Source chips narrow to
   // one engine; no active chip means both.
@@ -114,23 +121,31 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
     });
   }, [blocks, searchable, query, sources]);
 
-  const { upNext, waiting, finished } = useMemo(() => {
-    const up = visible
-      .filter((b) => b.court != null && !b.done)
+  // V3-OC05.1: a match already on court is not "up next" — the two headings
+  // must not overlap. `onCourt` is the assigned-and-started subset; `upNext`
+  // is everything assigned but NOT yet started (the genuinely upcoming set).
+  const { onCourt, upNext, waiting, finished } = useMemo(() => {
+    const assigned = visible.filter((b) => b.court != null && !b.done);
+    const current = assigned
+      .filter((b) => b.started)
+      .sort((x, y) => (x.slot ?? 0) - (y.slot ?? 0) || (x.court ?? 0) - (y.court ?? 0));
+    const up = assigned
+      .filter((b) => !b.started)
       .sort((x, y) => (x.slot ?? 0) - (y.slot ?? 0) || (x.court ?? 0) - (y.court ?? 0));
     const wait = visible.filter((b) => b.court == null && !b.done);
     const fin = visible.filter((b) => b.done);
-    return { upNext: up, waiting: wait, finished: fin };
+    return { onCourt: current, upNext: up, waiting: wait, finished: fin };
   }, [visible]);
 
   const row = (b: OpsBlock, showLocation: boolean, showStatusMarker: boolean) => {
-    const dot = b.done
-      ? 'bg-status-done'
+    // Shared match-state vocabulary (contract §2) — no screen-local synonym.
+    const statusLabel = b.done
+      ? STATE_WORD.done
       : b.started
-        ? 'bg-status-live'
+        ? STATE_WORD.onCourt
         : b.court != null
-          ? 'bg-status-called'
-          : 'bg-muted-foreground';
+          ? STATE_WORD.called
+          : STATE_WORD.pending;
     const isSelected = selectedKey === b.key;
     return (
       <li
@@ -141,7 +156,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
         // Courts omits `onSelect` for a read-only overview — a row with nothing
         // to activate must not be focusable (audit G1).
         {...(onSelect ? selectableRowProps(() => onSelect(b.key), isSelected) : {})}
-        // `flex-wrap`: same fix as the Run queue rows — at 390px the dot,
+        // `flex-wrap`: status, code and court columns wrap before names,
         // code and court columns plus the action buttons left the sides
         // column ~72px, so `break-words` broke names MID-WORD ("Damo/n
         // Ferraro"). Columns wrap to a second line; sides keeps a 10rem floor.
@@ -151,10 +166,11 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
       >
         {showStatusMarker ? (
           <span
-            aria-hidden
             data-testid="ops-status-marker"
-            className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`}
-          />
+            className="flex-shrink-0 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground"
+          >
+            {statusLabel}
+          </span>
         ) : null}
         {/* Same match-code grammar as the Run queue rows. */}
         <span className="w-20 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">{formatMatchIdentity(b.identity, b.id)}</span>
@@ -168,7 +184,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
         ) : null}
         <span className="min-w-[10rem] flex-1 break-words text-2sm">
           {b.sideA}
-          <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">vs</span>
+          <span className="px-1.5 text-xs uppercase tracking-[0.06em] text-muted-foreground">vs</span>
           {b.sideB}
         </span>
         {onAction ? (
@@ -183,12 +199,9 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
   const section = (title: string, items: OpsBlock[]) => {
     if (items.length === 0) return null;
     const showLocation = items.some((candidate) => candidate.court != null);
-    const statusMarkers = new Set(
-      items.map((candidate) =>
-        candidate.done ? 'done' : candidate.started ? 'started' : candidate.court != null ? 'called' : 'waiting',
-      ),
-    );
-    const showStatusMarker = statusMarkers.size > 1;
+    // State must remain readable when color is removed, even when a section
+    // happens to contain only one state (for example an all-called Up next).
+    const showStatusMarker = true;
     return (
       <>
         <li className={`border-y border-border bg-muted/40 px-4 py-1 ${EYEBROW_CLASS} text-muted-foreground`}>
@@ -220,23 +233,31 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
               setQuery('');
               setSources(new Set());
             }}
-            filters={[
-              {
-                label: 'Engine',
-                options: [
-                  { id: 'meet', label: MODULE_LABELS.meet },
-                  { id: 'bracket', label: MODULE_LABELS.bracket },
-                ],
-                active: sources,
-                onToggle: (id) =>
-                  setSources((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id);
-                    else next.add(id);
-                    return next;
-                  }),
-              },
-            ]}
+            filters={
+              showMatchTypeFilter
+                ? [
+                    {
+                      // V3-OC18.1: "Engine" named the internal category
+                      // (meet/bracket are engines to the codebase, not to
+                      // an operator); "Match type" names what the chip
+                      // actually narrows.
+                      label: 'Match type',
+                      options: [
+                        { id: 'meet', label: MODULE_LABELS.meet },
+                        { id: 'bracket', label: MODULE_LABELS.bracket },
+                      ],
+                      active: sources,
+                      onToggle: (id) =>
+                        setSources((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(id)) next.delete(id);
+                          else next.add(id);
+                          return next;
+                        }),
+                    },
+                  ]
+                : []
+            }
           />
         </div>
       ) : null}
@@ -244,6 +265,7 @@ export function UnifiedOpsList({ blocks, selectedKey, onSelect, onAction, search
           (`border-y`) whose top border IS the board→list seam — one hairline per
           seam (seamed, not gapped). */}
       <ul className="divide-y divide-border/60">
+        {section(STATE_WORD.onCourt, onCourt)}
         {section('Up next', upNext)}
         {section(STATE_WORD.pending, waiting)}
         {section('Finished', finished)}

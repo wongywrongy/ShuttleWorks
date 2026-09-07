@@ -16,7 +16,7 @@
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { Download } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
-import { INTERACTIVE_BASE } from '../../lib/utils';
+import { INTERACTIVE_BASE, ACCENT_PRESS } from '../../lib/utils';
 import {
   ActionsBar,
   DenseDataTable,
@@ -58,7 +58,7 @@ const ROSTER_COLUMNS: BandedTableColumn[] = [
   // Player is the one elastic identity column.
   { label: 'Player', className: `${NAME_COL_MIN} flex-1` },
   { label: 'Events', className: 'w-40 shrink-0' },
-  { label: 'Issues', className: 'w-28 shrink-0' },
+  { label: 'Issues', className: 'w-20 shrink-0' },
   { label: '', className: 'w-8 shrink-0' },
 ];
 
@@ -117,10 +117,20 @@ function BracketRosterTabCore({
     [badgesById],
   );
 
-  const [denseState, denseActions] = useDenseDataState({}, 'bracket-roster');
+  // V3-OC14.1: a large roster with no default order (insertion order) reads
+  // as unsorted noise with no way to tell whether that IS the current sort.
+  // Opening sorted by Player gives the table an explicit, visible sort state
+  // from the start — DenseDataTable already exposes it via aria-sort + the
+  // header's sort icon, and its own header button already changes it.
+  const [denseState, denseActions] = useDenseDataState(
+    { sort: { id: 'player', direction: 'asc' } },
+    'bracket-roster',
+  );
   const setDenseState = denseActions.setState;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
+  const [eventFilter, setEventFilter] = useState('all');
+  const [issueFilter, setIssueFilter] = useState('all');
   const [draft, setDraft] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     typeof window === 'undefined'
@@ -181,12 +191,19 @@ function BracketRosterTabCore({
         );
       },
     },
-    { id: 'issue', label: 'Issues', accessor: (row) => row.issue, className: 'w-28', mobile: true, render: (value) => value ? <span className="font-medium text-status-warning">{String(value)}</span> : null },
+    { id: 'issue', label: 'Issues', accessor: (row) => row.issue, className: 'w-20', strictWidth: 'w-20', mobile: true, render: (value) => value ? <span className="font-medium text-status-warning">{String(value)}</span> : null },
   ], [badgesById]);
-  const filteredCount = useMemo(() => {
+  const eventOptions = useMemo(() => [...new Set(rosterRows.flatMap((row) => row.eventLabel.split(' · ').filter(Boolean)))].sort(), [rosterRows]);
+  const filteredRows = useMemo(() => {
     const query = denseState.search.trim().toLocaleLowerCase();
-    return query ? rosterRows.filter((row) => `${row.player.name} ${row.eventLabel} ${row.issue}`.toLocaleLowerCase().includes(query)).length : rosterRows.length;
-  }, [denseState.search, rosterRows]);
+    return rosterRows.filter((row) => {
+      const matchesQuery = !query || `${row.player.name} ${row.eventLabel} ${row.issue}`.toLocaleLowerCase().includes(query);
+      const matchesEvent = eventFilter === 'all' || row.eventLabel.split(' · ').includes(eventFilter);
+      const matchesIssue = issueFilter === 'all' || (issueFilter === 'issues' ? Boolean(row.issue) : !row.issue);
+      return matchesQuery && matchesEvent && matchesIssue;
+    });
+  }, [denseState.search, eventFilter, issueFilter, rosterRows]);
+  const filteredCount = filteredRows.length;
 
   const commitAdd = () => {
     const name = draft.trim();
@@ -258,9 +275,9 @@ function BracketRosterTabCore({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110`}
+          className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS}`}
         >
-          ＋ Add player
+          Add player
         </button>
       </ActionsBar>
 
@@ -275,6 +292,19 @@ function BracketRosterTabCore({
             onStateChange={setDenseState}
             selectedCount={selectedIds.length}
           >
+            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              Event
+              <select aria-label="Filter by event" value={eventFilter} onChange={(event) => setEventFilter(event.target.value)} className="h-8 rounded border border-border-control bg-card px-2 text-xs text-foreground">
+                <option value="all">All events</option>
+                {eventOptions.map((event) => <option key={event} value={event}>{event}</option>)}
+              </select>
+            </label>
+            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              Issues
+              <select aria-label="Filter by issues" value={issueFilter} onChange={(event) => setIssueFilter(event.target.value)} className="h-8 rounded border border-border-control bg-card px-2 text-xs text-foreground">
+                <option value="all">All</option><option value="issues">Needs attention</option><option value="clear">No issues</option>
+              </select>
+            </label>
             <DenseDataColumnVisibility
               columns={rosterColumns}
               state={denseState}
@@ -298,7 +328,7 @@ function BracketRosterTabCore({
           </DenseDataToolbar>
           <DenseDataTable
             columns={rosterColumns}
-            rows={rosterRows}
+            rows={filteredRows}
             state={denseState}
             onStateChange={setDenseState}
             rowId={(row) => row.player.id}
@@ -312,6 +342,7 @@ function BracketRosterTabCore({
             rowTestId={(row) => `roster-row-${row.player.id}`}
              renderActions={(row) => <OverflowMenu label={`Actions for ${row.player.name}`} items={rowOverflowItems(row.player)} />}
             strictRows
+            strictRowHeight="roster"
             elasticColumnId="player"
             emptyState={players.length === 0 ? 'No players yet. Add the first one.' : 'No players match the current view.'}
           />
@@ -339,7 +370,7 @@ function BracketRosterTabCore({
               actually on screen. One footnote for the whole table, not a
               per-row repetition and not a permanent header annotation. */}
           {anySeeded && (
-            <p className="px-5 pb-4 pt-2 text-3xs text-muted-foreground">
+            <p className="px-5 pb-4 pt-2 text-xs text-muted-foreground">
               <span className="sw-num">[n]</span> after an event code is that
               player&rsquo;s seed in the draw.
             </p>

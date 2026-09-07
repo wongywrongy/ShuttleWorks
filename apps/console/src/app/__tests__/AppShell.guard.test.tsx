@@ -61,9 +61,10 @@ describe('resolveActivePane — unknown/absent module fails closed', () => {
       // A label, not a raw id — the module has no row to read one off.
       expect(r.label).toBe('Entries');
       // COPY-1: no fallback note. The panel's own title already says
-      // "Entries isn't available in this workspace"; the fallback restated it
-      // uncontracted underneath, so the surface said one sentence twice. A
-      // note appears only when the catalog supplies a real reason.
+      // "Entries isn't available for this tournament type"; the fallback
+      // restated it uncontracted underneath, so the surface said one
+      // sentence twice. A note appears only when the catalog supplies a
+      // real reason.
       expect(r.note).toBeUndefined();
       // And a way out, rather than a dead end.
       expect(r.primary).toBe('meet');

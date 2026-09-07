@@ -35,7 +35,7 @@ import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { EntrantSessionContext } from '../lib/sessionContext';
 import type { Route } from './+types/verify';
-import { CARD } from '../lib/ui';
+import { CARD, PAGE_TITLE } from '../lib/ui';
 
 /** Suffixes of the two outcome paths bound to this module (`app/routes.ts`). */
 const DONE_SUFFIX = '/done';
@@ -61,6 +61,11 @@ export interface VerifyLoaderData {
   verified: boolean;
   failed: boolean;
   sent: boolean;
+  /** `sent` page only: the resend route's own outcome, carried on `?ok=0`.
+   * This route is session-gated (not enumeration-sensitive like signup or
+   * reset-request), so it is safe to tell the entrant the truth rather than
+   * always claiming the mail went out. */
+  mailFailed: boolean;
 }
 
 export async function loader({ request }: { request: Request }) {
@@ -73,6 +78,7 @@ export async function loader({ request }: { request: Request }) {
     verified: url.pathname.endsWith(DONE_SUFFIX),
     failed: url.pathname.endsWith(FAILED_SUFFIX),
     sent: url.pathname.endsWith(SENT_SUFFIX),
+    mailFailed: url.searchParams.get('ok') === '0',
   };
   return data(payload, csrf.responseInit);
 }
@@ -87,15 +93,15 @@ export const meta: Route.MetaFunction = () => [
 ];
 
 export default function VerifyPage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, token, verified, failed, sent } = loaderData;
+  const { formCsrf, token, verified, failed, sent, mailFailed } = loaderData;
   const signedIn = useContext(EntrantSessionContext);
 
   return (
     <PlayShell>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Confirm your email
+          <h1 className={PAGE_TITLE}>
+            {verified ? 'Email confirmed' : 'Confirm your email'}
           </h1>
           <p className="text-sm text-muted-foreground">
             Organizers accept entries from confirmed addresses. This is a
@@ -105,9 +111,13 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
 
         {verified ? (
           <div className={`grid gap-4 ${CARD}`}>
+            {/* V3-PE26.1: a confirmed address is not a delivered entry.
+                Confirmation and entry status are separate, verified
+                outcomes — this page proves only the first, so it never
+                claims the second. */}
             <Notice tone="success">
-              Your email address is confirmed. Any entries you already sent are
-              now with the organizer.
+              Your email is confirmed. View My entries to check each entry&apos;s
+              status.
             </Notice>
             <Button asChild className="justify-self-start">
               <a href="/e/me/entries">See my entries</a>
@@ -121,8 +131,8 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
              every one of those cases, which is why no diagnosis is owed. */
           <div className={`grid gap-4 ${CARD}`}>
             <Notice tone="warning">
-              That confirmation link is no longer usable. Your saved entries
-              are unchanged, and a fresh link will replace this one.
+              This confirmation link is invalid or has expired. Your saved
+              entries are unchanged.
             </Notice>
             {signedIn ? (
               <form method="post" action="/e/account/resend-verification">
@@ -139,17 +149,38 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
 
         {sent ? (
           <div className={`grid gap-4 ${CARD}`}>
-            <Notice tone="success">
-              A fresh confirmation link has been sent to your account email.
-              Open the newest message; your saved entries are unchanged.
-            </Notice>
-            <p className="text-sm text-muted-foreground">
-              Delivery can take a few minutes. Check spam or junk mail before
-              requesting another link.
-            </p>
-            <Button asChild variant="outline" className="justify-self-start">
-              <a href="/e/me/entries">See my entries</a>
-            </Button>
+            {mailFailed ? (
+              <>
+                <Notice tone="warning">
+                  We could not send the email. Try again in a moment, or
+                  contact the organizer.
+                </Notice>
+                {signedIn ? (
+                  <form method="post" action="/e/account/resend-verification">
+                    <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+                    <Button type="submit">Try again</Button>
+                  </form>
+                ) : (
+                  <Button asChild variant="outline" className="justify-self-start">
+                    <a href="/e/login?next=/e/verify/failed">Sign in to request a new link</a>
+                  </Button>
+                )}
+              </>
+            ) : (
+              <>
+                <Notice tone="success">
+                  Confirmation email sent. Open the latest email to confirm your
+                  address.
+                </Notice>
+                <p className="text-sm text-muted-foreground">
+                  Delivery can take a few minutes. Check spam or junk mail before
+                  requesting another link.
+                </p>
+                <Button asChild variant="outline" className="justify-self-start">
+                  <a href="/e/me/entries">See my entries</a>
+                </Button>
+              </>
+            )}
           </div>
         ) : null}
 
@@ -166,6 +197,21 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
                   Confirm my email
                 </Button>
               </form>
+            ) : signedIn ? (
+              /* V3-PE25.1: a signed-in visitor who lost the link's query
+                 (typed the bare URL, or a mail client rewrote it) can resend
+                 right here instead of being sent through sign-in again to
+                 reach a control this page can show directly. */
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Open the confirmation link from the email we sent you, or
+                  request a new one below.
+                </p>
+                <form method="post" action="/e/account/resend-verification">
+                  <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+                  <Button type="submit">Send a new confirmation email</Button>
+                </form>
+              </>
             ) : (
               /* Reached by typing the URL, or by a link that lost its query
                  in a mail client's rewriting. Not an error state — nothing

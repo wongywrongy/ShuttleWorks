@@ -16,6 +16,7 @@
  *   status, phone) round-trip untouched.
  */
 import { Button } from '@scheduler/design-system';
+import { Fragment, useState } from 'react';
 
 export type SetupRow = Record<string, unknown>;
 
@@ -23,7 +24,8 @@ export interface RowsColumn {
   field: string;
   label: string;
   /** `list` renders a text input holding a comma-separated string array. */
-  type?: 'text' | 'date' | 'time' | 'email' | 'list' | 'checkbox';
+  type?: 'text' | 'date' | 'time' | 'email' | 'list' | 'checkbox' | 'select';
+  options?: readonly { value: string; label: string }[];
   placeholder?: string;
 }
 
@@ -33,19 +35,30 @@ const INPUT_CLASS =
 function cellValue(row: SetupRow, column: RowsColumn): string {
   const value = row[column.field];
   if (column.type === 'list') {
-    return Array.isArray(value) ? value.map(String).join(', ') : '';
+    return Array.isArray(value) ? value.map((item) => {
+      const raw = String(item);
+      return column.options?.find((option) => option.value === raw)?.label ?? raw;
+    }).join(', ') : '';
   }
   return value == null ? '' : String(value);
 }
 
 function parsedValue(raw: string, column: RowsColumn): unknown {
   if (column.type === 'list') {
+    const options = column.options ?? [];
     return raw
       .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean);
+      .map((part) => {
+        const trimmed = part.trim();
+        return options.find((option) => option.label === trimmed)?.value ?? trimmed;
+      })
+      .filter((part) => part.trim() !== '')
   }
   return raw;
+}
+
+function listDraftValue(raw: string): string[] {
+  return raw.split(',').filter((part) => part.trim() !== '');
 }
 
 export function SetupRowsEditor({
@@ -64,7 +77,24 @@ export function SetupRowsEditor({
   /** Field defaults for a freshly added row; `id` is minted here. */
   newRow: () => SetupRow;
 }) {
-  const gridTemplate = `${columns.map((column) => (column.type === 'checkbox' ? 'auto' : 'minmax(0,1fr)')).join(' ')} auto`;
+  const [listDrafts, setListDrafts] = useState<Record<string, string>>({});
+  const listColumn = columns.find((column) => column.type === 'list');
+  const recordColumns = listColumn ? columns.filter((column) => column !== listColumn) : columns;
+  const gridTemplate = `${columns.map((column) => {
+    if (column.type === 'checkbox') return 'auto';
+    if (column.type === 'date') return 'minmax(9rem, 1fr)';
+    if (column.type === 'time') return 'minmax(7rem, .8fr)';
+    if (column.type === 'list') return 'minmax(11rem, 1.2fr)';
+    if (column.field === 'name') return 'minmax(11rem, 1.4fr)';
+    return 'minmax(7rem, 1fr)';
+  }).join(' ')} auto`;
+  const recordGridTemplate = `${recordColumns.map((column) => {
+    if (column.type === 'checkbox') return 'auto';
+    if (column.type === 'date') return 'minmax(8rem, 1.1fr)';
+    if (column.type === 'time') return 'minmax(6.5rem, .9fr)';
+    if (column.field === 'name') return 'minmax(0, 1.4fr)';
+    return 'minmax(0, 1fr)';
+  }).join(' ')} auto`;
 
   const patchRow = (index: number, field: string, value: unknown) => {
     onChange(rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
@@ -78,13 +108,13 @@ export function SetupRowsEditor({
       {rows.length ? (
         <div className="overflow-x-auto rounded-sm border border-border/60">
           <div
-            className="grid items-center gap-x-3 gap-y-2 px-3 py-2"
-            style={{ gridTemplateColumns: gridTemplate }}
+            className="grid min-w-0 items-center gap-x-3 gap-y-2 px-3 py-2"
+            style={{ gridTemplateColumns: listColumn ? recordGridTemplate : gridTemplate }}
           >
-            {columns.map((column) => (
+            {(listColumn ? recordColumns : columns).map((column) => (
               <span
                 key={column.field}
-                className="text-2xs font-medium uppercase tracking-[0.06em] text-muted-foreground"
+                className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground"
               >
                 {column.label}
               </span>
@@ -92,21 +122,126 @@ export function SetupRowsEditor({
             <span aria-hidden="true" />
             {rows.map((row, index) => {
               const rowKey = String(row.id ?? index);
+              if (listColumn) {
+                return (
+                  <Fragment key={rowKey}>
+                    {recordColumns.map((column) =>
+                      column.type === 'checkbox' ? (
+                        <input
+                          key={`${rowKey}-${column.field}`}
+                          type="checkbox"
+                          checked={Boolean(row[column.field])}
+                          onChange={(event) => patchRow(index, column.field, event.target.checked)}
+                          aria-label={`${column.label} for row ${index + 1}`}
+                          className="h-6 w-6 justify-self-start rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                      ) : column.type === 'select' ? (
+                        <select
+                          key={`${rowKey}-${column.field}`}
+                          value={cellValue(row, column)}
+                          onChange={(event) => patchRow(index, column.field, event.target.value)}
+                          aria-label={`${column.label} for row ${index + 1}`}
+                          className={INPUT_CLASS}
+                        >
+                          <option value="">Select {column.label.toLowerCase()}</option>
+                          {(column.options ?? []).map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          key={`${rowKey}-${column.field}`}
+                          type={column.type ?? 'text'}
+                          value={cellValue(row, column)}
+                          placeholder={column.placeholder}
+                          onChange={(event) => patchRow(index, column.field, parsedValue(event.target.value, column))}
+                          aria-label={`${column.label} for row ${index + 1}`}
+                          className={INPUT_CLASS}
+                        />
+                      ),
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onChange(rows.filter((_, i) => i !== index))}
+                      aria-label={`Remove row ${index + 1}`}
+                    >
+                      Remove
+                    </Button>
+                    <div className="col-span-full min-w-0">
+                      <span className="mb-1 block text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
+                        {listColumn.label}
+                      </span>
+                      {listColumn.options && listColumn.options.length > 0 ? (
+                        // V3-OC07.2: only existing courts can be selected — a
+                        // compact checkbox list, not a free-text string that
+                        // must be typed consistently. Selection is shown once
+                        // (the checked boxes themselves), not repeated below.
+                        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                          {listColumn.options.map((option) => {
+                            const selected = (Array.isArray(row[listColumn.field]) ? row[listColumn.field] as unknown[] : []).map(String);
+                            const checked = selected.includes(option.value);
+                            return (
+                              <label key={option.value} className="inline-flex min-h-6 items-center gap-1.5 text-sm text-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(event) => {
+                                    const next = event.target.checked
+                                      ? [...selected, option.value]
+                                      : selected.filter((value) => value !== option.value);
+                                    patchRow(index, listColumn.field, next);
+                                  }}
+                                  aria-label={`${option.label}: ${listColumn.label} for row ${index + 1}`}
+                                  className="h-4 w-4 rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
+                                />
+                                {option.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="whitespace-normal text-xs leading-4 text-muted-foreground">
+                          Add named courts in Venue and courts to assign them here.
+                        </p>
+                      )}
+                    </div>
+                  </Fragment>
+                );
+              }
               return [
                 ...columns.map((column) =>
-                  column.type === 'checkbox' ? (
+                  column.type === 'list' ? (
+                    <div key={`${rowKey}-${column.field}`} className="col-span-full min-w-0">
+                      <input type="text" value={listDrafts[`${rowKey}-${column.field}`] ?? cellValue(row, column)} placeholder={column.placeholder} onFocus={() => setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${column.field}`]: cellValue(row, column) }))} onChange={(event) => { setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${column.field}`]: event.target.value })); patchRow(index, column.field, listDraftValue(event.target.value)); }} onBlur={(event) => { patchRow(index, column.field, parsedValue(event.target.value, column)); setListDrafts((drafts) => { const next = { ...drafts }; delete next[`${rowKey}-${column.field}`]; return next; }); }} aria-label={`${column.label} for row ${index + 1}`} className={INPUT_CLASS} />
+                      <p className="mt-1 whitespace-normal text-xs leading-4 text-muted-foreground">{cellValue(row, column) || 'No courts assigned'}</p>
+                    </div>
+                  ) : column.type === 'checkbox' ? (
                     <input
                       key={`${rowKey}-${column.field}`}
                       type="checkbox"
                       checked={Boolean(row[column.field])}
                       onChange={(event) => patchRow(index, column.field, event.target.checked)}
                       aria-label={`${column.label} for row ${index + 1}`}
-                      className="h-4 w-4 justify-self-start rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
+                      className="h-6 w-6 justify-self-start rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
                     />
+                  ) : column.type === 'select' ? (
+                    <select
+                      key={`${rowKey}-${column.field}`}
+                      value={cellValue(row, column)}
+                      onChange={(event) => patchRow(index, column.field, event.target.value)}
+                      aria-label={`${column.label} for row ${index + 1}`}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="">Select {column.label.toLowerCase()}</option>
+                      {(column.options ?? []).map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
                   ) : (
                     <input
                       key={`${rowKey}-${column.field}`}
-                      type={column.type === 'list' ? 'text' : (column.type ?? 'text')}
+                      type={column.type ?? 'text'}
                       value={cellValue(row, column)}
                       placeholder={column.placeholder}
                       onChange={(event) => patchRow(index, column.field, parsedValue(event.target.value, column))}

@@ -128,6 +128,51 @@ def test_display_token_is_the_only_public_key(client, workspace):
     )
 
 
+def test_match_states_vocabulary_is_total_and_bidirectional(client, workspace):
+    """D4: the board's own ``/match-states`` DTO redirects to
+    ``shared.match_vocabulary`` and must not repeat
+    ``operations.match_state_routes.MatchStateDTO``'s four-value Literal,
+    which silently coerced ``retired`` (and any other unrecognised spelling)
+    to ``scheduled``. ``playing``/``started`` and ``retired`` must both
+    survive the round trip onto the public wire."""
+    import uuid as _uuid
+
+    from db.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    tid, token = workspace
+    state = {
+        "config": {
+            "intervalMinutes": 30, "dayStart": "09:00", "dayEnd": "18:00",
+            "breaks": [], "courtCount": 2, "defaultRestMinutes": 0,
+            "freezeHorizonSlots": 0, "tournamentName": "TV Night",
+        },
+        "groups": [{"id": "g1", "name": "Riverside"}],
+        "players": [
+            {"id": "p1", "name": "Alice", "groupId": "g1", "availability": []},
+            {"id": "p2", "name": "Bob", "groupId": "g1", "availability": []},
+        ],
+        "matches": [
+            {"id": "m-live", "sideA": ["p1"], "sideB": ["p2"], "durationSlots": 1},
+            {"id": "m-retired", "sideA": ["p1"], "sideB": ["p2"], "durationSlots": 1},
+        ],
+    }
+    assert client.put(f"/tournaments/{tid}/state", json=state).status_code == 200
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        repo.match_states.upsert(_uuid.UUID(tid), "m-live", {"status": "started"})
+        repo.match_states.upsert(_uuid.UUID(tid), "m-retired", {"status": "retired"})
+    finally:
+        session.close()
+
+    client.cookies.clear()
+    body = client.get(f"/display/{token}/match-states").json()
+    assert body["m-live"]["status"] == "started"
+    assert body["m-retired"]["status"] == "retired"
+
+
 def test_display_routes_have_no_mutation_surface(client, workspace):
     _, token = workspace
     client.cookies.clear()

@@ -460,3 +460,71 @@ check-fast:
 	npm run docs:build
 	@echo "--- docs freshness (advisory — never fails the gate) ---"
 	-npm run docs:freshness
+
+# === Shared tournament fixture (v3 consolidated plan, work package 01) ===
+# One reproducible Taipei/Korea fixture both apps can point at: a disposable
+# SQLite database, the frozen clock, T029+T030 seeded through the HTTP API,
+# a viewer invite, a structural check, an idempotent post-seed defects pass
+# (tools/fixture-defects.py), the console preview server AND the entrant SSR
+# server. See docs/how-to/run-the-shared-fixture.md.
+#
+# `fixture-up` starts tools/fixture-up.sh in the background and leaves it
+# running (Ctrl-C does not apply to a backgrounded make target); `fixture-down`
+# tears it down. Only one fixture instance is tracked at a time.
+.PHONY: fixture-up fixture-down surface-books-fixture
+
+FIXTURE_STATE_FILE ?= /tmp/shuttleworks-fixture-up.state.json
+FIXTURE_LOG_FILE ?= /tmp/shuttleworks-fixture-up.log
+
+fixture-up:
+	@if [ -f "$(FIXTURE_STATE_FILE)" ] && kill -0 "$$(jq -r .pid "$(FIXTURE_STATE_FILE)" 2>/dev/null)" 2>/dev/null; then \
+		echo "a fixture is already running — see $(FIXTURE_STATE_FILE), or run 'make fixture-down' first"; \
+		exit 1; \
+	fi
+	@rm -f "$(FIXTURE_STATE_FILE)"
+	FIXTURE_STATE_FILE="$(FIXTURE_STATE_FILE)" nohup bash tools/fixture-up.sh \
+		>"$(FIXTURE_LOG_FILE)" 2>&1 &
+	@echo "starting — tailing $(FIXTURE_LOG_FILE); Ctrl-C only stops the tail, not the fixture"
+	@echo "run 'make fixture-down' to tear it down"
+	@for _attempt in $$(seq 1 90); do \
+		if [ -s "$(FIXTURE_STATE_FILE)" ]; then break; fi; \
+		sleep 1; \
+	done
+	@if [ -s "$(FIXTURE_STATE_FILE)" ]; then \
+		jq -r '"fixture ready — " + .fixtureJson' "$(FIXTURE_STATE_FILE)"; \
+	else \
+		echo "fixture did not report ready in time; see $(FIXTURE_LOG_FILE)" >&2; exit 1; \
+	fi
+
+fixture-down:
+	@if [ ! -f "$(FIXTURE_STATE_FILE)" ]; then \
+		echo "no $(FIXTURE_STATE_FILE) — nothing to tear down"; \
+		exit 0; \
+	fi
+	@pid="$$(jq -r .pid "$(FIXTURE_STATE_FILE)" 2>/dev/null)"; \
+	if [ -n "$$pid" ] && [ "$$pid" != "null" ]; then kill "$$pid" 2>/dev/null || true; fi
+	@rm -f "$(FIXTURE_STATE_FILE)"
+	@echo "torn down"
+
+# The same surface-capture pipeline as `surface-books`, but against the local
+# fixture above instead of the Tailscale demo — no network dependency, and
+# the ids come from the fixture's own manifest rather than a hardcoded
+# default (tools/surface-capture.mjs's fallback WS_ID/SLUG).
+surface-books-fixture:
+	@if [ ! -s "$(FIXTURE_STATE_FILE)" ]; then \
+		echo "no running fixture — run 'make fixture-up' first"; exit 1; \
+	fi
+	@set -eu; \
+	fixture_json="$$(jq -r .fixtureJson "$(FIXTURE_STATE_FILE)")"; \
+	console_url="$$(jq -er .consoleBaseUrl "$$fixture_json")"; \
+	entrant_url="$$(jq -er .entrantBaseUrl "$$fixture_json")"; \
+	workspace_id="$$(jq -er .taipeiTid "$$fixture_json")"; \
+	display_token="$$(jq -er .displayToken "$$fixture_json")"; \
+	entrant_slug="$$(jq -er .koreaSlug "$$fixture_json")"; \
+	mkdir -p "$(SURFACE_REPORT_DIR)"; \
+	WS_ID="$$workspace_id" DISPLAY_TOKEN="$$display_token" \
+		node tools/surface-capture.mjs console "$$console_url" \
+		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
+	SLUG="$$entrant_slug" node tools/surface-capture.mjs entrant "$$entrant_url" \
+		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
+	@$(MAKE) --no-print-directory surface-books-status

@@ -24,10 +24,11 @@
  * `standingsMode` is written here AND consumed by `MeetDisplayPage` (Task 9
  * wired the panel-vs-rotate rendering there — see its standings-placement
  * section + `publicDisplay/standingsLayout.ts`). `BracketDisplayPage` never
- * reads it (courts/standings rendering is meet-only). Note this editor's own
- * `DisplayPreview` swatch still does NOT render standings (fixed
- * courts-only sample fixture — see that file's doc comment) — an
- * intentional preview-fidelity gap, not a bug.
+ * reads it (courts/standings rendering is meet-only). Package 16 removed the
+ * sample-data `DisplayPreview` swatch this editor used to sit beside — it
+ * was dead code (never mounted) and its fixed courts-only sample fixture
+ * could not have shown standings anyway; `DisplayConfig`'s "Preview
+ * fullscreen" action now opens the real published board instead.
  *
  * ---- Court order + hide (task 7) ------------------------------------
  * Below the tv* rows, a "Court order and visibility" list drives
@@ -182,7 +183,7 @@ function CourtOrderRow({
         >
           Court {courtId}
           {isNew && (
-            <span className="rounded-sm bg-action-selected-bg px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-action-selected-foreground">
+            <span className="rounded-sm bg-action-selected-bg px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-action-selected-foreground">
               New
             </span>
           )}
@@ -205,7 +206,7 @@ function CourtOrderRow({
           A hidden court with a live match does NOT auto-reappear (Q9); the
           director must explicitly click Show. */}
       {hidden && hasLiveMatch && (
-        <div className="mt-1 flex items-center justify-between gap-2 rounded-sm bg-action-selected-bg px-2 py-1 text-2xs text-action-selected-foreground">
+        <div className="mt-1 flex items-center justify-between gap-2 rounded-sm bg-action-selected-bg px-2 py-1 text-xs text-action-selected-foreground">
           <span>
             Court {courtId} (hidden) has a live match. Show it?
           </span>
@@ -408,7 +409,7 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
             onClick={resetCourtLayout}
             aria-label="Reset court order and visibility"
             title="Reset court order and visibility"
-            className="inline-flex items-center gap-1 rounded p-1 text-2xs text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded p-1 text-xs text-muted-foreground transition-colors duration-fast ease-brand hover:text-foreground"
           >
             <ArrowCounterClockwise aria-hidden className="h-3.5 w-3.5" />
             Reset
@@ -430,7 +431,7 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
           ))}
         </SortableContext>
       </DndContext>
-      <p className="pb-3 pt-2 text-2xs text-muted-foreground">
+      <p className="pb-3 pt-2 text-xs text-muted-foreground">
         Hiding a court affects this board only. Operations are untouched.
       </p>
     </Section>

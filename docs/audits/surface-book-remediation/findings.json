@@ -1,0 +1,2142 @@
+[
+  {
+    "id": "OC02.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Running legend conflicts with row dots",
+    "sourcePage": "5",
+    "reviewPage": "114",
+    "acceptance": "Completed and live rows are distinguishable without color.",
+    "surfaces": [
+      "OC01",
+      "OC02"
+    ],
+    "files": [
+      "apps/console/src/components/control-plane/HealthDot.tsx",
+      "apps/console/src/modules/hub/HubPage.tsx",
+      "apps/console/src/modules/hub/WorkspaceRow.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/4/2/3",
+    "routes": [
+      "/login",
+      "/"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC02.2",
+    "tier": "operator",
+    "severity": 1,
+    "effort": "M",
+    "finding": "Boxed glyphs precede creation actions",
+    "sourcePage": "5",
+    "reviewPage": "126",
+    "acceptance": "No replacement-character boxes in creation actions at capture scale.",
+    "surfaces": [
+      "OC02",
+      "OC14",
+      "OC15",
+      "OC32",
+      "OC33"
+    ],
+    "files": [
+      "apps/console/src/modules/hub/HubPage.tsx",
+      "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "apps/console/src/modules/bracket/BracketRosterTab.tsx",
+      "apps/console/src/modules/bracket/BracketDrawsTab.tsx",
+      "apps/console/src/app/workspace/ModuleUnavailablePanel.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/4/2/3",
+    "routes": [
+      "/",
+      "/tournaments/:id/participants/people",
+      "/tournaments/:id/competition/draws",
+      "/tournaments/:id/roster (guard)",
+      "/tournaments/:id/matches (guard)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC03.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "H",
+    "finding": "Creation choices describe implementation",
+    "sourcePage": "7",
+    "reviewPage": "124",
+    "acceptance": "A first-time organizer can explain each option without knowing an engine or solver.",
+    "surfaces": [
+      "OC03",
+      "OC26"
+    ],
+    "files": [
+      "apps/console/src/modules/hub/NewWorkspacePage.tsx",
+      "apps/console/src/modules/settings/ModulesSettingsTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/3/3/4/3/2",
+    "routes": [
+      "/new",
+      "/tournaments/:id/administration/modules"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC04.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Local profile gate lacks a nearby sign-in action",
+    "sourcePage": "9",
+    "reviewPage": "114",
+    "acceptance": "Local users have one explicit sign-in action beside the restriction.",
+    "surfaces": [
+      "OC04"
+    ],
+    "files": [
+      "apps/console/src/modules/settings/GlobalSettingsPage.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/4/3/4/3/3",
+    "routes": [
+      "/settings"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC05.1",
+    "tier": "operator",
+    "severity": 3,
+    "effort": "H",
+    "finding": "Match IDs occupy the primary identity position",
+    "sourcePage": "11",
+    "reviewPage": "110",
+    "acceptance": "Overview, draw and plan use one human-readable match formatter; full IDs remain available only in support details.",
+    "surfaces": [
+      "OC05",
+      "OC16",
+      "OC18"
+    ],
+    "files": [
+      "apps/api/src/workspaces/workspace_signals.py",
+      "apps/console/src/components/control-plane/NextUpList.tsx",
+      "apps/console/src/modules/workspace/overview/PhasePanels.tsx",
+      "apps/console/src/platform/domain/matchIdentity.ts",
+      "apps/console/src/modules/workspace/WorkspaceOverview.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/3/3/2",
+    "routes": [
+      "/tournaments/:id/overview",
+      "/tournaments/:id/competition/draw?event=",
+      "/tournaments/:id/operations/plan"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC06.1",
+    "tier": "operator",
+    "severity": 1,
+    "effort": "M",
+    "finding": "Save rail and form use different right edges",
+    "sourcePage": "13",
+    "reviewPage": "127",
+    "acceptance": "Property-page save and content edges share one alignment rule.",
+    "surfaces": [
+      "OC06",
+      "OC07",
+      "OC10",
+      "OC11",
+      "OC12",
+      "OC13"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/4/4/3/2",
+    "routes": [
+      "/tournaments/:id/setup/general",
+      "/tournaments/:id/setup/dates",
+      "/tournaments/:id/setup/rules",
+      "/tournaments/:id/setup/entries",
+      "/tournaments/:id/setup/people",
+      "/tournaments/:id/setup/public-info"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC06.2",
+    "tier": "operator",
+    "severity": 1,
+    "effort": "M",
+    "finding": "Ready is repeated on every property page",
+    "sourcePage": "13",
+    "reviewPage": "127",
+    "acceptance": "Healthy property pages no longer repeat section and overall readiness.",
+    "surfaces": [
+      "OC06",
+      "OC07",
+      "OC08",
+      "OC09",
+      "OC10",
+      "OC11",
+      "OC12",
+      "OC13"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/4/4/3/2",
+    "routes": [
+      "/tournaments/:id/setup/general",
+      "/tournaments/:id/setup/dates",
+      "/tournaments/:id/setup/venue",
+      "/tournaments/:id/setup/events",
+      "/tournaments/:id/setup/rules",
+      "/tournaments/:id/setup/entries",
+      "/tournaments/:id/setup/people",
+      "/tournaments/:id/setup/public-info"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC06.3",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Timezone help exposes a storage identifier",
+    "sourcePage": "13",
+    "reviewPage": "111",
+    "acceptance": "The selected city/timezone remains clear without IANA in normal copy.",
+    "surfaces": [
+      "OC06"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/4/4/3/2",
+    "routes": [
+      "/tournaments/:id/setup/general"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC07.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Session columns clip editable values",
+    "sourcePage": "15",
+    "reviewPage": "115",
+    "acceptance": "All session names and complete dates are readable without entering edit mode.",
+    "surfaces": [
+      "OC07"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted with the evidence boundary stated.",
+    "evidence": "Native session editor evidence in evidence/operator/session-layout.png shows Court 1–8 and Start/End/Remove within the panel.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/3/3/3/2",
+    "routes": [
+      "/tournaments/:id/setup/dates"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC07.2",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Court assignment fields expose internal keys",
+    "sourcePage": "15",
+    "reviewPage": "115",
+    "acceptance": "Court 1 through Court 6 can be reviewed without reading storage keys.",
+    "surfaces": [
+      "OC07"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted with the evidence boundary stated.",
+    "evidence": "Native session editor evidence in evidence/operator/session-layout.png shows readable Court 1–8 labels.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/3/3/3/2",
+    "routes": [
+      "/tournaments/:id/setup/dates"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC09.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Edit event wraps inside unused table space",
+    "sourcePage": "19",
+    "reviewPage": "116",
+    "acceptance": "All five Edit event actions stay on one line at the supplied desktop width.",
+    "surfaces": [
+      "OC09"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/3/4/3/3",
+    "routes": [
+      "/tournaments/:id/setup/events"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC10.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Scoring vocabulary differs from badminton rules",
+    "sourcePage": "21",
+    "reviewPage": "111",
+    "acceptance": "Setup language matches the published best-of-three games wording.",
+    "surfaces": [
+      "OC10"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/4/3/2",
+    "routes": [
+      "/tournaments/:id/setup/rules"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC11.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Entry rules has no corresponding sidebar item",
+    "sourcePage": "23",
+    "reviewPage": "116",
+    "acceptance": "The current section is visible and highlighted in the Setup menu.",
+    "surfaces": [
+      "OC11",
+      "OC31"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx",
+      "apps/console/src/app/workspace/ModuleUnavailablePanel.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/4/3/2",
+    "routes": [
+      "/tournaments/:id/setup/entries",
+      "/tournaments/:id/setup (guard)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC11.2",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Registration method is a raw text value",
+    "sourcePage": "23",
+    "reviewPage": "117",
+    "acceptance": "Users cannot submit an unknown method through normal controls.",
+    "surfaces": [
+      "OC11"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/4/3/2",
+    "routes": [
+      "/tournaments/:id/setup/entries"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC12.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Staff roles expose enum-style labels",
+    "sourcePage": "25",
+    "reviewPage": "112",
+    "acceptance": "No hyphenated role codes appear in the staff editor.",
+    "surfaces": [
+      "OC12"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/3/3/2",
+    "routes": [
+      "/tournaments/:id/setup/people"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC12.2",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Public checkbox has ambiguous publication scope",
+    "sourcePage": "25",
+    "reviewPage": "117",
+    "acceptance": "Before selecting, the organizer can tell whether name, role and email will be published.",
+    "surfaces": [
+      "OC12"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/3/3/2",
+    "routes": [
+      "/tournaments/:id/setup/people"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC13.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Logo and banner are addresses without visual review",
+    "sourcePage": "27",
+    "reviewPage": "118",
+    "acceptance": "The selected logo and banner crop can be inspected before saving.",
+    "surfaces": [
+      "OC13"
+    ],
+    "files": [
+      "apps/console/src/modules/setup/SetupProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted with the evidence boundary stated.",
+    "evidence": "Controlled preview evidence in evidence/operator/controlled-preview.png verifies valid logo/banner previews and the error fallback before save; external delivery is outside this UI finding.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/3/4/3/2",
+    "routes": [
+      "/tournaments/:id/setup/public-info"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC14.1",
+    "tier": "operator",
+    "severity": 1,
+    "effort": "M",
+    "finding": "Empty issues column receives disproportionate space",
+    "sourcePage": "29",
+    "reviewPage": "128",
+    "acceptance": "Healthy roster rows devote space to names and events; issue-bearing rows remain obvious.",
+    "surfaces": [
+      "OC14"
+    ],
+    "files": [
+      "apps/console/src/modules/meet/roster/RosterTab.tsx",
+      "apps/console/src/modules/bracket/BracketRosterTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Native roster evidence in evidence/operator/roster-width.png covers the 80px Issues column and 519px Player/Events columns.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/3/4/4/3/4",
+    "routes": [
+      "/tournaments/:id/participants/people"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC15.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Draw counts omit their units",
+    "sourcePage": "31",
+    "reviewPage": "118",
+    "acceptance": "Doubles counts identify pairs; progress identifies matches played.",
+    "surfaces": [
+      "OC15"
+    ],
+    "files": [
+      "apps/console/src/modules/bracket/BracketDrawsTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/4/3/2",
+    "routes": [
+      "/tournaments/:id/competition/draws"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC16.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "H",
+    "finding": "Routine match states receive excessive colored chrome",
+    "sourcePage": "33",
+    "reviewPage": "125",
+    "acceptance": "Normal matches remain distinguishable in grayscale; exceptions retain a clear label and action.",
+    "surfaces": [
+      "OC16",
+      "OC18",
+      "OC19",
+      "OC24"
+    ],
+    "files": [
+      "apps/console/src/modules/bracket/DrawView.tsx",
+      "apps/console/src/modules/operations/plan/PlanCallList.tsx",
+      "apps/console/src/modules/operations/run/RunSurface.tsx",
+      "apps/console/src/modules/display/publicDisplay/CourtsView.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/2/2/2/1",
+    "routes": [
+      "/tournaments/:id/competition/draw?event=",
+      "/tournaments/:id/operations/plan",
+      "/tournaments/:id/operations/live",
+      "/display?token=..."
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC16.2",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Default draw zoom makes the dense canvas harder to read",
+    "sourcePage": "33",
+    "reviewPage": "119",
+    "acceptance": "Names remain readable at initial zoom; no data is hidden solely to fit all rounds.",
+    "surfaces": [
+      "OC16"
+    ],
+    "files": [
+      "apps/console/src/modules/bracket/PanZoomCanvas.tsx",
+      "apps/console/src/modules/bracket/DrawView.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/2/2/2/1",
+    "routes": [
+      "/tournaments/:id/competition/draw?event="
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC17.1",
+    "tier": "operator",
+    "severity": 3,
+    "effort": "M",
+    "finding": "Scores are grouped under Status rather than opponents",
+    "sourcePage": "35",
+    "reviewPage": "109",
+    "acceptance": "An operator can identify the winner and each game score without decoding a mixed status field.",
+    "surfaces": [
+      "OC17"
+    ],
+    "files": [
+      "apps/console/src/modules/bracket/BracketMatchesTab.tsx",
+      "apps/console/src/modules/meet/matches/MatchesTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted with the evidence boundary stated.",
+    "evidence": "Taipei fixture evidence in evidence/operator/taipei-matches.png: 155 matches, aligned three-game score columns, readable R32 references, and separated doubles partners.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/4/3/3",
+    "routes": [
+      "/tournaments/:id/competition/matches"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC18.1",
+    "tier": "operator",
+    "severity": 3,
+    "effort": "M",
+    "finding": "Queue state is carried by colored dots",
+    "sourcePage": "37",
+    "reviewPage": "109",
+    "acceptance": "Each queue state is readable with color removed.",
+    "surfaces": [
+      "OC18"
+    ],
+    "files": [
+      "apps/console/src/modules/operations/plan/PlanCallList.tsx",
+      "apps/console/src/modules/operations/UnifiedOpsBoard.tsx",
+      "apps/console/src/components/MatchChip.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/3/2/3/2/2",
+    "routes": [
+      "/tournaments/:id/operations/plan"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC18.2",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Plan-ready action leaves scope unclear",
+    "sourcePage": "37",
+    "reviewPage": "119",
+    "acceptance": "Before approval, the organizer can distinguish a usable plan from unresolved match assignments.",
+    "surfaces": [
+      "OC18"
+    ],
+    "files": [
+      "apps/console/src/modules/operations/OperationsProduct.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/3/2/3/2/2",
+    "routes": [
+      "/tournaments/:id/operations/plan"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC19.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Playing metric has an unclear unit",
+    "sourcePage": "39",
+    "reviewPage": "120",
+    "acceptance": "Metric and court cards use explicitly compatible units; stale or extra matches are explained.",
+    "surfaces": [
+      "OC05",
+      "OC19"
+    ],
+    "files": [
+      "apps/console/src/modules/workspace/overview/PhasePanels.tsx",
+      "apps/console/src/modules/operations/run/RunSummaryBand.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/3/3/2",
+    "routes": [
+      "/tournaments/:id/overview",
+      "/tournaments/:id/operations/live"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC19.2",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Doubles sides lack a strong visual break",
+    "sourcePage": "39",
+    "reviewPage": "120",
+    "acceptance": "Both partners are readable and the two opposing sides are unambiguous.",
+    "surfaces": [
+      "OC19",
+      "OC24"
+    ],
+    "files": [
+      "apps/console/src/modules/operations/run/RunCourtGrid.tsx",
+      "apps/console/src/modules/display/publicDisplay/CourtsView.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/3/2/3/2/3",
+    "routes": [
+      "/tournaments/:id/operations/live",
+      "/display?token=..."
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC20.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Save conventions vary across similar forms",
+    "sourcePage": "41",
+    "reviewPage": "121",
+    "acceptance": "Enabled, disabled, saving, saved and failed states are captured and consistent across forms.",
+    "surfaces": [
+      "OC04",
+      "OC06",
+      "OC20",
+      "OC21"
+    ],
+    "files": [
+      "apps/console/src/modules/settings/GlobalSettingsPage.tsx",
+      "apps/console/src/modules/setup/SetupProduct.tsx",
+      "apps/console/src/modules/settings/SharingTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/4/3/4/3/3",
+    "routes": [
+      "/settings",
+      "/tournaments/:id/setup/general",
+      "/tournaments/:id/publish/site",
+      "/tournaments/:id/publish/draws-results"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC22.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Two areas manage the same display link",
+    "sourcePage": "45",
+    "reviewPage": "121",
+    "acceptance": "Only one canonical public display URL and action group are visible.",
+    "surfaces": [
+      "OC22",
+      "OC23"
+    ],
+    "files": [
+      "apps/console/src/modules/workspace/DisplayConfig.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/3/3/3/2",
+    "routes": [
+      "/tournaments/:id/publish/displays",
+      "/tournaments/:id/publish/links"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC22.2",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Rotation guidance points to an absent navigation name",
+    "sourcePage": "45",
+    "reviewPage": "112",
+    "acceptance": "Instruction and visible action use the same label.",
+    "surfaces": [
+      "OC22",
+      "OC23"
+    ],
+    "files": [
+      "apps/console/src/modules/workspace/DisplayConfig.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/3/3/3/2",
+    "routes": [
+      "/tournaments/:id/publish/displays",
+      "/tournaments/:id/publish/links"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC24.1",
+    "tier": "operator",
+    "severity": 3,
+    "effort": "H",
+    "finding": "Two matches claim to be on Court 1",
+    "sourcePage": "49",
+    "reviewPage": "110",
+    "acceptance": "A court has at most one current match; conflicts are resolved in Operations before projection.",
+    "surfaces": [
+      "OC22",
+      "OC23",
+      "OC24"
+    ],
+    "files": [
+      "apps/console/src/modules/display/MeetDisplayPage.tsx",
+      "apps/console/src/modules/display/bracketDisplay/BracketDisplayPage.tsx",
+      "apps/console/src/modules/display/bracketDisplay/bracketDisplayData.ts",
+      "apps/console/src/modules/display/bracketDisplay/BracketLiveView.tsx",
+      "apps/console/src/modules/operations/runtime/runModel.ts",
+      "apps/api/src/repositories/local.py",
+      "apps/api/src/bracket/application.py"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Tailscale operator/display capture records two durable-fixture current-match conflicts; Operations shows both records and Display withholds Courts 1 and 3 pending operator choice. Four other courts project. The invariant prevents new double-current assignments; no automated resolution was performed.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/3/3/3/2",
+    "routes": [
+      "/tournaments/:id/publish/displays",
+      "/tournaments/:id/publish/links",
+      "/display?token=..."
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC24.2",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Court information is split across unrelated cards",
+    "sourcePage": "49",
+    "reviewPage": "122",
+    "acceptance": "Each court's current and next information stays together at the supplied desktop size.",
+    "surfaces": [
+      "OC24"
+    ],
+    "files": [
+      "apps/console/src/modules/display/MeetDisplayPage.tsx",
+      "apps/console/src/modules/display/publicDisplay/CourtsView.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/2/2/3",
+    "routes": [
+      "/display?token=..."
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC24.3",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Unassigned next match is shown as a contest",
+    "sourcePage": "49",
+    "reviewPage": "113",
+    "acceptance": "Empty next slots contain a clear sentence and no fictitious opponent structure.",
+    "surfaces": [
+      "OC24"
+    ],
+    "files": [
+      "apps/console/src/modules/display/publicDisplay/CourtsView.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/2/2/3",
+    "routes": [
+      "/display?token=..."
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC25.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Invitation form labels mechanism rather than outcome",
+    "sourcePage": "55",
+    "reviewPage": "122",
+    "acceptance": "Selected delivery method is reflected in the action and fields retain labels after typing.",
+    "surfaces": [
+      "OC25"
+    ],
+    "files": [
+      "apps/console/src/modules/settings/PeopleAccessTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/3/3/4/3/3",
+    "routes": [
+      "/tournaments/:id/administration/team"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC26.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "H",
+    "finding": "Module settings narrate software architecture",
+    "sourcePage": "57",
+    "reviewPage": "125",
+    "acceptance": "No normal settings explanation requires knowledge of solvers, projections or module ownership.",
+    "surfaces": [
+      "OC26"
+    ],
+    "files": [
+      "apps/console/src/modules/settings/ModulesSettingsTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/4/3/2/4/3/1",
+    "routes": [
+      "/tournaments/:id/administration/modules"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC27.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "H",
+    "finding": "Backup status exposes replication internals",
+    "sourcePage": "59",
+    "reviewPage": "126",
+    "acceptance": "The ordinary backup page explains status and recovery without distributed-system terminology.",
+    "surfaces": [
+      "OC27"
+    ],
+    "files": [
+      "apps/console/src/modules/settings/SyncBackupsTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/3/3/1",
+    "routes": [
+      "/tournaments/:id/administration/backups"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC27.2",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Backup choices share the same visible timestamp",
+    "sourcePage": "59",
+    "reviewPage": "123",
+    "acceptance": "Each restore candidate is distinguishable by useful contents or change description before confirmation.",
+    "surfaces": [
+      "OC27"
+    ],
+    "files": [
+      "apps/console/src/modules/settings/SyncBackupsTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/3/3/1",
+    "routes": [
+      "/tournaments/:id/administration/backups"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC29.1",
+    "tier": "operator",
+    "severity": 1,
+    "effort": "M",
+    "finding": "Lifecycle page uses a different heading scale",
+    "sourcePage": "63",
+    "reviewPage": "128",
+    "acceptance": "Team, Modules, Backups, Activity and Lifecycle share a page-heading rule.",
+    "surfaces": [
+      "OC29"
+    ],
+    "files": [
+      "apps/console/src/modules/settings/GeneralSettingsTab.tsx",
+      "apps/console/src/modules/settings/DangerZoneTab.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/4/3/4/4/3",
+    "routes": [
+      "/tournaments/:id/administration/lifecycle"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC30.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Guard text describes an unavailable module",
+    "sourcePage": "65",
+    "reviewPage": "113",
+    "acceptance": "The guard names the unavailable task and a valid next step without module terminology.",
+    "surfaces": [
+      "OC30"
+    ],
+    "files": [
+      "apps/console/src/app/workspace/ModuleUnavailablePanel.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/4/3/4/4/2",
+    "routes": [
+      "/tournaments/:id/entries (guard)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC32.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Roster empty state sends users to a distant action",
+    "sourcePage": "69",
+    "reviewPage": "123",
+    "acceptance": "The empty state has one directly adjacent action to create the first school.",
+    "surfaces": [
+      "OC32"
+    ],
+    "files": [
+      "apps/console/src/app/workspace/ModuleUnavailablePanel.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/4/3/4/3/3",
+    "routes": [
+      "/tournaments/:id/roster (guard)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "OC33.1",
+    "tier": "operator",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Empty matches foregrounds unavailable manual creation",
+    "sourcePage": "71",
+    "reviewPage": "124",
+    "acceptance": "The visible primary empty-state action can advance the stated workflow; unavailable methods are explained plainly.",
+    "surfaces": [
+      "OC33"
+    ],
+    "files": [
+      "apps/console/src/app/workspace/ModuleUnavailablePanel.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted at current implementation boundary; full support identifiers remain available where required.",
+    "evidence": "Integrated operator review on the 1440x900, DPR2 Korea fixture (79903f30-c9aa-4a95-86cf-cbfd0fbde500), with route-specific focused tests; see operator-implementation-review.md.",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/3/2/4/3/2",
+    "routes": [
+      "/tournaments/:id/matches (guard)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE01.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "H",
+    "finding": "Local Workspace leaks into tournament identity",
+    "sourcePage": "3",
+    "reviewPage": "211",
+    "acceptance": "No Local Workspace label appears on public tournament, draw-index or regulations pages.",
+    "surfaces": [
+      "PE01",
+      "PE02",
+      "PE03",
+      "PE04",
+      "PE05",
+      "PE06",
+      "PE07",
+      "PE08",
+      "PE09",
+      "PE15"
+    ],
+    "files": [
+      "apps/entrant/app/components/SeasonCalendar.tsx",
+      "apps/entrant/app/components/HeroHeader.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE01.1 (Local Workspace leaks into tournament identity).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/3/3/3/3/2",
+    "routes": [
+      "/e/",
+      "/e/?view=completed#calendar",
+      "/e/{slug}",
+      "/e/{slug}?tab=events",
+      "/e/{slug}?tab=players",
+      "/e/{slug}?tab=draws",
+      "/e/{slug}?tab=seeds (alias of draws)",
+      "/e/{slug}?tab=winners (alias of draws)",
+      "/e/{slug}/schedule",
+      "/e/{slug}/regulations"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE01.2",
+    "tier": "public",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Discovery introduction describes only entry-taking events",
+    "sourcePage": "3",
+    "reviewPage": "199",
+    "acceptance": "Page introduction matches the selected discovery task.",
+    "surfaces": [
+      "PE01",
+      "PE02"
+    ],
+    "files": [
+      "apps/entrant/app/routes/discovery.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE01.2 (Discovery introduction describes only entry-taking events).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/3/3/3/3/2",
+    "routes": [
+      "/e/",
+      "/e/?view=completed#calendar"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE01.3",
+    "tier": "public",
+    "severity": 1,
+    "effort": "M",
+    "finding": "Brand blue is not sufficiently rationed",
+    "sourcePage": "3",
+    "reviewPage": "212",
+    "acceptance": "Primary action, active location and ordinary links are distinct without adding another color.",
+    "surfaces": [
+      "PE01",
+      "PE02",
+      "PE03",
+      "PE04",
+      "PE05",
+      "PE06",
+      "PE07",
+      "PE08",
+      "PE09",
+      "PE10",
+      "PE11",
+      "PE12",
+      "PE13",
+      "PE14",
+      "PE15",
+      "PE16",
+      "PE17",
+      "PE18",
+      "PE19",
+      "PE20",
+      "PE21",
+      "PE22",
+      "PE23",
+      "PE24",
+      "PE25",
+      "PE26",
+      "PE27",
+      "PE28",
+      "PE29",
+      "PE30",
+      "PE31",
+      "PE32",
+      "PE33",
+      "PE34",
+      "PE35",
+      "PE36",
+      "PE37",
+      "PE38",
+      "PE39"
+    ],
+    "files": [
+      "apps/entrant/app/components/PlayShell.tsx",
+      "apps/entrant/app/components/SegmentedNav.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE01.3 (Brand blue is not sufficiently rationed).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/3/3/3/3/2",
+    "routes": [
+      "/e/",
+      "/e/?view=completed#calendar",
+      "/e/{slug}",
+      "/e/{slug}?tab=events",
+      "/e/{slug}?tab=players",
+      "/e/{slug}?tab=draws",
+      "/e/{slug}?tab=seeds (alias of draws)",
+      "/e/{slug}?tab=winners (alias of draws)",
+      "/e/{slug}/schedule",
+      "/e/{slug}/draws/{key}",
+      "/e/{slug}/draws/{key}?view=round&round=1",
+      "/e/{slug}/draws/{key}?view=list",
+      "/e/{slug}/draws/{key}?view=path&player=",
+      "/e/{slug}/draws/{key} (doubles key)",
+      "/e/{slug}/regulations",
+      "/e/{slug}/enter",
+      "/e/{slug}/enter/signed-in",
+      "/e/{slug}/enter/created",
+      "/e/login",
+      "/e/login/created",
+      "/e/login/failed",
+      "/e/login/signed-in",
+      "/e/signup",
+      "/e/signup/{slug}",
+      "/e/verify",
+      "/e/verify/done",
+      "/e/verify/failed",
+      "/e/verify/sent",
+      "/e/forgot",
+      "/e/reset",
+      "/e/reset/sent",
+      "/e/reset/done",
+      "/e/reset/failed",
+      "/e/reset/password-failed",
+      "/e/partner(?token=) or /e/partner/{token}",
+      "/e/partner/accepted",
+      "/e/partner/failed",
+      "/e/me/entries",
+      "/e/{slug}/receipt/{submissionId}"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE02.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Completed view is led by an unrelated live feature",
+    "sourcePage": "12",
+    "reviewPage": "202",
+    "acceptance": "The Completed heading and archive controls lead the completed view.",
+    "surfaces": [
+      "PE02"
+    ],
+    "files": [
+      "apps/entrant/app/routes/discovery.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE02.1 (Completed view is led by an unrelated live feature).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/3/2/3/3/2",
+    "routes": [
+      "/e/?view=completed#calendar"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE03.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Dates require switching between timezones",
+    "sourcePage": "21",
+    "reviewPage": "200",
+    "acceptance": "Opening, closing and match times use the same declared timezone.",
+    "surfaces": [
+      "PE03",
+      "PE09",
+      "PE13",
+      "PE15"
+    ],
+    "files": [
+      "apps/entrant/app/lib/format.ts",
+      "apps/entrant/app/routes/tournament.tsx",
+      "apps/entrant/app/routes/schedule.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE03.1 (Dates require switching between timezones).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/3/3/2",
+    "routes": [
+      "/e/{slug}",
+      "/e/{slug}/schedule",
+      "/e/{slug}/draws/{key}?view=path&player=",
+      "/e/{slug}/regulations"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE03.2",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Players entered count conflicts with the directory's apparent meaning",
+    "sourcePage": "21",
+    "reviewPage": "203",
+    "acceptance": "Every count identifies its entity and source; no false equality between online entries and draw participants.",
+    "surfaces": [
+      "PE03",
+      "PE04",
+      "PE05",
+      "PE06",
+      "PE07",
+      "PE08"
+    ],
+    "files": [
+      "apps/entrant/app/components/EventRow.tsx",
+      "apps/entrant/app/routes/tournament.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE03.2 (Players entered count conflicts with the directory's apparent meaning).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/3/3/2",
+    "routes": [
+      "/e/{slug}",
+      "/e/{slug}?tab=events",
+      "/e/{slug}?tab=players",
+      "/e/{slug}?tab=draws",
+      "/e/{slug}?tab=seeds (alias of draws)",
+      "/e/{slug}?tab=winners (alias of draws)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE03.3",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Overview repeats facts in prose and separate windows",
+    "sourcePage": "21",
+    "reviewPage": "203",
+    "acceptance": "Each key fact appears once in the overview's primary reading sequence.",
+    "surfaces": [
+      "PE03"
+    ],
+    "files": [
+      "apps/entrant/app/routes/tournament.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE03.3 (Overview repeats facts in prose and separate windows).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/3/3/2",
+    "routes": [
+      "/e/{slug}"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE03.4",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Fee guidance points to an unavailable entry form",
+    "sourcePage": "21",
+    "reviewPage": "204",
+    "acceptance": "The fee sentence has a usable source in the captured lifecycle.",
+    "surfaces": [
+      "PE03"
+    ],
+    "files": [
+      "apps/entrant/app/routes/tournament.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE03.4 (Fee guidance points to an unavailable entry form).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/3/3/2",
+    "routes": [
+      "/e/{slug}"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE04.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Draw index squeezes metadata beside an oversized event column",
+    "sourcePage": "25",
+    "reviewPage": "204",
+    "acceptance": "All five event rows have readable count units and single-line actions.",
+    "surfaces": [
+      "PE04",
+      "PE06",
+      "PE07",
+      "PE08"
+    ],
+    "files": [
+      "apps/entrant/app/components/EventRow.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE04.1 (Draw index squeezes metadata beside an oversized event column).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/3/3/3/2",
+    "routes": [
+      "/e/{slug}?tab=events",
+      "/e/{slug}?tab=draws",
+      "/e/{slug}?tab=seeds (alias of draws)",
+      "/e/{slug}?tab=winners (alias of draws)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE04.2",
+    "tier": "public",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Event titles call whole draws Final",
+    "sourcePage": "25",
+    "reviewPage": "200",
+    "acceptance": "Event and round labels describe different levels consistently.",
+    "surfaces": [
+      "PE04",
+      "PE06",
+      "PE07",
+      "PE08"
+    ],
+    "files": [
+      "apps/entrant/app/components/EventRow.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE04.2 (Event titles call whole draws Final).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/3/3/3/2",
+    "routes": [
+      "/e/{slug}?tab=events",
+      "/e/{slug}?tab=draws",
+      "/e/{slug}?tab=seeds (alias of draws)",
+      "/e/{slug}?tab=winners (alias of draws)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE04.3",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Published draw label conceals a zero-round exception",
+    "sourcePage": "25",
+    "reviewPage": "205",
+    "acceptance": "A zero-round event explains what is available without claiming a normal complete draw.",
+    "surfaces": [
+      "PE04",
+      "PE06",
+      "PE07",
+      "PE08"
+    ],
+    "files": [
+      "apps/entrant/app/components/EventRow.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE04.3 (Published draw label conceals a zero-round exception).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/3/3/3/2",
+    "routes": [
+      "/e/{slug}?tab=events",
+      "/e/{slug}?tab=draws",
+      "/e/{slug}?tab=seeds (alias of draws)",
+      "/e/{slug}?tab=winners (alias of draws)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE05.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Alphabet groups create large desktop dead zones",
+    "sourcePage": "30",
+    "reviewPage": "205",
+    "acceptance": "Short groups no longer reserve the height of the longest neighboring group; names retain readable size.",
+    "surfaces": [
+      "PE05"
+    ],
+    "files": [
+      "apps/entrant/app/components/EntrantsList.tsx",
+      "apps/entrant/app/components/PlayersList.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE05.1 (Alphabet groups create large desktop dead zones).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/2/2/3/4/3/3",
+    "routes": [
+      "/e/{slug}?tab=players"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE05.2",
+    "tier": "public",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Event abbreviations have no nearby expansion",
+    "sourcePage": "29",
+    "reviewPage": "201",
+    "acceptance": "First-time readers can resolve all five abbreviations without leaving the directory.",
+    "surfaces": [
+      "PE05"
+    ],
+    "files": [
+      "apps/entrant/app/components/EntrantsList.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE05.2 (Event abbreviations have no nearby expansion).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/2/2/3/4/3/3",
+    "routes": [
+      "/e/{slug}?tab=players"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE09.1",
+    "tier": "public",
+    "severity": 3,
+    "effort": "M",
+    "finding": "Live matches are buried behind future-round placeholders",
+    "sourcePage": "69",
+    "reviewPage": "197",
+    "acceptance": "Opening the live schedule shows currently playing matches before future round placeholders.",
+    "surfaces": [
+      "PE09"
+    ],
+    "files": [
+      "apps/api/src/entries/entries_site.py",
+      "apps/entrant/app/routes/schedule.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE09.1 (Live matches are buried behind future-round placeholders).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/2/3/3",
+    "routes": [
+      "/e/{slug}/schedule"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE09.2",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Now match has no court assignment",
+    "sourcePage": "69",
+    "reviewPage": "206",
+    "acceptance": "Every current match either names a court or explicitly explains the information gap.",
+    "surfaces": [
+      "PE09"
+    ],
+    "files": [
+      "apps/api/src/entries/entries_site.py",
+      "apps/entrant/app/components/MatchCard.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE09.2 (Now match has no court assignment).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/2/3/3",
+    "routes": [
+      "/e/{slug}/schedule"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE09.3",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Schedule controls consume the first mobile screen",
+    "sourcePage": "66",
+    "reviewPage": "206",
+    "acceptance": "At 390x844 the initial view includes at least one complete live or next-match row.",
+    "surfaces": [
+      "PE09"
+    ],
+    "files": [
+      "apps/entrant/app/routes/schedule.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE09.3 (Schedule controls consume the first mobile screen).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/2/3/3",
+    "routes": [
+      "/e/{slug}/schedule"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE10.1",
+    "tier": "public",
+    "severity": 3,
+    "effort": "M",
+    "finding": "Bracket card width hides player identity",
+    "sourcePage": "72",
+    "reviewPage": "197",
+    "acceptance": "Full partner names are available without hover on mobile; long names are not permanently hidden at initial scale.",
+    "surfaces": [
+      "PE10",
+      "PE12",
+      "PE14"
+    ],
+    "files": [
+      "apps/entrant/app/components/MatchCard.tsx",
+      "apps/entrant/app/routes/draw.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE10.1 (Bracket card width hides player identity).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/3/3/3",
+    "routes": [
+      "/e/{slug}/draws/{key}",
+      "/e/{slug}/draws/{key}?view=list",
+      "/e/{slug}/draws/{key} (doubles key)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE10.2",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Horizontal bracket continuation has little explicit guidance",
+    "sourcePage": "74",
+    "reviewPage": "207",
+    "acceptance": "A 390px visitor can reach every round through a visible control without guessing horizontal gestures.",
+    "surfaces": [
+      "PE10",
+      "PE12",
+      "PE14"
+    ],
+    "files": [
+      "apps/entrant/app/routes/draw.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE10.2 (Horizontal bracket continuation has little explicit guidance).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/3/3/3",
+    "routes": [
+      "/e/{slug}/draws/{key}",
+      "/e/{slug}/draws/{key}?view=list",
+      "/e/{slug}/draws/{key} (doubles key)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE10.3",
+    "tier": "public",
+    "severity": 1,
+    "effort": "M",
+    "finding": "Draw view switch extends across empty width",
+    "sourcePage": "72",
+    "reviewPage": "212",
+    "acceptance": "No inert tab-shaped rectangle extends beyond the view labels.",
+    "surfaces": [
+      "PE10",
+      "PE11",
+      "PE12",
+      "PE13",
+      "PE14"
+    ],
+    "files": [
+      "apps/entrant/app/routes/draw.tsx",
+      "apps/entrant/app/components/SegmentedNav.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE10.3 (Draw view switch extends across empty width).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/3/3/3",
+    "routes": [
+      "/e/{slug}/draws/{key}",
+      "/e/{slug}/draws/{key}?view=round&round=1",
+      "/e/{slug}/draws/{key}?view=list",
+      "/e/{slug}/draws/{key}?view=path&player=",
+      "/e/{slug}/draws/{key} (doubles key)"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE12.1",
+    "tier": "public",
+    "severity": 3,
+    "effort": "M",
+    "finding": "Player-path view does not visibly distinguish the searched player",
+    "sourcePage": "81",
+    "reviewPage": "198",
+    "acceptance": "After a player search, the matching person, matches and clear action are visibly evident without color alone.",
+    "surfaces": [
+      "PE12"
+    ],
+    "files": [
+      "apps/entrant/app/routes/draw.tsx",
+      "apps/entrant/app/components/MatchCard.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE12.1 (Player-path view does not visibly distinguish the searched player).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/3/3/3",
+    "routes": [
+      "/e/{slug}/draws/{key}?view=list"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE13.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Draw list mixes raw dates and undated future times",
+    "sourcePage": "85",
+    "reviewPage": "207",
+    "acceptance": "Each displayed time has an unambiguous date or a clear date-to-be-confirmed state.",
+    "surfaces": [
+      "PE11",
+      "PE13"
+    ],
+    "files": [
+      "apps/entrant/app/components/MatchCard.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE13.1 (Draw list mixes raw dates and undated future times).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/3/3/3/3/3/3",
+    "routes": [
+      "/e/{slug}/draws/{key}?view=round&round=1",
+      "/e/{slug}/draws/{key}?view=path&player="
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE13.2",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Every scheduled match repeats its own framed header",
+    "sourcePage": "85",
+    "reviewPage": "208",
+    "acceptance": "The list retains match boundaries with fewer repeated labels and no loss of names or schedule context.",
+    "surfaces": [
+      "PE09",
+      "PE11",
+      "PE13"
+    ],
+    "files": [
+      "apps/entrant/app/routes/draw.tsx",
+      "apps/entrant/app/components/MatchCard.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE13.2 (Every scheduled match repeats its own framed header).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/2/2/2/3/3",
+    "routes": [
+      "/e/{slug}/schedule",
+      "/e/{slug}/draws/{key}?view=round&round=1",
+      "/e/{slug}/draws/{key}?view=path&player="
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE15.1",
+    "tier": "public",
+    "severity": 3,
+    "effort": "M",
+    "finding": "Regulations prose overflows the mobile viewport",
+    "sourcePage": "101",
+    "reviewPage": "198",
+    "acceptance": "At 390 CSS px, every word is readable without horizontal scrolling; then verify 200% text zoom.",
+    "surfaces": [
+      "PE15"
+    ],
+    "files": [
+      "apps/entrant/app/routes/regulations.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE15.1 (Regulations prose overflows the mobile viewport).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/3/3/3/3",
+    "routes": [
+      "/e/{slug}/regulations"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE15.2",
+    "tier": "public",
+    "severity": 1,
+    "effort": "M",
+    "finding": "Single-section document carries a full contents window",
+    "sourcePage": "100",
+    "reviewPage": "213",
+    "acceptance": "A one-section document begins its body directly after essential metadata.",
+    "surfaces": [
+      "PE15"
+    ],
+    "files": [
+      "apps/entrant/app/routes/regulations.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE15.2 (Single-section document carries a full contents window).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/2/2/3/3/3/3",
+    "routes": [
+      "/e/{slug}/regulations"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE16.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Closed-entry heading still invites entry",
+    "sourcePage": "103",
+    "reviewPage": "201",
+    "acceptance": "Closed, open and unavailable entry states each have a matching heading.",
+    "surfaces": [
+      "PE16",
+      "PE17",
+      "PE18"
+    ],
+    "files": [
+      "apps/entrant/app/routes/enter.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE16.1 (Closed-entry heading still invites entry).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/4/3/4/3/2",
+    "routes": [
+      "/e/{slug}/enter",
+      "/e/{slug}/enter/signed-in",
+      "/e/{slug}/enter/created"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE19.1",
+    "tier": "public",
+    "severity": 1,
+    "effort": "L",
+    "finding": "Account copy overstates what an account does",
+    "sourcePage": "109",
+    "reviewPage": "211",
+    "acceptance": "Account creation and tournament entry are described as separate actions.",
+    "surfaces": [
+      "PE19",
+      "PE20",
+      "PE21",
+      "PE22",
+      "PE23",
+      "PE24"
+    ],
+    "files": [
+      "apps/entrant/app/routes/login.tsx",
+      "apps/entrant/app/routes/signup.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE19.1 (Account copy overstates what an account does).",
+    "remainingSeverity": 0,
+    "baselineQuality": "4/4/4/4/4/3/3",
+    "routes": [
+      "/e/login",
+      "/e/login/created",
+      "/e/login/failed",
+      "/e/login/signed-in",
+      "/e/signup",
+      "/e/signup/{slug}"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE22.1",
+    "tier": "public",
+    "severity": 3,
+    "effort": "M",
+    "finding": "Signed-in state still leads with the credential form",
+    "sourcePage": "115",
+    "reviewPage": "199",
+    "acceptance": "A signed-in visitor has a direct next task and does not have to re-enter credentials.",
+    "surfaces": [
+      "PE22"
+    ],
+    "files": [
+      "apps/entrant/app/routes/login.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE22.1 (Signed-in state still leads with the credential form).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/4/4/2/4/4/2",
+    "routes": [
+      "/e/login/signed-in"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE23.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Human-check success retains technical troubleshooting",
+    "sourcePage": "117",
+    "reviewPage": "208",
+    "acceptance": "Successful checks leave the account action visible with no scripting explanation.",
+    "surfaces": [
+      "PE23",
+      "PE24"
+    ],
+    "files": [
+      "apps/entrant/app/routes/enter.tsx",
+      "apps/entrant/app/routes/verify.tsx",
+      "apps/entrant/app/routes/resetPassword.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 1.",
+    "evidence": "Verified real-token account journey evidence, including controlled human-check success and valid recovery token completion; no provider or production account claim.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/3/3/3/3/3",
+    "routes": [
+      "/e/signup",
+      "/e/signup/{slug}"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE24.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Tournament account-creation route loses visible context",
+    "sourcePage": "121",
+    "reviewPage": "209",
+    "acceptance": "The destination is visible before submission and restored after authentication.",
+    "surfaces": [
+      "PE24"
+    ],
+    "files": [
+      "apps/entrant/app/routes/signup.tsx",
+      "apps/entrant/app/routes/login.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE24.1 (Tournament account-creation route loses visible context).",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/3/3/3/3/2",
+    "routes": [
+      "/e/signup/{slug}"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE26.1",
+    "tier": "public",
+    "severity": 1,
+    "effort": "M",
+    "finding": "Outcome pages retain the previous task heading",
+    "sourcePage": "127",
+    "reviewPage": "213",
+    "acceptance": "The page heading reflects the verified outcome while the next action remains clear.",
+    "surfaces": [
+      "PE26",
+      "PE32"
+    ],
+    "files": [
+      "apps/entrant/app/routes/login.tsx",
+      "apps/entrant/app/routes/signup.tsx",
+      "apps/entrant/app/routes/verify.tsx",
+      "apps/entrant/app/routes/resetPassword.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 1.",
+    "evidence": "Verified real-token account journey evidence, including controlled human-check success and valid recovery token completion; no provider or production account claim.",
+    "remainingSeverity": 0,
+    "baselineQuality": "3/4/4/3/4/4/3",
+    "routes": [
+      "/e/verify/done",
+      "/e/reset/done"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE37.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Invalid invitation has no orienting heading",
+    "sourcePage": "149",
+    "reviewPage": "209",
+    "acceptance": "The page names the problem and the next action matches recovery.",
+    "surfaces": [
+      "PE37"
+    ],
+    "files": [
+      "apps/entrant/app/routes/partner.tsx"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE37.1 (Invalid invitation has no orienting heading).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/4/4/2/4/4/2",
+    "routes": [
+      "/e/partner/failed"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE39.1",
+    "tier": "public",
+    "severity": 2,
+    "effort": "L",
+    "finding": "Receipt gate mixes loading and required sign-in",
+    "sourcePage": "153",
+    "reviewPage": "202",
+    "acceptance": "Settled sign-in-required and loading states have distinct wording.",
+    "surfaces": [
+      "PE39"
+    ],
+    "files": [
+      "apps/entrant/app/routes/receipt.tsx",
+      "apps/entrant/public/assets/receipt.js"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE39.1 (Receipt gate mixes loading and required sign-in).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/3/2/2/3/2",
+    "routes": [
+      "/e/{slug}/receipt/{submissionId}"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE39.2",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Receipt repeats its sign-in requirement in two regions",
+    "sourcePage": "153",
+    "reviewPage": "210",
+    "acceptance": "One section explains the gate and offers one primary sign-in continuation.",
+    "surfaces": [
+      "PE39"
+    ],
+    "files": [
+      "apps/entrant/app/routes/receipt.tsx",
+      "apps/entrant/public/assets/receipt.js"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE39.2 (Receipt repeats its sign-in requirement in two regions).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/3/2/2/3/2",
+    "routes": [
+      "/e/{slug}/receipt/{submissionId}"
+    ],
+    "implementationStatus": "implemented"
+  },
+  {
+    "id": "PE39.3",
+    "tier": "public",
+    "severity": 2,
+    "effort": "M",
+    "finding": "Entry reference is a long machine-formatted identifier",
+    "sourcePage": "154",
+    "reviewPage": "210",
+    "acceptance": "The user can quote or copy an unambiguous reference; its mapping to the entry is preserved.",
+    "surfaces": [
+      "PE39"
+    ],
+    "files": [
+      "apps/entrant/app/routes/receipt.tsx",
+      "apps/entrant/public/assets/receipt.js"
+    ],
+    "disposition": "accepted",
+    "decision": "Accepted after current public implementation and integrated v3 native evidence; remaining severity 0.",
+    "evidence": "Authoritative Tailscale public capture (39/39 routes with continuations) and focused route/test evidence for PE39.3 (Entry reference is a long machine-formatted identifier).",
+    "remainingSeverity": 0,
+    "baselineQuality": "2/3/3/2/2/3/2",
+    "routes": [
+      "/e/{slug}/receipt/{submissionId}"
+    ],
+    "implementationStatus": "implemented"
+  }
+]

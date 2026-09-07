@@ -26,7 +26,6 @@ import {
   deriveCourtLanes,
   deriveQueue,
   nextEligible,
-  onDeck,
   busyPlayers,
   isPlayerBusy,
   restShortKeys,
@@ -35,6 +34,7 @@ import {
   type RunMatch,
 } from '../runtime/runModel';
 import { buildLiveChips } from '../runtime/boardPlacements';
+import { deriveDisputes, type CourtDispute } from '../../../platform/domain/courtOccupancy';
 import { runAction, slotForAssign, type RunSeams } from '../runtime/runActions';
 import type { RunActionKind } from '../runtime/runMachine';
 import { RunSummaryBand } from './RunSummaryBand';
@@ -136,7 +136,6 @@ export function RunSurface({
   formatSlot,
   slotMinutes,
   restMinutes,
-  onDeckCount,
   meetOps,
   onAdvisoryReview,
 }: RunSurfaceProps) {
@@ -168,6 +167,9 @@ export function RunSurface({
 
   // ── transient state ───────────────────────────────────────────────────────
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // Which dispute claim (by key) currently has a resolve command in flight —
+  // disables its row's buttons so a double-click can't fire the command twice.
+  const [resolvingKey, setResolvingKey] = useState<string | null>(null);
 
   // Deep-linked selection (OV-1): the Overview's and Hub inspector's
   // "Up next" rows land here as /live?select={source}:{id}. Consumed once on
@@ -273,10 +275,6 @@ export function RunSurface({
   }, [matches, currentSlot, restMinutes, slotMinutes]);
   // CP5: the desk's lookahead — what auto-pull will actually send next.
   // Count is a workspace setting, clamped 1-5, default 3.
-  const deck = useMemo(
-    () => onDeck(queue, busy, Math.min(5, Math.max(1, onDeckCount ?? 3))),
-    [queue, busy, onDeckCount],
-  );
   // Bracket "called" is Operations-local (no persisted status), overlaid onto
   // `matches` by toRunMatches — but the BOARD renders from raw blocks, so
   // without this overlay a called bracket chip would stay painted 'scheduled'
@@ -298,6 +296,68 @@ export function RunSurface({
     [liveBlocks, currentSlot, planFinalized],
   );
   const summary = useMemo(() => deriveSummary(matches, lanes, liveChips), [matches, lanes, liveChips]);
+
+  // Derived disputes (contract §4.2, ruling C1) — recomputed on demand from
+  // current match rows, never persisted. Rendered below as an ACTIONABLE
+  // assignment (named claims, one button per resolution action), not a
+  // banner (D18): a pre-existing double assignment used to produce neither a
+  // banner nor a task at all, because the old banners came from rejected
+  // *commands*, and nothing rejects a write that never happened.
+  const disputes = useMemo(
+    () =>
+      deriveDisputes(
+        matches
+          .filter((m) => m.court != null)
+          .map((m) => ({ id: m.key, status: m.status, court: m.court })),
+      ),
+    [matches],
+  );
+
+  const handleResolveCourt = useCallback(
+    async (
+      dispute: CourtDispute,
+      chosenKey: string,
+      resolutionAction: 'keep_and_move' | 'keep_and_unassign' | 'keep_and_finish',
+    ) => {
+      const chosen = matches.find((m) => m.key === chosenKey);
+      const displaced = dispute.claims
+        .filter((c) => c.matchKey !== chosenKey)
+        .map((c) => matches.find((m) => m.key === c.matchKey))
+        .filter((m): m is RunMatch => m != null);
+      // The backend `resolve_court` command mutates rows in the unified
+      // meet `matches` table (ADR 0006: match records are non-merged).
+      // Bracket assignments live in the bracket session blob and have no
+      // row there yet, so a bracket-involved dispute can't be resolved
+      // through this command — logged as debt, not silently mis-applied.
+      if (!chosen || chosen.source !== 'meet' || displaced.some((m) => m.source !== 'meet') || displaced.length === 0) {
+        pushToast({
+          level: 'error',
+          message: 'Cannot resolve this court conflict here yet',
+          detail: 'A bracket match is involved: open it from the Bracket engine instead.',
+        });
+        return;
+      }
+      setResolvingKey(chosenKey);
+      try {
+        const outcome = await meetSubmit('resolve_court', chosen.id, {
+          chosenMatchKey: chosen.id,
+          displacedMatchKeys: displaced.map((m) => m.id),
+          action: resolutionAction,
+          note: null,
+        });
+        if (outcome.result.kind === 'conflict' || outcome.result.kind === 'staleVersion') {
+          pushToast({
+            level: 'error',
+            message: 'Could not resolve court conflict',
+            detail: outcome.result.message,
+          });
+        }
+      } finally {
+        setResolvingKey(null);
+      }
+    },
+    [matches, meetSubmit, pushToast],
+  );
 
   const conflictIds = useMemo(() => Object.keys(conflicts), [conflicts]);
   const labelForMatchId = useCallback(
@@ -588,6 +648,79 @@ export function RunSurface({
         </div>
       )}
 
+      {/* Court disputes — actionable assignments, not banners (D18, V3-OC19.1).
+          Each names the competing claims by match identity and offers one
+          button per resolution action; keyboard-reachable like any other
+          control on the surface. */}
+      {disputes.length > 0 && (
+        <div data-testid="run-disputes" className="shrink-0 space-y-2 px-4 pt-2">
+          {disputes.map((dispute) => {
+            const claimMatches = dispute.claims.map((claim) => ({
+              claim,
+              match: matches.find((m) => m.key === claim.matchKey),
+            }));
+            const bracketInvolved = claimMatches.some(({ match }) => match?.source !== 'meet');
+            return (
+              <div
+                key={dispute.courtId}
+                data-testid={`run-dispute-court-${dispute.courtId}`}
+                role="group"
+                aria-label={`Court ${dispute.courtId} needs resolution`}
+                className="rounded border border-status-overdue-solid bg-status-overdue-bg/10 p-3"
+              >
+                <p className={`${EYEBROW_CLASS} text-status-overdue-ink`}>
+                  Court {dispute.courtId} needs resolution: {claimMatches.length} matches assigned
+                </p>
+                <ul className="mt-1.5 space-y-2.5">
+                  {claimMatches.map(({ claim, match }) => (
+                    <li key={claim.matchKey} className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-foreground">
+                        {match ? `${formatMatchIdentity(match.identity, match.id)} · ${match.sideA} vs ${match.sideB}` : claim.matchKey}
+                      </span>
+                      <span className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          data-testid={`dispute-keep-move-${claim.matchKey}`}
+                          disabled={bracketInvolved || resolvingKey != null}
+                          onClick={() => handleResolveCourt(dispute, claim.matchKey, 'keep_and_move')}
+                          className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Keep this, move the other
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`dispute-keep-unassign-${claim.matchKey}`}
+                          disabled={bracketInvolved || resolvingKey != null}
+                          onClick={() => handleResolveCourt(dispute, claim.matchKey, 'keep_and_unassign')}
+                          className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Keep this, unassign the other
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`dispute-keep-finish-${claim.matchKey}`}
+                          disabled={bracketInvolved || resolvingKey != null}
+                          onClick={() => handleResolveCourt(dispute, claim.matchKey, 'keep_and_finish')}
+                          className="rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Keep this, mark the other finished
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {bracketInvolved ? (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    A bracket match is involved: resolve it from the Bracket engine; only
+                    meet-vs-meet court conflicts can be resolved here today.
+                  </p>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Content area — board+queue beside a PERSISTENT inspector. The inspector
           is always mounted (showing its "Select a match…" empty state) so the
           surface reads as interactive and operators see where actions live,
@@ -614,39 +747,11 @@ export function RunSurface({
             }}
           />
 
-          {/* On deck (CP5) — the next callable matches in queue order, so
-              the caller can warm players up ~10 minutes early. Read-only
-              labels; the queue rows below carry the actions. */}
-          {deck.length > 0 && (
-            <div
-              data-testid="run-on-deck"
-              className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/20 px-4 py-1.5"
-            >
-              <span className={`${EYEBROW_CLASS} text-ink-3`}>On deck</span>
-              {/* Deliberately UNNUMBERED: the queue below numbers rows by
-                  queue position, and the deck skips anyone whose player is on
-                  court, so a "#2" here would name a different match than "#2"
-                  there. Order is left-to-right; the strip's label says so. */}
-              {deck.map((m) => (
-                <span
-                  key={m.key}
-                  data-testid={`on-deck-${m.key}`}
-                  className="inline-flex items-baseline gap-1.5 text-xs"
-                >
-                  <span className="font-semibold sw-num text-2xs text-ink-3">{formatMatchIdentity(m.identity, m.id)}</span>
-                  <span className="text-muted-foreground">
-                    {m.sideA} v {m.sideB}
-                  </span>
-                </span>
-              ))}
-            </div>
-          )}
-
           {/* Queue — below the board. No border-t here: the board's own
               border-b IS the board→queue seam (seamed, not gapped — one
               hairline per seam, never two adjacent 1px borders). */}
           <div>
-            <div className="px-4 pb-1 pt-3 text-3xs font-semibold uppercase tracking-[0.08em] text-ink-faint">
+            <div className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint">
               Queue
             </div>
             <RunQueue

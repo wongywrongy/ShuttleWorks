@@ -211,7 +211,7 @@ export function bracketToOpsBlocks(data: BracketTournamentDTO): OpsBlock[] {
 
 /**
  * Auto-fit width one chip lane needs to read a label of `longestLabel`
- * characters at text-2xs: chip padding + inset + the M/B source square
+ * characters at text-xs: chip padding + inset + the M/B source square
  * (+42px) plus the Run board's right-aligned status stamp reserve (+34px —
  * "+30m" / "▸+15m"). ONE constant shared by BOTH operations boards so Plan
  * and Run cells are the same size at Auto fit and never drift apart

@@ -76,6 +76,7 @@ def page(client):
                 tournament_id=uuid.UUID(tid),
                 slug="spring-open",
                 is_open=True,
+                audience="public",
                 intro_text="All welcome.",
                 regulations_text="Play fair. Bring your own shuttles.",
                 waiver_required=True,
@@ -645,7 +646,7 @@ def closed_page(client):
     session = SessionLocal()
     try:
         session.add(
-            EntryPage(tournament_id=uuid.UUID(tid), slug="not-yet-open", is_open=False)
+            EntryPage(tournament_id=uuid.UUID(tid), slug="not-yet-open", is_open=False, audience="public")
         )
         session.commit()
     finally:
@@ -671,7 +672,7 @@ def second_open_page(client):
     try:
         session.get(Tournament, uuid.UUID(tid)).tournament_date = "2026-01-05"
         session.add(
-            EntryPage(tournament_id=uuid.UUID(tid), slug="aaa-open", is_open=True)
+            EntryPage(tournament_id=uuid.UUID(tid), slug="aaa-open", is_open=True, audience="public")
         )
         session.commit()
     finally:
@@ -918,9 +919,14 @@ def test_a_submission_answers_303_to_the_receipt_route(client, page, entrant):
     assert r.status_code == 303, r.text
     rows = _submissions()
     assert len(rows) == 1
+    # V3-24-1: the path segment is the SHORT REFERENCE, not the UUID - the
+    # same string the receipt prints and the entrant quotes. Read off the
+    # row, so this is the seam (redirect names what was recorded) and not a
+    # restatement of the generator.
     assert r.headers["location"] == (
-        f"/e/{page['slug']}/receipt/{rows[0].id}?totalCents=4000"
+        f"/e/{page['slug']}/receipt/{rows[0].short_reference}?totalCents=4000"
     )
+    assert re.fullmatch(r"[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}", rows[0].short_reference)
     # The fee is computed server-side in one place and stored as computed.
     assert rows[0].fee_total_cents == 4000
     # Q11: the version agreed to, recorded at that instant.
@@ -955,7 +961,7 @@ def test_the_receipt_redirect_states_the_recorded_total_and_only_that(
     rows = _submissions()
     assert len(rows) == 1
     assert first.headers["location"] == (
-        f"/e/{page['slug']}/receipt/{rows[0].id}"
+        f"/e/{page['slug']}/receipt/{rows[0].short_reference}"
         f"?totalCents={rows[0].fee_total_cents}"
     )
 

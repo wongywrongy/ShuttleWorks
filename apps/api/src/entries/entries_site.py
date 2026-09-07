@@ -1,4 +1,4 @@
-"""SP-P7's public-site projections: draws, seeds, winners, player pages.
+"""SP-P7's public-site projections: draws, player pages, schedule.
 
 ``/e/api/page/{slug}/…`` — slug-resolved like everything public (the
 uniform 404 of ``entries_public._resolve``; a raw tournament UUID is never
@@ -58,13 +58,18 @@ from db.models import (
     Tournament,
 )
 from repositories import LocalRepository, get_repository
+from shared.court_occupancy import CourtState, derive_court_states
+from shared.schedule_slots import add_minutes_wrapping, slot_time_from_start
+from shared.sides import is_pair_discipline
 
 router = APIRouter(prefix="/e/api/page/{slug}", tags=["entries-site"])
 
-# Short public max-age (§5): these answers are identical for every reader
+# Public, but no max-age (§5): these answers are identical for every reader
 # (no viewer block, no cookies read), and the SSR tier re-fetches per
 # document anyway — the header exists for intermediaries, not correctness.
-_CACHE = "public, max-age=30"
+# Audience and publication are revocable. Intermediaries may store the
+# projection, but must revalidate before serving it after a visibility change.
+_CACHE = "public, no-cache"
 
 
 # ---- shared plumbing ------------------------------------------------------
@@ -416,12 +421,14 @@ def _alphabetic_name_key(name: str) -> str:
 
 
 def _hhmm_plus(day_start: str, minutes: int) -> str:
-    """``dayStart`` + N minutes, wrapping midnight — mirrors the frontend's
-    ``slotToTime`` (lib/time.ts) so the public page and the operator's
-    schedule can never disagree about a start time."""
-    h, m = day_start.split(":")
-    total = (int(h) * 60 + int(m) + minutes) % (24 * 60)
-    return f"{total // 60:02d}:{total % 60:02d}"
+    """``dayStart`` + N minutes, wrapping midnight.
+
+    Redirects to ``shared/schedule_slots.py`` (D10) — the single authority
+    shared with ``workspace_signals.py`` and, transitively, the console's
+    ``slotToTime`` — so the public page and the operator's schedule can
+    never disagree about a start time.
+    """
+    return add_minutes_wrapping(day_start, minutes)
 
 
 # ---- DTOs -----------------------------------------------------------------
@@ -433,6 +440,8 @@ class DrawCardDTO(BaseModel):
     discipline: str
     kind: str  # the format tag: 'se' | 'rr' | 'de' | 'swiss' | 'compass' | 'monrad'
     size: int
+    # Draw participant/team count; it can differ from registered entries.
+    drawParticipantCount: int = 0
     hasConsolation: bool
     matchCoverage: "MatchCoverageDTO"
     recordScope: str
@@ -522,6 +531,40 @@ class MatchCoverageDTO(BaseModel):
     missing: Optional[int] = None
 
 
+class PublicUnresolvedSideDTO(BaseModel):
+    """Why a side has no (or an incomplete) resolved person — the public
+    twin of ``shared/sides.py``'s ``UnresolvedSideDTO`` (match-card §2.1).
+
+    Same field NAMES as the operator wire so one client model reads both
+    tiers, with two deliberate differences:
+
+    * ``reference`` carries the FORMATTED human match reference ("QF 3"),
+      not a raw play-unit id. The public tier has no ``matchIdentity.ts`` to
+      resolve one, so the reference and the legacy ``placeholder`` sentence
+      are spelled by one function (``_feeder_reference``) off one locator —
+      two spellings of one reference would be the D16 failure over again.
+    * ``known`` is always EMPTY here. The side's own ``persons`` (or, on
+      ``SideDTO``, the ``TeamDTO`` the client joins by ``participantKey``)
+      is the known set, and it has already been through the publication and
+      erasure gates in ``_participant_people``. Projecting the same people a
+      second time would put two gated copies of one identity on one wire,
+      free to diverge. The field is kept so the shape matches the contract
+      and the operator wire.
+    """
+
+    kind: Literal[
+        "bye",
+        "pending_member",
+        "winner_of",
+        "loser_of",
+        "withheld",
+        "undetermined",
+    ]
+    known: List[PersonReferenceDTO] = Field(default_factory=list)
+    missing: int = 0
+    reference: Optional[str] = None
+
+
 class SideDTO(BaseModel):
     participantKey: Optional[str] = None
     # "Winner of QF 3" / "Loser of R1 5" when the slot is fed by another
@@ -534,6 +577,11 @@ class SideDTO(BaseModel):
     # have no invented feeder and therefore leave both fields absent.
     feederNodeKey: Optional[str] = None
     feederTake: Optional[Literal["winner", "loser"]] = None
+    # The discriminated reason (contract §2.1), beside — not instead of —
+    # the legacy ``placeholder``/``bye`` pair: renderers switch on ``kind``
+    # rather than inferring one from a sentence, and an older client that
+    # only knows ``placeholder`` keeps working.
+    unresolved: Optional[PublicUnresolvedSideDTO] = None
 
 
 class NodeResultDTO(BaseModel):
@@ -604,42 +652,9 @@ class DrawDetailDTO(BaseModel):
     standings: Optional[List[StandingRowDTO]] = None
 
 
-class SeedLineDTO(BaseModel):
-    seed: int
-    persons: List[PersonReferenceDTO] = Field(default_factory=list)
-    club: Optional[str] = None
-
-
-class SeedsEventDTO(BaseModel):
-    eventCode: str
-    discipline: str
-    seeds: List[SeedLineDTO]
-
-
-class SeedsDTO(BaseModel):
-    published: bool
-    events: List[SeedsEventDTO] = []
-
-
 class HonorDTO(BaseModel):
     persons: List[PersonReferenceDTO] = Field(default_factory=list)
     club: Optional[str] = None
-
-
-class WinnersEventDTO(BaseModel):
-    eventCode: str
-    discipline: str
-    decided: bool
-    winner: Optional[HonorDTO] = None
-    runnerUp: Optional[HonorDTO] = None
-    semifinalists: List[HonorDTO] = []
-    finalScore: Optional[List[List[int]]] = None
-    finalists: List[HonorDTO] = []
-
-
-class WinnersDTO(BaseModel):
-    published: bool
-    events: List[WinnersEventDTO] = []
 
 
 class PlayerEventDTO(BaseModel):
@@ -669,6 +684,11 @@ class PlayerMatchSideDTO(BaseModel):
     placeholder: Optional[str] = None
     winner: bool = False
     seed: Optional[int] = None
+    # Contract §2.1. ``persons`` and ``unresolved`` are NOT mutually
+    # exclusive: a doubles side one player short carries the known person
+    # AND ``pending_member``, which is the whole point — it is what stops a
+    # half-formed pair rendering as an ordinary singles side.
+    unresolved: Optional[PublicUnresolvedSideDTO] = None
 
 
 class PlayerMatchDTO(BaseModel):
@@ -683,9 +703,19 @@ class PlayerMatchDTO(BaseModel):
     playedOn: Optional[str] = None
     localTime: Optional[str] = None
     courtLabel: Optional[str] = None
-    status: str = "scheduled"
+    # ``None`` means the persisted status is unrecognised (contract §2.2);
+    # never coerced to "scheduled" (D7).
+    status: Optional[str] = None
     durationMinutes: Optional[int] = None
     updatedAt: Optional[str] = None
+    # Match-card contract §2.3: publication is DATA, not styling, and it is
+    # not recoverable from ``score is None`` — an unplayed match has no score
+    # either. Without this the accessible summary said "Score not published"
+    # over every future match on the calendar (V3-11-3). Only the SCORES half
+    # is a per-match fact; ``personsPublished`` has no twin here because
+    # person publication is gated PER PERSON and already arrives minted as a
+    # dead ``PersonReferenceDTO`` (§2.3, ``_person_ref``).
+    scoresPublished: bool = True
 
 
 class PlayerPageDTO(BaseModel):
@@ -701,6 +731,7 @@ class ScheduleSideDTO(BaseModel):
     participantKey: Optional[str] = None
     persons: List[PersonReferenceDTO] = Field(default_factory=list)
     placeholder: Optional[str] = None
+    unresolved: Optional[PublicUnresolvedSideDTO] = None
 
 
 class ScheduleMatchDTO(BaseModel):
@@ -709,9 +740,14 @@ class ScheduleMatchDTO(BaseModel):
     eventCode: str
     discipline: Optional[str] = None
     roundLabel: Optional[str] = None
-    status: Literal[
-        "scheduled", "called", "live", "delayed", "completed", "walkover", "retired", "cancelled"
-    ] = "scheduled"
+    # ``None`` means the persisted status is unrecognised — the match is
+    # omitted from state facets and rendered with no state chip (contract
+    # §2.2); it is never coerced to ``scheduled`` (D7).
+    status: Optional[
+        Literal[
+            "scheduled", "called", "live", "delayed", "completed", "walkover", "retired", "cancelled"
+        ]
+    ] = None
     scheduledDate: Optional[str] = None
     scheduledTime: Optional[str] = None
     court: Optional[int] = None
@@ -830,16 +866,53 @@ def _unit_locator(event, knockout: bool) -> Dict[str, Tuple[str, str, int]]:
     return out
 
 
-def _placeholder(slot, locator) -> Optional[str]:
-    if slot.feeder_play_unit_id is None:
+def _feeder_reference(slot, locator, *, feeder_id=None, take: Optional[str] = None):
+    """``(kind, reference)`` for a feeder slot.
+
+    The one place a feeder reference is spelled on the public tier. It
+    replaced ``_placeholder`` outright rather than sitting beside it: two
+    functions formatting the same reference off the same locator is exactly
+    the drift D16 exists to prevent. ``_side`` builds both the discriminant
+    and the legacy ``placeholder`` sentence from this one return value."""
+    feeder_id = feeder_id if feeder_id is not None else slot.feeder_play_unit_id
+    if feeder_id is None:
         return None
-    where = locator.get(slot.feeder_play_unit_id)
-    take = "Loser" if slot.feeder_take == "loser" else "Winner"
+    take = take or ("Loser" if slot.feeder_take == "loser" else "Winner")
+    kind = "loser_of" if take.lower() == "loser" else "winner_of"
+    where = locator.get(feeder_id)
     if where is None:
-        return f"{take} of an earlier match"
+        return kind, "an earlier match"
     segment_label, short, position = where
     prefix = f"{segment_label} " if segment_label else ""
-    return f"{take} of {prefix}{short} {position}"
+    return kind, f"{prefix}{short} {position}"
+
+
+def _pending_pair_keys(event) -> frozenset:
+    """Participant keys in this draw that are a PAIR one member short.
+
+    The public twin of ``bracket/brackets.py::_participant_side``'s rule, on
+    the same two structural signals and with the same refusal to guess:
+
+    * a TEAM row with ONE member id — a pair slot with a member missing
+      outright. Not gated on the discipline: the TEAM type is itself the
+      claim "this participant is a pair", and it is trustworthy where a
+      free-text discipline ("Mixed Doubles") is not.
+    * an ENTRY-BACKED lone person in a PAIR discipline — what the entries
+      seam leaves behind when a partner invite is unaccepted.
+
+    An imported or hand-added PLAYER row that happens to hold a whole pair
+    under one name is left alone (see ``shared/sides.py``).
+    """
+    pair_event = is_pair_discipline(event.discipline, event.id)
+    keys = set()
+    for participant in event.participants:
+        members = list(participant.members or [])
+        if members:
+            if len(members) == 1:
+                keys.add(participant.id)
+        elif pair_event and (participant.entryPlayerId or participant.sourceEntryId):
+            keys.add(participant.id)
+    return frozenset(keys)
 
 
 def _derivation(unit, units, results, participant_id: str):
@@ -875,72 +948,87 @@ def _side(
     units,
     results,
     reveal_resolved: bool,
+    pending_keys: frozenset = frozenset(),
 ) -> SideDTO:
     """One side of a node. ``reveal_resolved`` is the results gate applied
     to advancement: when off, only structural placement may name a player —
     a side that got here by winning a recorded match is a result, and is
     projected back into the placeholder the slot held before advancement
-    overwrote it (``_derivation``)."""
+    overwrote it (``_derivation``).
+
+    ``pending_keys`` (``_pending_pair_keys``) is the set of participants that
+    are a pair one member short; a resolved side keyed on one of them carries
+    ``pending_member`` beside its persons rather than reading as singles.
+    """
     feeder_node_key = slot.feeder_play_unit_id
     feeder_take = (
         "loser"
         if feeder_node_key is not None and slot.feeder_take == "loser"
         else ("winner" if feeder_node_key is not None else None)
     )
+
+    def _resolved(participant_key: str) -> SideDTO:
+        return SideDTO(
+            participantKey=participant_key,
+            feederNodeKey=feeder_node_key,
+            feederTake=feeder_take,
+            unresolved=(
+                PublicUnresolvedSideDTO(kind="pending_member", missing=1)
+                if participant_key in pending_keys
+                else None
+            ),
+        )
+
+    def _feeder(kind_reference) -> SideDTO:
+        kind, reference = kind_reference
+        take = "Loser" if kind == "loser_of" else "Winner"
+        return SideDTO(
+            placeholder=f"{take} of {reference}",
+            feederNodeKey=feeder_node_key,
+            feederTake=feeder_take,
+            unresolved=PublicUnresolvedSideDTO(kind=kind, reference=reference),
+        )
+
     if slot.participant_id == _BYE:
         return SideDTO(
             bye=True,
             feederNodeKey=feeder_node_key,
             feederTake=feeder_take,
+            unresolved=PublicUnresolvedSideDTO(kind="bye"),
         )
     if slot.participant_id is not None:
         derived = _derivation(unit, units, results, slot.participant_id)
         if derived is not None:
             feeder_node_key, derived_take = derived
             feeder_take = derived_take.lower()
-        if not reveal_resolved:
-            if derived is not None:
-                dep_id, take = derived
-                where = locator.get(dep_id)
-                if where is None:
-                    return SideDTO(
-                        placeholder=f"{take} of an earlier match",
-                        feederNodeKey=feeder_node_key,
-                        feederTake=feeder_take,
-                    )
-                segment_label, short, position = where
-                prefix = f"{segment_label} " if segment_label else ""
-                return SideDTO(
-                    placeholder=f"{take} of {prefix}{short} {position}",
-                    feederNodeKey=feeder_node_key,
-                    feederTake=feeder_take,
-                )
-        return SideDTO(
-            participantKey=slot.participant_id,
-            feederNodeKey=feeder_node_key,
-            feederTake=feeder_take,
-        )
+        if not reveal_resolved and derived is not None:
+            dep_id, take = derived
+            return _feeder(_feeder_reference(slot, locator, feeder_id=dep_id, take=take))
+        return _resolved(slot.participant_id)
     if reveal_resolved and participant_ids:
         if participant_ids == [_BYE]:
             return SideDTO(
                 bye=True,
                 feederNodeKey=feeder_node_key,
                 feederTake=feeder_take,
+                unresolved=PublicUnresolvedSideDTO(kind="bye"),
             )
         # A resolved multi-member side is one participant (a pair) in this
         # model; the cached list is member ids only for teams, participant
         # ids otherwise — either way the FIRST id keys the lookup table the
         # tier joins against, and pairs are one participant row there.
-        return SideDTO(
-            participantKey=participant_ids[0],
-            feederNodeKey=feeder_node_key,
-            feederTake=feeder_take,
-        )
-    placeholder = _placeholder(slot, locator)
+        return _resolved(participant_ids[0])
+    feeder = _feeder_reference(slot, locator)
+    if feeder is not None:
+        return _feeder(feeder)
+    # Contract §6.2: no persons and no known reason is "To be decided" — the
+    # legacy "TBD" string stays on ``placeholder`` for older clients, but the
+    # discriminant is what a §6.1 renderer reads, and it never says TBD.
     return SideDTO(
-        placeholder=placeholder or "TBD",
+        placeholder="TBD",
         feederNodeKey=feeder_node_key,
         feederTake=feeder_take,
+        unresolved=PublicUnresolvedSideDTO(kind="undetermined"),
     )
 
 
@@ -1040,12 +1128,14 @@ def _bracket_indexes(payload):
 
 def _slot_time(payload, slot_id: Optional[int]) -> Optional[str]:
     """Venue-local start for a bracket slot. ``start_time`` names the day's
-    first slot; ``interval_minutes`` is the grid."""
-    if slot_id is None or payload.start_time is None:
+    first slot; ``interval_minutes`` is the grid.
+
+    Redirects to ``shared/schedule_slots.py`` (D10).
+    """
+    if payload.start_time is None:
         return None
-    minutes = slot_id * payload.interval_minutes
     base = payload.start_time
-    return _hhmm_plus(f"{base.hour:02d}:{base.minute:02d}", minutes)
+    return slot_time_from_start(base.hour, base.minute, slot_id, payload.interval_minutes)
 
 
 def _event_or_404(payload, draw_key: str):
@@ -1196,6 +1286,7 @@ def draws_index(
                     discipline=event.discipline,
                     kind=event.format,
                     size=event.bracket_size or event.participant_count,
+                    drawParticipantCount=event.participant_count,
                     hasConsolation=_has_consolation(event),
                     roundCount=max((len(segment.rounds) for segment in _event_segments(event)), default=len(event.rounds)),
                     champions=champions,
@@ -1238,6 +1329,7 @@ def draw_detail(
     knockout = event.format in _KNOCKOUT_FORMATS
     units, results, assignments = _bracket_indexes(payload)
     locator = _unit_locator(event, knockout)
+    pending_keys = _pending_pair_keys(event)
     roster_names = _bracket_roster_names(tournament)
     runtime = _schedule_runtime_snapshot(
         repo,
@@ -1273,6 +1365,7 @@ def draw_detail(
                                 units,
                                 results,
                                 results_on,
+                                pending_keys,
                             ),
                             _side(
                                 unit,
@@ -1282,6 +1375,7 @@ def draw_detail(
                                 units,
                                 results,
                                 results_on,
+                                pending_keys,
                             ),
                         ],
                         result=(
@@ -1352,6 +1446,7 @@ def draw_detail(
         discipline=event.discipline,
         kind=event.format,
         size=event.bracket_size or event.participant_count,
+        drawParticipantCount=event.participant_count,
         resultsPublished=results_on,
         **_event_projection_meta(event),
         identityScope=(event.config or {}).get("identity_scope"),
@@ -1448,85 +1543,6 @@ def players_index(
     )
 
 
-@router.get("/seeds", response_model=SeedsDTO)
-def seeds(
-    response: Response,
-    slug: str = Path(..., max_length=100),
-    repo: LocalRepository = Depends(get_repository),
-) -> SeedsDTO:
-    """Seeds are draw facts (§3.5) — gated by ``draws_published``."""
-    page, tournament = _page(repo, slug)
-    response.headers["Cache-Control"] = _CACHE
-    if not page.draws_published:
-        return SeedsDTO(published=False)
-    payload = _bracket(repo, tournament.id)
-    if payload is None:
-        return SeedsDTO(published=True)
-
-    roster_names = _bracket_roster_names(tournament)
-    identities = _public_identities(repo, tournament.id)
-    events_out = []
-    for event in payload.events:
-        seeded = sorted(
-            (p for p in event.participants if p.seed is not None),
-            key=lambda p: p.seed,
-        )
-        if not seeded:
-            continue
-        events_out.append(
-            SeedsEventDTO(
-                eventCode=_event_public_code(event),
-                discipline=event.discipline,
-                seeds=[
-                    SeedLineDTO(
-                        seed=p.seed,
-                        persons=_participant_people(
-                            p,
-                            roster_names,
-                            identities,
-                            event.id,
-                        ),
-                        club=_event_public_club(
-                            _participant_person_keys(p)[0],
-                            identities.clubs,
-                            identities,
-                            event.id,
-                            _event_public_code(event),
-                        )
-                        or next(
-                            (
-                                _event_public_club(
-                                    m,
-                                    identities.clubs,
-                                    identities,
-                                    event.id,
-                                    _event_public_code(event),
-                                )
-                                for m in _participant_person_keys(p)[1:]
-                                if _event_public_club(
-                                    m,
-                                    identities.clubs,
-                                    identities,
-                                    event.id,
-                                    _event_public_code(event),
-                                )
-                            ),
-                            None,
-                        ),
-                    )
-                    for p in seeded
-                ],
-            )
-        )
-    return SeedsDTO(published=True, events=events_out)
-
-
-def _honor(payload_team: Optional[TeamDTO]) -> Optional[HonorDTO]:
-    if payload_team is None:
-        return None
-    return HonorDTO(persons=payload_team.persons, club=payload_team.club)
-
-
 def _finalist_honors(final_unit, teams: Dict[str, TeamDTO]) -> List[HonorDTO]:
     """Keep final sides grouped, especially for doubles.
 
@@ -1571,61 +1587,6 @@ def _remaining_match_count(event, units, results) -> int:
             or _BYE in (units[unit_id].side_b or [])
         )
     )
-
-
-@router.get("/winners", response_model=WinnersDTO)
-def winners(
-    response: Response,
-    slug: str = Path(..., max_length=100),
-    repo: LocalRepository = Depends(get_repository),
-) -> WinnersDTO:
-    """Winner and runner-up per event as results complete (§3.6) — result
-    data, so gated by ``results_published``. Partial state is fine: an
-    undecided event reports ``decided: false``."""
-    page, tournament = _page(repo, slug)
-    response.headers["Cache-Control"] = _CACHE
-    if not page.results_published:
-        return WinnersDTO(published=False)
-    payload = _bracket(repo, tournament.id)
-    if payload is None:
-        return WinnersDTO(published=True)
-
-    roster_names = _bracket_roster_names(tournament)
-    identities = _public_identities(repo, tournament.id)
-    units, results, _ = _bracket_indexes(payload)
-    events_out = []
-    for event in payload.events:
-        teams = {
-            t.participantKey: t
-            for t in _teams(
-                event,
-                identities.clubs,
-                roster_names,
-                identities,
-                event.id,
-            )
-        }
-        entry = _event_winner(event, units, results)
-        winner_key, runner_key, semi_keys = entry
-        final_unit = _event_final_unit(event, units)
-        final_result = results.get(final_unit.id) if final_unit is not None else None
-        events_out.append(
-            WinnersEventDTO(
-                eventCode=_event_public_code(event),
-                discipline=event.discipline,
-                decided=winner_key is not None,
-                winner=_honor(teams.get(winner_key)) if winner_key else None,
-                runnerUp=_honor(teams.get(runner_key)) if runner_key else None,
-                semifinalists=[
-                    honor
-                    for honor in (_honor(teams.get(k)) for k in semi_keys)
-                    if honor is not None
-                ],
-                finalScore=_score_rows(final_result.score) if final_result is not None else None,
-                finalists=_finalist_honors(final_unit, teams),
-            )
-        )
-    return WinnersDTO(published=True, events=events_out)
 
 
 def _decided_sides(unit, result) -> Optional[Tuple[str, str]]:
@@ -1863,6 +1824,7 @@ def player_page(
                 continue
             knockout = event.format in _KNOCKOUT_FORMATS
             locator = _unit_locator(event, knockout)
+            pending_keys = _pending_pair_keys(event)
             teams = {
                 t.participantKey: t
                 for t in _teams(
@@ -1899,6 +1861,7 @@ def player_page(
                                 units,
                                 results,
                                 results_on,
+                                pending_keys,
                             )
                             if projected.participantKey:
                                 projected_keys.add(projected.participantKey)
@@ -1913,6 +1876,7 @@ def player_page(
                                     placeholder=("Bye" if projected.bye else projected.placeholder),
                                     winner=bool(decided and result.winner_side == side_tag),
                                     seed=team.seed if team else None,
+                                    unresolved=projected.unresolved,
                                 )
                             )
                         # Involvement AS THE PUBLIC VIEW KNOWS IT: the same
@@ -1945,6 +1909,7 @@ def player_page(
                                 localTime=unit.local_time,
                                 courtLabel=unit.court_label,
                                 status=match_status,
+                                scoresPublished=results_on,
                                 durationMinutes=(
                                     assignment.duration_slots * payload.interval_minutes
                                     if assignment is not None
@@ -2199,11 +2164,14 @@ def _meet_matches(
                 playedOn=None,
                 localTime=None,
                 courtLabel=None,
+                # Same D7/D8 fix as ``_meet_public_status``: never coerce an
+                # unrecognised status to "scheduled", and never upgrade
+                # "called" to "live" — results-off hides scores, not state.
                 status=(
                     "completed" if finished
-                    else "live" if state is not None and state.status in {"playing", "called"}
-                    else "scheduled"
+                    else _meet_public_status(state.status if state is not None else "scheduled")
                 ),
+                scoresPublished=results_on,
                 durationMinutes=(
                     int(assignment.get("durationSlots", 1)) * interval
                     if assignment is not None and isinstance(interval, int)
@@ -2216,6 +2184,67 @@ def _meet_matches(
 
 
 # ---- schedule / live projection ------------------------------------------
+
+
+@dataclass(frozen=True)
+class _LiveClaim:
+    """Adapter satisfying ``shared.court_occupancy``'s ``OccupancyMatch``
+    protocol for a currently-running bracket court assignment. A bracket
+    assignment has no ``MatchStatus`` of its own — "currently playing" is
+    expressed here as "started, not yet ended, not finished" — so every
+    claim this module hands to the authority is pre-filtered to that
+    condition and reported as the canonical ``"playing"`` status."""
+
+    id: str
+    status: str
+    court_id: Optional[int]
+
+
+def _merge_live_bracket_courts(courts: Dict[str, int], assignments) -> None:
+    """Add only currently running, Operations-owned bracket court claims.
+
+    The persisted bracket plan contains future placements too; those are not
+    an authoritative live court until Operations starts the assignment. A
+    materialized Match court remains authoritative.
+
+    Court disputes (two or more current claims on one physical court) are
+    derived by the one authority, ``shared.court_occupancy`` — this module
+    keeps no conflict detector of its own (contract §4, D1). Per ruling C2,
+    a dispute withholds only the court field for the claiming units; the
+    match rows themselves are untouched here and stay in the public
+    projection either way (the withheld unit simply has no ``courts`` entry
+    for the match loop above to read).
+    """
+    claims: List[_LiveClaim] = []
+    court_by_unit: Dict[str, int] = {}
+    fallback: Dict[str, int] = {}
+    for assignment in assignments:
+        unit_id = assignment.play_unit_id
+        court_id = assignment.court_id
+        if (
+            not unit_id
+            or court_id is None
+            or assignment.actual_start_slot is None
+            or assignment.actual_end_slot is not None
+            or assignment.finished
+        ):
+            continue
+        effective = courts.get(unit_id, court_id)
+        claims.append(_LiveClaim(id=unit_id, status="playing", court_id=effective))
+        court_by_unit[unit_id] = effective
+        if unit_id not in courts:
+            fallback[unit_id] = court_id
+
+    states: Dict[int, CourtState] = derive_court_states(claims)
+    disputed_courts = {court for court, state in states.items() if state == "disputed"}
+    conflicts = {
+        unit_id for unit_id, court in court_by_unit.items() if court in disputed_courts
+    }
+    for unit_id, court_id in fallback.items():
+        if unit_id not in conflicts:
+            courts[unit_id] = court_id
+    for unit_id in conflicts:
+        courts.pop(unit_id, None)
 
 
 def _schedule_runtime_snapshot(
@@ -2253,6 +2282,7 @@ def _schedule_runtime_snapshot(
         state_rows = repo.match_states.list_for_tournament(tournament.id)
         states = {row.match_id: row for row in state_rows}
         if bracket_payload is not None:
+            _merge_live_bracket_courts(courts, bracket_payload.assignments)
             bracket_revisions = [
                 (
                     row.id,
@@ -2282,6 +2312,7 @@ def _schedule_runtime_snapshot(
                             row.actual_end_slot,
                             row.started,
                             row.finished,
+                            row.court_id,
                         ],
                         separators=(",", ":"),
                     ),
@@ -2424,6 +2455,7 @@ def _bracket_schedule_matches(
         }
         knockout = event.format in _KNOCKOUT_FORMATS
         locator = _unit_locator(event, knockout)
+        pending_keys = _pending_pair_keys(event)
         segments = _event_segments(event)
         for segment in segments:
             total = len(segment.rounds)
@@ -2447,7 +2479,8 @@ def _bracket_schedule_matches(
                     sides: List[ScheduleSideDTO] = []
                     for cached, slot in ((unit.side_a, unit.slot_a), (unit.side_b, unit.slot_b)):
                         projected = _side(
-                            unit, cached, slot, locator, units, results, results_on
+                            unit, cached, slot, locator, units, results, results_on,
+                            pending_keys,
                         )
                         team = teams.get(projected.participantKey) if projected.participantKey else None
                         sides.append(
@@ -2455,6 +2488,7 @@ def _bracket_schedule_matches(
                                 participantKey=projected.participantKey,
                                 persons=team.persons if team else [],
                                 placeholder=("Bye" if projected.bye else projected.placeholder),
+                                unresolved=projected.unresolved,
                             )
                         )
                     scheduled = _slot_time(payload, assignment.slot_id if assignment else None)
@@ -2474,6 +2508,30 @@ def _bracket_schedule_matches(
                         updatedAt=updated_at,
                     ))
     return out
+
+
+def _meet_public_status(raw_state: Optional[str]) -> Optional[str]:
+    """Map a persisted (or legacy) Meet match status to the public wire status.
+
+    Two rules from contract §9.1, fixed here (D7, D8):
+
+    - **Never coerce an unrecognised status to ``scheduled``.** An unknown
+      value yields ``None`` — the caller omits the match from state facets
+      and renders no state chip (§2.2). This is the mechanism that used to
+      let a cancelled match reappear as an upcoming one.
+    - **``called`` must not be published as ``live``,** and results-off must
+      not synthesise a play state at all: turning results off hides scores,
+      not match progression, so this mapping does not consult the
+      results-publication flag. Only the score/ledger is gated by it,
+      downstream in the caller.
+    """
+    if raw_state == "playing":
+        return "live"
+    if raw_state == "finished":
+        return "completed"
+    if raw_state in {"retired", "called", "delayed", "cancelled", "scheduled"}:
+        return raw_state
+    return None
 
 
 def _meet_schedule_matches(
@@ -2521,14 +2579,7 @@ def _meet_schedule_matches(
         match_id = match["id"]
         state_row = states.get(match_id)
         raw_state = state_row.status if state_row is not None else "scheduled"
-        if results_on:
-            state = {
-                "playing": "live",
-                "finished": "completed",
-                "retired": "retired",
-            }.get(raw_state, raw_state if raw_state in {"called", "delayed", "cancelled"} else "scheduled")
-        else:
-            state = "live" if raw_state in {"playing", "called"} else "scheduled"
+        state = _meet_public_status(raw_state)
         assignment = assignments.get(match_id)
         scheduled = None
         if assignment and isinstance(day_start, str) and isinstance(interval, int) and isinstance(assignment.get("slotId"), int):
@@ -2670,7 +2721,27 @@ def schedule_matches(
         matches = [m for m in matches if m.court == court]
     if state:
         matches = [m for m in matches if m.status == state]
-    matches.sort(key=lambda m: (m.scheduledDate is None, m.scheduledDate or "", m.scheduledTime is None, m.scheduledTime or "", m.matchKey))
+    # Public readers need the live queue immediately, even when the event's
+    # bracket contains many future-round placeholders.  Apply this ordering
+    # to the complete filtered result set before slicing a page: a live match
+    # beyond page one must still be the first thing a spectator sees. Within
+    # each state group retain deterministic tournament chronology and the
+    # stable match key as a final tie-breaker.
+    def schedule_order(item: ScheduleMatchDTO) -> tuple[int, bool, str, bool, str, str]:
+        state_rank = (
+            0 if item.status == "live" else
+            2 if item.status in {"completed", "walkover", "retired", "cancelled"} else 1
+        )
+        return (
+            state_rank,
+            item.scheduledDate is None,
+            item.scheduledDate or "",
+            item.scheduledTime is None,
+            item.scheduledTime or "",
+            item.matchKey,
+        )
+
+    matches.sort(key=schedule_order)
 
     day_counts: Dict[str, int] = {}
     for item in facets_source:
@@ -2680,7 +2751,10 @@ def schedule_matches(
         days=[ScheduleDayFacetDTO(day=value, count=day_counts[value]) for value in sorted(day_counts)],
         events=sorted({m.eventCode for m in facets_source if m.eventCode}),
         courts=sorted({m.court for m in facets_source if m.court is not None}),
-        states=sorted({m.status for m in facets_source}),
+        # An unrecognised status is omitted here (contract §2.2) — a
+        # spectator cannot filter by a state that was never coerced into
+        # existence.
+        states=sorted({m.status for m in facets_source if m.status is not None}),
     )
     total = len(matches)
     start = (page - 1) * page_size

@@ -16,7 +16,7 @@
 import { useMemo } from 'react';
 import type { OpsBlock } from '../opsBlock';
 import type { CourtLane, RunMatch } from '../runtime/runModel';
-import { sideNameLines } from '../../../lib/names';
+import { sideNameLines } from '../../../platform/domain/sides';
 import { STATE_WORD } from '../../../lib/stateWords';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
@@ -60,7 +60,7 @@ function bandFor(now: RunMatch | undefined): {
   if (now.timeliness === 'late')
     return { cls: 'bg-status-late-solid text-status-late-ink', word: STATE_WORD.late };
   if (now.status === 'playing')
-    return { cls: 'bg-status-live-solid text-status-live-ink', word: STATE_WORD.live };
+    return { cls: 'bg-surface-band text-foreground', word: STATE_WORD.onCourt };
   if (now.status === 'called')
     return { cls: 'bg-status-called-solid text-status-called-ink', word: STATE_WORD.called };
   if (now.timeliness === 'due')
@@ -148,16 +148,17 @@ export function RunCourtGrid({
   return (
     <div
       data-testid="run-court-grid"
-      className="grid shrink-0 gap-2.5 border-b border-border p-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]"
+      className="grid shrink-0 grid-cols-1 gap-2.5 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-3"
     >
       {lanes.map((lane) => {
         const now = lane.now;
+        const conflict = lane.conflict;
         const identityLabel = now ? formatMatchIdentity(now.identity, now.id) : '';
         const band = bandFor(now);
         const figure = bandFigure(now);
         const head = (
           <div
-            className={`flex items-center justify-between gap-2 whitespace-nowrap px-2.5 py-1.5 text-2xs font-extrabold uppercase tracking-[0.06em] ${band.cls}`}
+            className={`flex items-center justify-between gap-2 whitespace-nowrap px-2.5 py-1.5 text-xs font-extrabold uppercase tracking-[0.06em] ${band.cls}`}
           >
             <span>Court {lane.court}</span>
             <span className="sw-num">
@@ -171,6 +172,47 @@ export function RunCourtGrid({
             </span>
           </div>
         );
+
+        if (conflict && conflict.length > 1) {
+          return (
+            <div
+              key={lane.court}
+              data-testid={`run-court-conflict-${lane.court}`}
+              className="flex flex-col overflow-hidden rounded border border-status-overdue-solid bg-status-overdue-bg/20"
+            >
+              <div className="flex items-center justify-between gap-2 bg-status-overdue-solid px-2.5 py-1.5 text-xs font-extrabold uppercase tracking-[0.06em] text-status-overdue-ink">
+                <span>Court {lane.court}</span>
+                {/* V3-OC19.1: never "Resolve this in Operations" while
+                 * Operations IS the current surface. */}
+                <span>Needs resolution</span>
+              </div>
+              <div className="space-y-2 px-2.5 py-3">
+                <p className="text-xs font-semibold text-foreground">
+                  Two matches are assigned to this court.
+                </p>
+                <div className="space-y-1">
+                  {conflict.map((match) => (
+                    <button
+                      key={match.key}
+                      type="button"
+                      data-testid={`run-conflict-match-${match.key}`}
+                      onClick={() => onSelect(match.key)}
+                      // V3-OC19.1: a direct, equally-named route to EACH
+                      // affected assignment — the same "Open ›" affordance an
+                      // ordinary occupied card offers, not a bare row.
+                      className="flex w-full items-center justify-between gap-2 rounded border border-border bg-card px-2 py-1 text-left text-xs font-semibold text-foreground hover:border-accent"
+                    >
+                      <span className="min-w-0 break-words">
+                        {formatMatchIdentity(match.identity, match.id)} · {match.sideA} vs {match.sideB}
+                      </span>
+                      <span className="shrink-0 text-accent">Open ›</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         if (!now) {
           return (
@@ -221,9 +263,14 @@ export function RunCourtGrid({
             {head}
             <div className="flex flex-col gap-[5px] px-2.5 py-[7px]">
               <SideRow name={now.sideA} />
-              <SideRow name={now.sideB} />
+              <div className="border-t border-rule-soft pt-1.5">
+                <span className="mb-0.5 block text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
+                  VS
+                </span>
+                <SideRow name={now.sideB} />
+              </div>
             </div>
-            <div className="mt-auto flex items-center justify-between gap-2 border-t border-rule-soft px-2.5 py-[5px] text-3xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
+            <div className="mt-auto flex items-center justify-between gap-2 border-t border-rule-soft px-2.5 py-[5px] text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
               <span className="min-w-0 break-words sw-num">{identityLabel}</span>
               <span className="shrink-0 text-accent">Open ›</span>
             </div>

@@ -17,16 +17,17 @@ import { useMemo } from 'react';
 import type { OpsBlock } from '../opsBlock';
 import { SELECTABLE_ROW_FOCUS, selectableRowProps } from '../../../lib/selectableRow';
 import { EYEBROW_CLASS } from '../../../lib/utils';
-import { MODULE_LABELS } from '../../../platform/product-shell/types';
 import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
+import { STATE_WORD } from '../../../lib/stateWords';
 
-const SOURCE_LABEL: Record<'meet' | 'bracket', string> = {
-  meet: MODULE_LABELS.meet,
-  bracket: MODULE_LABELS.bracket,
-};
-const SOURCE_SQUARE: Record<'meet' | 'bracket', string> = {
-  meet: 'bg-module-meet/15 text-module-meet',
-  bracket: 'bg-module-bracket/15 text-module-bracket',
+// Shared match-state vocabulary (contract §2) — `started` reads as
+// "On court" everywhere in the console; the literal 'Playing' this used to
+// carry (D5) is deleted, not redirected to a second constant.
+const PLAN_STATE_LABEL: Record<OpsBlock['status'], string> = {
+  scheduled: STATE_WORD.scheduled,
+  called: STATE_WORD.called,
+  started: STATE_WORD.onCourt,
+  finished: STATE_WORD.done,
 };
 
 export interface PlanCallListProps {
@@ -116,19 +117,12 @@ export function PlanCallList({
                 <span className="w-6 flex-shrink-0 text-right text-2xs sw-num text-ink-faint">
                   #{i + 1}
                 </span>
-                <span
-                  aria-hidden
-                  title={SOURCE_LABEL[b.source]}
-                  className={`inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-xs text-[9px] font-semibold sw-num ${SOURCE_SQUARE[b.source]}`}
-                >
-                  {SOURCE_LABEL[b.source][0]}
-                </span>
                 <span className="w-16 flex-shrink-0 break-words text-2xs font-semibold sw-num text-ink-3">
                   {formatMatchIdentity(b.identity, b.id)}
                 </span>
                 <span className="min-w-[10rem] flex-1 break-words text-sm">
                   {b.sideA}
-                  <span className="px-1.5 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className="px-1.5 text-xs uppercase tracking-[0.06em] text-muted-foreground">
                     v
                   </span>
                   {b.sideB}
@@ -137,6 +131,9 @@ export function PlanCallList({
                     ORDER; the clock time is the solve's estimate. */}
                 <span className="flex-shrink-0 text-2xs sw-num text-muted-foreground">
                   ~{formatSlot(b.slot ?? 0)}
+                </span>
+                <span className="flex-shrink-0 text-xs text-muted-foreground">
+                  {PLAN_STATE_LABEL[b.status]}
                 </span>
               </div>
             </li>

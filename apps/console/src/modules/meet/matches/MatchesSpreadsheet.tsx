@@ -39,7 +39,7 @@ import {
   type MatchInspectorModel,
   type SetPair,
 } from '../../../components/control-plane';
-import { formatPlayerName } from '../../../lib/names';
+import { formatPersonName } from '../../../platform/domain/sides';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { usePlayerMap } from '../../../store/selectors';
 import type { MatchDTO, PlayerDTO } from '../../../api/dto';
@@ -219,7 +219,8 @@ export function MatchesSpreadsheet({
 
     const sideLabel = (ids: string[]) => {
       const labels = ids.map((id) => playerById.get(id)?.name || id);
-      return labels.length > 0 ? labels.join(' / ') : 'No players';
+      // match-card contract §2.1/§2.4 — "To be decided", never "No players".
+      return labels.length > 0 ? labels.join(' / ') : 'To be decided';
     };
 
     const model: MatchInspectorModel = {
@@ -306,7 +307,7 @@ export function MatchesSpreadsheet({
   if (matches.length === 0) {
     return (
       <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-        No matches yet. Add one manually or use auto-generate above.
+        No matches yet. Use Regenerate from roster above to build the supported lineup, or add a custom match from the actions bar.
       </div>
     );
   }
@@ -595,7 +596,10 @@ function PlayerCellSummary({
       className={`${MEET_MATCH_CELL.side} flex flex-wrap items-baseline gap-x-1 text-2sm leading-relaxed`}
     >
       {named.length === 0 ? (
-        <span className="text-xs italic text-muted-foreground">No players</span>
+        // match-card contract §2.1/§2.4: an unresolved side never renders
+        // "No players" — the fixed label for a slot with no claim at all is
+        // "To be decided" (same word `sides.ts`'s `undetermined` kind uses).
+        <span className="text-xs italic text-muted-foreground">To be decided</span>
       ) : (
         named.map((p, i) => (
           <span key={p.id} className="inline-flex items-baseline">
@@ -609,7 +613,7 @@ function PlayerCellSummary({
                 finished match is not (MAT-3). The outcome itself lives in
                 the result cell now. */}
             <span className={winner ? 'font-semibold text-foreground' : 'text-foreground'}>
-              {p.name ? formatPlayerName(p.name) : '–'}
+              {p.name ? formatPersonName(p.name) : '–'}
             </span>
             {i < named.length - 1 ? (
               <span className="px-1 text-muted-foreground">/</span>

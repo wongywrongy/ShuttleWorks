@@ -1,7 +1,11 @@
 """Fast, exact allow-list guards for SP-P9's public projection spine."""
 
 from entries.entries_json import EntrantRowDTO, ReserveRowDTO
-from entries.entries_me import MyEntryLineDTO, ReceiptEntryLineDTO
+from entries.entries_me import (
+    MyEntryLineDTO,
+    MyTournamentCardDTO,
+    ReceiptEntryLineDTO,
+)
 from entries.entries_site import (
     DrawCardDTO,
     DrawPlayerDTO,
@@ -17,9 +21,7 @@ from entries.entries_site import (
     ScheduleFacetsDTO,
     ScheduleMatchDTO,
     ScheduleSideDTO,
-    SeedLineDTO,
     TeamDTO,
-    WinnersEventDTO,
 )
 
 
@@ -28,22 +30,21 @@ EXPECTED = {
     PersonReferenceDTO: {"identity", "resolution", "label"},
     EntrantRowDTO: {"person", "club", "eventCodes"},
     ReserveRowDTO: {"eventCode", "position", "person", "club"},
-    DrawCardDTO: {"drawKey", "eventCode", "discipline", "kind", "size", "hasConsolation", "matchCoverage", "recordScope", "topologyScope", "roundCount", "champions", "finalists", "remainingMatchCount", "historical", "sourceUrl"},
+    DrawCardDTO: {"drawKey", "eventCode", "discipline", "kind", "size", "hasConsolation", "matchCoverage", "recordScope", "topologyScope", "roundCount", "champions", "finalists", "drawParticipantCount", "remainingMatchCount", "historical", "sourceUrl"},
     DrawPlayerDTO: {"playerKey", "person", "club", "eventCodes"},
     TeamDTO: {"participantKey", "persons", "club", "seed"},
-    SeedLineDTO: {"seed", "persons", "club"},
     HonorDTO: {"persons", "club"},
-    WinnersEventDTO: {"eventCode", "discipline", "decided", "winner", "runnerUp", "semifinalists", "finalScore", "finalists"},
     PlayerDrawPathDTO: {"roundLabel", "opponents"},
     PlayerEventDTO: {"code", "discipline", "partner", "seed", "drawPath"},
-    PlayerMatchSideDTO: {"persons", "placeholder", "winner", "seed"},
-    PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt"},
+    PlayerMatchSideDTO: {"persons", "placeholder", "winner", "seed", "unresolved"},  # v3 pkg 29: the discriminated Side.unresolved (contract §2.1)
+    PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt", "scoresPublished"},  # v3 pkg 29
     PlayerPageDTO: {"person", "club", "events", "matches"},
     ScheduleDayFacetDTO: {"day", "count"},
-    ScheduleSideDTO: {"participantKey", "persons", "placeholder"},
+    ScheduleSideDTO: {"participantKey", "persons", "placeholder", "unresolved"},  # v3 pkg 29
     ScheduleMatchDTO: {"matchKey", "source", "eventCode", "discipline", "roundLabel", "status", "scheduledDate", "scheduledTime", "court", "sides", "score", "walkover", "updatedAt"},
     ScheduleFacetsDTO: {"days", "events", "courts", "states"},
-    MyEntryLineDTO: {"eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner"},
+    MyEntryLineDTO: {"eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner", "partnerInviteMailFailed", "shortReference"},  # v3 pkg 24: delivery flag, no person data. pkg 30 (V3-24-1): the reference of the act this line came from - this account's own name for its own submission, no person data
+    MyTournamentCardDTO: {"slug", "tournamentName", "orgName", "entrantsPublished", "resultsPublished", "date", "venueName", "status", "feeTotalCents", "submittedAt", "events", "submissionId", "withdrawsUntil", "shortReference"},  # v3 pkg 30 (V3-24-1)
     ReceiptEntryLineDTO: {"eventCode", "discipline", "player", "partner", "state"},
 }
 
@@ -66,3 +67,21 @@ def test_the_identity_and_contact_privacy_seams_stay_separate():
     forbidden = {"email", "phone", "feeCents", "submission", "accountId"}
     for model in EXPECTED:
         assert key_set(model).isdisjoint(forbidden), model.__name__
+
+
+def test_public_my_entries_keyset_rejects_extra_field():
+    """The negative control for the card the entrant's own page renders.
+
+    ``MyTournamentCardDTO`` is the one projection on this list that grew a
+    field in SP-PUB-AUDIT-1, so the guard that would have caught a stray one
+    is asserted directly rather than assumed: a subclass with a single extra
+    key must FAIL the exact-set check the suite applies to the real DTO.
+    """
+
+    class LeakyCard(MyTournamentCardDTO):
+        accountEmail: str = ""
+
+    expected = EXPECTED[MyTournamentCardDTO]
+    assert key_set(MyTournamentCardDTO) == expected
+    assert key_set(LeakyCard) != expected
+    assert key_set(LeakyCard) - expected == {"accountEmail"}

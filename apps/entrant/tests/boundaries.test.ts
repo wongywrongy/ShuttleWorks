@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { afterEach, expect, test } from 'vitest';
 
@@ -18,15 +18,16 @@ afterEach(cleanup);
 
 /** Runs the real CLI the CI job runs. Returns exit code + combined output. */
 function depcruise(): { code: number; out: string } {
-  try {
-    const out = execFileSync('npx', ['depcruise', 'app', '--output-type', 'err'], {
-      encoding: 'utf8',
-    });
-    return { code: 0, out };
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
-    return { code: e.status ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` };
-  }
+  // dependency-cruiser writes the human-readable `err` report to stderr even
+  // on success; capture both streams so the test observes the same evidence a
+  // developer sees in a terminal.
+  const result = spawnSync('npx', ['depcruise', 'app', '--output-type', 'err'], {
+    encoding: 'utf8',
+  });
+  return {
+    code: result.status ?? 1,
+    out: `${result.stdout ?? ''}${result.stderr ?? ''}`,
+  };
 }
 
 test('the entrant app is clean against its own boundary rules', () => {

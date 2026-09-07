@@ -13,7 +13,8 @@ CSRF = {"X-ShuttleWorks-CSRF": "1"}
 
 ROW_KEYS = {
     "slug", "name", "organizer", "venueName", "date", "eventCount",
-    "status", "closesInDays", "drawsPublished", "winnersPublished",
+    "status", "closesInDays", "closesAt", "timeZone", "locality",
+    "drawsPublished", "winnersPublished",
 }
 
 
@@ -39,17 +40,21 @@ def season(client):
     next_month = (now + timedelta(days=30)).date().isoformat()
 
     def make(session, slug, tournament_date, *, draws=False, results=False,
-             closes=None, is_open=True, with_event=True):
+             closes=None, is_open=True, with_event=True, venue_address=None,
+             time_zone=None):
         tid = client.post(
             "/tournaments", json={"name": slug.replace("-", " ").title()},
             headers=CSRF,
         ).json()["id"]
         t = session.get(Tournament, uuid.UUID(tid))
         t.tournament_date = tournament_date
+        if time_zone is not None:
+            t.time_zone = time_zone
         session.add(EntryPage(
             tournament_id=uuid.UUID(tid), slug=slug, is_open=is_open,
-            venue_name=f"{slug} hall", draws_published=draws,
-            results_published=results,
+            audience="public",
+            venue_name=f"{slug} hall", venue_address=venue_address,
+            draws_published=draws, results_published=results,
         ))
         if with_event:
             session.add(EntryEvent(
@@ -60,7 +65,19 @@ def season(client):
 
     session = SessionLocal()
     try:
-        make(session, "case-open", next_month, closes=now + timedelta(days=5))
+        make(
+            session, "case-open", next_month, closes=now + timedelta(days=5),
+            venue_address="4 Kingsway, London, United Kingdom",
+            time_zone="Europe/London",
+        )
+        # V3-26-7: the demo simulator's seed data packs an itinerary into
+        # venue_address as "<place>; <date range>; <draw format>" — the
+        # locality heuristic must still surface the place alone.
+        make(
+            session, "case-itinerary-address", next_month,
+            closes=now + timedelta(days=5),
+            venue_address="Asan, South Korea; 4-9 August; 32MS/32WS/32MD/32WD/32XD",
+        )
         make(session, "case-closed", next_month, closes=now - timedelta(days=1))
         make(session, "case-live", today, draws=True)
         make(session, "case-quiet-live", today)
@@ -85,6 +102,20 @@ def test_every_enum_case_computes_serverside(client, season):
     rows = rows_by_slug(client.get("/e/api/pages").json())
     assert rows["case-open"]["status"] == "entries_open"
     assert rows["case-open"]["closesInDays"] == 5
+    # V3-PE01.2/PE01.3: the exact deadline instant, the tournament's own
+    # zone, and a best-effort locality out of the free-text venue address.
+    assert rows["case-open"]["closesAt"] is not None
+    assert rows["case-open"]["timeZone"] == "Europe/London"
+    assert rows["case-open"]["locality"] == "London, United Kingdom"
+    # V3-26-7: an itinerary-shaped address ("<place>; <dates>; <draw
+    # format>") must still reduce to place-only, not the whole string.
+    assert rows["case-itinerary-address"]["locality"] == "Asan, South Korea"
+    # A closed row has no open-event deadline to count down to, so no exact
+    # instant either — never a stale or invented one.
+    assert rows["case-closed"]["closesAt"] is None
+    # No address was given for this row (`make`'s default) — a heuristic
+    # over free text must omit, never guess, when it has nothing to parse.
+    assert rows["case-closed"]["locality"] is None
     assert rows["case-closed"]["status"] == "entries_closed"
     assert rows["case-live"]["status"] == "in_progress_live"
     assert rows["case-quiet-live"]["status"] == "in_progress"
@@ -110,7 +141,7 @@ def test_the_key_set_is_pinned(client, season):
 
 def test_counts_match_the_rows(client, season):
     body = client.get("/e/api/pages").json()
-    assert body["counts"] == {"takingEntries": 1, "completed": 2}
+    assert body["counts"] == {"takingEntries": 2, "completed": 2}
 
 
 def test_the_now_pick_requires_published_draws(client, season):
@@ -134,6 +165,7 @@ def test_two_live_tournaments_pick_one_and_count_the_rest(client, season):
         t.tournament_date = season["today"]
         session.add(EntryPage(
             tournament_id=uuid.UUID(tid), slug="also-live", is_open=True,
+            audience="public",
             draws_published=True,
         ))
         session.commit()
@@ -157,13 +189,17 @@ def test_rows_order_dated_ascending_then_slug(client, season):
     assert slugs == [
         "case-done", "case-winners",          # yesterday, slug-tied
         "case-live", "case-quiet-live",       # today
-        "case-closed", "case-open",           # next month
+        "case-closed", "case-itinerary-address", "case-open",  # next month
         "case-undated",                       # undated sorts LAST, not first
     ]
 
 
 def test_the_public_cache_header_is_set(client, season):
-    assert client.get("/e/api/pages").headers["Cache-Control"] == "public, max-age=30"
+    # Audience is revocable (a page can go private again), so intermediaries
+    # must revalidate on every read rather than serve a stale public answer
+    # from cache: no max-age, but still cacheable-by-name as a public
+    # response (register rationale, PU03 family).
+    assert client.get("/e/api/pages").headers["Cache-Control"] == "public, no-cache"
 
 
 def test_no_entrant_or_pricing_data_leaks(client, season):

@@ -205,6 +205,12 @@ def create_offline_session(
         )
     except ValueError as exc:
         _raise_protocol(ProtocolError(403, "offline_session_scope_invalid", str(exc)))
+    # The cookie value is minted here, never echoed: ``offline_sessions.issue``
+    # returns ``secrets.token_urlsafe`` and stores only its SHA-256 digest, and
+    # the name is a settings constant. Nothing from the request body reaches
+    # ``Set-Cookie`` — ``ttl_hours`` is an ``int`` bounded 1..168 by the schema
+    # and again by ``issue``. CodeQL ``py/cookie-injection`` here is a false
+    # positive (2026-09-07).
     response.set_cookie(
         key=settings.offline_session_cookie_name, value=token,
         max_age=body.ttl_hours * 3600, httponly=True,
@@ -250,6 +256,12 @@ def bootstrap_offline_session(
         )
     except ValueError as exc:
         _raise_protocol(ProtocolError(403, "offline_session_scope_invalid", str(exc)))
+    # The cookie value is minted here, never echoed: ``offline_sessions.issue``
+    # returns ``secrets.token_urlsafe`` and stores only its SHA-256 digest, and
+    # the name is a settings constant. Nothing from the request body reaches
+    # ``Set-Cookie`` — ``ttl_hours`` is an ``int`` bounded 1..168 by the schema
+    # and again by ``issue``. CodeQL ``py/cookie-injection`` here is a false
+    # positive (2026-09-07).
     response.set_cookie(
         key=settings.offline_session_cookie_name,
         value=token,
@@ -485,7 +497,7 @@ def authority_status(
     repo: LocalRepository = Depends(get_repository),
 ) -> AuthorityStatus:
     try:
-        authority, highest, pending, oldest, blocked, blocked_error = (
+        authority, highest, pending, oldest, blocked, blocked_error, acknowledged = (
             SyncApplication(repo).latest_authority(tournament_id)
         )
     except ProtocolError as exc:
@@ -501,6 +513,7 @@ def authority_status(
         oldest_pending_at=oldest,
         blocked_operations=blocked,
         last_blocked_error_code=blocked_error,
+        acknowledged_operations=acknowledged,
     )
 
 

@@ -240,7 +240,7 @@ describe('bracket engine config (shared form)', () => {
     renderBracketTab();
     expandConfigSections();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Sets' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Game scores' }));
     // Save-on-submit: the click alone must not have written yet.
     expect(setConfig).not.toHaveBeenCalled();
 

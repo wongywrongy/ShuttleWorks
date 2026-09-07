@@ -168,6 +168,21 @@ def submit_solve_job(
             ErrorCode.SOLVE_JOB_ACTIVE,
             "a solve is already running for this tournament",
         )
+    if job.tournament_id != tournament_id:
+        # Defence in depth (SEC, 2026-09-07). ``Idempotency-Key`` is
+        # caller-chosen, and the replay lookup used to be global: a key
+        # reused across workspaces returned the OTHER workspace's job,
+        # schedule result and all, past a tenancy dependency that only ever
+        # sees the path. The lookup is workspace-scoped now; this refuses to
+        # serialise a foreign job even if some future path finds one, because
+        # every other guard here is on the way IN, not on what goes out.
+        log.error(
+            "refusing to return solve job %s (workspace %s) for workspace %s",
+            job.id,
+            job.tournament_id,
+            tournament_id,
+        )
+        raise http_error(404, ErrorCode.SOLVE_JOB_NOT_FOUND, "solve job not found")
     if not created:
         log.info("idempotent replay of solve job %s", job.id)
     return _job_to_dto(job)

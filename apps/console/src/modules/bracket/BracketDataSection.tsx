@@ -21,7 +21,7 @@ import { Row, Section } from '../../platform/engine-config/SettingsControls';
 import { DialogFooter } from '../../components/DialogFooter';
 
 const LINK_CLASSES =
-  'inline-flex items-center rounded-sm border border-border bg-card px-3 py-1 text-2xs font-medium text-card-foreground hover:bg-muted/40';
+  'inline-flex items-center rounded-sm border border-border bg-card px-3 py-1 text-xs font-medium text-card-foreground hover:bg-muted/40';
 
 export function BracketDataSection() {
   const tid = useTournamentId();
@@ -80,7 +80,7 @@ export function BracketDataSection() {
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="inline-flex items-center rounded-sm border border-destructive/40 bg-card px-3 py-1 text-2xs font-medium text-destructive hover:bg-destructive/10"
+            className="inline-flex items-center rounded-sm border border-destructive/40 bg-card px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/10"
           >
             Reset bracket
           </button>

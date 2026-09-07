@@ -236,10 +236,18 @@ def test_upgrade_enforces_the_tenant_scoped_idempotency_uniqueness(alembic_cfg):
             sa.text(
                 "INSERT INTO submissions"
                 " (tournament_id, id, account_id, idempotency_key,"
-                "  submitted_at, updated_at)"
-                " VALUES (:tid, :id, :acct, 'key-1', :now, :now)"
+                # V3-24-1: NOT NULL and globally unique - derived from this
+                # row's own id so two inserts never collide.
+                "  short_reference, submitted_at, updated_at)"
+                " VALUES (:tid, :id, :acct, 'key-1', :ref, :now, :now)"
             ),
-            {"tid": tid, "id": submission_id, "acct": account, "now": now},
+            {
+                "tid": tid,
+                "id": submission_id,
+                "acct": account,
+                "ref": str(submission_id).replace("-", "")[:8].upper(),
+                "now": now,
+            },
         )
 
     with engine.begin() as conn:

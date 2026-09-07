@@ -25,7 +25,7 @@ export function BracketInlineNotice({
     >
       <div className="font-medium">{title}</div>
       {message ? (
-        <div className="mt-0.5 text-xs opacity-80">{message}</div>
+        <div className="mt-0.5 text-xs text-muted-foreground">{message}</div>
       ) : null}
     </div>
   );

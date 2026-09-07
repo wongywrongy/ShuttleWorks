@@ -26,19 +26,43 @@
  */
 import type { FormEcho } from './echo';
 
-export type Tab =
-  | 'overview'
-  | 'events'
-  /** Legacy deep-link compatibility; no longer emitted by visibleTabs. */
-  | 'entrants'
-  | 'players'
-  | 'draws'
-  | 'seeds'
-  | 'winners';
+/**
+ * The tournament page's server-rendered panels (ADR 0028): Overview, the
+ * merged Draws panel (every event, with its draw and champion once
+ * published) and the Players directory. Schedule / Live is a separate route
+ * and rides the same bar as a link.
+ */
+export type Tab = 'overview' | 'draws' | 'players';
+
+/** Retired `?tab=` ids that posters and bookmarks still carry; `activeTab`
+ * folds each onto the panel that absorbed it. */
+export type LegacyTab = 'events' | 'entrants' | 'seeds' | 'winners';
 
 export type ChipState =
-  | { kind: 'entriesOpen'; closesInDays: number | null }
+  | {
+      kind: 'entriesOpen';
+      closesInDays: number | null;
+      /**
+       * V3-26-5: set only when `closesInDays` exceeds
+       * `CHIP_ABSOLUTE_DATE_THRESHOLD_DAYS` — a pre-formatted, tournament-
+       * timezone calendar date (`12 Jan 2035`) that `chipLabel` prefers over
+       * the relative count. Computed by `format.ts`'s `capChipCountdown`,
+       * not here: this module only counts days, it does not turn instants
+       * into words (see the `MONTHS_LONG` note below on why `format.ts`
+       * cannot be imported the other way).
+       */
+      closesAtAbsolute?: string | null;
+    }
   | { kind: 'entriesClosed' };
+
+/**
+ * V3-26-5 (owner ruling): beyond this many days, "closes in Nd" stops being
+ * useful — a fixture's synthetic far-future `closesAt` reads "closes in
+ * 3039d" and forces layout overflow at 200% zoom on `StatusChip`
+ * (`whitespace-nowrap`/`shrink-0` by design; see V3-26-7's sibling debt
+ * row). Past the threshold the chip states the exact date instead.
+ */
+export const CHIP_ABSOLUTE_DATE_THRESHOLD_DAYS = 99;
 
 export type CtaState = { kind: 'enter'; href: string } | { kind: 'closed' };
 
@@ -123,6 +147,20 @@ export interface SeasonRow {
   status: PageStatus;
   /** Whole days until entries close; server-computed, never 0 (ceil ≥ 1). */
   closesInDays: number | null;
+  /**
+   * V3-PE01.2: the exact instant `closesInDays` counts down to, as the
+   * pinned wire moment (`"%Y-%m-%d %H:%M UTC"`) — present exactly when
+   * `closesInDays` is, never on its own. This module cannot format it
+   * (a `phase → format` edge would close an import cycle, see the
+   * `MONTHS_LONG` note above) — the rendering component pairs this with
+   * `timeZone` through `formatMomentInZone`.
+   */
+  closesAt: string | null;
+  /** The tournament's own IANA zone, for rendering `closesAt` in it. */
+  timeZone: string;
+  /** V3-PE01.3: a best-effort "City, Country" line out of the organizer's
+   * free-text venue address; `null` when there is nothing to parse. */
+  locality: string | null;
   drawsPublished: boolean;
   winnersPublished: boolean;
 }
@@ -165,7 +203,10 @@ export interface MonthGroup {
  */
 export type StatusCell =
   | { kind: 'chip-live'; label: string; href: string }
-  | { kind: 'chip-open'; chip: ChipState }
+  // `closesAt`/`timeZone` ride beside the binary chip so the renderer can
+  // state the exact tournament-timezone deadline (V3-PE01.2) without this
+  // module importing the formatter (see `SeasonRow.closesAt`).
+  | { kind: 'chip-open'; chip: ChipState; closesAt: string | null; timeZone: string }
   | { kind: 'chip-muted'; label: string }
   | { kind: 'link'; label: string; href: string }
   | { kind: 'text'; label: string };
@@ -307,6 +348,9 @@ export function nearestCloseAt(
 /** The chip's sentence-case public copy — the ruling's exact two states. */
 export function chipLabel(state: ChipState): string {
   if (state.kind === 'entriesClosed') return 'Entries closed';
+  // V3-26-5: the capped, absolute-date form wins whenever it is present —
+  // `capChipCountdown` only ever sets it beyond the threshold.
+  if (state.closesAtAbsolute) return `Entries open · closes ${state.closesAtAbsolute}`;
   if (state.closesInDays === null) return 'Entries open';
   if (state.closesInDays === 0) return 'Entries open · closes today';
   return `Entries open · closes in ${state.closesInDays}d`;
@@ -324,10 +368,9 @@ export function ctaState(
 }
 
 /**
- * Design §6 visibleTabs table. A declarative `[tab, predicate]` walk so a
- * future Draws/Schedule/Results tab is a data addition (brief rule 4). The
- * function is total: `[overview]` is the minimal answer when no public data exists, but
- * still an answer.
+ * Design §6 visibleTabs table, four-tab form (ADR 0028). A declarative
+ * `[tab, predicate]` walk; the function is total: `[overview]` is the minimal
+ * answer when no public data exists, but still an answer.
  */
 export function visibleTabs(
   events: readonly unknown[],
@@ -336,24 +379,33 @@ export function visibleTabs(
 ): Tab[] {
   const table: readonly [Tab, boolean][] = [
     ['overview', true],
-    ['events', events.length > 0],
+    // The Draws panel lists every event from the day the page exists; draws
+    // and results join the rows as the organizer publishes them.
+    ['draws', events.length > 0],
     // One public roster serves both registered entrants and imported draw
     // players. The API merges those rows; this avoids two competing lists
     // where the draw roster appears to contain only five winners. The
     // parameter is optional for older fixtures and falls back to the legacy
     // entrant-list visibility rule.
     ['players', publication ? publication.entrants || publication.draws : entrants.length > 0],
-    ['draws', publication?.draws ?? false],
-    ['seeds', publication?.draws ?? false],
-    ['winners', publication?.results ?? false],
   ];
   return table.filter(([, visible]) => visible).map(([tab]) => tab);
 }
 
-/** Requested ∈ visible → requested; the retired entrants tab maps to Players. */
+const LEGACY_TABS: Readonly<Record<LegacyTab, Tab>> = Object.freeze({
+  events: 'draws',
+  seeds: 'draws',
+  winners: 'draws',
+  entrants: 'players',
+});
+
+/** Requested ∈ visible → requested; a retired id maps to the panel that absorbed it. */
 export function activeTab(requested: string | null, visible: readonly Tab[]): Tab {
-  if (requested === 'entrants' && visible.includes('players')) return 'players';
-  return visible.includes(requested as Tab) ? (requested as Tab) : 'overview';
+  const wanted =
+    requested !== null && requested in LEGACY_TABS
+      ? LEGACY_TABS[requested as LegacyTab]
+      : (requested as Tab);
+  return visible.includes(wanted) ? wanted : 'overview';
 }
 
 /** A chain, not a module-scoped Map: the mutable-bindings guard
@@ -549,16 +601,20 @@ export function statusCell(row: SeasonRow): StatusCell {
     case 'in_progress':
       return { kind: 'chip-muted', label: 'In progress' };
     case 'entries_open':
-      return { kind: 'chip-open', chip: { kind: 'entriesOpen', closesInDays: row.closesInDays } };
+      return {
+        kind: 'chip-open',
+        chip: { kind: 'entriesOpen', closesInDays: row.closesInDays },
+        closesAt: row.closesAt,
+        timeZone: row.timeZone,
+      };
     case 'entries_closed':
       return { kind: 'chip-muted', label: 'Entries closed' };
     case 'completed_winners':
     case 'completed':
-      if (row.drawsPublished) {
-        return { kind: 'link', label: 'Draws', href: `${page}?tab=draws` };
-      }
-      if (row.winnersPublished) {
-        return { kind: 'link', label: 'Winners', href: `${page}?tab=winners` };
+      // Draws and winners share one public panel (ADR 0028); either
+      // publication makes the row link there.
+      if (row.drawsPublished || row.winnersPublished) {
+        return { kind: 'link', label: 'Results', href: `${page}?tab=draws` };
       }
       return { kind: 'text', label: 'Completed' };
   }

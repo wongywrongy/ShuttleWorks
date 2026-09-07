@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, StatusBar } from "@scheduler/design-system";
+import { Card } from "@scheduler/design-system";
 import { useBracketApi } from "../../api/bracketClient";
 import { useTournamentId } from "../../hooks/useTournamentId";
 import { useTournamentStore } from "../../store/tournamentStore";
@@ -10,6 +10,7 @@ import type {
   PlayUnitDTO,
   ResultDTO,
   SegmentDTO,
+  SideDTO,
   StandingRowDTO,
   TournamentDTO,
 } from "../../api/bracketDto";
@@ -18,7 +19,6 @@ import { INTERACTIVE_BASE } from "../../lib/utils";
 import {
   REASON_BADGE,
   WinnerDot,
-  statusTallyItems,
 } from "../../components/control-plane";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { PanZoomCanvas } from "./PanZoomCanvas";
@@ -30,7 +30,10 @@ import { bwfPositions } from "./bwf";
 import { descriptorFor } from "./formatRegistry";
 import { StandingsTable } from "./StandingsTable";
 import { EYEBROW_CLASS } from "../../lib/utils";
+import { formatBracketSlot, type BracketSlotContext } from "./formatBracketSlot";
 import { buildPlayUnitLabels } from "./bracketLabels";
+import { formatSideCondensed, formatSideLines, sideFromWire } from "../../platform/domain/sides";
+import { ACCENT_PRESS } from '../../lib/utils';
 
 /** How the SE canvas lays out its rounds. One-sided is the classic
  *  printed-bracket cascade (R1 left, Final right) and the default;
@@ -295,7 +298,7 @@ function BracketView({
             {editing ? "Done seeding" : "Edit seeding"}
           </button>
           {editing ? (
-            <span className="text-2xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {busy
                 ? "Saving…"
                 : selectedPos !== null
@@ -309,11 +312,7 @@ function BracketView({
         <div className="hidden h-full min-h-0 lg:block">
           <PanZoomCanvas
             roundLabels={roundLabels}
-            overlayTrailing={
-              <StatusBar
-                items={statusTallyItems(drawProgress(data, event.id))}
-              />
-            }
+            overlayTrailing={<DrawTally progress={drawProgress(data, event.id)} />}
           >
             {/* Bracket canvas: one-sided (default) reads left-to-right with the
               Final as the rightmost column; mirrored fans two wings out from
@@ -367,9 +366,11 @@ function BracketView({
                           <BracketCell
                             pu={idMap[puId]}
                             identityLabel={identityLabelById.get(puId) ?? puId}
+                            feederLabels={identityLabelById}
                             nameById={nameById}
                             result={resultByPu[puId]}
                             assignment={assignmentByPu[puId]}
+                            slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
                             final={isFinal}
                             seeding={editing && col.roundIndex === 0}
                             selectedPos={selectedPos}
@@ -402,6 +403,16 @@ function BracketView({
         </div>
       </div>
     </div>
+  );
+}
+
+function DrawTally({ progress }: { progress: Record<string, number> }) {
+  return (
+    <span className="flex items-center gap-2 text-2xs sw-num text-muted-foreground">
+      {([['done', progress.done], ['live', progress.live], ['ready', progress.ready], ['pending', progress.pending]] as const).map(([label, count]) => (
+        <span key={label}>{label} {count}</span>
+      ))}
+    </span>
   );
 }
 
@@ -536,7 +547,7 @@ function MobileRoundFocus({
                   data-unit-id={id}
                   className="rounded border border-border bg-bg-elev p-3 shadow-sm"
                 >
-                  <div className="mb-2 flex items-center justify-between gap-2 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
+                  <div className="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-[0.06em] text-muted-foreground">
                     <span>Match {index + 1}</span>
                     <span>
                       {assignment
@@ -549,10 +560,10 @@ function MobileRoundFocus({
                       className={
                         result?.winner_side === "A"
                           ? "font-semibold text-foreground"
-                          : "text-muted-foreground"
+                          : "text-foreground"
                       }
                     >
-                      {formatMobileSide(unit.side_a, nameById)}
+                      {formatMobileSide(unit.sides?.[0], unit.side_a, nameById)}
                     </span>
                     <span className="sw-num text-xs text-muted-foreground">
                       {mobileScore(result, "A")}
@@ -560,9 +571,9 @@ function MobileRoundFocus({
                       {mobileScore(result, "B")}
                     </span>
                     <span
-                      className={`text-right ${result?.winner_side === "B" ? "font-semibold text-foreground" : "text-muted-foreground"}`}
+                      className={`text-right ${result?.winner_side === "B" ? "font-semibold text-foreground" : "text-foreground"}`}
                     >
-                      {formatMobileSide(unit.side_b, nameById)}
+                      {formatMobileSide(unit.sides?.[1], unit.side_b, nameById)}
                     </span>
                   </div>
                   {/* SP-OPCON-1 SWP-10: internal ids never render as
@@ -592,10 +603,22 @@ function MobileRoundFocus({
   );
 }
 
+/** The mobile round inspector's condensed side (one line per side).
+ *
+ *  v3 package 29: a RESOLVED wire side wins — its persons are the two
+ *  partners the backend resolved from `member_ids`, and a pair one member
+ *  short carries "partner to be confirmed" through `formatSideCondensed`.
+ *  An unresolved wire side (bye/feeder) and a payload with no `sides` at all
+ *  keep the legacy id-join, whose "Open slot" wording this view owns. */
 function formatMobileSide(
+  wire: SideDTO | undefined,
   side: string[] | null | undefined,
   nameById: Record<string, string>,
 ): string {
+  if (wire) {
+    const built = sideFromWire(wire);
+    if (built.persons.length > 0) return formatSideCondensed(built);
+  }
   if (!side?.length) return "Open slot";
   return side.map((id) => nameById[id] ?? id).join(" / ");
 }
@@ -1288,9 +1311,11 @@ function SegmentedBracketView({
                               <BracketCell
                                 pu={pu}
                                 identityLabel={identityLabelById.get(m.puId) ?? m.puId}
+                                feederLabels={identityLabelById}
                                 nameById={nameById}
                                 result={resultByPu[m.puId]}
                                 assignment={assignmentByPu[m.puId]}
+                                slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
                                 final={isFinalCol}
                                 scoringFormat={scoringFormat}
                                 setsToWin={setsToWin}
@@ -1317,9 +1342,11 @@ function SegmentedBracketView({
 function BracketCell({
   pu,
   identityLabel,
+  feederLabels,
   nameById,
   result,
   assignment,
+  slotContext,
   final = false,
   seeding = false,
   selectedPos = null,
@@ -1331,9 +1358,14 @@ function BracketCell({
   pu: PlayUnitDTO;
   /** F-UNI-22: source-aware identity formatted at the draw adapter seam. */
   identityLabel: string;
+  feederLabels: Map<string, string>;
   nameById: Record<string, string>;
   result: ResultDTO | undefined;
   assignment: AssignmentDTO | undefined;
+  /** Tournament-timezone wall-clock inputs for the assigned slot (match-card
+   *  contract §4.3 / V3-OC16.1): the caption shows a real time + court, not
+   *  the raw slot index. Optional only for callers mid-migration. */
+  slotContext?: BracketSlotContext;
   /** Final-round cell — carries the accent ring + glow (the draw's hero). */
   final?: boolean;
   /** Round-0 cell in seeding-edit mode: sides swap instead of recording. */
@@ -1346,22 +1378,33 @@ function BracketCell({
   onResult: (w: "A" | "B", sets?: BracketSetScore[]) => void | Promise<void>;
 }) {
   const winner = result?.winner_side;
-  const aName = labelFor(pu.side_a, pu.slot_a, nameById);
-  const bName = labelFor(pu.side_b, pu.slot_b, nameById);
+  const aName = labelFor(pu.side_a, pu.slot_a, nameById, feederLabels);
+  const bName = labelFor(pu.side_b, pu.slot_b, nameById, feederLabels);
   // Stacked members for RESOLVED pair sides (owner ruling, P4 review): the
-  // card gives each player their own line, so the " / " join is noise there.
-  // A doubles side is ONE participant whose NAME carries the join — split it
-  // too. Feeder/bye placeholders and the score-entry labels keep the string.
-  // SP-DM-3 P6 kept this split deliberately (plan judgment call 3): it splits
-  // the participant's OWN stored display name (`nameById[id]` — the persisted,
-  // operator-editable `bracket_participants.name`; it never reads `labelFor`'s
-  // output), purely to line-break the card. Nothing is persisted and no member
-  // id is recovered. The decode that DID recover identity —
-  // `bracketMigration.ts`'s split-and-zip — is gone.
-  const membersOf = (ids: string[] | null) =>
-    ids?.flatMap((id) => (nameById[id] ?? id).split(" / ")) ?? null;
-  const aMembers = membersOf(pu.side_a);
-  const bMembers = membersOf(pu.side_b);
+  // card gives each player their own line.
+  //
+  // v3 package 29 (V3-10-1): the wire's structured `sides` now carries a
+  // doubles pair as TWO persons resolved from `member_ids` against the
+  // bracket roster, so this reads them off `sideFromWire` and the last
+  // ` / `-split in the draw card is GONE — a name containing a slash no
+  // longer breaks into two players, and a pair one member short renders
+  // "partner to be confirmed" on its own line instead of passing as
+  // singles. The legacy split survives only as the fallback for a payload
+  // minted before `sides` existed (it splits the participant's OWN stored
+  // display name to line-break the card; nothing is persisted and no member
+  // id is recovered — the decode that DID recover identity,
+  // `bracketMigration.ts`'s split-and-zip, is gone).
+  const membersOf = (wire: SideDTO | undefined, ids: string[] | null) => {
+    if (wire) {
+      const built = sideFromWire(wire);
+      // Only a RESOLVED side stacks; a bye/feeder placeholder keeps the
+      // single `labelFor` string the card already renders.
+      return built.persons.length > 0 ? formatSideLines(built) : null;
+    }
+    return ids?.flatMap((id) => (nameById[id] ?? id).split(" / ")) ?? null;
+  };
+  const aMembers = membersOf(pu.sides?.[0], pu.side_a);
+  const bMembers = membersOf(pu.sides?.[1], pu.side_b);
   const canRecord = !!pu.side_a && !!pu.side_b && !result && !seeding;
   const posA = pu.match_index * 2;
   const posB = posA + 1;
@@ -1388,12 +1431,29 @@ function BracketCell({
       {/* One step darker than the muted tier: this caption is the ONLY
           schedule information in the whole tree, and at muted-on-white it
           was very nearly invisible (DRAW-3). */}
-      <div className="flex justify-between text-3xs text-foreground/70 sw-num">
+      <div className="flex justify-between text-xs text-text-secondary sw-num">
         <span>{identityLabel}</span>
         <span>
+          {/* V3-OC16.1: the slot index is never user-facing — never
+              "slot 52", and never `formatBracketSlot`'s "Slot N" fallback
+              either (that fallback is for schedule-setup chrome with no
+              start time at all; showing it here would just relabel the
+              same raw index). A real tournament-timezone time when the
+              bracket has a start time to derive one from; the court alone
+              when it does not; "Not scheduled" with no assignment at all.
+              The match reference stays the caption's other half, unchanged
+              (secondary identity, never removed). */}
           {assignment
-            ? `slot ${assignment.slot_id} · court ${assignment.court_id}`
-            : "–"}
+            ? (() => {
+                const time =
+                  slotContext?.start_time
+                    ? formatBracketSlot(assignment.slot_id, slotContext)
+                    : null;
+                return time
+                  ? `${time} · Court ${assignment.court_id}`
+                  : `Court ${assignment.court_id}`;
+              })()
+            : "Not scheduled"}
         </span>
       </div>
       <Side
@@ -1442,7 +1502,7 @@ function BracketCell({
           <button
             type="button"
             onClick={() => setScoring(true)}
-            className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1 text-2xs font-medium text-muted-foreground hover:border-accent hover:text-foreground"
+            className="w-full rounded-sm border border-border bg-bg-elev px-2 py-1 text-xs font-medium text-muted-foreground hover:border-accent hover:text-foreground"
           >
             Enter score
           </button>
@@ -1493,7 +1553,7 @@ function Side({
       onClick={onClick}
       disabled={disabled}
       className={
-        // A posted result recolours this row (winner tint, loser strike-out).
+        // A posted result recolours this row; loser names remain readable.
         // It is an occasional action, so it fades at the 200ms standard band
         // (MOTION.md §4) instead of snapping.
         "w-full flex items-center justify-between gap-1.5 rounded-sm px-2 py-1.5 text-2sm transition-colors duration-standard ease-brand " +
@@ -1505,9 +1565,9 @@ function Side({
               // least operational thing in the console, and it was the loudest
               // element in the app — a wall of solid green on a surface nobody
               // watches during a live day.
-              "bg-status-live-bg border border-status-live-border border-l-[3px] border-l-status-live text-foreground font-semibold"
+              "bg-bg-elev border border-border border-l-[3px] border-l-status-live text-foreground font-semibold"
             : loser
-              ? "bg-muted text-muted-foreground line-through"
+              ? "bg-bg-elev border border-border text-foreground"
               : bye
                 ? "bg-muted text-muted-foreground italic"
                 : seeding
@@ -1528,11 +1588,11 @@ function Side({
           : label}
       </span>
       {seeding && !bye ? (
-        <span className="text-3xs text-muted-foreground">⇄</span>
+        <span className="text-xs text-muted-foreground">⇄</span>
       ) : decided ? (
         <span className="flex shrink-0 items-center gap-1">
           {winning && walkover && sets.length === 0 ? (
-            <span className="rounded-sm bg-muted px-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {REASON_BADGE.walkover}
             </span>
           ) : null}
@@ -1546,7 +1606,7 @@ function Side({
               className={`w-6 text-right text-2xs sw-num ${
                 (side === "A" ? s.sideA > s.sideB : s.sideB > s.sideA)
                   ? "font-semibold"
-                  : "opacity-70"
+                  : "text-muted-foreground"
               }`}
             >
               {side === "A" ? s.sideA : s.sideB}
@@ -1554,7 +1614,7 @@ function Side({
           ))}
         </span>
       ) : onWin && !bye ? (
-        <span className="text-3xs text-muted-foreground">↵ wins</span>
+        <span className="text-xs text-muted-foreground">↵ wins</span>
       ) : null}
     </button>
   );
@@ -1568,6 +1628,7 @@ function labelFor(
     feeder_take?: "loser" | null;
   },
   nameById: Record<string, string>,
+  feederLabels?: Map<string, string>,
 ): string {
   if (side && side.length > 0) {
     return side.map((id) => nameById[id] ?? id).join(" / ");
@@ -1575,7 +1636,8 @@ function labelFor(
   if (slot.participant_id === "__BYE__" || slot.participant_id === null) {
     if (slot.feeder_play_unit_id) {
       const take = slot.feeder_take === "loser" ? "Loser" : "Winner";
-      return `${take} of ${slot.feeder_play_unit_id}`;
+      const readableRef = feederLabels?.get(slot.feeder_play_unit_id) ?? slot.feeder_play_unit_id;
+      return `${take} of ${readableRef}`;
     }
     return "Bye";
   }
@@ -1645,7 +1707,7 @@ function RoundRobinView({
       )}
       {event.rounds.map((round, ri) => (
         <Card key={ri} variant="frame" className="p-4">
-          <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.08em] mb-3">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.06em] mb-3">
             Round {ri + 1}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1659,9 +1721,11 @@ function RoundRobinView({
                   key={puId}
                   pu={pu}
                   identityLabel={identityLabelById.get(puId) ?? puId}
+                  feederLabels={identityLabelById}
                   nameById={nameById}
                   result={result}
                   assignment={assignment}
+                  slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
                   scoringFormat={scoringFormat}
                   setsToWin={setsToWin}
                   onResult={(winner, sets) => {
@@ -1830,7 +1894,7 @@ function SwissView({
         )}
         {event.rounds.map((round, ri) => (
           <Card key={ri} variant="frame" className="p-4">
-            <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-[0.08em] mb-3">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.06em] mb-3">
               {totalRounds !== null
                 ? `Round ${ri + 1} of ${totalRounds}`
                 : `Round ${ri + 1}`}
@@ -1845,9 +1909,11 @@ function SwissView({
                     key={puId}
                     pu={pu}
                     identityLabel={identityLabelById.get(puId) ?? puId}
+                    feederLabels={identityLabelById}
                     nameById={nameById}
                     result={resultByPu[puId]}
                     assignment={assignment}
+                    slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
                     scoringFormat={scoringFormat}
                     setsToWin={setsToWin}
                     onResult={(winner, sets) => {
@@ -1882,7 +1948,7 @@ function SwissView({
                   ? undefined
                   : "Record every result to pair the next round"
               }
-              className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               {`Generate round ${playedRounds + 1} of ${totalRounds}`}
             </button>

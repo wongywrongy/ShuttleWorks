@@ -32,9 +32,9 @@ import {
   type BracketPairingCommand,
 } from './pairingMutation';
 import { disciplineLabel } from './bracketLabels';
-import { EYEBROW_CLASS } from '../../lib/utils';
+import { EYEBROW_CLASS, ACCENT_PRESS } from '../../lib/utils';
 import { isDoublesCode } from '../../lib/doubles';
-import { formatPlayerName } from '../../lib/names';
+import { formatPersonName } from '../../platform/domain/sides';
 
 /** Writes one event's participant list (config echoed by the caller). */
 export type CommitEventFn = (
@@ -71,7 +71,7 @@ export function BracketAvailabilityField({
         onChange={(availability) => onUpdate(player.id, { availability })}
       />
       {!bounds.anchored ? (
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Applies when the session start time is set.
         </p>
       ) : null}
@@ -351,14 +351,14 @@ function EventTypeEditor({
                 <span className="flex shrink-0 items-center gap-1.5">
                   {entered ? (
                     <span
-                      className="rounded-sm border border-accent/30 bg-action-selected-bg px-2 py-0.5 text-2xs font-medium text-action-selected-foreground"
+                      className="rounded-sm border border-accent/30 bg-action-selected-bg px-2 py-0.5 text-xs font-medium text-action-selected-foreground"
                       data-testid={`event-entered-${ev.id}`}
                     >
                       Entered
                     </span>
                   ) : null}
                   <span
-                    className="text-2xs italic text-muted-foreground"
+                    className="text-xs italic text-muted-foreground"
                     data-testid={`event-locked-${ev.id}`}
                     title="Participants are locked once a draw is generated."
                   >
@@ -368,10 +368,10 @@ function EventTypeEditor({
               )}
             </div>
             {isDoublesCode(ev.discipline) && entered ? (
-              <div className="flex items-center gap-2 pl-11 text-2xs text-muted-foreground">
+              <div className="flex items-center gap-2 pl-11 text-xs text-muted-foreground">
                 <span data-testid={`partner-${ev.id}`}>
                   {currentPartner
-                    ? `Partner: ${formatPlayerName(currentPartner.name)}`
+                    ? `Partner: ${formatPersonName(currentPartner.name)}`
                     : 'Partner missing'}
                 </span>
                 {isDraft && currentTeam ? (
@@ -424,7 +424,7 @@ function EventTypeEditor({
                   disabled={!partnerId || busy}
                   onClick={() => confirmPair(ev)}
                   data-testid={`partner-confirm-${ev.id}`}
-                  className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:opacity-50"
+                  className={`rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
                 >
                   Add
                 </button>

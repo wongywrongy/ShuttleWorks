@@ -11,14 +11,15 @@
  * director wrote no regulations — a reader with nothing to read does not
  * exist, rather than existing emptily).
  */
+import type { ReactNode } from 'react';
 import { isRouteErrorResponse, useRouteError } from 'react-router';
-import { BRAND } from '@scheduler/brand';
 
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { dateOfIso, formatDateLong } from '../lib/format';
+import { PAGE_TITLE } from '../lib/ui';
 import type { Route } from './+types/regulations';
 
 export interface RegulationsLoaderData {
@@ -59,6 +60,45 @@ function headingLine(line: string): string | null {
     return value;
   }
   return null;
+}
+
+/**
+ * V3-PE15.2: a director's regulations sometimes end a line with a bare
+ * "Source: <url>." or "Source reference: <url>." citation (the historical
+ * demo data does this, quoting an upstream results page). Rendered as plain
+ * text that reads as an unclickable technical address in the middle of
+ * prose. This turns *only* the trailing URL into a link with a readable
+ * label derived from the URL itself — the organizer's words are otherwise
+ * untouched (R1: content is not rewritten, only its presentation as a link).
+ */
+const SOURCE_URL_RE = /(Source(?: reference)?:\s*)(https?:\/\/\S+?)(\.?)(\s*)$/;
+
+function urlLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const last = parsed.pathname.split('/').filter(Boolean).pop();
+    if (!last) return parsed.hostname;
+    return decodeURIComponent(last).replace(/_/g, ' ');
+  } catch {
+    return url;
+  }
+}
+
+function renderBody(body: string): ReactNode {
+  const match = SOURCE_URL_RE.exec(body);
+  if (!match) return body;
+  const [, prefix, url, trailingDot] = match;
+  const before = body.slice(0, match.index);
+  return (
+    <>
+      {before}
+      {prefix}
+      <a href={url} className="text-accent underline-offset-4 hover:underline">
+        {urlLabel(url)}
+      </a>
+      {trailingDot}
+    </>
+  );
 }
 
 /**
@@ -119,7 +159,7 @@ export async function loader({ params }: { params: { slug?: string } }) {
   const payload: RegulationsLoaderData = {
     slug: page.page.slug,
     tournamentName: page.tournament.name,
-    organizerName: page.org?.name ?? null,
+    organizerName: page.org?.name === 'Local Workspace' ? null : page.org?.name ?? null,
     venueName: page.venue?.name ?? null,
     venueAddress: page.venue?.address ?? null,
     tournamentDate: page.tournament.date ?? null,
@@ -185,10 +225,10 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
         </div>
 
         <header className="mt-6 max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             Organizer-published document
           </p>
-          <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-foreground">
+          <h1 className={`mt-2 ${PAGE_TITLE}`}>
             Tournament regulations
           </h1>
           {tournamentName ? <p className="mt-1 text-base text-foreground">{tournamentName}</p> : null}
@@ -200,13 +240,13 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
             {tournamentDate ? (
               <div>
                 <dt className="text-xs text-muted-foreground">Tournament date</dt>
-                <dd className="mt-1 font-medium text-foreground">{tournamentDate}</dd>
+                <dd className="mt-1 break-words font-medium text-foreground [overflow-wrap:anywhere]">{tournamentDate}</dd>
               </div>
             ) : null}
             {venueName || venueAddress ? (
               <div>
                 <dt className="text-xs text-muted-foreground">Venue</dt>
-                <dd className="mt-1 font-medium text-foreground">
+                <dd className="mt-1 break-words font-medium text-foreground [overflow-wrap:anywhere]">
                   {venueName}
                   {venueAddress ? <span className="block font-normal text-muted-foreground">{venueAddress}</span> : null}
                 </dd>
@@ -215,15 +255,15 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
             {organizerName ? (
               <div>
                 <dt className="text-xs text-muted-foreground">Organizer</dt>
-                <dd className="mt-1 font-medium text-foreground">{organizerName}</dd>
+                <dd className="mt-1 break-words font-medium text-foreground [overflow-wrap:anywhere]">{organizerName}</dd>
               </div>
             ) : null}
           </dl>
         </header>
 
         <div className="mt-8 grid gap-8 md:grid-cols-[14rem_minmax(0,1fr)] md:items-start">
-          <aside className="md:sticky md:top-4" aria-label="Document navigation">
-            <nav className="rounded-lg border border-rule-soft bg-surface-raised p-4">
+          <aside className="md:sticky md:top-4" aria-label={sections.length > 1 ? 'Document navigation' : undefined}>
+            {sections.length > 1 ? <nav className="rounded-lg border border-rule-soft bg-surface-raised p-4">
               <h2 className="font-display text-sm font-bold tracking-tight text-foreground">On this page</h2>
               <ol className="mt-3 grid gap-2 text-sm">
                 {sections.map((section) => (
@@ -234,11 +274,15 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
                   </li>
                 ))}
               </ol>
-            </nav>
+            </nav> : null}
             <div className="mt-4 grid gap-2 text-sm">
-              <a href={`/e/${encodeURIComponent(slug)}`} className="text-accent underline-offset-4 hover:underline">Tournament overview</a>
-              <a href={`/e/${encodeURIComponent(slug)}?tab=events`} className="text-accent underline-offset-4 hover:underline">View events</a>
-              <a href={`/e/${encodeURIComponent(slug)}?tab=players`} className="text-accent underline-offset-4 hover:underline">View entrants</a>
+              {/* V3-PE15.2: link text matches the destination's own nav label
+                  (`TabBar`'s "Overview"/"Draws"/"Players") rather than a
+                  paraphrase, so a reader does not have to learn a second name
+                  for the same page. */}
+              <a href={`/e/${encodeURIComponent(slug)}`} className="text-accent underline-offset-4 hover:underline">Overview</a>
+              <a href={`/e/${encodeURIComponent(slug)}?tab=draws`} className="text-accent underline-offset-4 hover:underline">Draws</a>
+              <a href={`/e/${encodeURIComponent(slug)}?tab=players`} className="text-accent underline-offset-4 hover:underline">Players</a>
             </div>
           </aside>
 
@@ -249,16 +293,11 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
                 <section key={section.id} id={section.id} className="scroll-mt-6">
                   <h3 className="font-display text-xl font-bold tracking-tight text-foreground">{section.title}</h3>
                   {section.body ? (
-                    <p className="mt-3 whitespace-pre-line text-base leading-8 text-foreground">{section.body}</p>
+                    <p className="mt-3 whitespace-pre-line break-words text-base leading-8 text-foreground [overflow-wrap:anywhere]">{renderBody(section.body)}</p>
                   ) : null}
                 </section>
               ))}
             </div>
-            <p className="mt-10 border-t border-rule-soft pt-4 text-sm text-muted-foreground">
-              Source: this document is published by the tournament organizer through {BRAND.productName}.
-              {organizerName ? ` Organizer: ${organizerName}.` : ''}
-              {' Contact details are not published on this page.'}
-            </p>
           </article>
         </div>
         <noscript>

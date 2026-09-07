@@ -20,6 +20,18 @@ function detailText(record: SyncQuarantineRecord): string {
   return [sequence, expected].filter(Boolean).join(' · ');
 }
 
+/** Ordinary-language headline for the default view (V3-OC27.1): what is
+ * saved, what is pending, and what needs action — no distributed-systems
+ * vocabulary required to read it. */
+function headline(authority: AuthorityStatusDTO): string {
+  if (authority.blocked_operations > 0) return 'Changes needing attention';
+  if (authority.pending_operations > 0) {
+    const n = authority.pending_operations;
+    return `${n} change${n === 1 ? '' : 's'} saved on this device, waiting to sync`;
+  }
+  return 'No changes need attention';
+}
+
 export function SyncReconciliationPanel({ authority }: { authority: AuthorityStatusDTO | null }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
@@ -63,13 +75,19 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 id="sync-reconciliation-heading" className="text-sm font-semibold text-foreground">
-            Reconciliation evidence
+            {headline(authority)}
           </h2>
-          <p className="mt-1 max-w-xl text-xs text-muted-foreground">
-            Rejected operations stay immutable. Apply the correction onsite; link it here after cloud acknowledgement.
-          </p>
+          {/* Technical vocabulary ("Reconciliation evidence", "immutable",
+              "cloud acknowledgement") lives behind this disclosure, not in
+              the default view (V3-OC27.1). */}
+          <details className="mt-1 max-w-xl text-xs text-muted-foreground">
+            <summary className="cursor-pointer select-none">Reconciliation evidence</summary>
+            <p className="mt-1">
+              Rejected operations stay immutable. Apply the correction onsite; link it here after cloud acknowledgement.
+            </p>
+          </details>
         </div>
-        <label className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
+        <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
           <input
             type="checkbox"
             checked={sync.includeResolved}
@@ -87,14 +105,14 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
       ) : null}
 
       {sync.loading && sync.items.length === 0 ? (
-        <p className="mt-3 p-2 text-xs text-muted-foreground">Loading reconciliation evidence…</p>
+        <p className="mt-3 p-2 text-xs text-muted-foreground">Loading…</p>
       ) : sync.error ? (
         <p role="alert" className="mt-3 rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
           {sync.error}
         </p>
       ) : sync.items.length === 0 ? (
         <p className="mt-3 rounded border border-border bg-muted/30 p-2 text-xs text-muted-foreground">
-          No {sync.includeResolved ? '' : 'open '}quarantined operations.
+          {sync.includeResolved ? 'Nothing to review yet.' : 'No changes need attention.'}
         </p>
       ) : (
         <ul className="mt-3 divide-y divide-border rounded border border-border">
@@ -105,7 +123,7 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 text-xs text-foreground">
-                      <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide ${record.status === 'resolved' ? 'bg-status-live/10 text-status-live' : 'bg-status-warning/10 text-status-warning'}`}>
+                      <span className={`rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${record.status === 'resolved' ? 'bg-status-live/10 text-status-live' : 'bg-status-warning/10 text-status-warning'}`}>
                         {record.status}
                       </span>
                       <span className="font-semibold">{record.reason_code}</span>
@@ -116,7 +134,7 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
                       {record.operation_id ? ` · operation ${record.operation_id.slice(0, 8)}` : ''}
                     </div>
                     {record.resolution_note ? (
-                      <div className="mt-1 text-2xs text-muted-foreground">Resolution: {record.resolution_note}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">Resolution: {record.resolution_note}</div>
                     ) : null}
                   </div>
                   {record.status === 'open' ? (
@@ -136,7 +154,7 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
                 </div>
                 {expanded ? (
                   <div className="mt-3 border-t border-border pt-3">
-                    <label className="block text-2xs uppercase tracking-wide text-muted-foreground">
+                    <label className="block text-xs uppercase tracking-wide text-muted-foreground">
                       Operator reason
                       <textarea
                         aria-label="Operator reason"
@@ -146,7 +164,7 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
                         placeholder="Why is this correction safe?"
                       />
                     </label>
-                    <label className="mt-2 block text-2xs uppercase tracking-wide text-muted-foreground">
+                    <label className="mt-2 block text-xs uppercase tracking-wide text-muted-foreground">
                       Acknowledged correction operation
                       <select
                         aria-label="Acknowledged correction operation"

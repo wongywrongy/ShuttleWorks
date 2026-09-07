@@ -68,7 +68,7 @@ class SyncApplication:
 
     def latest_authority(
         self, tournament_id: uuid.UUID
-    ) -> tuple[TournamentAuthority, int, int, datetime | None, int, str | None]:
+    ) -> tuple[TournamentAuthority, int, int, datetime | None, int, str | None, int]:
         return self._repo.execute_query(
             self._service()._latest_authority_status, tournament_id
         )

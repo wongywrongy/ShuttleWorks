@@ -8,6 +8,7 @@ vi.mock('../../../hooks/useTournamentBackups', () => ({ useTournamentBackups: vi
 const createBackup = vi.fn();
 const restoreBackup = vi.fn();
 const deleteBackup = vi.fn();
+const inspectBackup = vi.fn();
 
 function setHook(over: Partial<ReturnType<typeof useTournamentBackups>> = {}) {
   vi.mocked(useTournamentBackups).mockReturnValue({
@@ -19,6 +20,7 @@ function setHook(over: Partial<ReturnType<typeof useTournamentBackups>> = {}) {
     createBackup,
     restoreBackup,
     deleteBackup,
+    inspectBackup,
     downloadUrl: (f: string) => `/api/tournaments/t1/state/backups/${f}`,
     ...over,
   });
@@ -51,6 +53,37 @@ describe('SyncBackupsTab', () => {
     );
     expect(restoreBackup).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /restore workspace/i })).toBeInTheDocument();
+  });
+
+  it('inspects same-time candidates before offering a separate restore confirmation', async () => {
+    setHook({
+      entries: [
+        { filename: 'new.json', sizeBytes: 2048, modifiedAt: '2026-06-01T00:00:00Z' },
+        { filename: 'old.json', sizeBytes: 1024, modifiedAt: '2026-06-01T00:00:00Z' },
+      ],
+    });
+    inspectBackup.mockResolvedValue({
+      version: 1,
+      config: { tournamentName: 'Finals' },
+      groups: [{ id: 'g1', name: 'School A' }],
+      players: [{ id: 'p1', name: 'Ada' }],
+      matches: [{ id: 'm1', sideA: [], sideB: [], durationSlots: 1 }],
+      schedule: { assignments: [], unscheduledMatches: [], softViolations: [], objectiveScore: null, infeasibleReasons: [], status: 'unknown' },
+      bracketPlayers: [{ id: 'bp1', name: 'Bracket entrant' }],
+      bracket_session: { assignments: [{ play_unit_id: 'u1' }, { play_unit_id: 'u2' }] },
+      scheduleIsStale: false,
+    });
+    render(<SyncBackupsTab />);
+    fireEvent.click(within(screen.getByTestId('backup-new.json')).getByRole('button', { name: 'Backup new.json' }));
+    fireEvent.click(await screen.findByTestId('backup-inspect-new.json'));
+    expect(await screen.findByText('Finals')).toBeInTheDocument();
+    expect(screen.getByText('Meet roster players')).toBeInTheDocument();
+    expect(screen.getByText('Bracket entrants')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(restoreBackup).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Review restore' }));
+    expect(screen.getByRole('button', { name: /restore workspace/i })).toBeInTheDocument();
+    expect(restoreBackup).not.toHaveBeenCalled();
   });
 
   it('restores a backup after confirm (delegates to the hook → store rehydrate)', async () => {
@@ -104,21 +137,93 @@ describe('SyncBackupsTab — WSB-2/3/4', () => {
     render(<SyncBackupsTab />);
     expect(within(screen.getByTestId('backup-a.json')).getByText('Auto')).toBeInTheDocument();
     expect(within(screen.getByTestId('backup-m.json')).getByText('Manual')).toBeInTheDocument();
-    // The filename is no longer a standing second line on every row.
+    // The filename is a detail-affordance concern now (V3-OC27.2) — it lives
+    // behind the overflow menu / Inspect, not the default row.
     expect(within(screen.getByTestId('backup-a.json')).queryByText('a.json')).toBeNull();
     expect(screen.getByTestId('backup-eligibility-a.json')).toHaveTextContent(/eligible to restore/i);
-    expect(within(screen.getByTestId('backup-a.json')).getByText(/2026/)).toBeInTheDocument();
+    // Timezone-qualified per contract §7 (`clock_with_zone`) — never a
+    // silent local-time assumption.
+    expect(within(screen.getByTestId('backup-a.json')).getByText(/UTC/)).toBeInTheDocument();
   });
 
-  it('explains the pre-restore recovery point before confirmation', () => {
+  /* V3-OC27.2: two backups minted in the same second (or the same minute)
+   * must be distinguishable by their CONTENT, never by byte size or
+   * filename alone — those move behind Inspect / download. */
+  it('distinguishes same-minute recovery points by change summary and counts, not byte size', () => {
+    setHook({
+      entries: [
+        {
+          filename: 'new.json',
+          sizeBytes: 2048,
+          modifiedAt: '2026-06-01T02:00:30Z',
+          origin: 'auto',
+          matchCount: 5,
+          entryCount: 10,
+          changeSummary: '+1 match, +2 entrants since previous snapshot',
+        },
+        {
+          filename: 'old.json',
+          sizeBytes: 1024,
+          modifiedAt: '2026-06-01T02:00:05Z',
+          origin: 'auto',
+          matchCount: 4,
+          entryCount: 8,
+          changeSummary: 'First recorded snapshot',
+        },
+      ],
+    });
+    render(<SyncBackupsTab />);
+    expect(screen.getByTestId('backup-summary-new.json')).toHaveTextContent(
+      '+1 match, +2 entrants since previous snapshot',
+    );
+    expect(screen.getByTestId('backup-summary-old.json')).toHaveTextContent('First recorded snapshot');
+    expect(within(screen.getByTestId('backup-new.json')).getByText('5 matches, 10 entrants')).toBeInTheDocument();
+    expect(within(screen.getByTestId('backup-old.json')).getByText('4 matches, 8 entrants')).toBeInTheDocument();
+    // Never byte-delta prose or a bare filename in the default row.
+    expect(screen.queryByText(/larger than the next point/i)).toBeNull();
+    expect(screen.queryByText(/smaller than the next point/i)).toBeNull();
+    expect(within(screen.getByTestId('backup-new.json')).queryByText('new.json')).toBeNull();
+    // The two rows collide on the same MINUTE (02:00:30 vs 02:00:05), so the
+    // default timestamp must include seconds to keep them distinguishable
+    // even before reading the summary.
+    expect(within(screen.getByTestId('backup-new.json')).getByText(/:30/)).toBeInTheDocument();
+    expect(within(screen.getByTestId('backup-old.json')).getByText(/:05/)).toBeInTheDocument();
+  });
+
+  it('does not show seconds when no other backup collides on the minute', () => {
+    setHook({
+      entries: [
+        { filename: 'solo.json', sizeBytes: 1024, modifiedAt: '2026-06-01T02:00:30Z', origin: 'auto' },
+      ],
+    });
+    render(<SyncBackupsTab />);
+    expect(within(screen.getByTestId('backup-solo.json')).queryByText(/:30/)).toBeNull();
+  });
+
+  it('explains the pre-restore recovery point before confirmation, naming it by its summary', () => {
+    setHook({
+      entries: [
+        {
+          filename: 'b1.json',
+          sizeBytes: 2048,
+          modifiedAt: '2026-06-01T00:00:00Z',
+          matchCount: 3,
+          entryCount: 6,
+          changeSummary: '+3 matches since previous snapshot',
+        },
+      ],
+    });
     render(<SyncBackupsTab />);
     fireEvent.click(
       within(screen.getByTestId('backup-b1.json')).getByRole('button', {
         name: 'Restore backup b1.json',
       }),
     );
-    expect(screen.getByText(/recovery point of the current workspace will be created/i)).toBeInTheDocument();
-    expect(screen.getByText(/if that safety snapshot cannot be saved/i)).toBeInTheDocument();
+    expect(screen.getByText('+3 matches since previous snapshot · 3 matches, 6 entrants')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Restoring replaces the current workspace with this snapshot\. A recovery point of the current state is saved first/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/if that safety snapshot cannot be saved, the restore will not run/i)).toBeInTheDocument();
   });
 
   it('the Restore row button is neutral — the red moved into the confirm (WSB-2)', () => {

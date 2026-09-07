@@ -172,14 +172,6 @@ PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
         "states, and the explicit DTO contains names and schedule facts but no "
         "entrant contact or account data"
     ),
-    ("GET", "/e/api/page/{slug}/seeds"): (
-        "per-event seed lists — seeds are draw facts, so draws_published "
-        "gates them; the same published:false envelope when off"
-    ),
-    ("GET", "/e/api/page/{slug}/winners"): (
-        "per-event winners — results_published gates them; derived by the "
-        "same _event_winner the entrant's own result badges use"
-    ),
     ("GET", "/e/api/page/{slug}/players/{person_key}"): (
         "one person's tournament — entrants_published gates the page "
         "(unpublished person is the uniform 404); the person_key is the "
@@ -436,7 +428,7 @@ def entry_page(cloud_client):
             t = Tournament(name=name, kind="meet", data={})
             session.add(t)
             session.flush()
-            session.add(EntryPage(tournament_id=t.id, slug=f"club-{label}", is_open=True))
+            session.add(EntryPage(tournament_id=t.id, slug=f"club-{label}", is_open=True, audience="public"))
             ev = EntryEvent(
                 tournament_id=t.id,
                 code="MS",

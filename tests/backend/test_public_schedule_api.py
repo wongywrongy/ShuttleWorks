@@ -13,6 +13,7 @@ from fastapi import Response
 from sqlalchemy import event as sqlalchemy_event
 from starlette.requests import Request
 from starlette.responses import Response as StarletteResponse
+from types import SimpleNamespace
 
 from tests.backend._helpers import isolate_test_database
 
@@ -43,7 +44,10 @@ ITEM_KEYS = {
     "walkover",
     "updatedAt",
 }
-SIDE_KEYS = {"participantKey", "persons", "placeholder"}
+# v3 pkg 29: ``unresolved`` is the discriminated reason a side is not a
+# resolved name (match-card contract §2.1). It carries no person data of its
+# own on the public tier — ``known`` is always empty there.
+SIDE_KEYS = {"participantKey", "persons", "placeholder", "unresolved"}
 PERSON_KEYS = {"identity", "resolution", "label"}
 IDENTITY_KEYS = {"id", "name"}
 
@@ -124,6 +128,7 @@ def _seed(tmp_path, monkeypatch, *, published: bool):
             tournament_id=tournament.id,
             slug="schedule-open",
             is_open=True,
+            audience="public",
             draws_published=published,
             results_published=published,
         )
@@ -231,10 +236,95 @@ def test_published_schedule_filters_paginates_and_exposes_only_allowlisted_field
         session.close()
 
 
+def test_schedule_orders_live_before_upcoming_and_completed_before_pagination(tmp_path, monkeypatch):
+    """The first public page must answer 'what is happening now?' globally."""
+    session, repo = _seed(tmp_path, monkeypatch, published=True)
+    try:
+        from db.models import MatchState
+
+        # Keep one chronologically later match live, one upcoming, and one
+        # completed. The public order is state-first, then date/time, so the
+        # live match remains page one even when it would otherwise be beyond
+        # the first page of the schedule.
+        live = session.query(MatchState).filter(MatchState.match_id == "m-live").one()
+        live.status = "playing"
+        upcoming = session.query(MatchState).filter(MatchState.match_id == "m-retired").one()
+        upcoming.status = "scheduled"
+        done = session.query(MatchState).filter(MatchState.match_id == "m-done").one()
+        done.status = "finished"
+        session.commit()
+
+        first, _ = _call(repo, page_size=1)
+        second, _ = _call(repo, page=2, page_size=1)
+        third, _ = _call(repo, page=3, page_size=1)
+        assert first.items[0].matchKey == "meet:m-live"
+        assert second.items[0].matchKey == "meet:m-retired"
+        assert third.items[0].matchKey == "meet:m-done"
+    finally:
+        session.close()
+
+
 def test_matches_route_is_explicitly_public_by_design():
     from tests.backend.test_auth_surface import PUBLIC_BY_DESIGN
 
     assert ("GET", "/e/api/page/{slug}/matches") in PUBLIC_BY_DESIGN
+
+
+def test_unknown_status_is_never_coerced_to_scheduled(tmp_path, monkeypatch):
+    """D7 / contract §2.2: an unrecognised persisted status yields no public
+    state at all — never a positive "scheduled" reading."""
+    session, repo = _seed(tmp_path, monkeypatch, published=True)
+    try:
+        from db.models import MatchState
+
+        state = session.query(MatchState).filter(MatchState.match_id == "m-live").one()
+        state.status = "bogus-legacy-value"
+        session.commit()
+        result, _ = _call(repo)
+        item = next(item for item in result.items if item.matchKey == "meet:m-live")
+        assert item.status is None
+        # Omitted from state facets — a spectator cannot filter by a state
+        # that was never coerced into existence.
+        assert None not in result.facets.states
+    finally:
+        session.close()
+
+
+def test_called_publishes_as_called_never_live_with_results_off(tmp_path, monkeypatch):
+    """D8 / contract §9.1: ``called`` must not be published as ``live``, and
+    turning results off must not synthesise a play state for any other
+    status either — it only hides the score."""
+    session, repo = _seed(tmp_path, monkeypatch, published=False)
+    try:
+        from db.models import EntryPage, MatchState
+
+        state = session.query(MatchState).filter(MatchState.match_id == "m-live").one()
+        state.status = "called"
+        page = session.query(EntryPage).filter(EntryPage.slug == "schedule-open").one()
+        page.draws_published = True
+        page.results_published = False
+        session.commit()
+        result, _ = _call(repo)
+        called_item = next(item for item in result.items if item.matchKey == "meet:m-live")
+        assert called_item.status == "called"
+
+        # A genuinely playing match still reads as "live" with results off —
+        # results-off hides scores, not match progression.
+        state.status = "playing"
+        session.commit()
+        result, _ = _call(repo)
+        playing_item = next(item for item in result.items if item.matchKey == "meet:m-live")
+        assert playing_item.status == "live"
+
+        # And a finished match still reads "completed" (no score attached).
+        state.status = "finished"
+        session.commit()
+        result, _ = _call(repo)
+        finished_item = next(item for item in result.items if item.matchKey == "meet:m-live")
+        assert finished_item.status == "completed"
+        assert finished_item.score is None
+    finally:
+        session.close()
 
 
 def test_planned_court_is_not_public_until_operations_assigns_it(tmp_path, monkeypatch):
@@ -387,3 +477,65 @@ def test_schedule_query_count_is_bounded_as_matches_scale(tmp_path, monkeypatch)
         assert expanded <= 9
     finally:
         session.close()
+
+
+def _bracket_assignment(unit, court, *, started=None, ended=None, finished=False):
+    return SimpleNamespace(
+        play_unit_id=unit,
+        court_id=court,
+        actual_start_slot=started,
+        actual_end_slot=ended,
+        finished=finished,
+    )
+
+
+def test_bracket_court_projection_uses_started_assignment_only():
+    from entries.entries_site import _merge_live_bracket_courts
+
+    courts = {}
+    _merge_live_bracket_courts(courts, [
+        _bracket_assignment("future", 2),
+        _bracket_assignment("live", 1, started=3),
+        _bracket_assignment("done", 3, started=1, ended=2),
+    ])
+    assert courts == {"live": 1}
+
+
+def test_bracket_current_court_conflict_is_withheld_for_both_matches():
+    from entries.entries_site import _merge_live_bracket_courts
+
+    courts = {}
+    _merge_live_bracket_courts(courts, [
+        _bracket_assignment("first", 1, started=3),
+        _bracket_assignment("second", 1, started=4),
+    ])
+    assert courts == {}
+
+
+def test_bracket_materialized_operations_court_wins_for_current_assignment():
+    from entries.entries_site import _merge_live_bracket_courts
+
+    courts = {"live": 4}
+    _merge_live_bracket_courts(courts, [_bracket_assignment("live", 1, started=3)])
+    assert courts == {"live": 4}
+
+
+def test_bracket_court_conflict_withholds_court_field_only_third_court_unaffected():
+    """C2 (state-and-formatting contract §4.2): a disputed court withholds
+    only the court field for the competing claims — it does not remove
+    either match from the projection, which is a decision the caller of
+    ``_merge_live_bracket_courts`` makes (both units simply have no
+    ``courts`` entry to read a court from). A third, undisputed court keeps
+    its assignment untouched. D1: the dispute itself is derived via
+    ``shared.court_occupancy``, not a bespoke detector here."""
+    from entries.entries_site import _merge_live_bracket_courts
+
+    courts = {}
+    _merge_live_bracket_courts(courts, [
+        _bracket_assignment("first", 1, started=3),
+        _bracket_assignment("second", 1, started=4),
+        _bracket_assignment("third", 2, started=5),
+    ])
+    assert "first" not in courts
+    assert "second" not in courts
+    assert courts == {"third": 2}

@@ -68,7 +68,7 @@ export function AppSidebar() {
         to="/settings?section=profile"
         title={identity}
         aria-label={identity}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-2xs font-semibold text-muted-foreground hover:text-foreground"
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-xs font-semibold text-muted-foreground hover:text-foreground"
       >
         {initial}
       </Link>

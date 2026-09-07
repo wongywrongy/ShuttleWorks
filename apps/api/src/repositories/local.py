@@ -1012,6 +1012,50 @@ class _LocalBracketRepo:
             grouped.setdefault(row.bracket_event_id, []).append(row)
         return grouped
 
+    def list_match_identity_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, dict]]:
+        """Batch the persisted coordinates needed by workspace summaries."""
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketMatch, BracketEvent.discipline, BracketEvent.format)
+            .join(
+                BracketEvent,
+                (BracketEvent.tournament_id == BracketMatch.tournament_id)
+                & (BracketEvent.id == BracketMatch.bracket_event_id),
+            )
+            .where(BracketMatch.tournament_id.in_(tournament_ids))
+        ).all()
+        grouped: dict[uuid.UUID, dict[str, dict]] = {}
+        for row, discipline, event_format in rows:
+            grouped.setdefault(row.tournament_id, {})[row.id] = {
+                "id": row.id,
+                "event_id": row.bracket_event_id,
+                "event_code": discipline,
+                "format": event_format,
+                "round_index": row.round_index,
+                "match_index": row.match_index,
+                "segment": (row.meta or {}).get("segment"),
+                "side_a": row.side_a,
+                "side_b": row.side_b,
+            }
+        return grouped
+
+    def list_participant_names_by_tournament(
+        self, tournament_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, str]]:
+        if not tournament_ids:
+            return {}
+        rows = self.session.execute(
+            select(BracketParticipant.tournament_id, BracketParticipant.id, BracketParticipant.name)
+            .where(BracketParticipant.tournament_id.in_(tournament_ids))
+        ).all()
+        grouped: dict[uuid.UUID, dict[str, str]] = {}
+        for tournament_id, participant_id, name in rows:
+            grouped.setdefault(tournament_id, {})[str(participant_id)] = name
+        return grouped
+
     def bulk_create_matches(
         self,
         tournament_id: uuid.UUID,
@@ -2062,6 +2106,13 @@ class _LocalModuleRepo:
         )
 
 
+# The three resolution actions a ``resolve_court`` command may name for
+# each displaced match (§4.2's ``CourtResolution.action``).
+_RESOLVE_COURT_ACTIONS = frozenset(
+    {"keep_and_move", "keep_and_unassign", "keep_and_finish"}
+)
+
+
 class LocalRepository:
     """Façade: holds the session and exposes the sub-repositories."""
 
@@ -2421,8 +2472,32 @@ class LocalRepository:
             conflict_error=ce_cls,
         )
         if error is not None:
-            self.session.commit()
+            self.commit_pending()
             raise error
+
+        # Enforce the single-current-match court invariant at the canonical
+        # command boundary. Presentation layers may explain a conflict, but
+        # they must never hide one or choose a current record for the caller.
+        # The predicate itself lives once, in ``operations.match_state
+        # .assert_court_available`` (backed by ``shared.court_occupancy``) —
+        # this used to be a second, independent copy of the same rule.
+        from operations.match_state import assert_court_available
+
+        try:
+            assert_court_available(self, tournament_id, match_id, target_status)
+        except ce_cls as exc:
+            self._stamp_rejection(
+                command_row,
+                command_id=command_id,
+                tournament_id=tournament_id,
+                match_id=match_id,
+                action=action,
+                payload=payload,
+                submitted_by=submitted_by,
+                reason=exc.message,
+            )
+            self.commit_pending()
+            raise
 
         error = self._validate_concrete_match_sides(
             match,
@@ -2436,7 +2511,7 @@ class LocalRepository:
             conflict_error=ce_cls,
         )
         if error is not None:
-            self.session.commit()
+            self.commit_pending()
             raise error
 
         error = self._validate_assign_court(
@@ -2451,7 +2526,7 @@ class LocalRepository:
             conflict_error=ce_cls,
         )
         if error is not None:
-            self.session.commit()
+            self.commit_pending()
             raise error
 
         error = self._validate_command_transition(
@@ -2467,7 +2542,7 @@ class LocalRepository:
             conflict_error=ce_cls,
         )
         if error is not None:
-            self.session.commit()
+            self.commit_pending()
             raise error
 
         self._apply_command_mutation(match, action, payload, target_status)
@@ -2499,7 +2574,7 @@ class LocalRepository:
             resulting_version=match.version,
         )
 
-        self.session.commit()
+        self.commit_pending()
         self.session.refresh(match)
         self.session.refresh(command_row)
         return ProcessedCommand(
@@ -2552,6 +2627,132 @@ class LocalRepository:
             expected_version=expected_version,
             operation_id=command_id,
         )
+
+    def process_resolve_court_command(
+        self,
+        *,
+        tournament_id: uuid.UUID,
+        command_id: uuid.UUID,
+        chosen_match_id: str,
+        payload: dict,
+        seen_version: int,
+        submitted_by: uuid.UUID,
+    ) -> ProcessedCommand:
+        """Persist the resolution of a derived court dispute (§4.2, ruling C1).
+
+        The dispute itself is never persisted — it is recomputed on demand
+        from current match rows by ``shared.court_occupancy.derive_disputes``.
+        Only the *resolution* is, as an ordinary idempotent command: it
+        mutates the displaced matches named in
+        ``payload['displacedMatchKeys']`` per ``payload['action']`` and
+        leaves the chosen match itself untouched (it was already the valid
+        occupant). Replay is idempotent via the same mechanism every other
+        command uses (``_replay_existing_command``); once applied, the
+        underlying rows have changed and the dispute stops being derived —
+        there is no "resolved but still detected" state to reconcile.
+        """
+        ce_cls = _conflict_error_class()
+        action = "resolve_court"
+
+        existing = self.session.get(Command, command_id)
+        replay = self._replay_existing_command(
+            existing,
+            tournament_id=tournament_id,
+            match_id=chosen_match_id,
+            conflict_error=ce_cls,
+        )
+        if replay is not None:
+            return replay
+        command_row = existing
+
+        chosen = self.session.get(Match, (tournament_id, chosen_match_id))
+        error = self._validate_command_match(
+            chosen,
+            command_row,
+            command_id=command_id,
+            tournament_id=tournament_id,
+            match_id=chosen_match_id,
+            action=action,
+            payload=payload,
+            submitted_by=submitted_by,
+            seen_version=seen_version,
+            conflict_error=ce_cls,
+        )
+        if error is not None:
+            self.commit_pending()
+            raise error
+
+        resolution_action = payload.get("action")
+        displaced_ids = payload.get("displacedMatchKeys") or []
+        if (
+            resolution_action not in _RESOLVE_COURT_ACTIONS
+            or not isinstance(displaced_ids, list)
+            or not displaced_ids
+        ):
+            reason = (
+                "resolve_court requires a non-empty displacedMatchKeys list "
+                "and an action of keep_and_move, keep_and_unassign or "
+                "keep_and_finish"
+            )
+            self._stamp_rejection(
+                command_row,
+                command_id=command_id,
+                tournament_id=tournament_id,
+                match_id=chosen_match_id,
+                action=action,
+                payload=payload,
+                submitted_by=submitted_by,
+                reason=reason,
+            )
+            self.commit_pending()
+            raise ce_cls(match_id=chosen_match_id, message=reason)
+
+        for displaced_id in displaced_ids:
+            displaced = self.session.get(Match, (tournament_id, displaced_id))
+            if displaced is None:
+                # Already gone (e.g. the schedule was regenerated since the
+                # dispute was observed) — not fatal to the resolution.
+                continue
+            self._apply_resolution_to_displaced(displaced, resolution_action)
+            self._mirror_command_state(
+                tournament_id, displaced_id, MatchStatus(displaced.status)
+            )
+
+        command_row = self._finalize_applied_command(
+            command_row,
+            command_id=command_id,
+            tournament_id=tournament_id,
+            match_id=chosen_match_id,
+            action=action,
+            payload=payload,
+            submitted_by=submitted_by,
+        )
+        self.commit_pending()
+        self.session.refresh(chosen)
+        self.session.refresh(command_row)
+        return ProcessedCommand(match=chosen, command=command_row, is_replay=False)
+
+    @staticmethod
+    def _apply_resolution_to_displaced(displaced: Match, resolution_action: str) -> None:
+        """Mutate one displaced match per the chosen resolution action.
+
+        Bypasses the strict transition guard deliberately — like the bulk
+        admin routes, this is an operator escape hatch for a state a prior
+        misassignment already produced; ``assert_valid_transition`` exists
+        to stop an accidental illegal move, not to block the desk from
+        correcting one it is actively looking at.
+        """
+        if resolution_action == "keep_and_unassign":
+            displaced.court_id = None
+            displaced.time_slot = None
+            displaced.status = MatchStatus.SCHEDULED.value
+        elif resolution_action == "keep_and_finish":
+            displaced.status = MatchStatus.FINISHED.value
+        else:  # keep_and_move
+            displaced.court_id = None
+            if displaced.status == MatchStatus.PLAYING.value:
+                displaced.status = MatchStatus.CALLED.value
+        displaced.version = displaced.version + 1
 
     def _replay_existing_command(
         self,

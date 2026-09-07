@@ -32,7 +32,15 @@ module.exports = {
       },
 
       fontSize: {
-        '3xs':  ['var(--text-3xs)',  { lineHeight: '0.875rem', letterSpacing: '0.02em' }],
+        support: ['var(--text-support)', { lineHeight: '1rem' }],
+        console: ['var(--text-console)', { lineHeight: '1.25rem' }],
+        public: ['var(--text-public)', { lineHeight: '1.5rem' }],
+        section: ['var(--text-section)', { lineHeight: '1.75rem' }],
+        page: ['var(--text-page)', { lineHeight: '2.25rem' }],
+        // '3xs' (10px) is REMOVED (v3 consolidated plan, package 07 R1,
+        // closed by package 17) — see tokens.css. Do not re-add `text-3xs`.
+        // '2xs' (11px) is reserved for numeric tabular data in dense tables
+        // (v3 consolidated plan R1) — a caption made of words uses 'xs'.
         '2xs':  ['var(--text-2xs)',  { lineHeight: '1rem',   letterSpacing: '0.02em' }],
         xs:     ['var(--text-xs)',   { lineHeight: '1rem' }],
         '2sm':  ['var(--text-2sm)',  { lineHeight: '1.25rem' }],

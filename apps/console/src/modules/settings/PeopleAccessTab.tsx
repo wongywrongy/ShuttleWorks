@@ -346,7 +346,7 @@ export function PeopleAccessTab({
                   <span className="flex min-w-0 items-center gap-2">
                     <span
                       aria-hidden
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-muted-foreground"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
                     >
                       {name ? name[0].toUpperCase() : initialFor(m.userId)}
                     </span>
@@ -354,7 +354,7 @@ export function PeopleAccessTab({
                       <span className="break-words text-xs font-medium text-foreground">
                         {label}
                         {currentUserId === m.userId && (
-                          <span className="ml-1 text-2xs text-muted-foreground">(you)</span>
+                          <span className="ml-1 text-xs text-muted-foreground">(you)</span>
                         )}
                       </span>
                       {/* No resting reason line (WSM-1). The last-owner rule
@@ -364,7 +364,7 @@ export function PeopleAccessTab({
                           on the menu item itself (disabled, reason in its
                           accessible name) and as the row error if the server
                           refuses anyway. */}
-                      <span className="text-2xs capitalize text-muted-foreground">{m.role}</span>
+                      <span className="text-xs capitalize text-muted-foreground">{m.role}</span>
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">

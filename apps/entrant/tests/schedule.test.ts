@@ -12,7 +12,7 @@ import { createServer } from "vite";
 import { createRequestHandler, type ServerBuild } from "react-router";
 
 import entryPageFixture from "./helpers/entryPage.fixture.json";
-import { loader } from "../app/routes/schedule";
+import { formatScheduleUpdated, loader } from "../app/routes/schedule";
 
 const PAGE = {
   ...entryPageFixture,
@@ -63,6 +63,17 @@ const MATCHES = {
   updatedAt: "2026-09-12T10:35:00+00:00",
   revision: "abc123",
 };
+
+describe("schedule freshness", () => {
+  it("formats the update instant in tournament time", () => {
+    expect(formatScheduleUpdated("2026-09-12T10:35:00+00:00", "Asia/Seoul"))
+      .toContain("Sep 12, 2026, 7:35 PM");
+  });
+
+  it("preserves an unparseable server value instead of inventing a date", () => {
+    expect(formatScheduleUpdated("unknown", "Asia/Seoul")).toBe("unknown");
+  });
+});
 
 const vite = await createServer({
   server: { middlewareMode: true },
@@ -119,7 +130,16 @@ async function render(
 describe("Schedule / Live", () => {
   it("renders a mobile-readable match card with explicit state and timezone", async () => {
     const html = await render();
-    expect(html).toContain("Schedule / Live");
+    // Plan §4: the page title matches its navigation destination ("Schedule"),
+    // not a slash-assembled compound.
+    // v3-consolidated work package 26b: `h2`, not `h1` — `HeroHeader`
+    // already renders the document's one `<h1 id="tournament-title">`
+    // (the tournament name); a second `h1` here failed the plan §6
+    // "Accessibility" heading-order check. `tournament.tsx`'s own panel
+    // headings (`Overview`, `Draws`) were already `h2`; this brings
+    // Schedule in line with that convention.
+    expect(html).toMatch(/<h2[^>]*id="schedule-title"[^>]*>\s*Schedule\s*<\/h2>/);
+    expect(html).not.toContain("Schedule / Live");
     expect(html).toContain("Live now");
     expect(html).toContain("Ada Lovelace");
     expect(html).toContain("Grace Hopper");

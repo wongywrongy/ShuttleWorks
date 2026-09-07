@@ -140,7 +140,7 @@ export function WarmRestartDialog({ isOpen, onClose }: Props) {
               }`}
             >
               <div className="font-medium">{opt.label}</div>
-              <div className="text-2xs text-muted-foreground mt-0.5">{opt.hint}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{opt.hint}</div>
             </button>
           ))}
         </div>

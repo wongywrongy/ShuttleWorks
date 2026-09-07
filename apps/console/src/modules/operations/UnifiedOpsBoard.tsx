@@ -336,7 +336,7 @@ export function UnifiedOpsBoard({
   );
 
   const LEGEND = [
-    { label: STATE_WORD.live, dot: 'bg-status-live-solid' },
+    { label: STATE_WORD.onCourt, dot: 'bg-status-live-solid' },
     { label: STATE_WORD.called, dot: 'bg-status-called-solid' },
   ];
 
@@ -344,7 +344,7 @@ export function UnifiedOpsBoard({
     // No border-t: the grid's last court row already carries a `border-b`
     // hairline (GanttTimeline), so a border-t here would double it on the
     // Plan board (Run is scrollbar-separated, so it keeps its own border-t).
-    <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1 text-2xs">
+    <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1 text-xs">
       <span className="text-muted-foreground">Time</span>
       <ActiveChoice
         active={auto}
@@ -388,11 +388,17 @@ export function UnifiedOpsBoard({
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
         {grid}
         {zoomBar}
-        <div className="flex items-center gap-2 border-t border-border/60 bg-muted/40 px-3 py-1.5 text-2xs" data-testid="unified-ops-status">
+        <div className="flex items-center gap-2 border-t border-border/60 bg-muted/40 px-3 py-1.5 text-xs" data-testid="unified-ops-status">
           {hoverCell && validation ? (
             validation.feasible ? (
               <span className="inline-flex items-center gap-1 text-status-done">
-                <Check className="h-3.5 w-3.5" /> Feasible: drop to pin at C{hoverCell.courtId} · S{hoverCell.slotId}
+                {/* V3-OC18.1 (minimal fix): the raw slot index ("S152") is
+                 * internal-engine jargon the operator cannot read as a time.
+                 * `formatSlot` renders the same wall-clock the timeline
+                 * ruler above already shows; falls back to the slot index
+                 * only when no formatter was supplied (never in production). */}
+                <Check className="h-3.5 w-3.5" /> Feasible: drop to pin at Court {hoverCell.courtId} ·{' '}
+                {formatSlot ? formatSlot(hoverCell.slotId) : `S${hoverCell.slotId}`}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-destructive">
@@ -401,7 +407,11 @@ export function UnifiedOpsBoard({
             )
           ) : (
             <span className="text-muted-foreground">
-              Drag a match to any cell to reschedule: meet and bracket share one court plan.
+              {/* V3-OC18.1: "meet and bracket share one court plan" is
+               * why the board is unified, not something the operator needs
+               * to act on — the instruction now states only the available
+               * action. */}
+              Drag a match to any cell to reschedule.
             </span>
           )}
         </div>
@@ -479,6 +489,7 @@ function BlockView({
       ref={setNodeRef}
       label={identityLabel}
       source={block.source}
+      showSource={false}
       state={fromEngineStatus(block.status)}
       selected={selected}
       tone="state"

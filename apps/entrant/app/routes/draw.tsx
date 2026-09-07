@@ -22,7 +22,7 @@ import { PersonGroup } from "../components/PersonGroup";
 import { EmptyState } from "../components/EmptyState";
 import { MessagePage } from "../components/MessagePage";
 import { PlayShell } from "../components/PlayShell";
-import { TabBar } from "../components/TabBar";
+import { SegmentedNav } from "../components/SegmentedNav";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
 import type {
   DrawDetailDTO,
@@ -39,8 +39,8 @@ import {
   roundLabel,
 } from "../lib/draws.types";
 import type { EntryPageDTO } from "../lib/entryPage.types";
-import { visibleTabs } from "../lib/phase";
-import { INPUT_SKIN } from "../lib/ui";
+import { FIELD_INPUT, PAGE_TITLE } from "../lib/ui";
+import { formatCalendarDay } from "../lib/format";
 import type { MatchCardData } from "../components/MatchCard";
 import { personRefModel } from "../../public/assets/person-ref.js";
 import type { Route } from "./+types/draw";
@@ -52,8 +52,15 @@ export interface DrawLoaderData {
   draw: DrawDetailDTO;
   /** Validated `?segment=` — a real segment id, defaulting to the first. */
   activeSegment: string;
-  /** Scriptless presentation mode, persisted in the URL. */
-  view: "bracket" | "round" | "list";
+  /**
+   * Scriptless presentation mode, persisted in the URL. `null` means no
+   * `?view=` was given: the DEFAULT, adaptive state (contract §4.3/P5,
+   * V3-PE10.2) — the response renders both the Round and Bracket markup,
+   * CSS-toggled by viewport width (Round below 768px, Bracket at or above
+   * it), so a first mobile visit gets Round without a client-side redirect
+   * or any JavaScript. An explicit `?view=` always wins at every width.
+   */
+  view: "bracket" | "round" | "list" | null;
   roundIndex: number;
   playerQuery: string;
 }
@@ -92,9 +99,10 @@ export async function loader({
     const requestedView = query.get("view");
     const view =
       requestedView === "round" ||
-      requestedView === "list"
+      requestedView === "list" ||
+      requestedView === "bracket"
         ? requestedView
-        : "bracket";
+        : null;
     const activeSegment =
       draw.segments.find((segment) => segment.id === requested)?.id ??
       draw.segments[0]?.id ??
@@ -135,6 +143,10 @@ function nodeToMatch(
   teams: Map<string, TeamDTO>,
   eventCode: string,
   round: string | null,
+  /** Contract §2.3: publication is data. A null score means "withheld" only
+   *  when this is false; otherwise the match simply has no score yet
+   *  (v3 package 29, V3-11-3). */
+  scoresPublished: boolean,
 ): MatchCardData {
   const decided =
     node.result?.winnerSide === "A" || node.result?.winnerSide === "B";
@@ -149,6 +161,7 @@ function nodeToMatch(
         persons: team?.persons ?? [],
         seed: team?.seed,
         placeholder: side.bye ? "Bye" : side.placeholder,
+        unresolved: side.unresolved ?? null,
         winner:
           decided && node.result?.winnerSide === (index === 0 ? "A" : "B"),
       };
@@ -157,11 +170,20 @@ function nodeToMatch(
     decided,
     scheduledTime: node.scheduledTime,
     court: node.court,
-    playedOn: node.playedOn,
+    // D12: never the raw ISO date in prose — the same human date label the
+    // schedule route already uses for its cards (`scheduleDateLabel`, now
+    // itself redirected to the entrant time authority).
+    playedOn: node.playedOn ? formatCalendarDay(node.playedOn) : null,
     localTime: node.localTime,
     courtLabel: node.courtLabel,
     sourceUrl: node.sourceUrl,
     sourceRef: node.sourceRef,
+    scoresPublished,
+    // Contract §3.6/§4.3, V3-PE10.1: the node's own 1-based position within
+    // its round, already on the wire (`MatchNodeDTO.position`) — rendered as
+    // a small visible reference so "Winner of {reference}" resolves to a
+    // labelled source node without counting rows.
+    matchNumber: node.position,
   };
 }
 
@@ -255,28 +277,20 @@ function SegmentNavigation({
   if (segments.length < 2) return null;
   const base = `/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(drawKey)}`;
   const href = (segmentId: string) => {
-    const params = new URLSearchParams({ segment: segmentId, view });
+    const params = new URLSearchParams({ segment: segmentId, ...(view ? { view } : {}) });
     if (view === 'round') params.set('round', String(roundIndex));
     if (playerQuery) params.set('player', playerQuery);
     return `${base}?${params}`;
   };
   return (
-    <nav aria-label="Draw segments" className="flex flex-wrap gap-2">
-      {segments.map((segment) => (
-        <a
-          key={segment.id}
-          href={href(segment.id)}
-          aria-current={segment.id === active ? "page" : undefined}
-          className={`border-b-2 px-0.5 py-1.5 text-sm ${
-            segment.id === active
-              ? "border-action-primary font-medium text-foreground"
-              : "border-rule-soft text-muted-foreground hover:border-rule-control"
-          }`}
-        >
-          {segment.label || segment.id}
-        </a>
-      ))}
-    </nav>
+    <SegmentedNav
+      label="Draw segments"
+      segments={segments.map((segment) => ({
+        label: segment.label || segment.id,
+        href: href(segment.id),
+        current: segment.id === active,
+      }))}
+    />
   );
 }
 
@@ -296,36 +310,23 @@ function DrawViewLinks({
   playerQuery: string;
 }) {
   const base = `/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(drawKey)}`;
-  const href = (view: DrawLoaderData["view"]) => {
+  const href = (view: "bracket" | "round" | "list") => {
     const params = new URLSearchParams({ segment, view });
     if (view === "round") params.set("round", String(roundIndex));
     if (playerQuery) params.set("player", playerQuery);
     return `${base}?${params}`;
   };
   return (
-    <nav
-      aria-label="Draw view"
-      className="overflow-x-auto border-b border-rule-soft"
-    >
-      <div className="flex min-w-max gap-5">
-        {(
-          [
-            ["bracket", "Bracket"],
-            ["round", "Round"],
-            ["list", "List"],
-          ] as const
-        ).map(([view, label]) => (
-          <a
-            key={view}
-            href={href(view)}
-            aria-current={active === view ? "page" : undefined}
-            className={`shrink-0 border-b-2 px-0.5 pb-2 pt-1 text-sm ${active === view ? "border-action-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:border-rule-control hover:text-foreground"}`}
-          >
-            {label}
-          </a>
-        ))}
-      </div>
-    </nav>
+    <SegmentedNav
+      label="Draw view"
+      segments={(
+        [
+          ["bracket", "Bracket"],
+          ["round", "Round"],
+          ["list", "List"],
+        ] as const
+      ).map(([view, label]) => ({ label, href: href(view), current: active === view }))}
+    />
   );
 }
 
@@ -387,11 +388,17 @@ function MatchList({
   teams,
   eventCode,
   slug,
+  scoresPublished,
+  highlightPersonId,
+  highlightPersonName,
 }: {
   rounds: DrawDetailDTO["segments"][number]["rounds"];
   teams: Map<string, TeamDTO>;
   eventCode: string;
   slug: string;
+  scoresPublished: boolean;
+  highlightPersonId?: string | null;
+  highlightPersonName?: string | null;
 }) {
   if (rounds.length === 0)
     return (
@@ -412,7 +419,10 @@ function MatchList({
               <MatchCard
                 key={node.nodeKey}
                 slug={slug}
-                match={nodeToMatch(node, teams, eventCode, round.label)}
+                match={nodeToMatch(node, teams, eventCode, round.label, scoresPublished)}
+                highlightPersonId={highlightPersonId}
+                highlightPersonName={highlightPersonName}
+                compactList
               />
             ))}
           </div>
@@ -479,6 +489,12 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
           : false;
       })?.identity?.id ?? null
     : null;
+  const selectedPerson = selectedPersonId
+    ? draw.teams.flatMap((team) => team.persons).find((person) => person.identity?.id === selectedPersonId)
+    : null;
+  const selectedPersonLabel = selectedPerson
+    ? personRefModel({ slug, identity: selectedPerson.identity, state: selectedPerson.resolution }).text
+    : playerQuery;
   const roundRobin = isRoundRobin(draw.kind);
   const segment =
     draw.segments.find((candidate) => candidate.id === activeSegment) ??
@@ -509,10 +525,95 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
     : [];
   const clearPlayerParams = new URLSearchParams({
     segment: activeSegment,
-    view,
+    ...(view ? { view } : {}),
   });
   if (view === 'round') clearPlayerParams.set('round', String(roundIndex));
   const clearPlayerHref = `/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(draw.drawKey)}?${clearPlayerParams}`;
+  const matchCount = pathRounds.reduce((count, round) => count + round.matches.length, 0);
+  const clampedRoundIndex = Math.min(roundIndex, Math.max(0, (segment?.rounds.length ?? 1) - 1));
+
+  /** Round view, at the currently selected round (contract §4.3/P5's
+   *  mobile default) — shared by the explicit `?view=round` branch and the
+   *  adaptive default below it. */
+  const roundBlock = segment ? (
+    <>
+      <RoundPager
+        base={`/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(draw.drawKey)}`}
+        segment={activeSegment}
+        roundIndex={clampedRoundIndex}
+        roundCount={segment.rounds.length}
+        playerQuery={playerQuery}
+      />
+      {segment.rounds[clampedRoundIndex] ? (
+        <MatchList
+          rounds={playerQuery
+            ? pathRounds.filter((round) => round.label === segment.rounds[clampedRoundIndex].label)
+            : [segment.rounds[clampedRoundIndex]]}
+          teams={teams}
+          eventCode={draw.eventCode}
+          slug={slug}
+          scoresPublished={draw.resultsPublished}
+          highlightPersonId={selectedPersonId}
+          highlightPersonName={selectedPersonLabel}
+        />
+      ) : null}
+    </>
+  ) : null;
+
+  /** The horizontal bracket canvas (contract §4.3 — enlarges rather than
+   *  shrinking names; scrolls in its own labelled region). Shared by the
+   *  explicit `?view=bracket` branch and the adaptive default below it. */
+  const bracketBlock = segment ? (
+    <section
+      data-testid="public-bracket-canvas"
+      aria-label={`${eventDisciplineLabel(draw.discipline)} bracket`}
+      className="min-w-0 border-y border-rule-soft bg-surface-raised"
+    >
+      <div className="overflow-x-auto px-4 pb-2 pt-3 md:px-6">
+        <div
+          className="flex w-max min-w-full items-stretch"
+          data-bracket-grid
+          data-pinned-person={selectedPersonId ?? undefined}
+        >
+          {segment.rounds.map((round, roundPosition) => (
+            <Fragment key={round.label}>
+              {roundPosition > 0 ? <ConnectorColumn destination={round} nodeIndex={nodeIndex} teams={teams} /> : null}
+              <section data-bracket-round={round.label} className="flex w-64 shrink-0 flex-col">
+                <h2 className="h-4 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
+                  {round.label}
+                </h2>
+                <div className="mt-3 flex flex-1 flex-col">
+                  {round.matches.map((node) => (
+                    <div
+                      key={node.nodeKey}
+                      data-node-key={node.nodeKey}
+                      data-person-ids={nodePersonIds(node, teams).join(' ')}
+                      className="bracket-slot flex min-h-[46px] flex-1 items-center"
+                    >
+                      <MatchCard
+                        variant="bracket-node"
+                        slug={slug}
+                        match={nodeToMatch(
+                          node,
+                          teams,
+                          draw.eventCode,
+                          round.label,
+                          draw.resultsPublished,
+                        )}
+                        highlightPersonId={selectedPersonId}
+                        highlightPersonName={selectedPersonLabel}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </Fragment>
+          ))}
+        </div>
+      </div>
+      <script type="module" src="/e/assets/bracket-path.js" />
+    </section>
+  ) : null;
 
   return (
     <PlayShell>
@@ -523,19 +624,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
         >
           ← {tournamentName ? `${tournamentName} · Draws` : "Draws"}
         </a>
-        <div className="mt-5 border-b border-rule-soft">
-          <TabBar
-            tabs={visibleTabs(page.events, page.entrants, page.publication)}
-            active="draws"
-            hrefFor={(tab) =>
-              tab === "overview"
-                ? `/e/${encodeURIComponent(slug)}`
-                : `/e/${encodeURIComponent(slug)}?tab=${tab}`
-            }
-            scheduleHref={`/e/${encodeURIComponent(slug)}/schedule`}
-          />
-        </div>
-        <h1 className="mt-4 font-display text-2xl font-bold tracking-tight text-foreground">
+        <h1 className={`mt-5 ${PAGE_TITLE}`}>
           {eventDisciplineLabel(draw.discipline)}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -544,6 +633,12 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
             kindLabel(draw.kind),
             entryCountLabel(draw.eventCode, draw.size),
           ].join(" · ")}
+        </p>
+        {/* V3-PE13.1: stated once beside the list, from the DTO's own
+            timezone — never hardcoded — so a direct link to this draw
+            never leaves the reader guessing without returning to Overview. */}
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          All times in {page.tournament.timeZone}.
         </p>
 
         <div className="mt-5 grid gap-3">
@@ -559,7 +654,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
           ) : null}
           {!roundRobin ? (
             <form method="get" className="flex max-w-xl flex-wrap items-center gap-2">
-              <input type="hidden" name="view" value={view} />
+              {view ? <input type="hidden" name="view" value={view} /> : null}
               <input type="hidden" name="segment" value={activeSegment} />
               {view === 'round' ? <input type="hidden" name="round" value={roundIndex} /> : null}
               <label className="sr-only" htmlFor="draw-player">
@@ -570,20 +665,34 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                 name="player"
                 defaultValue={playerQuery}
                 placeholder="Find a player or pair"
-                className={`h-9 min-w-0 flex-1 rounded px-3 ${INPUT_SKIN}`}
+                className={`${FIELD_INPUT} flex-1`}
               />
-                <button
+              <button
                 type="submit"
-                className="h-9 border border-action-primary px-3 text-sm font-semibold text-foreground hover:bg-surface-sunken"
+                className="h-10 rounded-sm border border-action-primary bg-surface-raised px-3 text-sm font-semibold text-foreground hover:bg-surface-sunken"
               >
                 Find
               </button>
               {playerQuery ? (
                 <a href={clearPlayerHref} className="text-sm text-muted-foreground underline-offset-4 hover:underline">
-                  Clear player filter
+                  Clear search
                 </a>
               ) : null}
             </form>
+          ) : null}
+          {playerQuery ? (
+            // V3-PE12.1: name the actual behaviour exactly — a plural-aware
+            // count of what was found, not "Showing matches for X" (which
+            // does not say whether that is filtering, highlighting, or the
+            // whole draw). The bracket canvas is never filtered — it dims
+            // the rest of the tree instead (`bracket-path.js`) — so "found"
+            // covers both the filtered List/Round views and the highlighted
+            // Bracket view honestly.
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-s-2 border-action-primary bg-surface-sunken px-3 py-2 text-sm" role="status">
+              <span>
+                {matchCount} {matchCount === 1 ? 'match' : 'matches'} found for &lsquo;<strong>{selectedPersonLabel}</strong>&rsquo;
+              </span>
+            </div>
           ) : null}
         </div>
 
@@ -607,6 +716,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                               teams,
                               draw.eventCode,
                               round.label,
+                              draw.resultsPublished,
                             )}
                           />
                         ))}
@@ -633,82 +743,23 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                     teams={teams}
                     eventCode={draw.eventCode}
                     slug={slug}
+                    scoresPublished={draw.resultsPublished}
+                    highlightPersonId={selectedPersonId}
+                    highlightPersonName={selectedPersonLabel}
                   />
                 ) : view === "round" ? (
-                  <>
-                    <RoundPager
-                      base={`/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(draw.drawKey)}`}
-                      segment={activeSegment}
-                      roundIndex={Math.min(
-                        roundIndex,
-                        Math.max(0, segment.rounds.length - 1),
-                      )}
-                      roundCount={segment.rounds.length}
-                      playerQuery={playerQuery}
-                    />
-                    {segment.rounds[
-                      Math.min(
-                        roundIndex,
-                        Math.max(0, segment.rounds.length - 1),
-                      )
-                    ] ? (
-                      <MatchList
-                        rounds={playerQuery
-                          ? pathRounds.filter((round) => round.label === segment.rounds[Math.min(roundIndex, Math.max(0, segment.rounds.length - 1))].label)
-                          : [segment.rounds[Math.min(roundIndex, Math.max(0, segment.rounds.length - 1))]]}
-                        teams={teams}
-                        eventCode={draw.eventCode}
-                        slug={slug}
-                      />
-                    ) : null}
-                  </>
+                  roundBlock
+                ) : view === "bracket" ? (
+                  bracketBlock
                 ) : (
-                  <section
-                    data-testid="public-bracket-canvas"
-                    aria-label={`${eventDisciplineLabel(draw.discipline)} bracket`}
-                    className="border-y border-rule-soft bg-surface-raised"
-                  >
-                    <div className="overflow-x-auto px-4 py-2 md:px-6">
-                      <div
-                        className="flex w-max min-w-full items-stretch"
-                        data-bracket-grid
-                        data-pinned-person={selectedPersonId ?? undefined}
-                      >
-                        {segment.rounds.map((round, roundPosition) => (
-                          <Fragment key={round.label}>
-                            {roundPosition > 0 ? <ConnectorColumn destination={round} nodeIndex={nodeIndex} teams={teams} /> : null}
-                            <section data-bracket-round={round.label} className="flex w-64 shrink-0 flex-col">
-                              <h2 className="h-4 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
-                                {round.label}
-                              </h2>
-                              <div className="mt-3 flex flex-1 flex-col">
-                                {round.matches.map((node) => (
-                                  <div
-                                    key={node.nodeKey}
-                                    data-node-key={node.nodeKey}
-                                    data-person-ids={nodePersonIds(node, teams).join(' ')}
-                                    className="bracket-slot flex min-h-[50px] flex-1 items-center"
-                                  >
-                                    <MatchCard
-                                      variant="bracket-node"
-                                      slug={slug}
-                                      match={nodeToMatch(
-                                        node,
-                                        teams,
-                                        draw.eventCode,
-                                        round.label,
-                                      )}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </section>
-                          </Fragment>
-                        ))}
-                      </div>
-                    </div>
-                    <script type="module" src="/e/assets/bracket-path.js" />
-                  </section>
+                  // No explicit `?view=` (contract §4.3/P5, V3-PE10.2): both
+                  // markups render in one response, CSS-toggled by viewport
+                  // width — Round below 768px (the mobile default), Bracket
+                  // canvas at or above it. No client redirect, no JS.
+                  <>
+                    <div className="md:hidden">{roundBlock}</div>
+                    <div className="hidden md:block">{bracketBlock}</div>
+                  </>
                 )
               ) : null}
             </>

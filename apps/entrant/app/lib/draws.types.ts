@@ -7,6 +7,7 @@
  */
 
 import type { PersonReferenceDTO } from './person.types';
+import type { UnresolvedSideDTO } from './side';
 
 /** The format tag — the keys of the API's `FORMAT_REGISTRY`
  *  (`apps/api/src/bracket/formats/__init__.py`). Every write path validates
@@ -23,6 +24,8 @@ export interface DrawCardDTO {
   discipline: string;
   kind: DrawKind;
   size: number;
+  /** Distinct participants placed into the published draw. */
+  drawParticipantCount?: number;
   hasConsolation: boolean;
   matchCoverage: MatchCoverageDTO;
   recordScope: string;
@@ -81,6 +84,9 @@ export interface SideDTO {
   bye: boolean;
   feederNodeKey: string | null;
   feederTake: 'winner' | 'loser' | null;
+  /** Contract §2.1's discriminated reason. The persons themselves are on
+   *  the `TeamDTO` this side's `participantKey` joins to. */
+  unresolved?: UnresolvedSideDTO | null;
 }
 
 export interface NodeResultDTO {
@@ -145,42 +151,9 @@ export interface DrawDetailDTO {
   standings: StandingRowDTO[] | null;
 }
 
-export interface SeedLineDTO {
-  seed: number;
-  persons: PersonReferenceDTO[];
-  club: string | null;
-}
-
-export interface SeedsEventDTO {
-  eventCode: string;
-  discipline: string;
-  seeds: SeedLineDTO[];
-}
-
-export interface SeedsDTO {
-  published: boolean;
-  events: SeedsEventDTO[];
-}
-
 export interface HonorDTO {
   persons: PersonReferenceDTO[];
   club: string | null;
-}
-
-export interface WinnersEventDTO {
-  eventCode: string;
-  discipline: string;
-  decided: boolean;
-  winner: HonorDTO | null;
-  runnerUp: HonorDTO | null;
-  semifinalists: HonorDTO[];
-  finalScore: number[][] | null;
-  finalists: HonorDTO[];
-}
-
-export interface WinnersDTO {
-  published: boolean;
-  events: WinnersEventDTO[];
 }
 
 /** The human name of a format tag — shown on draw cards. Keyed by `DrawKind`,

@@ -11,6 +11,7 @@ test('Yunavero owns a single generated ShuttleWorks brand contract', () => {
     productName: 'ShuttleWorks',
     publicProductName: 'ShuttleWorks Tournaments',
     productMonogram: 'SW',
+    sportName: 'Badminton',
     companyName: 'Yunavero',
     companyDomain: 'yunavero.com',
     endorsement: 'by Yunavero',
@@ -20,11 +21,15 @@ test('Yunavero owns a single generated ShuttleWorks brand contract', () => {
   assert.notEqual(brand.operatorHostname, brand.entrantHostname)
   assert.match(read('packages/brand/generated.ts'), /companyName: "Yunavero"/)
   assert.match(read('apps/api/src/core/brand.py'), /COMPANY_NAME = "Yunavero"/)
+  assert.match(read('packages/brand/generated.ts'), /sportName: "Badminton"/)
+  assert.match(read('apps/api/src/core/brand.py'), /SPORT_NAME = "Badminton"/)
 })
 
 test('customer surfaces consume the shared brand while protocol names stay stable', () => {
   assert.match(read('apps/console/src/components/ShuttleWorksMark.tsx'), /BRAND\.productName/)
-  assert.match(read('apps/entrant/app/components/PlayShell.tsx'), /BRAND\.endorsement/)
+  // v3 pkg 21 (V3-PE02.1): the public footer renders the shared BRAND_SIGNATURE
+  // (productName + endorsement) rather than assembling the endorsement itself.
+  assert.match(read('apps/entrant/app/components/PlayShell.tsx'), /BRAND_SIGNATURE/)
   assert.match(read('apps/api/src/core/main.py'), /PRODUCT_NAME/)
   assert.match(read('apps/api/src/core/main.py'), /BRAND_SIGNATURE/)
 

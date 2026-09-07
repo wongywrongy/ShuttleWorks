@@ -43,7 +43,7 @@ const STATE_FILL: Record<MatchChipState, string> = {
   scheduled: 'bg-card border-border text-ink-3 hover:brightness-110',
   called: 'bg-status-called-solid border-status-called-border text-status-called-ink hover:brightness-110',
   playing: 'bg-status-live-solid border-status-live-border text-status-live-ink hover:brightness-110',
-  done: 'bg-surface-band border-border/60 text-muted-foreground hover:brightness-110',
+  done: 'bg-surface-band border-rule-soft text-muted-foreground hover:brightness-110',
 };
 
 export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -57,6 +57,9 @@ export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonEle
   selected?: boolean;
   /** Per-surface colour encoding. Defaults to `discipline` (Plan). */
   tone?: MatchChipTone;
+  /** Show the internal Meet/Bracket source marker. Plan identity already
+   * carries the event/reference, so it suppresses this routine badge. */
+  showSource?: boolean;
   /** Event-type key for `getEventColor` — only used by the `discipline` tone. */
   colorKey?: string;
   /** Optional team labels for the second line (only shown when `showSides`). */
@@ -75,7 +78,7 @@ export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonEle
 }
 
 export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function MatchChip(
-  { label, source, state, late = false, selected = false, tone = 'discipline', colorKey, sideA, sideB, showSides = false, onSelect, className, children, ...rest },
+  { label, source, state, late = false, selected = false, tone = 'discipline', colorKey, sideA, sideB, showSides = false, showSource = true, onSelect, className, children, ...rest },
   ref,
 ) {
   const fill = selected
@@ -123,24 +126,33 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
       {...rest}
     >
       <span className="flex items-center gap-1 leading-tight">
-        {/* Source initial square (M=meet, B=bracket) */}
-        <span
-          aria-hidden
-          className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-xs text-3xs font-semibold sw-num ${squareCls}`}
-        >
-          {SOURCE_INITIAL[source]}
-        </span>
-        <span className={`min-w-0 break-words text-2xs font-semibold sw-num${doneLabel ? ' text-muted-foreground' : ''}`}>{label}</span>
+        {showSource ? (
+          <span
+            aria-hidden
+            className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-xs text-xs font-semibold sw-num ${squareCls}`}
+          >
+            {SOURCE_INITIAL[source]}
+          </span>
+        ) : null}
+        <span className="min-w-0 break-words text-2xs font-semibold sw-num">{label}</span>
         {doneLabel ? (
-          <span aria-hidden className="text-3xs text-muted-foreground">
+          <span aria-hidden className="text-xs text-muted-foreground">
             ✓
           </span>
         ) : null}
       </span>
       {showSides && sideA != null && sideB != null && (
-        <span className="mt-0.5 break-words text-2xs leading-tight">
-          {sideA} <span className="opacity-60">v</span> {sideB}
-        </span>
+        <>
+          {/* D14/match-card §3.1: stacked, one side per line — never a
+           *  joined "sideA v sideB" string — even at chip density. The
+           *  accessible name still carries the "versus" phrasing (§3.2)
+           *  for anyone not reading the two visible lines. */}
+          <span aria-hidden="true" className="mt-0.5 flex flex-col leading-tight">
+            <span className="break-words text-xs">{sideA}</span>
+            <span className="break-words text-xs">{sideB}</span>
+          </span>
+          <span className="sr-only">{`${sideA} versus ${sideB}`}</span>
+        </>
       )}
       {children}
     </button>

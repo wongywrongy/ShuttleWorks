@@ -48,7 +48,7 @@ import {
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { DragOverlayChip } from './positionGrid/DragOverlayChip';
 import { DetailDrawer } from './PlayerDetailPanel';
-import { EYEBROW_CLASS } from '../../../lib/utils';
+import { EYEBROW_CLASS, ACCENT_PRESS } from '../../../lib/utils';
 import { DetailDock, EmptyState, PickerPopover } from '../../../components/control-plane';
 import { InlineSearch } from '../../../components/InlineSearch';
 import { MeetActionsBar } from '../components/MeetActionsBar';
@@ -60,6 +60,7 @@ import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 import { decomposeMeetEventRank } from '../../../platform/domain/matchIdentity';
 import { ActiveChoice } from '../../../components/ActiveChoice';
+import { SELECTABLE_ROW_FOCUS } from '../../../lib/selectableRow';
 
 export function RosterTab() {
   const tid = useTournamentId();
@@ -83,6 +84,8 @@ export function RosterTab() {
   const [selectedRank, setSelectedRank] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [eventFilter, setEventFilter] = useState('all');
+  const [issueFilter, setIssueFilter] = useState('all');
   // Name of the player currently being dragged — drives the DragOverlay
   // preview so a chip can leave the grid's overflow-auto without clipping.
   const [activeDragName, setActiveDragName] = useState<string | null>(null);
@@ -221,9 +224,24 @@ export function RosterTab() {
   );
   const filteredPlayers = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return schoolPlayers;
-    return schoolPlayers.filter((p) => p.name.toLowerCase().includes(q));
-  }, [schoolPlayers, query]);
+    return schoolPlayers.filter((p) => {
+      if (q && !p.name.toLowerCase().includes(q)) return false;
+      if (eventFilter !== 'all' && !(p.ranks ?? []).some((rank) =>
+        decomposeMeetEventRank(rank, Object.keys(config?.rankCounts ?? {})).event_code === eventFilter,
+      )) return false;
+      if (issueFilter === 'issues' && (p.ranks ?? []).length > 0) return false;
+      if (issueFilter === 'clear' && (p.ranks ?? []).length === 0) return false;
+      return true;
+    });
+  }, [schoolPlayers, query, eventFilter, issueFilter, config?.rankCounts]);
+  const eventOptions = useMemo(() => {
+    const codes = new Set<string>();
+    for (const rank of Object.keys(config?.rankCounts ?? {})) {
+      const code = decomposeMeetEventRank(rank, Object.keys(config?.rankCounts ?? {})).event_code;
+      if (code) codes.add(code);
+    }
+    return [...codes].sort();
+  }, [config?.rankCounts]);
   const selectedPlayer =
     players.find((p) => p.id === selectedPlayerId) ?? null;
 
@@ -343,7 +361,21 @@ export function RosterTab() {
         {groups.length === 0 ? (
           <EmptyState
             title="No schools yet"
-            body="A school is a roster of players; their positions are what matches get built from. Add a school from the actions bar to start."
+            // V3-OC32.1: pointed at "the actions bar" even though the Add
+            // school action sits right below this text. Describe the next
+            // domain step instead of redirecting away from the adjacent
+            // button.
+            body="Add a school, then add its players and positions."
+            action={
+              <button
+                type="button"
+                onClick={() => document.querySelector<HTMLButtonElement>('[data-testid="school-add-button"]')?.click()}
+                disabled={!canEditWorkspace}
+                className={`${INTERACTIVE_BASE} inline-flex h-8 items-center rounded-sm bg-accent px-3 text-xs font-medium text-accent-ink disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                Add school
+              </button>
+            }
           />
         ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -380,6 +412,23 @@ export function RosterTab() {
                     // two different player counts at once (RST-3).
                     placeholder="Filter players…"
                   />
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <label className="text-xs text-muted-foreground">
+                      Event
+                      <select className="mt-1 h-7 w-full rounded-sm border border-border bg-card px-1.5 text-xs text-foreground" value={eventFilter} onChange={(e) => setEventFilter(e.target.value)} aria-label="Filter roster by event">
+                        <option value="all">All events</option>
+                        {eventOptions.map((code) => <option key={code} value={code}>{code}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs text-muted-foreground">
+                      Issues
+                      <select className="mt-1 h-7 w-full rounded-sm border border-border bg-card px-1.5 text-xs text-foreground" value={issueFilter} onChange={(e) => setIssueFilter(e.target.value)} aria-label="Filter roster by issues">
+                        <option value="all">All</option>
+                        <option value="issues">Needs attention</option>
+                        <option value="clear">No issues</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
               )}
               {/* Column header for the list. The trailing number per row had
@@ -476,7 +525,7 @@ export function RosterTab() {
                   positionOccupants.length < (isDoublesRank(selectedRank) ? 2 : 1)
                     ? positionOccupants.length === 0
                       ? 'No one assigned yet. Click the cell to assign a player.'
-                      : 'Partner not assigned. Use ＋ add partner in the cell.'
+                  : 'Partner not assigned. Use Add partner in the cell.'
                     : null
                 }
                 onClose={closeDrawer}
@@ -544,7 +593,9 @@ function SchoolTabs({
                 school name widens its pill and the bar scrolls — the pill
                 is the only place that name is written. */}
             <span>{g.name}</span>
-            <span className="tabular-nums text-2xs opacity-75">
+            <span
+              className={`tabular-nums text-2xs ${isActive ? 'text-text-on-accent' : 'text-muted-foreground'}`}
+            >
               {counts.get(g.id) ?? 0}
             </span>
           </ActiveChoice>
@@ -584,9 +635,9 @@ function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void })
             aria-haspopup="dialog"
             aria-expanded={open}
             data-testid="school-add-button"
-            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink shadow-glow transition-[filter] duration-fast ease-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:cursor-not-allowed disabled:opacity-50`}
           >
-            ＋ Add school
+            Add school
           </button>
         </div>
       </PickerPopover.Anchor>
@@ -622,7 +673,7 @@ function AddSchoolMenu({ onAddSchool }: { onAddSchool: (name: string) => void })
             type="button"
             onClick={commit}
             disabled={!draft.trim()}
-            className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow hover:brightness-110 disabled:opacity-50"
+            className={`rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
           >
             Add
           </button>
@@ -685,7 +736,7 @@ function BulkImportMenu({
             }
             className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50`}
           >
-            ＋ Bulk import
+                  Bulk import
           </button>
         </div>
       </PickerPopover.Anchor>
@@ -724,7 +775,7 @@ function BulkImportMenu({
               onClick={commit}
               disabled={names.length === 0}
               data-testid="bulk-import-commit"
-              className="rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink shadow-glow hover:brightness-110 disabled:opacity-50"
+              className={`rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
             >
               Add {names.length || ''}
             </button>
@@ -789,11 +840,19 @@ function PlayerListSection({
             key={p.id}
             data-testid={`player-row-${p.id}`}
             data-selected={isSelected ? 'true' : 'false'}
+            role="button"
+            tabIndex={0}
+            aria-pressed={isSelected}
+            aria-label={`Select ${p.name || '(unnamed)'}`}
             className={[
               // Same row family as the school list: border-l accent bar,
               // py-1 / pl-2 / pr-2, text-sm, hover wash. Keeps both lists at
               // one density.
               'group flex cursor-pointer items-center gap-2 rounded-sm border-l-2 py-1 pl-2 pr-2 text-sm transition-colors duration-fast ease-brand',
+              // V3 row-navigation ruling: a row you can click must also be a
+              // row you can reach and operate from the keyboard — Tab lands
+              // here, a visible focus ring shows it, Enter/Space toggle it.
+              SELECTABLE_ROW_FOCUS,
               isSelected
                 ? 'border-accent bg-accent/10 font-medium text-foreground'
                 : 'border-transparent text-foreground hover:bg-muted/40',
@@ -801,6 +860,15 @@ function PlayerListSection({
             onClick={(e) => {
               // Don't toggle when clicking the row's own buttons (× delete).
               if ((e.target as HTMLElement).closest('[data-no-select]')) return;
+              onTogglePlayer(p.id);
+            }}
+            onKeyDown={(e) => {
+              // A nested control (the drag-handle chip, the delete button)
+              // owns its own keys; only Enter/Space landing on the row
+              // itself toggles selection.
+              if (e.target !== e.currentTarget) return;
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
               onTogglePlayer(p.id);
             }}
           >

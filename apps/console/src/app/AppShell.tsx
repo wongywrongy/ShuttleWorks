@@ -73,7 +73,6 @@ export function resolveActivePane(
   if (active && isModuleEnterable(active.status)) return { kind: 'outlet' };
   if (!active && !catalogLoaded) return { kind: 'outlet' };
   const primary = primaryModuleForOpen(modules);
-  const primaryWm = modules.find((m) => m.id === primary);
   return {
     kind: 'panel',
     // An absent module has no row to read a label off, so fall back to the
@@ -86,7 +85,14 @@ export function resolveActivePane(
     // A note only appears now when it says something the title does not.
     note: active?.note,
     primary,
-    primaryLabel: primaryWm?.label ?? primary,
+    primaryLabel:
+      active?.status === 'coming-soon'
+        ? 'Administration · Modules'
+        : primary === 'display'
+          ? 'Displays'
+          : primary === 'entries'
+            ? 'Entries'
+            : 'Setup · General',
     canOpenSettings: active?.status === 'disabled',
     reason:
       active?.status === 'disabled'
@@ -291,7 +297,11 @@ export function AppShell() {
               reason={pane.reason}
               onGoToPrimary={() => {
                 if (tid)
-                  navigate(workflowHref(tid, defaultTabForModule(pane.primary)));
+                  navigate(
+                    pane.reason === 'unavailable'
+                      ? `/tournaments/${tid}/administration/modules`
+                      : workflowHref(tid, defaultTabForModule(pane.primary)),
+                  );
               }}
               onOpenSettings={
                 pane.canOpenSettings && tid

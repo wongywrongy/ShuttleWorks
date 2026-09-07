@@ -55,18 +55,19 @@
  * between a missing capability and an inscrutable "the human check did not
  * pass" after filling the whole form in. Everything else here works unhydrated.
  */
-import { Button, Notice, TextField } from '@scheduler/design-system/components';
+import { Button, TextField } from '@scheduler/design-system/components';
 import { brandedTitle } from '@scheduler/brand';
 import { data } from 'react-router';
 
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { apiGet } from '../lib/apiFetch.server';
+import type { EntryPageDTO } from '../lib/entryPage.types';
 import { FORM_FIELD } from '../lib/formField';
 import { safeNext } from '../lib/nextTarget';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import type { Route } from './+types/signup';
-import { CARD } from '../lib/ui';
+import { CARD, EYEBROW, PAGE_TITLE } from '../lib/ui';
 
 /** `EntrantConfigDTO` — `api/entries_json.py`. Exactly two keys, both public
  * by nature: a sitekey is rendered into every signup page, and the auth mode
@@ -82,6 +83,17 @@ export interface SignupLoaderData {
    * on this very response. Node's own — there is no projection to read one
    * from here, and there is no session to derive one from. */
   formCsrf: string;
+  /** Validated same-tier continuation, used when signup came from a receipt. */
+  next: string;
+  /**
+   * The human tournament name (V3-PE24.1), when this signup was reached
+   * from a tournament's entry page (`/e/signup/{slug}`). `null` on the
+   * bare `/e/signup` route — there is no slug to name — and also `null` on
+   * a lookup failure, in which case the heading falls back to generic
+   * wording rather than block the page on a read the entry page itself
+   * would already have failed on.
+   */
+  tournamentName: string | null;
 }
 
 /**
@@ -94,7 +106,13 @@ export interface SignupLoaderData {
  * reviewable act rather than a quiet one. `mintFormCsrf` is pinned the same
  * way, for the same reason.
  */
-export async function loader() {
+export async function loader({
+  request,
+  params,
+}: {
+  request: Request;
+  params: { slug?: string };
+}) {
   // The sitekey is fetched rather than duplicated into a node env var: its
   // pair, the secret, is validated only in the backend, and a sitekey that
   // drifts from its secret fails the challenge for every honest entrant while
@@ -103,10 +121,34 @@ export async function loader() {
   // signup the backend will refuse anyway.
   const config = await apiGet<EntrantConfig>('/e/api/config');
 
+  // V3-PE24.1: name the tournament on the page, not just "this tournament".
+  // Best-effort — the same anonymous read `enter.tsx` already performs for
+  // this slug — and never blocks the page: a lookup failure (closed
+  // tournament, race with deletion) falls back to the generic heading
+  // rather than turning a signup page into a 404 the entry page itself
+  // has not raised.
+  let tournamentName: string | null = null;
+  if (params.slug) {
+    try {
+      const page = await apiGet<EntryPageDTO>(
+        `/e/api/page/${encodeURIComponent(params.slug)}`,
+      );
+      tournamentName = page?.tournament?.name ?? null;
+    } catch {
+      // Best-effort only (see the field's doc comment above): any failure —
+      // a 404, a network error, or a shape this page did not expect — falls
+      // back to the generic heading rather than surfacing here at all.
+      tournamentName = null;
+    }
+  }
+
   const csrf = mintFormCsrf();
+  const url = new URL(request.url);
   const payload: SignupLoaderData = {
     turnstileSiteKey: config.turnstileSiteKey,
     formCsrf: csrf.token,
+    next: safeNext(url.searchParams.get('next'), ACCOUNT_READY_PAGE),
+    tournamentName,
   };
   return data(payload, csrf.responseInit);
 }
@@ -176,16 +218,16 @@ function invitationPathFor(token: string | undefined): string {
 }
 
 export default function SignupPage({ loaderData, params }: Route.ComponentProps) {
-  const { turnstileSiteKey, formCsrf } = loaderData;
+  const { turnstileSiteKey, formCsrf, tournamentName } = loaderData;
   const contextParams = params as { slug?: string; token?: string };
   // Both suffixes are literals from this file, appended to an already
   // validated path, so composing them cannot invalidate it.
   const entryPath = entryPathFor(contextParams.slug);
   const invitationPath = invitationPathFor(contextParams.token);
   const next =
-    invitationPath || (entryPath === '' ? ACCOUNT_READY_PAGE : `${entryPath}/created`);
+    invitationPath || (entryPath === '' ? loaderData.next : `${entryPath}/created`);
   const signInDestination =
-    invitationPath || (entryPath ? `${entryPath}/signed-in` : '');
+    invitationPath || (entryPath ? `${entryPath}/signed-in` : loaderData.next === ACCOUNT_READY_PAGE ? '' : loaderData.next);
   const signInHref = signInDestination
     ? `/e/login?next=${signInDestination}`
     : '/e/login';
@@ -197,27 +239,17 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
     <PlayShell>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Create an entrant account
+          <h1 className={PAGE_TITLE}>
+            {entryPath
+              ? `Create your account to enter ${tournamentName ?? 'this tournament'}`
+              : 'Create an account'}
           </h1>
           <p className="text-sm text-muted-foreground">
-            One account enters you into any tournament on this site. The
-            organizer sees your name and contact details on the entries they
-            receive.
+            Use one account to manage your tournament entries. Creating an
+            account does not submit an entry. The organizer sees your name and
+            contact details on entries they receive.
           </p>
         </header>
-
-        {/* The one thing on this page that does not work without script, said
-            before the entrant spends five minutes filling the form in. The
-            backend refuses an empty challenge token with no round trip
-            (`services/turnstile.verify_turnstile`), so a scriptless submission
-            is refused as "the human check did not pass" — which reads as an
-            accusation rather than as a missing capability. */}
-        <Notice tone="info">
-          The human check on this form needs JavaScript. With scripting turned
-          off, everything below still fills in and submits, but the check cannot
-          run. Ask the organizer to set your account up instead.
-        </Notice>
 
         <div className={`grid gap-6 ${CARD}`}>
           {/*
@@ -272,7 +304,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               required
               maxLength={320}
               autoComplete="email"
-              hint="Sign-in address, and where the organizer replies."
+              hint="Use the email where you want entry updates."
             />
 
             <TextField
@@ -290,7 +322,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               minLength={8}
               maxLength={128}
               autoComplete="new-password"
-              hint="At least 8 characters. Very common passwords are refused."
+              hint="Use at least 8 characters and avoid common passwords."
               // Deleted for the reason spelled out in `login.tsx`: `TextField`'s
               // default "Show password" toggle is a `<button type="button">`
               // with an `onClick`; this form's only module is reserved for the
@@ -304,7 +336,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               name="displayName"
               maxLength={200}
               autoComplete="name"
-              hint="How the organizer sees you on an entry."
+              hint="Name shown to the organizer."
             />
 
             <TextField
@@ -323,20 +355,34 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
                 one codebase (`api/entrants.py`). The sitekey comes from the
                 backend's own config so it cannot drift from the secret it is
                 paired with. */}
-            <div
-              id="turnstile-widget"
-              className="cf-turnstile"
-              data-sitekey={turnstileSiteKey}
-              data-action="signup"
-            />
-            <p
-              id="turnstile-status"
-              className="text-sm text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              Loading the human check
-            </p>
+            {/* The one thing on this page that does not work without script,
+                said where the check itself sits. The backend refuses an empty
+                challenge token with no round trip
+                (`services/turnstile.verify_turnstile`), so a scriptless
+                submission is refused as "the human check did not pass" — which
+                reads as an accusation rather than as a missing capability. */}
+            <div className="grid gap-2 rounded-sm border border-rule-control bg-surface-sunken p-3">
+              <p className={EYEBROW}>Human check</p>
+              <div
+                id="turnstile-widget"
+                className="cf-turnstile"
+                data-sitekey={turnstileSiteKey}
+                data-action="signup"
+              />
+              <p
+                id="turnstile-status"
+                className="text-sm text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
+                Loading the human check
+              </p>
+              <p id="turnstile-help" className="text-xs text-muted-foreground">
+                The human check needs JavaScript. With scripting turned off, the
+                form still fills in and submits, but the check cannot run. Ask
+                the organizer to set your account up instead.
+              </p>
+            </div>
             <script
               src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
               data-cfasync="false"
@@ -345,7 +391,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
             />
             <script type="module" src="/e/assets/turnstile.js" defer />
 
-            <Button type="submit" className="justify-self-start">
+            <Button type="submit" size="lg" className="justify-self-start">
               Create account
             </Button>
           </form>
@@ -357,7 +403,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
                 405, which is what R8-E removed from the entry page.
                 `tests/login.test.ts` reads every href in this document and
                 fails on any under a backend prefix. */}
-            Already have an account?{' '}
+            Already have one?{' '}
             <a className="text-accent underline underline-offset-4" href={signInHref}>
               Sign in
             </a>

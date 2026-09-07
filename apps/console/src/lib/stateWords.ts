@@ -31,7 +31,8 @@ export type StateWord =
   | 'scheduled'
   | 'free'
   | 'closed'
-  | 'onCourt';
+  | 'onCourt'
+  | 'retired';
 
 export const STATE_WORD: Record<StateWord, string> = {
   live: 'Live',
@@ -51,4 +52,7 @@ export const STATE_WORD: Record<StateWord, string> = {
   // of the match but a fact about its people, and the desk reads it in the
   // same column as the others, so it lives in the same vocabulary.
   onCourt: 'On court',
+  // Terminal, adjudicated: a side retired (contract §2.1). Distinct from
+  // `done`/`finished` — a retirement is never rendered as an ordinary result.
+  retired: 'Retired',
 };

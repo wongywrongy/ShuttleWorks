@@ -24,6 +24,9 @@ const row = (slug: string): SeasonRow => ({
   eventCount: 4,
   status: 'entries_closed',
   closesInDays: null,
+  closesAt: null,
+  timeZone: 'UTC',
+  locality: null,
   drawsPublished: false,
   winnersPublished: false,
 });

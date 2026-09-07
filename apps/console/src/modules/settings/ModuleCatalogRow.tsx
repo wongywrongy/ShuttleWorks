@@ -8,7 +8,7 @@ import {
   SELECTABLE_ROW_FOCUS,
   selectableRowProps,
 } from "../../lib/selectableRow";
-import { TEXT_MUTED_2XS, TEXT_MUTED_XS, TEXT_TITLE } from '../../lib/utils'
+import { TEXT_MUTED_XS, TEXT_TITLE } from '../../lib/utils'
 
 /** The catalog chip speaks the glossary's tri-state, not the wire's. The chip
  *  used to print `module.status` straight through, so it read "enabled" and
@@ -82,7 +82,7 @@ export function ModuleCatalogRow({
               normal, one visible step quieter. */}
           <span
             className={[
-              "text-2xs uppercase tracking-[0.08em]",
+              "text-xs uppercase tracking-[0.06em]",
               module.status === "enabled"
                 ? "font-semibold text-accent"
                 : module.status === "available"
@@ -97,33 +97,31 @@ export function ModuleCatalogRow({
           {meta?.capability ?? module.note}
         </p>
         {meta?.dependency ? (
-          <p className={TEXT_MUTED_2XS}>{meta.dependency}</p>
+          <p className={TEXT_MUTED_XS}>{meta.dependency}</p>
         ) : null}
         {/* Don't repeat the dependency line word-for-word as the reason. */}
         {blockedReason && blockedReason !== meta?.dependency ? (
-          <p className={TEXT_MUTED_2XS}>{blockedReason}</p>
+          <p className={TEXT_MUTED_XS}>{blockedReason}</p>
         ) : null}
         <p
           data-testid={`module-impact-${module.id}`}
-          className={TEXT_MUTED_2XS}
+          className={TEXT_MUTED_XS}
         >
           {ownsData
-            ? "Data impact: owns operational data; it is preserved and must be reviewed before any disable action."
-            : module.id === "display"
-              ? "Data impact: read-only output; it does not own match data."
-              : "Data impact: no operational records yet."}
+            ? `${meta?.name ?? module.label} has draws or matches, so it stays on. It can be turned off once they are removed through ${meta?.name ?? module.label}.`
+            : `Turning ${meta?.name ?? module.label} off hides it from this workspace's navigation. Nothing is stored yet, so nothing is deleted.`}
         </p>
         <p
           data-testid={`module-completion-${module.id}`}
-          className={TEXT_MUTED_2XS}
+          className={TEXT_MUTED_XS}
         >
           {module.status === "enabled"
             ? ownsData
-              ? "Configuration: active with data"
-              : "Configuration: enabled; finish setup"
+              ? "Active with data; finish setup"
+              : "Enabled; finish setup"
             : module.status === "disabled"
-              ? "Configuration: off; data preserved"
-              : "Configuration: available to enable"}
+              ? "Off"
+              : "Available to enable"}
         </p>
       </div>
       <div className="shrink-0">
@@ -185,10 +183,9 @@ export function ModuleCatalogRow({
               Review {meta?.name ?? module.label} data impact
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              This module owns operational data in this workspace. Disabling it
-              could hide or invalidate those records, so the server keeps it
-              enabled until the data is cleared through its normal workflow. No
-              data will be removed here.
+              {meta?.name ?? module.label} has draws or matches, so it stays
+              on. It can be turned off once they are removed through{" "}
+              {meta?.name ?? module.label}.
             </p>
             <div className="mt-5 flex justify-end">
               <Button onClick={() => setImpactOpen(false)}>

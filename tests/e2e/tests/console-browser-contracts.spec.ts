@@ -103,6 +103,73 @@ test.describe("canonical console browser contracts", () => {
     expect(await fatalHarnessEvents(page)).toEqual([]);
   });
 
+  test("audit: six courts form balanced rows with one queue", async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/tournaments/${TAIPEI_TID}/operations/live`);
+    const cards = page.locator('[data-testid^="run-card-"]');
+    await expect(cards).toHaveCount(6);
+    const positions = await cards.evaluateAll((nodes) => nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      return { x: Math.round(box.x), y: Math.round(box.y) };
+    }));
+    expect(new Set(positions.map((position) => position.x)).size).toBe(3);
+    expect(new Set(positions.map((position) => position.y)).size).toBe(2);
+    await expect(page.getByText('On deck', { exact: true })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('live-six-courts.png'), fullPage: true });
+    expect(await fatalHarnessEvents(page)).toEqual([]);
+  });
+
+  test("audit: publication is staged and old relay routes reach their owner", async ({ page }, testInfo) => {
+    const created = await page.request.post('/api/tournaments', { headers: { 'X-ShuttleWorks-CSRF': '1' }, data: { name: 'Publication review' } });
+    expect(created.ok()).toBe(true);
+    const publicationTid = (await created.json()).id;
+    const configured = await page.request.put(`/api/tournaments/${publicationTid}/entry-page`, { headers: { 'X-ShuttleWorks-CSRF': '1' }, data: { slug: 'publication-review', isOpen: true } });
+    expect(configured.ok()).toBe(true);
+    await page.goto(`/tournaments/${publicationTid}/publish/draws-results`);
+    await expect(page).toHaveURL(new RegExp(`/publish/site$`));
+    const publication = page.getByTestId('sharing-publication');
+    await expect(publication).toBeVisible();
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'PATCH' && request.url().includes('/entry-page/publication')) writes.push(request.postData() ?? '');
+    });
+    await publication.getByRole('combobox', { name: 'Public audience' }).click();
+    await page.getByRole('option', { name: 'Unlisted', exact: true }).click();
+    await expect(publication.getByRole('status')).toContainText('Unsaved changes');
+    expect(writes).toEqual([]);
+    await publication.getByRole('button', { name: 'Discard changes' }).click();
+    expect(writes).toEqual([]);
+    await publication.getByRole('combobox', { name: 'Public audience' }).click();
+    await page.getByRole('option', { name: 'Unlisted', exact: true }).click();
+    const savedResponse = page.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().includes('/entry-page/publication'));
+    await publication.getByRole('button', { name: 'Save publication changes' }).click();
+    const response = await savedResponse;
+    expect(response.ok(), await response.text()).toBe(true);
+    await expect(publication.getByRole('status')).toContainText('Publication settings saved');
+    expect(writes).toHaveLength(1);
+    expect(JSON.parse(writes[0])).toEqual({ audience: 'unlisted' });
+    await page.screenshot({ path: testInfo.outputPath('publish-site.png'), fullPage: true });
+    await page.reload();
+    await expect(publication.getByRole('combobox', { name: 'Public audience' })).toContainText('Unlisted');
+    await page.goto(`/tournaments/${TAIPEI_TID}/publish/links`);
+    await expect(page).toHaveURL(new RegExp(`/publish/displays$`));
+    await expect(page.getByLabel('Venue board link', { exact: true })).toBeVisible();
+    expect(await fatalHarnessEvents(page)).toEqual([]);
+  });
+
+  test("audit: a checked-out tournament keeps publication drafts after refusal", async ({ page }) => {
+    await page.goto(`/tournaments/${TAIPEI_TID}/publish/site`);
+    const publication = page.getByTestId('sharing-publication');
+    await expect(publication).toBeVisible();
+    await publication.getByRole('combobox', { name: 'Public audience' }).click();
+    await page.getByRole('option', { name: 'Private', exact: true }).click();
+    await publication.getByRole('button', { name: 'Save publication changes' }).click();
+    await expect(publication.getByRole('alert')).toContainText('Return control before publishing');
+    await expect(publication.getByRole('combobox', { name: 'Public audience' })).toContainText('Private');
+    await expect(publication.getByRole('status')).toContainText('Unsaved changes');
+    expect(await fatalHarnessEvents(page)).toEqual([]);
+  });
+
   test("the API-created Taipei viewer sees live data but cannot issue writes", async ({
     page,
   }) => {

@@ -14,12 +14,33 @@
  * Status is plain text or a text link. SP-P9 reserves containers for neither
  * routine state nor live state on public discovery.
  */
+import { formatMomentInZone } from '../lib/format';
 import type { StatusCell } from '../lib/phase';
 import { chipLabel } from '../lib/phase';
 
+/**
+ * V3-PE01.2: the exact tournament-timezone deadline is the primary read; the
+ * relative countdown `chipLabel` already carries ("closes in Nd") rides
+ * alongside as SECONDARY urgency text only — never the only date shown, and
+ * never a bare "d" suffix with no durable instant behind it. Falls back to
+ * the relative-only chip when the exact instant fails to parse (rule 4:
+ * degrade to what is known, never to raw ISO).
+ */
+function openDeadlineLabel(cell: Extract<StatusCell, { kind: 'chip-open' }>): string {
+  const exact = cell.closesAt === null ? null : formatMomentInZone(cell.closesAt, cell.timeZone);
+  if (exact === null) return chipLabel(cell.chip);
+  const relative =
+    cell.chip.kind === 'entriesOpen' && cell.chip.closesInDays !== null
+      ? cell.chip.closesInDays === 0
+        ? ' · today'
+        : ` · ${cell.chip.closesInDays}d`
+      : '';
+  return `Closes ${exact}${relative}`;
+}
+
 export function SeasonStatusCell({ cell }: { cell: StatusCell }) {
   if (cell.kind === 'chip-open') {
-    return <span className="text-sm font-semibold text-foreground">{chipLabel(cell.chip)}</span>;
+    return <span className="text-xs font-medium text-status-live">{openDeadlineLabel(cell)}</span>;
   }
 
   if (cell.kind === 'chip-live') {

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAction } from '../../hooks/useAction';
 import { Button, Modal } from '@scheduler/design-system';
 import { EmptyState, OverflowMenu, PAGE_BODY_WIDTH } from '../../components/control-plane';
@@ -7,56 +7,38 @@ import { TEXT_TITLE } from '../../lib/utils'
 import { DialogFooter } from '../../components/DialogFooter';
 import { useAuthorityStatus } from '../../hooks/useAuthorityStatus';
 import { SyncReconciliationPanel } from './SyncReconciliationPanel';
+import type { BackupSnapshotDTO } from '../../api/dto';
+// Package 19 / V3-OC27.2: timestamps redirect to the contract §7.3 console
+// authority (V3-19-2 — the authority did not exist yet when this tab's
+// timestamp handling was written; it now lives in `lib/formatDateTime.ts`).
+import { minuteKey, dayLabel, fmtTime, fmtTimestamp } from '../../lib/formatDateTime';
 
-/** Human-readable file size: B / KB / MB. */
+/** Human-readable file size: B / KB / MB. Detail-affordance only (V3-OC27.2)
+ *  — never rendered in the default row. */
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Day header: "Today", else "Aug 12" ("Aug 12, 2025" outside the current year). */
-function dayLabel(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const now = new Date();
-  if (d.toDateString() === now.toDateString()) return 'Today';
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
-  });
-}
-
-/** Time-of-day ("3:04 PM") — the day lives in the group header. */
-function fmtTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-/** The list is grouped by day, but every recovery point still needs its
- * exact moment for incident review and operator confidence. */
-function fmtTimestamp(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-      });
+/** "1 match, 2 entrants" — omits a count that is zero AND the other is
+ * zero too (an empty snapshot says so via its change summary instead). */
+function countsText(matchCount: number, entryCount: number): string | null {
+  const parts: string[] = [];
+  if (matchCount > 0) parts.push(`${matchCount} match${matchCount === 1 ? '' : 'es'}`);
+  if (entryCount > 0) parts.push(`${entryCount} entrant${entryCount === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(', ') : null;
 }
 
 /** Sync & Backups: list the workspace's state backups, create a new one, and
  *  restore from one (with confirm). Wired through the shared `useTournamentBackups`
  *  hook — the single seam for backup actions — so a restore re-hydrates the live
  *  tournament store (no stale data) exactly like the operator BackupPanel. */
-export function SyncBackupsTab() {
+export function SyncBackupsTab({ timeZone: timeZoneProp }: { timeZone?: string } = {}) {
+  // Contract §7.2: an unknown timezone falls back to UTC and says so — every
+  // formatter above renders the zone abbreviation explicitly, so "UTC" here
+  // is never a silent local-time assumption.
+  const timeZone = timeZoneProp || 'UTC';
   const authority = useAuthorityStatus();
   const {
     entries,
@@ -65,6 +47,7 @@ export function SyncBackupsTab() {
     busyAction,
     createBackup,
     restoreBackup,
+    inspectBackup,
     deleteBackup,
     downloadUrl,
   } = useTournamentBackups();
@@ -72,6 +55,10 @@ export function SyncBackupsTab() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [retryKind, setRetryKind] = useState<'create' | 'restore' | 'delete' | null>(null);
+  const [inspectTarget, setInspectTarget] = useState<string | null>(null);
+  const [inspectState, setInspectState] = useState<BackupSnapshotDTO | null>(null);
+  const [inspectLoading, setInspectLoading] = useState(false);
+  const [inspectError, setInspectError] = useState<string | null>(null);
   const restoring = busyAction === restoreTarget;
   const deleting = busyAction === deleteTarget;
 
@@ -140,13 +127,36 @@ export function SyncBackupsTab() {
   // filename. Entries arrive newest-first, so same-day rows are adjacent.
   const groups: { label: string; items: typeof entries }[] = [];
   for (const b of entries) {
-    const label = dayLabel(b.modifiedAt);
+    const label = dayLabel(b.modifiedAt, timeZone);
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.items.push(b);
     else groups.push({ label, items: [b] });
   }
 
+  // V3-OC27.2: two backups that land in the same minute are otherwise
+  // indistinguishable by the default timestamp alone — add seconds only to
+  // the rows that actually collide.
+  const minuteCollisions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const b of entries) {
+      const key = minuteKey(b.modifiedAt, timeZone);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [entries, timeZone]);
+  const collides = (iso: string) => (minuteCollisions.get(minuteKey(iso, timeZone)) ?? 0) > 1;
+
   const target = entries.find((e) => e.filename === restoreTarget);
+
+  const inspect = async (filename: string) => {
+    setInspectTarget(filename);
+    setInspectState(null);
+    setInspectError(null);
+    setInspectLoading(true);
+    try { setInspectState(await inspectBackup(filename)); }
+    catch (err) { setInspectError(err instanceof Error ? err.message : 'Could not inspect backup'); }
+    finally { setInspectLoading(false); }
+  };
 
   return (
     <div className="space-y-4">
@@ -157,25 +167,30 @@ export function SyncBackupsTab() {
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-foreground">
-                {authority.status.state === 'active'
-                  ? 'Live from this event node'
-                  : `Event authority: ${authority.status.state}`}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Epoch {authority.status.authority_epoch} · Node{' '}
-                {authority.status.node_id.slice(0, 8)}
-              </div>
+              <div className="text-sm font-semibold text-foreground">Saved on this device.</div>
             </div>
-            <div className="text-right text-xs">
-              {authority.status.pending_operations === 0 ? (
-                <span className="text-status-success-fg">Cloud copy up to date</span>
-              ) : (
+            {/* A cloud row only ever appears when the outbox carries actual
+               evidence of a sync pipeline (pending, blocked, or previously
+               acknowledged operations) — console edits never reach that
+               outbox on their own, so "Sync is active" cannot be derived
+               from the authority epoch state alone (ruling R3). */}
+            {authority.status.blocked_operations > 0 ? (
+              <div className="text-right text-xs">
+                <span className="text-status-warning-fg">Needs attention</span>
+              </div>
+            ) : authority.status.pending_operations > 0 ? (
+              <div className="text-right text-xs">
                 <span className="text-status-warning">
-                  {authority.status.pending_operations} committed locally · awaiting cloud
+                  {authority.status.pending_operations} change
+                  {authority.status.pending_operations === 1 ? '' : 's'} saved on
+                  this device, waiting to sync
                 </span>
-              )}
-            </div>
+              </div>
+            ) : authority.status.acknowledged_operations > 0 ? (
+              <div className="text-right text-xs">
+                <span className="text-status-success-fg">Synced</span>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : authority.error ? (
@@ -242,11 +257,11 @@ export function SyncBackupsTab() {
         <div className="space-y-3">
           {groups.map((g) => (
             <div key={g.items[0].filename}>
-              <div className="mb-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {g.label}
               </div>
               <ul className="divide-y divide-border rounded border border-border">
-                {g.items.map((b) => (
+                {g.items.map((b, index) => (
                   <li
                     key={b.filename}
                     data-testid={`backup-${b.filename}`}
@@ -269,12 +284,34 @@ export function SyncBackupsTab() {
                           {b.origin === 'manual' ? 'Manual' : 'Auto'}
                         </span>
                         <span className="text-muted-foreground"> · </span>
-                        <time dateTime={b.modifiedAt} title={fmtTimestamp(b.modifiedAt)}>
-                          {fmtTimestamp(b.modifiedAt)}
-                        </time>
-                        <span className="text-muted-foreground"> · {fmtBytes(b.sizeBytes)}</span>
+                        {(() => {
+                          const withSeconds = collides(b.modifiedAt);
+                          const label = fmtTimestamp(b.modifiedAt, timeZone, withSeconds);
+                          return (
+                            <time dateTime={b.modifiedAt} title={label}>
+                              {label}
+                            </time>
+                          );
+                        })()}
                       </div>
-                      <div className="mt-1 text-2xs text-muted-foreground">
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <span>{index === 0 && g === groups[0] ? 'Latest recovery point' : 'Earlier recovery point'}</span>
+                        <span aria-hidden="true"> · </span>
+                        {/* Change summary + meaningful counts (V3-OC27.2)
+                            replace byte-delta prose and the filename here —
+                            those move to "Inspect backup" in the overflow
+                            menu, which already shows the full snapshot
+                            breakdown and now the filename + exact size too. */}
+                        <span data-testid={`backup-summary-${b.filename}`}>
+                          {b.changeSummary ?? 'Snapshot details in Inspect backup'}
+                        </span>
+                        {countsText(b.matchCount ?? 0, b.entryCount ?? 0) ? (
+                          <>
+                            <span aria-hidden="true"> · </span>
+                            <span>{countsText(b.matchCount ?? 0, b.entryCount ?? 0)}</span>
+                          </>
+                        ) : null}
+                        <span aria-hidden="true"> · </span>
                         <span data-testid={`backup-eligibility-${b.filename}`}>Eligible to restore</span>
                         <span aria-hidden="true"> · </span>
                         {b.origin === 'manual' ? 'Retained until deleted' : 'Automatic retention'}
@@ -310,6 +347,12 @@ export function SyncBackupsTab() {
                         label={`Backup ${b.filename}`}
                         items={[
                           {
+                            key: 'inspect',
+                            label: 'Inspect backup',
+                            testId: `backup-inspect-${b.filename}`,
+                            onSelect: () => void inspect(b.filename),
+                          },
+                          {
                             key: 'download',
                             label: 'Download',
                             testId: `backup-download-${b.filename}`,
@@ -343,7 +386,9 @@ export function SyncBackupsTab() {
               Delete the backup from{' '}
               {(() => {
                 const d = entries.find((e) => e.filename === deleteTarget);
-                return d ? `${dayLabel(d.modifiedAt)}, ${fmtTime(d.modifiedAt)}` : deleteTarget;
+                return d
+                  ? `${dayLabel(d.modifiedAt, timeZone)}, ${fmtTime(d.modifiedAt, timeZone, collides(d.modifiedAt))}`
+                  : deleteTarget;
               })()}
               ?
             </h2>
@@ -373,14 +418,27 @@ export function SyncBackupsTab() {
           <div className="p-6">
             <h2 id="restore-backup-heading" className={TEXT_TITLE}>
               Restore the backup from{' '}
-              {target ? `${dayLabel(target.modifiedAt)}, ${fmtTime(target.modifiedAt)}` : restoreTarget}?
+              {target
+                ? `${dayLabel(target.modifiedAt, timeZone)}, ${fmtTime(target.modifiedAt, timeZone, collides(target.modifiedAt))}`
+                : restoreTarget}
+              ?
             </h2>
+            {/* Names the chosen snapshot by its content, not its filename
+                (V3-OC27.2) — the same summary/counts shown in the list row. */}
+            {target ? (
+              <p className="mt-1 text-xs font-medium text-foreground">
+                {target.changeSummary ?? 'Snapshot details in Inspect backup'}
+                {countsText(target.matchCount ?? 0, target.entryCount ?? 0)
+                  ? ` · ${countsText(target.matchCount ?? 0, target.entryCount ?? 0)}`
+                  : ''}
+              </p>
+            ) : null}
             <p className="mt-1 text-xs text-muted-foreground">
-              A recovery point of the current workspace will be created before this
-              restore. If that safety snapshot cannot be saved, the restore will not
-              run. Then this replaces the workspace&rsquo;s matches, results, and settings
-              with <span className="font-mono">{restoreTarget}</span>; changes made
-              since it are discarded.
+              Restoring replaces the current workspace with this snapshot. A
+              recovery point of the current state is saved first; if that
+              safety snapshot cannot be saved, the restore will not run.
+              Matches, results, and settings all change to match the
+              snapshot. Everything recorded since it is discarded.
             </p>
             <DialogFooter align="between">
               <Button variant="ghost" onClick={() => setRestoreTarget(null)} disabled={restoring}>
@@ -393,6 +451,43 @@ export function SyncBackupsTab() {
               >
                 {restoring || restoreAction.pending ? 'Restoring…' : 'Restore workspace'}
               </Button>
+            </DialogFooter>
+          </div>
+        </Modal>
+      )}
+      {inspectTarget && (
+        <Modal onClose={() => setInspectTarget(null)} titleId="inspect-backup-heading">
+          <div className="p-6">
+            <h2 id="inspect-backup-heading" className={TEXT_TITLE}>Inspect recovery point</h2>
+            {/* Exact filename + size — the detail affordance V3-OC27.2 asks
+                for; the default list row shows the change summary instead. */}
+            <p className="mt-1 text-xs text-muted-foreground font-mono">{inspectTarget}</p>
+            {(() => {
+              const found = entries.find((e) => e.filename === inspectTarget);
+              return found ? (
+                <p className="mt-0.5 text-xs text-muted-foreground">{fmtBytes(found.sizeBytes)}</p>
+              ) : null;
+            })()}
+            {inspectLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading snapshot contents…</p> : inspectError ? <p role="alert" className="mt-4 text-sm text-destructive">{inspectError}</p> : inspectState ? (
+              <>
+              <p className="mt-4 text-xs text-muted-foreground">
+                Counts are split by module because this recovery point includes
+                the Meet state and Bracket session in one workspace snapshot.
+              </p>
+              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">Tournament</dt><dd>{inspectState.config?.tournamentName || 'Unnamed tournament'}</dd>
+                <dt className="text-muted-foreground">Meet roster players</dt><dd>{inspectState.players.length}</dd>
+                <dt className="text-muted-foreground">Meet schools / groups</dt><dd>{inspectState.groups.length}</dd>
+                <dt className="text-muted-foreground">Meet matches</dt><dd>{inspectState.matches.length}</dd>
+                <dt className="text-muted-foreground">Meet scheduled items</dt><dd>{inspectState.schedule?.assignments?.length ?? 0}</dd>
+                <dt className="text-muted-foreground">Bracket entrants</dt><dd>{inspectState.bracketPlayers?.length ?? 0}</dd>
+                <dt className="text-muted-foreground">Bracket scheduled items</dt><dd>{inspectState.bracket_session?.assignments?.length ?? 0}</dd>
+              </dl>
+              </>
+            ) : null}
+            <DialogFooter align="between">
+              <Button variant="ghost" onClick={() => setInspectTarget(null)}>Close</Button>
+              {inspectState ? <Button onClick={() => { setInspectTarget(null); setRestoreTarget(inspectTarget); }}>Review restore</Button> : null}
             </DialogFooter>
           </div>
         </Modal>

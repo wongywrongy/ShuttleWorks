@@ -27,9 +27,12 @@ const BLOCKS: OpsBlock[] = [
 ];
 
 describe('UnifiedOpsList', () => {
-  it('sections rows into Up next / Pending / Finished and tags each by source', () => {
+  it('sections rows into On court / Up next / Pending / Finished and tags each by source', () => {
+    // V3-OC05.1: a started-and-court-assigned match (pu1) is "On court", not
+    // "Up next" — the two headings must never overlap.
     render(<UnifiedOpsList blocks={BLOCKS} onAction={() => {}} />);
-    expect(screen.getByText(/Up next · 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/On court · 1/i)).toBeInTheDocument();
+    expect(screen.getByText(/Up next · 1/i)).toBeInTheDocument();
     expect(screen.getByText(/Pending · 1/i)).toBeInTheDocument();
     expect(screen.getByText(/Finished · 1/i)).toBeInTheDocument();
     expect(screen.getAllByTestId('ops-row')).toHaveLength(4);
@@ -73,7 +76,7 @@ describe('UnifiedOpsList', () => {
         ]}
       />,
     );
-    expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(0);
+    expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(2);
     unmount();
 
     render(
@@ -85,5 +88,24 @@ describe('UnifiedOpsList', () => {
       />,
     );
     expect(screen.queryAllByTestId('ops-status-marker')).toHaveLength(2);
+  });
+
+  // V3-OC18.1: a filter over a category that never varies is a control with
+  // nothing to control (X16) — it only earns its place once both engines
+  // are actually present in the list.
+  it('shows the match-type filter only when both engines are present', () => {
+    const { unmount } = render(
+      <UnifiedOpsList blocks={BLOCKS} searchable />,
+    );
+    expect(screen.getByText('Match type')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <UnifiedOpsList
+        blocks={[blk({ source: 'meet', id: 'm1', court: 1, slot: 0, status: 'scheduled' })]}
+        searchable
+      />,
+    );
+    expect(screen.queryByText('Match type')).not.toBeInTheDocument();
   });
 });

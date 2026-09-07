@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { BracketPlayerDTO } from "../../../api/dto";
-import { formatPlayerName, formatSideName } from "../../../lib/names";
+import { formatPersonName as formatPlayerName, formatSideName } from "../../../platform/domain/sides";
 import {
   ParticipantPicker,
   type PickedPair,

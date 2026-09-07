@@ -81,6 +81,7 @@ export const ENGINE_CONFIG_FIELDS = [
   { key: 'pointsPerSet', group: 'scoring', modules: ['meet', 'bracket'] },
   { key: 'setsToWin', group: 'scoring', modules: ['meet', 'bracket'] },
   { key: 'deuceEnabled', group: 'scoring', modules: ['meet', 'bracket'] },
+  { key: 'pointCap', group: 'scoring', modules: ['meet', 'bracket'] },
   { key: 'defaultRestMinutes', group: 'timing', modules: ['meet', 'bracket'] },
   { key: 'breaks', group: 'timing', modules: ['meet', 'bracket'] },
   { key: 'restBetweenRounds', group: 'timing', modules: ['bracket'] },
@@ -203,6 +204,7 @@ export function EngineConfigForm({
     pointsPerSet: formData.pointsPerSet ?? 21,
     setsToWin: formData.setsToWin ?? 2,
     deuceEnabled: formData.deuceEnabled ?? true,
+    pointCap: formData.pointCap ?? null,
   };
 
   // Break-window: one editable break, mapped into the array.
@@ -514,6 +516,7 @@ function initialEngineState(
     pointsPerSet: config?.pointsPerSet ?? 21,
     setsToWin: config?.setsToWin ?? 2,
     deuceEnabled: config?.deuceEnabled ?? true,
+    pointCap: config?.pointCap ?? null,
     defaultRestMinutes: config?.defaultRestMinutes ?? 30,
     restBetweenRounds: config?.restBetweenRounds ?? 1,
     deterministic: config?.deterministic ?? false,

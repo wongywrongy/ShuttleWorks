@@ -388,18 +388,60 @@ describe('signup is not an account-enumeration oracle', () => {
     }
   });
 
-  it('takes no argument through which an address could reach the loader', async () => {
-    // `mintFormCsrf.length === 0` is pinned for the same reason in
-    // `formCsrf.server.test.ts`: a function with no parameters is
-    // structurally incapable of reading its caller's input. This loader
-    // renders a fixed form and fetches one public projection; it has no
-    // business being handed the request at all, and a zero-arity signature is
-    // the cheapest possible proof that it is not.
+  it('accepts only a validated continuation, never an address', async () => {
+    // The request is read only for `next`; account identity is never accepted.
     const route = (await vite.ssrLoadModule('/app/routes/signup.tsx')) as {
       loader: (...args: unknown[]) => unknown;
     };
 
-    expect(route.loader.length).toBe(0);
+    expect(route.loader.length).toBe(1);
+  });
+
+  it('preserves a receipt continuation and rejects an external one', async () => {
+    const receipt = await render('/e/signup?next=%2Fe%2Fspring-open%2Freceipt%2Fabc-123');
+    expect(receipt).toContain('name="next" value="/e/spring-open/receipt/abc-123"');
+    expect(receipt).toContain('href="/e/login?next=/e/spring-open/receipt/abc-123"');
+    const unsafe = await render('/e/signup?next=https%3A%2F%2Fevil.example');
+    expect(unsafe).toContain('name="next" value="/e/login/created"');
+    expect(unsafe).not.toContain('evil.example');
+  });
+});
+
+// ---- v3 consolidated plan §08: label association + error/hint adjacency ---
+
+describe('every field carries a persistent, associated label', () => {
+  it('has a <label for=id> for every visible TextField', async () => {
+    // R1: a placeholder is never a label. Each `TextField` id below renders
+    // a real `<label for>` (design-system `TextField`), not merely an
+    // `aria-label` — asserted on the wire, same posture as the rest of this
+    // file, rather than trusting the component in isolation.
+    const html = await render();
+
+    for (const id of ['signup-email', 'signup-password', 'signup-name', 'signup-phone']) {
+      expect(html).toMatch(new RegExp(`<label[^>]*for="${id}"[^>]*>`));
+      expect(html).toMatch(new RegExp(`<input[^>]*id="${id}"`));
+    }
+  });
+
+  it('associates each hint to its field with aria-describedby, adjacent in the DOM', async () => {
+    // `TextField` wires hint/error through the SAME `aria-describedby`
+    // mechanism (error simply replaces hint while present — see the
+    // component doc comment), so this is the reachable proxy for "field
+    // validation is adjacent and associated" (plan §4 Errors) on a page
+    // this suite never drives to a failed-validation render.
+    const html = await render();
+
+    for (const id of ['signup-email', 'signup-password', 'signup-name', 'signup-phone']) {
+      const inputTag = html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))?.[0] ?? '';
+      const describedBy = /aria-describedby="([^"]+)"/.exec(inputTag)?.[1];
+      expect(describedBy).toBe(`${id}-hint`);
+      // Adjacent: the hint paragraph immediately follows this field's own
+      // input/wrapper, not buried elsewhere in the form.
+      const fieldIndex = html.indexOf(inputTag);
+      const hintTag = new RegExp(`<p id="${id}-hint"[^>]*>`).exec(html);
+      expect(hintTag).not.toBeNull();
+      expect(hintTag!.index).toBeGreaterThan(fieldIndex);
+    }
   });
 });
 
@@ -414,5 +456,47 @@ describe('the sign-up page titles its browser tab', () => {
     const html = await render();
 
     expect(html).toMatch(/<title>[^<]+<\/title>/);
+  });
+});
+
+// ---- V3-PE24.1: name the tournament on a tournament-scoped signup ---------
+
+describe('a tournament-scoped signup names the tournament', () => {
+  function stubConfigAndPage(tournamentName: string | null) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const body = url.includes('/e/api/page/')
+          ? { tournament: { name: tournamentName } }
+          : CONFIG;
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+  }
+
+  it('shows the human tournament name in the heading, not "this tournament"', async () => {
+    stubConfigAndPage('Yunavero Club Open');
+    const html = await (await fetchSignup('/e/signup/spring-open')).text();
+
+    expect(html).toMatch(/<h1[^>]*>Create your account to enter Yunavero Club Open<\/h1>/);
+    expect(html).not.toContain('this tournament');
+  });
+
+  it('falls back to generic wording rather than failing when the lookup cannot name it', async () => {
+    stubConfigAndPage(null);
+    const html = await (await fetchSignup('/e/signup/spring-open')).text();
+
+    expect(html).toMatch(/<h1[^>]*>Create your account to enter this tournament<\/h1>/);
+  });
+
+  it('still generic on the bare, tournament-less signup page', async () => {
+    stubConfigAndPage('Yunavero Club Open');
+    const html = await (await fetchSignup('/e/signup')).text();
+
+    expect(html).toMatch(/<h1[^>]*>Create an account<\/h1>/);
   });
 });

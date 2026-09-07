@@ -44,7 +44,7 @@ export function paymentSummary(receipt) {
 export function receiptText(receipt) {
   const lines = [
     receipt.tournamentName ?? "Tournament entry",
-    `Reference: ${receipt.submissionId}`,
+    `Reference: ${receipt.shortReference}`,
     `Status: ${receiptStatus(receipt.status).label}`,
     `Submitted: ${formatMoment(receipt.submittedAt) || receipt.submittedAt}`,
     `Payment: ${paymentSummary(receipt)}`,
@@ -94,7 +94,7 @@ function card(doc, title) {
   const section = el(
     doc,
     "section",
-    "rounded-lg border border-rule-soft bg-surface-raised p-5 shadow-sm",
+    "rounded-lg border border-rule-soft bg-surface-raised p-4 md:p-6",
   );
   section.appendChild(
     el(
@@ -122,7 +122,13 @@ function actionLink(doc, href, label, primary = false) {
 
 function renderMessage(root, title, body, action) {
   const doc = root.ownerDocument;
-  const section = card(doc, title);
+  const pageTitle = doc.getElementById("receipt-title");
+  if (pageTitle) pageTitle.textContent = title;
+  // The page title is the single primary heading. The settled panel gets a
+  // neutral section label so it cannot duplicate that heading (PE39.1/.2).
+  const intro = doc.getElementById("receipt-intro");
+  if (intro) intro.remove();
+  const section = card(doc, "Account access");
   section.appendChild(el(doc, "p", "mt-2 text-sm text-muted-foreground", body));
   if (action) {
     const row = el(doc, "div", "mt-4 flex flex-wrap gap-2");
@@ -135,6 +141,10 @@ function renderMessage(root, title, body, action) {
 
 export function renderReceipt(root, receipt) {
   const doc = root.ownerDocument;
+  const pageTitle = doc.getElementById("receipt-title");
+  if (pageTitle) pageTitle.textContent = "Entry received";
+  const intro = doc.getElementById("receipt-intro");
+  if (intro) intro.remove();
   const summary = card(doc, "Receipt summary");
   const headingRow = el(
     doc,
@@ -154,7 +164,7 @@ export function renderReceipt(root, receipt) {
     el(
       doc,
       "span",
-      `rounded-full border px-2.5 py-1 text-xs font-semibold ${TONE_CLASS[status.tone]}`,
+      `inline-flex h-badge items-center rounded-xs border px-2.5 text-xs font-medium leading-none ${TONE_CLASS[status.tone]}`,
       status.label,
     ),
   );
@@ -179,11 +189,20 @@ export function renderReceipt(root, receipt) {
   if (receipt.venueName) fact("Venue", receipt.venueName);
   if (receipt.orgName) fact("Organizer", receipt.orgName);
   summary.appendChild(facts);
+  const copy = el(doc, "button", "mt-3 text-left text-sm font-medium text-accent underline underline-offset-4", "Copy reference");
+  copy.type = "button";
+  copy.dataset.copyReference = receipt.shortReference;
+  copy.addEventListener("click", () => copyReference(copy, receipt.shortReference));
+  summary.appendChild(copy);
 
   const events = card(doc, "Events");
   const list = el(doc, "ul", "mt-3 divide-y divide-rule-soft");
   for (const event of receipt.events ?? []) {
-    const item = el(doc, "li", "grid gap-1 py-3 first:pt-0 last:pb-0");
+    const item = el(
+      doc,
+      "li",
+      "flex flex-wrap items-baseline justify-between gap-4 py-2 text-sm text-foreground first:pt-0 last:pb-0",
+    );
     item.appendChild(
       el(
         doc,
@@ -225,6 +244,19 @@ export function renderReceipt(root, receipt) {
     );
   }
   events.appendChild(list);
+  const total = formatCents(receipt.feeTotalCents);
+  if (total) {
+    const totalRow = el(
+      doc,
+      "p",
+      "mt-3 flex flex-wrap items-baseline justify-between gap-4 border-t border-rule-soft pt-3 text-sm text-foreground",
+    );
+    totalRow.appendChild(el(doc, "span", "font-semibold", "Total"));
+    totalRow.appendChild(
+      el(doc, "span", "text-lg font-semibold tabular-nums text-foreground", total),
+    );
+    events.appendChild(totalRow);
+  }
 
   const nodes = [summary, events];
   if (receipt.paymentInstructions || receipt.paymentNote) {
@@ -270,7 +302,7 @@ export function renderReceipt(root, receipt) {
     const href = URL.createObjectURL(blob);
     const anchor = doc.createElement("a");
     anchor.href = href;
-    anchor.download = `shuttleworks-entry-${receipt.submissionId}.txt`;
+    anchor.download = `shuttleworks-entry-${receipt.shortReference}.txt`;
     anchor.click();
     URL.revokeObjectURL(href);
   });
@@ -281,23 +313,43 @@ export function renderReceipt(root, receipt) {
   root.setAttribute("aria-busy", "false");
 }
 
+async function copyReference(button, value) {
+  try {
+    await navigator.clipboard.writeText(value);
+    button.textContent = "Reference copied";
+  } catch {
+    button.textContent = "Copy unavailable — quote the full reference above";
+  }
+}
+
+for (const button of document.querySelectorAll("[data-copy-reference]")) {
+  button.addEventListener("click", () => copyReference(button, button.dataset.copyReference ?? ""));
+}
+
 export async function loadReceipt(root, fetchImpl = fetch) {
-  const submissionId = root.dataset.submissionId;
+  // V3-24-1: the page's handle on this act is its short reference — the
+  // same string in the address bar, in the "Reference" line above, and in
+  // the account-scoped request below. There is one identifier on this
+  // screen, and the entrant can read it.
+  const reference = root.dataset.reference;
   const slug = root.dataset.slug;
-  if (!submissionId) return;
+  if (!reference) return;
   try {
     const response = await fetchImpl(
-      `/e/api/me/submissions/${encodeURIComponent(submissionId)}`,
+      `/e/api/me/submissions/${encodeURIComponent(reference)}`,
       {
         headers: { accept: "application/json" },
       },
     );
     if (response.status === 401) {
-      const next = `/e/${encodeURIComponent(slug ?? "")}/receipt/${encodeURIComponent(submissionId)}`;
+      const next = `/e/${encodeURIComponent(slug ?? "")}/receipt/${encodeURIComponent(reference)}`;
       renderMessage(
         root,
         "Sign in to view the full receipt",
-        "The reference is safe. Sign in with the account that submitted this entry to see its events, partner, fee, and payment state.",
+        // V3-PE39.1: no unverifiable safety claim ("the reference is safe"
+        // has no user-actionable meaning); state the one thing that is
+        // true and actionable instead.
+        "Sign in with the account used for this entry to view its details and payment status.",
         {
           href: `/e/login?next=${encodeURIComponent(next)}`,
           label: "Sign in and return",

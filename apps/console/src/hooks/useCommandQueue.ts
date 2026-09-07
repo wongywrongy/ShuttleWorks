@@ -38,8 +38,13 @@ import { assertCanEdit } from './useCanEdit';
 import { useTournamentId } from './useTournamentId';
 import type { MatchStateDTO } from '../api/dto';
 
+// `resolve_court` is intentionally absent: it leaves the CHOSEN match's own
+// status untouched (only the displaced matches change, and there is more
+// than one of them — no single "optimistic status" for this action). See
+// the `submit` guard below, which skips the optimistic-apply step for it
+// rather than inventing a status to write.
 const ACTION_TO_LEGACY_STATUS: Record<
-  MatchAction,
+  Exclude<MatchAction, 'resolve_court'>,
   MatchStatus
 > = {
   call_to_court: 'called',
@@ -181,7 +186,8 @@ export function useCommandQueue() {
         };
       }
       const commandId = uuidv4();
-      const optimisticStatus = ACTION_TO_LEGACY_STATUS[action];
+      const optimisticStatus =
+        action === 'resolve_court' ? undefined : ACTION_TO_LEGACY_STATUS[action];
       // Resolve the canonical match version. Audit-pass fix: the
       // previous Step F placeholder of 0 caused every first command
       // on a fresh match to 409 (backfill creates rows at version=1).
@@ -205,8 +211,10 @@ export function useCommandQueue() {
       // we can roll back precisely on a 409 if the refetch fails.
       const previousStatus = matchStates[matchId]?.status ?? 'scheduled';
 
-      // 1-3: optimistic apply + pending bookkeeping.
-      applyOptimisticStatus(matchId, optimisticStatus);
+      // 1-3: optimistic apply + pending bookkeeping. resolve_court has no
+      // single optimistic status (see the map's comment above) — skip it,
+      // the authoritative state lands on `ok` below same as everything else.
+      if (optimisticStatus !== undefined) applyOptimisticStatus(matchId, optimisticStatus);
       setPendingCommand(matchId, commandId);
 
       const command: Omit<QueuedCommand, 'attempts' | 'status'> = {

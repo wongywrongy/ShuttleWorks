@@ -34,9 +34,36 @@ describe('email confirmation recovery', () => {
 
   it('confirms a resend without losing the entries destination', async () => {
     const { html } = await render('/e/verify/sent');
-    expect(html).toContain('fresh confirmation link has been sent');
-    expect(html).toContain('your saved entries are unchanged');
+    expect(html).toContain('Confirmation email sent');
+    expect(html).toContain('Open the latest email');
     expect(html).toContain('href="/e/me/entries"');
+  });
+
+  it('tells a signed-in visitor the resend actually failed, with a retry action', async () => {
+    const { html } = await render('/e/verify/sent?ok=0', {
+      cookie: 'sw_play_session=opaque-session-handle',
+    });
+    expect(html).toContain('We could not send the email');
+    expect(html).not.toContain('Confirmation email sent');
+    expect(html).toContain('action="/e/account/resend-verification"');
+    expect(html).toContain('Try again');
+  });
+
+  it('offers the resend control directly to a signed-in visitor with no token', async () => {
+    // V3-PE25.1: a signed-in visitor who lost the confirmation link's query
+    // string resends right here instead of being routed through sign-in
+    // again to reach a control this page can show directly.
+    const { html } = await render('/e/verify', {
+      cookie: 'sw_play_session=opaque-session-handle',
+    });
+    expect(html).toContain('action="/e/account/resend-verification"');
+    expect(html).toContain('Send a new confirmation email');
+  });
+
+  it('sends a signed-out visitor through sign-in instead', async () => {
+    const { html } = await render('/e/verify');
+    expect(html).not.toContain('action="/e/account/resend-verification"');
+    expect(html).toContain('href="/e/login"');
   });
 });
 
@@ -48,19 +75,35 @@ describe('password reset recovery', () => {
     const { html } = await render(
       `/e/reset/password-failed?token=${token}&next=${encodeURIComponent(next)}`,
     );
-    expect(html).toContain('password does not meet the requirements');
+    // V3-PE34.1: the specific rejection sits beside the field, wired by
+    // `aria-describedby`, rather than repeating the general requirements in
+    // the banner above the form.
     expect(html).toContain('Your reset link is still valid');
+    expect(html).toMatch(/aria-describedby="reset-password-error"/);
+    expect(html).toContain('id="reset-password-error"');
+    expect(html).toContain('too common or too short');
+    // The persistent requirements helper is gone while the field-level error
+    // is present — `TextField` swaps `hint` for `error`, never both.
+    expect(html).not.toContain('At least 8 characters. Avoid common passwords.');
     expect(html).toContain(`name="token" value="${token}"`);
     expect(html).toContain(`name="next" value="${next}"`);
-    expect(html).not.toContain('reset link is no longer usable');
+    expect(html).not.toContain('invalid or has expired');
+  });
+
+  it('shows the same password requirements before any submission', async () => {
+    // The other half of PE34.1: the requirements are visible before a
+    // failure too, not only discoverable by triggering the error.
+    const { html } = await render(`/e/reset?token=${token}`);
+    expect(html).toContain('At least 8 characters. Avoid common passwords.');
+    expect(html).toMatch(/aria-describedby="reset-password-hint"/);
   });
 
   it('distinguishes an invalid token and preserves recovery context', async () => {
     const { html } = await render(
       `/e/reset/failed?next=${encodeURIComponent(next)}`,
     );
-    expect(html).toContain('reset link is no longer usable');
-    expect(html).toContain('no password was changed');
+    expect(html).toContain('This reset link is invalid or has expired');
+    expect(html).toContain("Your password hasn&#x27;t changed");
     expect(html).toContain(`/e/forgot?next=${encodeURIComponent(next)}`);
   });
 

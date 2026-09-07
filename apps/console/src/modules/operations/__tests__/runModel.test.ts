@@ -79,14 +79,29 @@ describe('runModel', () => {
     expect(lane.now?.id).toBe('qf1');
     expect(lane.next?.id).toBe('md1');
   });
-  it('a called match outranks a scheduled one; playing outranks called', () => {
+
+  it('does not choose a current match when two live records claim one court', () => {
+    const ms = toRunMatches([
+      blk({ id: 'a', court: 1, slot: 0, status: 'started' }),
+      blk({ id: 'b', court: 1, slot: 1, status: 'started' }),
+      blk({ id: 'next', court: 1, slot: 2, status: 'scheduled' }),
+    ], {});
+    const [lane] = deriveCourtLanes(ms, 1);
+    expect(lane.now).toBeUndefined();
+    expect(lane.conflict?.map((match) => match.id)).toEqual(['a', 'b']);
+    expect(lane.next?.id).toBe('next');
+  });
+  it('keeps a called match queued behind the playing match', () => {
     const ms = toRunMatches([
       blk({ id: 's', court: 1, slot: 0, status: 'scheduled' }),
       blk({ id: 'c', court: 1, slot: 1, status: 'called' }),
       blk({ id: 'p', court: 1, slot: 2, status: 'started' }),
     ], {});
     const [lane] = deriveCourtLanes(ms, 1);
-    expect([lane.now?.id, lane.next?.id, lane.later?.id]).toEqual(['p', 'c', 's']);
+    expect(lane.now?.id).toBe('p');
+    expect(lane.conflict).toBeUndefined();
+    expect(lane.next?.id).toBe('c');
+    expect(lane.later?.id).toBe('s');
   });
   it('renders a free court (empty lane) for courts with no live matches', () => {
     const lanes = deriveCourtLanes(toRunMatches([blk({ id: 'x', court: 1, slot: 0 })], {}), 2);
@@ -214,6 +229,25 @@ describe('runModel', () => {
       const inPlay = lanes.filter((l) => l.now?.status === 'playing').length;
       expect(s.courtsFree + inPlay, `${name}: band disagrees with the floor`).toBe(courts);
     }
+  });
+
+  it('a disputed court is excluded from BOTH playing and courtsFree, and counted once in disputedCourts (D2/D3)', () => {
+    const blocks: OpsBlock[] = [
+      blk({ id: 'a', court: 1, slot: 0, status: 'started' }),
+      blk({ id: 'b', court: 1, slot: 0, status: 'started' }),
+      blk({ id: 'c', court: 2, slot: 0, status: 'started' }),
+    ];
+    const ms = toRunMatches(blocks, {});
+    const lanes = deriveCourtLanes(ms, 4);
+    const s = deriveSummary(ms, lanes, buildLiveChips(blocks, 9, true));
+    // Court 1 is disputed (two playing records); court 2 is cleanly occupied;
+    // courts 3-4 are free. The old rule counted the disputed court as TWO
+    // playing matches (D3) while also excluding it from free (D2) — an
+    // internally-contradictory total. The new rule agrees with the backend's
+    // `workspace_signals.py` fixture for the identical arrangement.
+    expect(s.playing).toBe(1);
+    expect(s.disputedCourts).toBe(1);
+    expect(s.courtsFree).toBe(2);
   });
 });
 

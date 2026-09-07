@@ -1,0 +1,1143 @@
+[
+  {
+    "id": "OC01",
+    "tier": "operator",
+    "title": "Authentication · Sign in",
+    "captureRoute": "/login",
+    "findings": [
+      "OC02.1"
+    ],
+    "module": "platform/auth/LoginPage.tsx",
+    "beforeRating": "3/3/3/3/4/2/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: platform/auth/LoginPage.tsx; route: /login; findings: OC02.1."
+  },
+  {
+    "id": "OC02",
+    "tier": "operator",
+    "title": "Hub — workspace list",
+    "captureRoute": "/",
+    "findings": [
+      "OC02.1",
+      "OC02.2"
+    ],
+    "module": "modules/hub/HubPage.tsx",
+    "beforeRating": "3/3/3/3/4/2/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/hub/HubPage.tsx; route: /; findings: OC02.1, OC02.2."
+  },
+  {
+    "id": "OC03",
+    "tier": "operator",
+    "title": "Hub — create workspace",
+    "captureRoute": "/new",
+    "findings": [
+      "OC03.1"
+    ],
+    "module": "modules/hub/NewWorkspacePage.tsx",
+    "beforeRating": "3/4/3/3/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/hub/NewWorkspacePage.tsx; route: /new; findings: OC03.1."
+  },
+  {
+    "id": "OC04",
+    "tier": "operator",
+    "title": "Global settings",
+    "captureRoute": "/settings",
+    "findings": [
+      "OC04.1",
+      "OC20.1"
+    ],
+    "module": "modules/settings/GlobalSettingsPage.tsx",
+    "beforeRating": "3/4/4/3/4/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/settings/GlobalSettingsPage.tsx; route: /settings; findings: OC04.1, OC20.1."
+  },
+  {
+    "id": "OC05",
+    "tier": "operator",
+    "title": "Overview",
+    "captureRoute": "/tournaments/:id/overview",
+    "findings": [
+      "OC05.1",
+      "OC19.1"
+    ],
+    "module": "modules/workspace/WorkspaceOverview.tsx",
+    "beforeRating": "2/3/2/2/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/workspace/WorkspaceOverview.tsx; route: /tournaments/:id/overview; findings: OC05.1, OC19.1."
+  },
+  {
+    "id": "OC06",
+    "tier": "operator",
+    "title": "Setup · General",
+    "captureRoute": "/tournaments/:id/setup/general",
+    "findings": [
+      "OC06.1",
+      "OC06.2",
+      "OC06.3",
+      "OC20.1"
+    ],
+    "module": "modules/setup/SetupProduct.tsx (general)",
+    "beforeRating": "3/3/3/4/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/setup/SetupProduct.tsx (general); route: /tournaments/:id/setup/general; findings: OC06.1, OC06.2, OC06.3, OC20.1."
+  },
+  {
+    "id": "OC07",
+    "tier": "operator",
+    "title": "Setup · Dates",
+    "captureRoute": "/tournaments/:id/setup/dates",
+    "findings": [
+      "OC06.1",
+      "OC06.2",
+      "OC07.1",
+      "OC07.2"
+    ],
+    "module": "modules/setup/SetupProduct.tsx (dates)",
+    "beforeRating": "2/2/2/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/setup/SetupProduct.tsx (dates); route: /tournaments/:id/setup/dates; findings: OC06.1, OC06.2, OC07.1, OC07.2."
+  },
+  {
+    "id": "OC08",
+    "tier": "operator",
+    "title": "Setup · Venue",
+    "captureRoute": "/tournaments/:id/setup/venue",
+    "findings": [
+      "OC06.2"
+    ],
+    "module": "modules/setup/SetupProduct.tsx (venue)",
+    "beforeRating": "4/4/4/4/4/3/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/setup/SetupProduct.tsx (venue); route: /tournaments/:id/setup/venue; findings: OC06.2."
+  },
+  {
+    "id": "OC09",
+    "tier": "operator",
+    "title": "Setup · Events",
+    "captureRoute": "/tournaments/:id/setup/events",
+    "findings": [
+      "OC06.2",
+      "OC09.1"
+    ],
+    "module": "modules/setup/SetupProduct.tsx (events)",
+    "beforeRating": "2/2/2/3/4/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/setup/SetupProduct.tsx (events); route: /tournaments/:id/setup/events; findings: OC06.2, OC09.1."
+  },
+  {
+    "id": "OC10",
+    "tier": "operator",
+    "title": "Setup · Rules",
+    "captureRoute": "/tournaments/:id/setup/rules",
+    "findings": [
+      "OC06.1",
+      "OC06.2",
+      "OC10.1"
+    ],
+    "module": "modules/setup/SetupProduct.tsx (rules)",
+    "beforeRating": "3/3/3/3/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/setup/SetupProduct.tsx (rules); route: /tournaments/:id/setup/rules; findings: OC06.1, OC06.2, OC10.1."
+  },
+  {
+    "id": "OC11",
+    "tier": "operator",
+    "title": "Setup · Entry rules",
+    "captureRoute": "/tournaments/:id/setup/entries",
+    "findings": [
+      "OC06.1",
+      "OC06.2",
+      "OC11.1",
+      "OC11.2"
+    ],
+    "module": "modules/setup/SetupProduct.tsx (entries)",
+    "beforeRating": "3/3/3/3/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/setup/SetupProduct.tsx (entries); route: /tournaments/:id/setup/entries; findings: OC06.1, OC06.2, OC11.1, OC11.2."
+  },
+  {
+    "id": "OC12",
+    "tier": "operator",
+    "title": "Setup · Staff",
+    "captureRoute": "/tournaments/:id/setup/people",
+    "findings": [
+      "OC06.1",
+      "OC06.2",
+      "OC12.1",
+      "OC12.2"
+    ],
+    "module": "modules/setup/SetupProduct.tsx (people)",
+    "beforeRating": "3/3/3/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/setup/SetupProduct.tsx (people); route: /tournaments/:id/setup/people; findings: OC06.1, OC06.2, OC12.1, OC12.2."
+  },
+  {
+    "id": "OC13",
+    "tier": "operator",
+    "title": "Setup · Public information",
+    "captureRoute": "/tournaments/:id/setup/public-info",
+    "findings": [
+      "OC06.1",
+      "OC06.2",
+      "OC13.1"
+    ],
+    "module": "modules/setup/SetupProduct.tsx (public-info)",
+    "beforeRating": "2/3/2/3/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/setup/SetupProduct.tsx (public-info); route: /tournaments/:id/setup/public-info; findings: OC06.1, OC06.2, OC13.1."
+  },
+  {
+    "id": "OC14",
+    "tier": "operator",
+    "title": "Participants · Roster",
+    "captureRoute": "/tournaments/:id/participants/people",
+    "findings": [
+      "OC02.2",
+      "OC14.1"
+    ],
+    "module": "modules/meet/roster/RosterTab.tsx | modules/bracket/BracketRosterTab.tsx",
+    "beforeRating": "3/4/3/4/4/3/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/meet/roster/RosterTab.tsx | modules/bracket/BracketRosterTab.tsx; route: /tournaments/:id/participants/people; findings: OC02.2, OC14.1."
+  },
+  {
+    "id": "OC15",
+    "tier": "operator",
+    "title": "Competition · Draws",
+    "captureRoute": "/tournaments/:id/competition/draws",
+    "findings": [
+      "OC02.2",
+      "OC15.1"
+    ],
+    "module": "modules/bracket/BracketDrawsTab.tsx",
+    "beforeRating": "3/3/3/3/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/bracket/BracketDrawsTab.tsx; route: /tournaments/:id/competition/draws; findings: OC02.2, OC15.1."
+  },
+  {
+    "id": "OC16",
+    "tier": "operator",
+    "title": "Competition · Draw canvas",
+    "captureRoute": "/tournaments/:id/competition/draw?event=",
+    "findings": [
+      "OC05.1",
+      "OC16.1",
+      "OC16.2"
+    ],
+    "module": "modules/bracket/DrawView.tsx",
+    "beforeRating": "2/2/2/2/2/2/1",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/bracket/DrawView.tsx; route: /tournaments/:id/competition/draw?event=; findings: OC05.1, OC16.1, OC16.2."
+  },
+  {
+    "id": "OC17",
+    "tier": "operator",
+    "title": "Competition · Matches",
+    "captureRoute": "/tournaments/:id/competition/matches",
+    "findings": [
+      "OC17.1"
+    ],
+    "module": "modules/bracket/BracketMatchesTab.tsx | modules/meet/matches/MatchesTab.tsx",
+    "beforeRating": "2/3/2/2/4/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/bracket/BracketMatchesTab.tsx | modules/meet/matches/MatchesTab.tsx; route: /tournaments/:id/competition/matches; findings: OC17.1."
+  },
+  {
+    "id": "OC18",
+    "tier": "operator",
+    "title": "Operations · Plan",
+    "captureRoute": "/tournaments/:id/operations/plan",
+    "findings": [
+      "OC05.1",
+      "OC16.1",
+      "OC18.1",
+      "OC18.2"
+    ],
+    "module": "modules/operations/OperationsProduct.tsx (plan)",
+    "beforeRating": "2/3/3/2/3/2/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/operations/OperationsProduct.tsx (plan); route: /tournaments/:id/operations/plan; findings: OC05.1, OC16.1, OC18.1, OC18.2."
+  },
+  {
+    "id": "OC19",
+    "tier": "operator",
+    "title": "Operations · Live day",
+    "captureRoute": "/tournaments/:id/operations/live",
+    "findings": [
+      "OC16.1",
+      "OC19.1",
+      "OC19.2"
+    ],
+    "module": "modules/operations/run/RunSurface.tsx",
+    "beforeRating": "2/3/3/2/3/2/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/operations/run/RunSurface.tsx; route: /tournaments/:id/operations/live; findings: OC16.1, OC19.1, OC19.2."
+  },
+  {
+    "id": "OC20",
+    "tier": "operator",
+    "title": "Publish · Site",
+    "captureRoute": "/tournaments/:id/publish/site",
+    "findings": [
+      "OC20.1"
+    ],
+    "module": "modules/settings/SharingTab.tsx scope=site -> PublicationSettings.tsx",
+    "beforeRating": "3/4/4/3/4/3/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/settings/SharingTab.tsx scope=site -> PublicationSettings.tsx; route: /tournaments/:id/publish/site; findings: OC20.1."
+  },
+  {
+    "id": "OC21",
+    "tier": "operator",
+    "title": "Publish · Draws and results",
+    "captureRoute": "/tournaments/:id/publish/draws-results",
+    "findings": [
+      "OC20.1"
+    ],
+    "module": "redirect -> /publish/site",
+    "beforeRating": "3/4/4/3/4/3/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: redirect -> /publish/site; route: /tournaments/:id/publish/draws-results; findings: OC20.1."
+  },
+  {
+    "id": "OC22",
+    "tier": "operator",
+    "title": "Publish · Displays",
+    "captureRoute": "/tournaments/:id/publish/displays",
+    "findings": [
+      "OC22.1",
+      "OC22.2",
+      "OC24.1"
+    ],
+    "module": "modules/workspace/DisplayConfig.tsx + SharingTab scope=links",
+    "beforeRating": "2/3/2/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/workspace/DisplayConfig.tsx + SharingTab scope=links; route: /tournaments/:id/publish/displays; findings: OC22.1, OC22.2, OC24.1."
+  },
+  {
+    "id": "OC23",
+    "tier": "operator",
+    "title": "Publish · Links",
+    "captureRoute": "/tournaments/:id/publish/links",
+    "findings": [
+      "OC22.1",
+      "OC22.2",
+      "OC24.1"
+    ],
+    "module": "redirect -> /publish/displays",
+    "beforeRating": "2/3/2/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: redirect -> /publish/displays; route: /tournaments/:id/publish/links; findings: OC22.1, OC22.2, OC24.1."
+  },
+  {
+    "id": "OC24",
+    "tier": "operator",
+    "title": "Display · Fullscreen venue board",
+    "captureRoute": "/display?token=...",
+    "findings": [
+      "OC16.1",
+      "OC19.2",
+      "OC24.1",
+      "OC24.2",
+      "OC24.3"
+    ],
+    "module": "modules/display/PublicDisplayPage.tsx -> MeetDisplayPage.tsx / publicDisplay/CourtsView.tsx",
+    "beforeRating": "2/3/2/2/2/2/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/display/PublicDisplayPage.tsx -> MeetDisplayPage.tsx / publicDisplay/CourtsView.tsx; route: /display?token=...; findings: OC16.1, OC19.2, OC24.1, OC24.2, OC24.3."
+  },
+  {
+    "id": "OC25",
+    "tier": "operator",
+    "title": "Administration · Team",
+    "captureRoute": "/tournaments/:id/administration/team",
+    "findings": [
+      "OC25.1"
+    ],
+    "module": "modules/settings/PeopleAccessTab.tsx",
+    "beforeRating": "3/4/3/3/4/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/settings/PeopleAccessTab.tsx; route: /tournaments/:id/administration/team; findings: OC25.1."
+  },
+  {
+    "id": "OC26",
+    "tier": "operator",
+    "title": "Administration · Modules",
+    "captureRoute": "/tournaments/:id/administration/modules",
+    "findings": [
+      "OC03.1",
+      "OC26.1"
+    ],
+    "module": "modules/settings/ModulesSettingsTab.tsx",
+    "beforeRating": "2/4/3/2/4/3/1",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/settings/ModulesSettingsTab.tsx; route: /tournaments/:id/administration/modules; findings: OC03.1, OC26.1."
+  },
+  {
+    "id": "OC27",
+    "tier": "operator",
+    "title": "Administration · Backups",
+    "captureRoute": "/tournaments/:id/administration/backups",
+    "findings": [
+      "OC27.1",
+      "OC27.2"
+    ],
+    "module": "modules/settings/SyncBackupsTab.tsx",
+    "beforeRating": "2/3/2/2/3/3/1",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/settings/SyncBackupsTab.tsx; route: /tournaments/:id/administration/backups; findings: OC27.1, OC27.2."
+  },
+  {
+    "id": "OC28",
+    "tier": "operator",
+    "title": "Administration · Activity",
+    "captureRoute": "/tournaments/:id/administration/activity",
+    "findings": [],
+    "module": "modules/settings/ActivityTab.tsx",
+    "beforeRating": "4/4/4/4/4/4/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/settings/ActivityTab.tsx; route: /tournaments/:id/administration/activity; findings: none recorded."
+  },
+  {
+    "id": "OC29",
+    "tier": "operator",
+    "title": "Administration · Lifecycle",
+    "captureRoute": "/tournaments/:id/administration/lifecycle",
+    "findings": [
+      "OC29.1"
+    ],
+    "module": "modules/settings/GeneralSettingsTab.tsx + DangerZoneTab.tsx",
+    "beforeRating": "3/3/4/3/4/4/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: modules/settings/GeneralSettingsTab.tsx + DangerZoneTab.tsx; route: /tournaments/:id/administration/lifecycle; findings: OC29.1."
+  },
+  {
+    "id": "OC30",
+    "tier": "operator",
+    "title": "Module guard · Entries unavailable",
+    "captureRoute": "/tournaments/:id/entries (guard)",
+    "findings": [
+      "OC30.1"
+    ],
+    "module": "app/workspace/ModuleUnavailablePanel.tsx (entries)",
+    "beforeRating": "3/4/4/3/4/4/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: app/workspace/ModuleUnavailablePanel.tsx (entries); route: /tournaments/:id/entries (guard); findings: OC30.1."
+  },
+  {
+    "id": "OC31",
+    "tier": "operator",
+    "title": "Module guard · Meet configuration unavailable",
+    "captureRoute": "/tournaments/:id/setup (guard)",
+    "findings": [
+      "OC11.1"
+    ],
+    "module": "app/workspace/ModuleUnavailablePanel.tsx (setup)",
+    "beforeRating": "4/4/4/4/4/4/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: app/workspace/ModuleUnavailablePanel.tsx (setup); route: /tournaments/:id/setup (guard); findings: OC11.1."
+  },
+  {
+    "id": "OC32",
+    "tier": "operator",
+    "title": "Module guard · Meet roster unavailable",
+    "captureRoute": "/tournaments/:id/roster (guard)",
+    "findings": [
+      "OC02.2",
+      "OC32.1"
+    ],
+    "module": "app/workspace/ModuleUnavailablePanel.tsx (roster)",
+    "beforeRating": "3/3/4/3/4/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: app/workspace/ModuleUnavailablePanel.tsx (roster); route: /tournaments/:id/roster (guard); findings: OC02.2, OC32.1."
+  },
+  {
+    "id": "OC33",
+    "tier": "operator",
+    "title": "Module guard · Meet matches unavailable",
+    "captureRoute": "/tournaments/:id/matches (guard)",
+    "findings": [
+      "OC02.2",
+      "OC33.1"
+    ],
+    "module": "app/workspace/ModuleUnavailablePanel.tsx (matches)",
+    "beforeRating": "2/3/3/2/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: app/workspace/ModuleUnavailablePanel.tsx (matches); route: /tournaments/:id/matches (guard); findings: OC02.2, OC33.1."
+  },
+  {
+    "id": "PE01",
+    "tier": "public",
+    "title": "Discovery · Season",
+    "captureRoute": "/e/",
+    "findings": [
+      "PE01.1",
+      "PE01.2",
+      "PE01.3"
+    ],
+    "module": "routes/discovery.tsx",
+    "beforeRating": "3/4/3/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/discovery.tsx; route: /e/; findings: PE01.1, PE01.2, PE01.3."
+  },
+  {
+    "id": "PE02",
+    "tier": "public",
+    "title": "Discovery · Completed tournaments",
+    "captureRoute": "/e/?view=completed#calendar",
+    "findings": [
+      "PE01.1",
+      "PE01.2",
+      "PE01.3",
+      "PE02.1"
+    ],
+    "module": "routes/discovery.tsx",
+    "beforeRating": "3/4/3/2/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/discovery.tsx; route: /e/?view=completed#calendar; findings: PE01.1, PE01.2, PE01.3, PE02.1."
+  },
+  {
+    "id": "PE03",
+    "tier": "public",
+    "title": "Tournament · Overview",
+    "captureRoute": "/e/{slug}",
+    "findings": [
+      "PE01.1",
+      "PE01.3",
+      "PE03.1",
+      "PE03.2",
+      "PE03.3",
+      "PE03.4"
+    ],
+    "module": "routes/tournament.tsx",
+    "beforeRating": "3/3/3/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/tournament.tsx; route: /e/{slug}; findings: PE01.1, PE01.3, PE03.1, PE03.2, PE03.3, PE03.4."
+  },
+  {
+    "id": "PE04",
+    "tier": "public",
+    "title": "Tournament · Events",
+    "captureRoute": "/e/{slug}?tab=events",
+    "findings": [
+      "PE01.1",
+      "PE01.3",
+      "PE03.2",
+      "PE04.1",
+      "PE04.2",
+      "PE04.3"
+    ],
+    "module": "routes/tournament.tsx (EventRow)",
+    "beforeRating": "2/2/2/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/tournament.tsx (EventRow); route: /e/{slug}?tab=events; findings: PE01.1, PE01.3, PE03.2, PE04.1, PE04.2, PE04.3."
+  },
+  {
+    "id": "PE05",
+    "tier": "public",
+    "title": "Tournament · Players",
+    "captureRoute": "/e/{slug}?tab=players",
+    "findings": [
+      "PE01.1",
+      "PE01.3",
+      "PE03.2",
+      "PE05.1",
+      "PE05.2"
+    ],
+    "module": "routes/tournament.tsx (EntrantsList/PlayersList)",
+    "beforeRating": "3/2/2/3/4/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/tournament.tsx (EntrantsList/PlayersList); route: /e/{slug}?tab=players; findings: PE01.1, PE01.3, PE03.2, PE05.1, PE05.2."
+  },
+  {
+    "id": "PE06",
+    "tier": "public",
+    "title": "Tournament · Draws",
+    "captureRoute": "/e/{slug}?tab=draws",
+    "findings": [
+      "PE01.1",
+      "PE01.3",
+      "PE03.2",
+      "PE04.1",
+      "PE04.2",
+      "PE04.3"
+    ],
+    "module": "routes/tournament.tsx (DrawsPanel, EventRow)",
+    "beforeRating": "2/2/2/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/tournament.tsx (DrawsPanel, EventRow); route: /e/{slug}?tab=draws; findings: PE01.1, PE01.3, PE03.2, PE04.1, PE04.2, PE04.3."
+  },
+  {
+    "id": "PE07",
+    "tier": "public",
+    "title": "Tournament · Seeded entries",
+    "captureRoute": "/e/{slug}?tab=seeds (alias of draws)",
+    "findings": [
+      "PE01.1",
+      "PE01.3",
+      "PE03.2",
+      "PE04.1",
+      "PE04.2",
+      "PE04.3"
+    ],
+    "module": "routes/tournament.tsx (DrawsPanel alias)",
+    "beforeRating": "2/2/2/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/tournament.tsx (DrawsPanel alias); route: /e/{slug}?tab=seeds (alias of draws); findings: PE01.1, PE01.3, PE03.2, PE04.1, PE04.2, PE04.3."
+  },
+  {
+    "id": "PE08",
+    "tier": "public",
+    "title": "Tournament · Winners",
+    "captureRoute": "/e/{slug}?tab=winners (alias of draws)",
+    "findings": [
+      "PE01.1",
+      "PE01.3",
+      "PE03.2",
+      "PE04.1",
+      "PE04.2",
+      "PE04.3"
+    ],
+    "module": "routes/tournament.tsx (DrawsPanel alias)",
+    "beforeRating": "2/2/2/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/tournament.tsx (DrawsPanel alias); route: /e/{slug}?tab=winners (alias of draws); findings: PE01.1, PE01.3, PE03.2, PE04.1, PE04.2, PE04.3."
+  },
+  {
+    "id": "PE09",
+    "tier": "public",
+    "title": "Tournament · Schedule and live",
+    "captureRoute": "/e/{slug}/schedule",
+    "findings": [
+      "PE01.1",
+      "PE01.3",
+      "PE03.1",
+      "PE09.1",
+      "PE09.2",
+      "PE09.3",
+      "PE13.2"
+    ],
+    "module": "routes/schedule.tsx",
+    "beforeRating": "2/3/2/2/2/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/schedule.tsx; route: /e/{slug}/schedule; findings: PE01.1, PE01.3, PE03.1, PE09.1, PE09.2, PE09.3, PE13.2."
+  },
+  {
+    "id": "PE10",
+    "tier": "public",
+    "title": "Draw · Singles full bracket",
+    "captureRoute": "/e/{slug}/draws/{key}",
+    "findings": [
+      "PE01.3",
+      "PE10.1",
+      "PE10.2",
+      "PE10.3"
+    ],
+    "module": "routes/draw.tsx (bracket branch)",
+    "beforeRating": "2/3/2/2/3/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/draw.tsx (bracket branch); route: /e/{slug}/draws/{key}; findings: PE01.3, PE10.1, PE10.2, PE10.3."
+  },
+  {
+    "id": "PE11",
+    "tier": "public",
+    "title": "Draw · Singles round view",
+    "captureRoute": "/e/{slug}/draws/{key}?view=round&round=1",
+    "findings": [
+      "PE01.3",
+      "PE10.3",
+      "PE13.1",
+      "PE13.2"
+    ],
+    "module": "routes/draw.tsx (round branch, RoundPager)",
+    "beforeRating": "3/3/3/3/3/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/draw.tsx (round branch, RoundPager); route: /e/{slug}/draws/{key}?view=round&round=1; findings: PE01.3, PE10.3, PE13.1, PE13.2."
+  },
+  {
+    "id": "PE12",
+    "tier": "public",
+    "title": "Draw · Singles player path",
+    "captureRoute": "/e/{slug}/draws/{key}?view=list",
+    "findings": [
+      "PE01.3",
+      "PE10.1",
+      "PE10.2",
+      "PE10.3",
+      "PE12.1"
+    ],
+    "module": "routes/draw.tsx (list branch, MatchList)",
+    "beforeRating": "2/3/2/2/3/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/draw.tsx (list branch, MatchList); route: /e/{slug}/draws/{key}?view=list; findings: PE01.3, PE10.1, PE10.2, PE10.3, PE12.1."
+  },
+  {
+    "id": "PE13",
+    "tier": "public",
+    "title": "Draw · Singles match list",
+    "captureRoute": "/e/{slug}/draws/{key}?view=path&player=",
+    "findings": [
+      "PE01.3",
+      "PE03.1",
+      "PE10.3",
+      "PE13.1",
+      "PE13.2"
+    ],
+    "module": "routes/draw.tsx (path alias -> bracket highlight)",
+    "beforeRating": "3/3/2/3/2/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/draw.tsx (path alias -> bracket highlight); route: /e/{slug}/draws/{key}?view=path&player=; findings: PE01.3, PE03.1, PE10.3, PE13.1, PE13.2."
+  },
+  {
+    "id": "PE14",
+    "tier": "public",
+    "title": "Draw · Doubles detail",
+    "captureRoute": "/e/{slug}/draws/{key} (doubles key)",
+    "findings": [
+      "PE01.3",
+      "PE10.1",
+      "PE10.2",
+      "PE10.3"
+    ],
+    "module": "routes/draw.tsx (bracket branch, doubles)",
+    "beforeRating": "2/3/1/2/3/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/draw.tsx (bracket branch, doubles); route: /e/{slug}/draws/{key} (doubles key); findings: PE01.3, PE10.1, PE10.2, PE10.3."
+  },
+  {
+    "id": "PE15",
+    "tier": "public",
+    "title": "Regulations reader",
+    "captureRoute": "/e/{slug}/regulations",
+    "findings": [
+      "PE01.1",
+      "PE01.3",
+      "PE03.1",
+      "PE15.1",
+      "PE15.2"
+    ],
+    "module": "routes/regulations.tsx",
+    "beforeRating": "2/2/2/3/3/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/regulations.tsx; route: /e/{slug}/regulations; findings: PE01.1, PE01.3, PE03.1, PE15.1, PE15.2."
+  },
+  {
+    "id": "PE16",
+    "tier": "public",
+    "title": "Entry form",
+    "captureRoute": "/e/{slug}/enter",
+    "findings": [
+      "PE01.3",
+      "PE16.1"
+    ],
+    "module": "routes/enter.tsx",
+    "beforeRating": "3/4/4/3/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/enter.tsx; route: /e/{slug}/enter; findings: PE01.3, PE16.1."
+  },
+  {
+    "id": "PE17",
+    "tier": "public",
+    "title": "Entry form · Signed-in outcome",
+    "captureRoute": "/e/{slug}/enter/signed-in",
+    "findings": [
+      "PE01.3",
+      "PE16.1"
+    ],
+    "module": "routes/enter.tsx (signed-in outcome)",
+    "beforeRating": "3/4/4/3/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/enter.tsx (signed-in outcome); route: /e/{slug}/enter/signed-in; findings: PE01.3, PE16.1."
+  },
+  {
+    "id": "PE18",
+    "tier": "public",
+    "title": "Entry form · Account-created outcome",
+    "captureRoute": "/e/{slug}/enter/created",
+    "findings": [
+      "PE01.3",
+      "PE16.1"
+    ],
+    "module": "routes/enter.tsx (created outcome)",
+    "beforeRating": "3/4/4/3/4/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/enter.tsx (created outcome); route: /e/{slug}/enter/created; findings: PE01.3, PE16.1."
+  },
+  {
+    "id": "PE19",
+    "tier": "public",
+    "title": "Account · Sign in",
+    "captureRoute": "/e/login",
+    "findings": [
+      "PE01.3",
+      "PE19.1"
+    ],
+    "module": "routes/login.tsx",
+    "beforeRating": "4/4/4/4/4/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/login.tsx; route: /e/login; findings: PE01.3, PE19.1."
+  },
+  {
+    "id": "PE20",
+    "tier": "public",
+    "title": "Account · Created outcome",
+    "captureRoute": "/e/login/created",
+    "findings": [
+      "PE01.3",
+      "PE19.1"
+    ],
+    "module": "routes/login.tsx (created)",
+    "beforeRating": "4/4/4/4/4/4/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/login.tsx (created); route: /e/login/created; findings: PE01.3, PE19.1."
+  },
+  {
+    "id": "PE21",
+    "tier": "public",
+    "title": "Account · Failed sign-in outcome",
+    "captureRoute": "/e/login/failed",
+    "findings": [
+      "PE01.3",
+      "PE19.1"
+    ],
+    "module": "routes/login.tsx (failed)",
+    "beforeRating": "4/4/4/4/4/4/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/login.tsx (failed); route: /e/login/failed; findings: PE01.3, PE19.1."
+  },
+  {
+    "id": "PE22",
+    "tier": "public",
+    "title": "Account · Signed-in outcome",
+    "captureRoute": "/e/login/signed-in",
+    "findings": [
+      "PE01.3",
+      "PE19.1",
+      "PE22.1"
+    ],
+    "module": "routes/login.tsx (signed-in)",
+    "beforeRating": "2/4/4/2/4/4/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/login.tsx (signed-in); route: /e/login/signed-in; findings: PE01.3, PE19.1, PE22.1."
+  },
+  {
+    "id": "PE23",
+    "tier": "public",
+    "title": "Account · Create account",
+    "captureRoute": "/e/signup",
+    "findings": [
+      "PE01.3",
+      "PE19.1",
+      "PE23.1"
+    ],
+    "module": "routes/signup.tsx",
+    "beforeRating": "3/4/3/3/3/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/signup.tsx; route: /e/signup; findings: PE01.3, PE19.1, PE23.1."
+  },
+  {
+    "id": "PE24",
+    "tier": "public",
+    "title": "Account · Create account for tournament",
+    "captureRoute": "/e/signup/{slug}",
+    "findings": [
+      "PE01.3",
+      "PE19.1",
+      "PE23.1",
+      "PE24.1"
+    ],
+    "module": "routes/signup.tsx ({slug})",
+    "beforeRating": "3/4/3/3/3/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/signup.tsx ({slug}); route: /e/signup/{slug}; findings: PE01.3, PE19.1, PE23.1, PE24.1."
+  },
+  {
+    "id": "PE25",
+    "tier": "public",
+    "title": "Account · Verify address",
+    "captureRoute": "/e/verify",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/verify.tsx",
+    "beforeRating": "4/4/4/4/4/3/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/verify.tsx; route: /e/verify; findings: PE01.3."
+  },
+  {
+    "id": "PE26",
+    "tier": "public",
+    "title": "Account · Verification complete",
+    "captureRoute": "/e/verify/done",
+    "findings": [
+      "PE01.3",
+      "PE26.1"
+    ],
+    "module": "routes/verify.tsx (done)",
+    "beforeRating": "3/4/4/3/4/4/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/verify.tsx (done); route: /e/verify/done; findings: PE01.3, PE26.1."
+  },
+  {
+    "id": "PE27",
+    "tier": "public",
+    "title": "Account · Verification failed",
+    "captureRoute": "/e/verify/failed",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/verify.tsx (failed)",
+    "beforeRating": "4/4/4/4/4/4/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/verify.tsx (failed); route: /e/verify/failed; findings: PE01.3."
+  },
+  {
+    "id": "PE28",
+    "tier": "public",
+    "title": "Account · Verification email sent",
+    "captureRoute": "/e/verify/sent",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/verify.tsx (sent)",
+    "beforeRating": "4/4/4/4/4/4/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/verify.tsx (sent); route: /e/verify/sent; findings: PE01.3."
+  },
+  {
+    "id": "PE29",
+    "tier": "public",
+    "title": "Account · Forgot password",
+    "captureRoute": "/e/forgot",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/resetPassword.tsx (forgot)",
+    "beforeRating": "4/4/4/4/4/3/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/resetPassword.tsx (forgot); route: /e/forgot; findings: PE01.3."
+  },
+  {
+    "id": "PE30",
+    "tier": "public",
+    "title": "Account · Reset password",
+    "captureRoute": "/e/reset",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/resetPassword.tsx (reset)",
+    "beforeRating": "4/4/4/4/4/3/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/resetPassword.tsx (reset); route: /e/reset; findings: PE01.3."
+  },
+  {
+    "id": "PE31",
+    "tier": "public",
+    "title": "Account · Reset email sent",
+    "captureRoute": "/e/reset/sent",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/resetPassword.tsx (sent)",
+    "beforeRating": "4/4/4/4/4/4/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/resetPassword.tsx (sent); route: /e/reset/sent; findings: PE01.3."
+  },
+  {
+    "id": "PE32",
+    "tier": "public",
+    "title": "Account · Password reset complete",
+    "captureRoute": "/e/reset/done",
+    "findings": [
+      "PE01.3",
+      "PE26.1"
+    ],
+    "module": "routes/resetPassword.tsx (done)",
+    "beforeRating": "3/4/4/3/4/4/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/resetPassword.tsx (done); route: /e/reset/done; findings: PE01.3, PE26.1."
+  },
+  {
+    "id": "PE33",
+    "tier": "public",
+    "title": "Account · Password reset failed",
+    "captureRoute": "/e/reset/failed",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/resetPassword.tsx (failed)",
+    "beforeRating": "4/4/4/4/4/4/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/resetPassword.tsx (failed); route: /e/reset/failed; findings: PE01.3."
+  },
+  {
+    "id": "PE34",
+    "tier": "public",
+    "title": "Account · New password failed",
+    "captureRoute": "/e/reset/password-failed",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/resetPassword.tsx (password-failed)",
+    "beforeRating": "4/4/4/4/4/4/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/resetPassword.tsx (password-failed); route: /e/reset/password-failed; findings: PE01.3."
+  },
+  {
+    "id": "PE35",
+    "tier": "public",
+    "title": "Doubles partner invitation",
+    "captureRoute": "/e/partner(?token=) or /e/partner/{token}",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/partner.tsx (preview)",
+    "beforeRating": "4/4/4/4/4/3/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/partner.tsx (preview); route: /e/partner(?token=) or /e/partner/{token}; findings: PE01.3."
+  },
+  {
+    "id": "PE36",
+    "tier": "public",
+    "title": "Doubles partner accepted",
+    "captureRoute": "/e/partner/accepted",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/partner.tsx (accepted)",
+    "beforeRating": "3/4/4/3/4/3/3",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/partner.tsx (accepted); route: /e/partner/accepted; findings: PE01.3."
+  },
+  {
+    "id": "PE37",
+    "tier": "public",
+    "title": "Doubles partner failed",
+    "captureRoute": "/e/partner/failed",
+    "findings": [
+      "PE01.3",
+      "PE37.1"
+    ],
+    "module": "routes/partner.tsx (failed)",
+    "beforeRating": "2/4/4/2/4/4/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/partner.tsx (failed); route: /e/partner/failed; findings: PE01.3, PE37.1."
+  },
+  {
+    "id": "PE38",
+    "tier": "public",
+    "title": "My entries (signed out)",
+    "captureRoute": "/e/me/entries",
+    "findings": [
+      "PE01.3"
+    ],
+    "module": "routes/myEntries.tsx",
+    "beforeRating": "4/4/4/4/4/3/4",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/myEntries.tsx; route: /e/me/entries; findings: PE01.3."
+  },
+  {
+    "id": "PE39",
+    "tier": "public",
+    "title": "Entry receipt",
+    "captureRoute": "/e/{slug}/receipt/{submissionId}",
+    "findings": [
+      "PE01.3",
+      "PE39.1",
+      "PE39.2",
+      "PE39.3"
+    ],
+    "module": "routes/receipt.tsx",
+    "beforeRating": "2/3/3/2/2/3/2",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Retain current component pending integrated visual verification.",
+    "note": "Renderer: routes/receipt.tsx; route: /e/{slug}/receipt/{submissionId}; findings: PE01.3, PE39.1, PE39.2, PE39.3."
+  },
+  {
+    "id": "PE05b",
+    "tier": "public",
+    "title": "Player detail (injected)",
+    "captureRoute": "/e/{slug}/players/{personKey}",
+    "findings": [],
+    "module": "routes/player.tsx",
+    "beforeRating": "N/R",
+    "afterRating": "pending-integrated-capture",
+    "decision": "Continuation render of PE05; excluded from the 72-surface baseline count.",
+    "note": "Runtime-injected continuation after PE05 when a person key resolves; retained for evidence completeness.",
+    "baselineSurfaceId": "PE05",
+    "countsAsBaseline": false
+  }
+]

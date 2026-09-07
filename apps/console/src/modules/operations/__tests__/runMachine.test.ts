@@ -29,8 +29,10 @@ describe('runMachine', () => {
     expect(fromEngineStatus('called')).toBe('called');
   });
   it('labels use the canonical words', () => {
+    // Contract §2: `playing` is "On court" — "Live" is a lifecycle/section
+    // word, never a match state.
     expect(RUN_STATUS_LABEL).toMatchObject({
-      scheduled: 'Scheduled', called: 'Called', playing: 'Live', done: 'Done',
+      scheduled: 'Scheduled', called: 'Called', playing: 'On court', done: 'Done',
     });
   });
 });

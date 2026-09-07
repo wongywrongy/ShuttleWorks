@@ -9,7 +9,7 @@
  * inputs + a save action) so cloud mode can simply unlock them; local-dev
  * limitations are footnotes (muted), never accent-colored warnings.
  */
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { Button } from '@scheduler/design-system';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
@@ -100,12 +100,32 @@ function ProfilePage() {
       <PageHead
         title="Profile"
         subtitle="Your name and how you appear across the app."
-        action={
-          <Button size="sm" disabled={locked}>
+        // Locked (no real account to save to): Save is hidden, not merely
+        // grayed out — a disabled button here would offer no visible reason
+        // (v3 consolidated plan §3 X12, R2). The reason itself, and the one
+        // action that resolves it, now leads the page below (V3-OC04.1) —
+        // it used to trail the read-only fields, so the apparent first task
+        // was editing a form nothing here can save.
+        action={locked ? undefined : (
+          <Button size="sm">
             Save changes
           </Button>
-        }
+        )}
       />
+
+      {locked ? (
+        <div className="rounded-md border border-border bg-muted/30 p-4">
+          <p className="text-sm text-foreground">
+            Sign in with an account to edit your profile.
+          </p>
+          <Link
+            to="/login"
+            className="mt-2 inline-block text-sm font-medium text-accent underline underline-offset-2"
+          >
+            Sign in
+          </Link>
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-4">
         <span
@@ -114,12 +134,14 @@ function ProfilePage() {
         >
           {initials}
         </span>
-        <div>
-          <Button variant="outline" size="sm" disabled={locked}>
-            Change photo
-          </Button>
-          <p className="mt-1 text-xs text-muted-foreground">JPG or PNG, up to 2&nbsp;MB.</p>
-        </div>
+        {locked ? null : (
+          <div>
+            <Button variant="outline" size="sm">
+              Change photo
+            </Button>
+            <p className="mt-1 text-xs text-muted-foreground">JPG or PNG, up to 2&nbsp;MB.</p>
+          </div>
+        )}
       </div>
 
       <Section title="Your details" defaultOpen>
@@ -131,8 +153,6 @@ function ProfilePage() {
         />
         <FieldRow label="Email" type="email" defaultValue={email} disabled={locked} last />
       </Section>
-
-      {locked ? <Note>Profile editing unlocks once you sign in with an account.</Note> : null}
     </PageBody>
   );
 }
@@ -180,15 +200,17 @@ function SecurityPage() {
       <PageHead
         title="Security"
         subtitle="Manage your password and account security."
-        action={
+        // Locked: hide the action rather than show a permanently disabled
+        // one with no visible reason; the Note below already states why.
+        action={locked ? undefined : (
           <Button
             size="sm"
-            disabled={locked || busy || !current || !next || !confirm}
+            disabled={busy || !current || !next || !confirm}
             onClick={() => void updatePassword()}
           >
             {busy ? 'Updating…' : 'Update password'}
           </Button>
-        }
+        )}
       />
 
       <Section title="Change password" defaultOpen>
@@ -267,7 +289,7 @@ function SessionsPage() {
               <div className="text-sm font-medium text-foreground">{browser}</div>
               <div className={TEXT_MUTED_XS}>Current session · active now</div>
             </div>
-            <span className="rounded-sm bg-action-selected-bg px-1.5 py-0.5 text-2xs font-medium text-action-selected-foreground">
+            <span className="rounded-sm bg-action-selected-bg px-1.5 py-0.5 text-xs font-medium text-action-selected-foreground">
               This device
             </span>
           </div>

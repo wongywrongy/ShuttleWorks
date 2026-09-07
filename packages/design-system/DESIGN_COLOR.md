@@ -45,7 +45,7 @@ Adding or fixing a theme is a mapping change, not a component sweep.
 |---|---|---|
 | `surface-sunken` | `gray-2` #EFF2F5 (wells/bands — the *explicit* page tint) | `gray-13` #0F1114 |
 | `surface-base` | `gray-1` #F9FAFB (page) | `gray-12` #16181D — **never pure black** |
-| `surface-raised` | `gray-0` #FFFFFF + hairline + `shadow-sm` | `gray-11` #23272E |
+| `surface-raised` | `gray-0` #FFFFFF + hairline | `gray-11` #23272E |
 | `surface-overlay` | `gray-0` #FFFFFF + `shadow-md/lg` | `gray-10` #313640 |
 | `text-primary` | `gray-13` | `220 20% 95%` (off-white, never #FFF) |
 | `text-secondary` | `gray-8` | `gray-4` |
@@ -58,7 +58,7 @@ Adding or fixing a theme is a mapping change, not a component sweep.
 **Dark elevation = luminance:** sunken 7% → base 10% → raised 16% → overlay 22% (+5–8% per
 step). Anything floating (right rail, menus, dialogs, cards) sits on a *lighter* surface than
 its backdrop; shadows are secondary in dark. **Light is its own logic** (not an inversion):
-white/near-white base, subtle gray sunken wells, raised = white + hairline + small shadow.
+white/near-white base, subtle gray sunken wells, raised = white + hairline; shadows are reserved for overlays.
 
 ## Accessibility gates (blockers)
 

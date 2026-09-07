@@ -2,14 +2,17 @@
  * The tournament page's hero band: organizer · name · date/venue line ·
  * plain status line · ONE phase-dependent CTA (Z8) — a real link when entries are
  * open, plain status text when closed, never a disabled control pretending
- * to be actionable. `children` is the tab bar, rendered inside the band so
- * the active-tab underline sits on the band's bottom rule.
+ * to be actionable. `children` is the tab bar, rendered inside the band.
+ *
+ * ADR 0028: the title takes the display role, the status line carries the
+ * live tone while entries are open, and the phase eyebrow is gone — the
+ * status line and the CTA already say what phase the tournament is in.
  */
 import type { ReactNode } from 'react';
 import { Button } from '@scheduler/design-system/components';
 
-import type { ChipState, CtaState, TournamentPhase } from '../lib/phase';
-import { chipLabel, phaseLabel } from '../lib/phase';
+import type { ChipState, CtaState } from '../lib/phase';
+import { chipLabel } from '../lib/phase';
 
 export function HeroHeader({
   orgName,
@@ -17,8 +20,8 @@ export function HeroHeader({
   metaLine,
   chip,
   cta,
-  phase,
   phaseAction,
+  statusOverride,
   freshness,
   children,
 }: {
@@ -27,13 +30,24 @@ export function HeroHeader({
   metaLine: string;
   chip: ChipState;
   cta: CtaState;
-  /** Optional newer lifecycle presentation; old page payloads keep the
-   * original two-state hero unchanged. */
-  phase?: TournamentPhase;
+  /** Optional newer lifecycle action; old page payloads keep the original
+   * two-state hero unchanged. */
   phaseAction?: { label: string; href: string } | null;
+  /**
+   * V3-PE03.3: when the server ships an explicit lifecycle phase, the
+   * subtitle leads with the tournament's REAL state (e.g. "Live now")
+   * instead of the binary entries chip — a live tournament's header used to
+   * say "Entries closed" while its own CTA said "Follow live matches".
+   * Entry closure stays reachable in the Key dates section; it just stops
+   * being the FIRST thing a spectator reads. Absent on older payloads,
+   * which keep the original two-state chip unchanged.
+   */
+  statusOverride?: { label: string; live: boolean } | null;
   freshness?: string | null;
   children?: ReactNode;
 }) {
+  const statusLabel = statusOverride ? statusOverride.label : chipLabel(chip);
+  const statusIsLive = statusOverride ? statusOverride.live : chip.kind === 'entriesOpen';
   return (
     <section className="border-b border-rule-soft bg-surface-raised" aria-labelledby="tournament-title">
       <div className="mx-auto w-full max-w-6xl px-4 pt-8 md:pt-10">
@@ -42,17 +56,20 @@ export function HeroHeader({
               under a long tournament name — without it the title block takes
               the full width and the CTA wraps to a left-aligned second row,
               which reads as a stretched phone layout at 1280px. */}
-          <div className="min-w-0 flex-1 basis-96">
-            {orgName ? <p className="text-sm text-muted-foreground">{orgName}</p> : null}
-            <h1 id="tournament-title" className="mt-1 max-w-3xl text-balance font-display text-2xl font-semibold tracking-tight text-foreground md:text-[1.75rem]">
+          <div className="grid min-w-0 flex-1 basis-96 gap-1.5">
+            {/* Migration-created bootstrap workspaces are an internal
+                ownership placeholder, not a tournament organizer identity. */}
+            {orgName && orgName !== 'Local Workspace' ? <p className="text-sm text-muted-foreground">{orgName}</p> : null}
+            <h1 id="tournament-title" className="type-display max-w-3xl text-balance text-[1.875rem] leading-tight tracking-[-0.025em] text-foreground">
               {title}
             </h1>
             {metaLine ? (
-              <p className="mt-1.5 text-sm text-muted-foreground">{metaLine}</p>
+              <p className="text-sm text-muted-foreground">{metaLine}</p>
             ) : null}
-            <p className="mt-3 text-sm font-semibold text-foreground">{chipLabel(chip)}</p>
-            {phase ? <p className="mt-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{phaseLabel(phase)}</p> : null}
-            {freshness ? <p className="mt-1 text-xs text-muted-foreground">{freshness}</p> : null}
+            <p className={`mt-1.5 text-sm font-medium ${statusIsLive ? 'text-status-live' : 'text-muted-foreground'}`}>
+              {statusLabel}
+            </p>
+            {freshness ? <p className="text-xs text-muted-foreground">{freshness}</p> : null}
           </div>
           {/* When entries are closed the plain status line already answers;
               the action slot stays empty rather than repeating it or
@@ -67,7 +84,7 @@ export function HeroHeader({
             </Button>
           ) : null}
         </div>
-        {children}
+        {children ? <div className="pb-4">{children}</div> : null}
       </div>
     </section>
   );

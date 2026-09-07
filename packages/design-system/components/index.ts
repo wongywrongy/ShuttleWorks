@@ -20,11 +20,15 @@ export {
   CardContent,
   type CardProps,
 } from './Card';
+export { Badge, badgeVariants, type BadgeProps, type BadgeTone, type BadgeSize } from './Badge';
+export { Avatar, type AvatarProps, type AvatarSize, type AvatarVariant } from './Avatar';
 export { Select, type SelectProps, type SelectOption } from './Select';
 export { TextField, type TextFieldProps } from './TextField';
+export { Checkbox, type CheckboxProps } from './Checkbox';
+export { FormActions, type FormActionsProps } from './FormActions';
 export { CourtMark, COURT_ASPECT, type CourtMarkProps } from './CourtMark';
 export { Separator } from './Separator';
-export { StatusPill, type PillTone } from './StatusPill';
+export { StatusPill, type PillTone, type ChipTone } from './StatusPill';
 export { STATUS_TONE, type StatusToneName, type StatusToneParts } from './statusTone';
 export { EYEBROW_CLASS } from './textStyles';
 export { EmptyState, type EmptyStateProps } from './EmptyState';

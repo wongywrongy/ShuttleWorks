@@ -23,6 +23,15 @@ alternative and it does not earn its migration here.
 The structured ``log.warning`` at each conflict site is the other half, and in
 practice the more useful one: the log is what you read when someone reports
 that their change vanished.
+
+Court disputes (contract §4.2, ruling C1): this module is **not** the
+authority on court occupancy or disputes, and is not becoming one. It counts
+rejected optimistic-concurrency writes; a court dispute is a derived read-time
+observation from ``shared.court_occupancy.derive_disputes`` over current
+match rows, and its resolution is persisted through the ordinary command path
+(``operations/commands.py`` action ``resolve_court``), not through this
+counter. This module stays a documented view-local metric, not a state
+source — see ``docs/reference/contracts/state-and-formatting.md`` §4.4.
 """
 from __future__ import annotations
 

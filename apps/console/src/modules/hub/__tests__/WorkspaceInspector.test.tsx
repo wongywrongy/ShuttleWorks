@@ -167,4 +167,32 @@ describe('WorkspaceInspector', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Administration' }));
     expect(onSettings).toHaveBeenCalledWith('t1');
   });
+
+  // V3-OC02.2: the Hub row's Attention cell shows only the first reason plus
+  // an "N more issues" count — this is where the rest become readable.
+  it('lists attention reasons the checklist has no step for, without repeating a checklist reason', () => {
+    const withEntriesIssue: TournamentSummaryDTO = {
+      ...withSignals,
+      signals: {
+        ...withSignals.signals!,
+        attention: [
+          { code: 'NO_ROSTER', label: 'No players added yet' },
+          { code: 'ENTRIES_NOT_COMMITTED', label: 'Confirmed entries not on the roster' },
+        ],
+      },
+    };
+    render(<WorkspaceInspector tournament={withEntriesIssue} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
+    const attention = screen.getByTestId('inspector-attention-list');
+    // The entries reason has no checklist step — it gets its own line.
+    expect(attention).toHaveTextContent('Confirmed entries not on the roster');
+    // NO_ROSTER already appears as the roster step's subline (SP-UI-1's
+    // merge) — it must not also appear in this list.
+    expect(attention).not.toHaveTextContent('No players added yet');
+    expect(screen.getByTestId('inspector-checklist')).toHaveTextContent('No players added yet');
+  });
+
+  it('renders no Attention section when every reason is already a checklist step', () => {
+    render(<WorkspaceInspector tournament={withSignals} onOpen={noop} onSetDate={noop} onSettings={noop} onClose={noop} />);
+    expect(screen.queryByTestId('inspector-attention')).toBeNull();
+  });
 });

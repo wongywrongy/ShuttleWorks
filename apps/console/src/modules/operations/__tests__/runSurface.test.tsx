@@ -814,3 +814,105 @@ describe('RunSurface — a bracket match on court reaches the rich bracket panel
     expect(screen.getAllByText('vs')).toHaveLength(1);
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Court disputes — actionable assignments, not banners (contract §4.2, D18,
+// V3-OC19.1). Two meet matches marked `started` on the same court derive a
+// dispute; the block names both claims and offers one button per resolution
+// action, distinct from the rejected-command toast strip above.
+// ═════════════════════════════════════════════════════════════════════════════
+
+function makeDisputeBlocks(): OpsBlock[] {
+  return [
+    mkBlock({
+      id: 'a', source: 'meet', key: 'meet:a', identity: identityFixture('MS1'),
+      court: 1, slot: 0, status: 'started', sideA: 'Alice', sideB: 'Bob',
+    }),
+    mkBlock({
+      id: 'b', source: 'meet', key: 'meet:b', identity: identityFixture('MS2'),
+      court: 1, slot: 0, status: 'started', sideA: 'Carol', sideB: 'Dave',
+    }),
+  ];
+}
+
+describe('RunSurface — court disputes are actionable assignments', () => {
+  it('renders a named, keyboard-reachable assignment for a disputed court, not a banner', () => {
+    render(
+      <RunSurface
+        blocks={makeDisputeBlocks()}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={2}
+        currentSlot={0}
+      />,
+    );
+
+    const block = screen.getByTestId('run-dispute-court-1');
+    expect(block).toHaveTextContent('needs resolution');
+    // Named by match identity — not an anonymous "two matches" banner.
+    expect(block).toHaveTextContent('MS1');
+    expect(block).toHaveTextContent('MS2');
+
+    // One button per resolution action, per claim, all real <button> elements
+    // (focusable / keyboard-operable by default, unlike a banner).
+    const buttons = screen.getAllByRole('button', { name: /Keep this/ });
+    expect(buttons.length).toBeGreaterThanOrEqual(3);
+
+    // The disputed court is a separate block from the rejected-command strip.
+    expect(screen.queryByTestId('run-conflicts')).toBeNull();
+  });
+
+  it('submits resolve_court with the chosen and displaced match keys', async () => {
+    mockMeetSubmit.mockResolvedValue({ commandId: 'cmd-1', result: { kind: 'ok', matchStatus: 'started', matchVersion: 2, courtId: 1, timeSlot: 0 } });
+    render(
+      <RunSurface
+        blocks={makeDisputeBlocks()}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={2}
+        currentSlot={0}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('dispute-keep-move-meet:a'));
+    });
+
+    expect(mockMeetSubmit).toHaveBeenCalledWith(
+      'resolve_court',
+      'a',
+      expect.objectContaining({
+        chosenMatchKey: 'a',
+        displacedMatchKeys: ['b'],
+        action: 'keep_and_move',
+      }),
+    );
+  });
+
+  it('disables resolution and explains when a bracket match is involved', () => {
+    const blocks: OpsBlock[] = [
+      mkBlock({
+        id: 'a', source: 'meet', key: 'meet:a', identity: identityFixture('MS1'),
+        court: 1, slot: 0, status: 'started', sideA: 'Alice', sideB: 'Bob',
+      }),
+      mkBlock({
+        id: 'pu1', source: 'bracket', key: 'bracket:pu1', identity: identityFixture('QF1'),
+        court: 1, slot: 0, status: 'started', sideA: 'Team X', sideB: 'Team Y',
+      }),
+    ];
+    render(
+      <RunSurface
+        blocks={blocks}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={2}
+        currentSlot={0}
+      />,
+    );
+
+    const block = screen.getByTestId('run-dispute-court-1');
+    expect(block).toHaveTextContent('Bracket engine');
+    const buttons = screen.getAllByRole('button', { name: /Keep this/ });
+    for (const button of buttons) expect(button).toBeDisabled();
+  });
+});

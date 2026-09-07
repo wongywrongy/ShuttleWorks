@@ -134,7 +134,7 @@ export function PlayerSearchPicker({
                   {p.name || '(unnamed)'}
                 </span>
                 {currentRanks.length > 0 ? (
-                  <span className="w-full break-normal text-3xs font-normal text-muted-foreground">
+                  <span className="w-full break-normal text-xs font-normal text-muted-foreground">
                     {currentRanks.join(', ')}
                   </span>
                 ) : null}
@@ -143,7 +143,7 @@ export function PlayerSearchPicker({
           })
         )}
       </div>
-      <div className="flex items-center justify-between border-t border-border/60 px-2 py-1 text-3xs text-muted-foreground">
+      <div className="flex items-center justify-between border-t border-border/60 px-2 py-1 text-xs text-muted-foreground">
         <span>Up/Down to navigate · Enter to pick · Esc to close</span>
         <button
           type="button"

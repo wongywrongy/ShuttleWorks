@@ -60,7 +60,7 @@ import { safeNext } from '../lib/nextTarget';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { EntrantSessionContext } from '../lib/sessionContext';
 import type { Route } from './+types/login';
-import { CARD } from '../lib/ui';
+import { CARD, PAGE_TITLE } from '../lib/ui';
 
 /**
  * Where a successful sign-in lands when the link that brought the entrant here
@@ -83,6 +83,22 @@ import { CARD } from '../lib/ui';
  * page's `/signed-in` variant takes.
  */
 const DEFAULT_NEXT = '/e/login/signed-in';
+
+/** Keep the account creation handoff in the same tournament context. */
+function signupHrefFor(next: string): string {
+  const entry = next.match(/^\/e\/([^/]+)\/enter(?:\/(?:created|signed-in))?$/);
+  if (entry) return `/e/signup/${encodeURIComponent(entry[1])}`;
+  const partner = next.match(/^\/e\/partner\/([^/]+)$/);
+  if (partner) return `/e/signup/partner/${encodeURIComponent(partner[1])}`;
+  return `/e/signup?next=${encodeURIComponent(next)}`;
+}
+
+function continuationFor(next: string): { href: string; label: string } {
+  if (next === DEFAULT_NEXT) return { href: '/e/me/entries', label: 'Open My entries' };
+  if (/\/receipt(?:\/|$)/.test(next)) return { href: next, label: 'View your receipt' };
+  if (/\/enter(?:\/|$)/.test(next)) return { href: next, label: 'Continue to this entry' };
+  return { href: next, label: 'Continue to your tournament' };
+}
 
 export interface LoginLoaderData {
   /** The pre-session double-submit token, minted together with the nonce set
@@ -124,6 +140,8 @@ export interface LoginLoaderData {
    * gated by FastAPI.
    */
   justSignedIn: boolean;
+  /** Explicit user request to replace the current session's account. */
+  switchAccount: boolean;
 }
 
 /**
@@ -167,6 +185,7 @@ export async function loader({ request }: { request: Request }) {
     justSignedUp: url.pathname.endsWith(SIGNED_UP_SUFFIX),
     signInFailed: url.pathname.endsWith(FAILED_SUFFIX),
     justSignedIn: url.pathname.endsWith(SIGNED_IN_SUFFIX),
+    switchAccount: url.searchParams.get('switch') === '1',
   };
   return data(payload, csrf.responseInit);
 }
@@ -204,9 +223,18 @@ export const meta: Route.MetaFunction = () => [
 ];
 
 export default function LoginPage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, next, justSignedUp, signInFailed, justSignedIn } = loaderData;
+  const { formCsrf, next, justSignedUp, signInFailed, justSignedIn, switchAccount } = loaderData;
   const signedIn = useContext(EntrantSessionContext);
-  const showLoginForm = !(justSignedIn && signedIn);
+  // Root's boolean cookie-presence signal is sufficient to avoid making an
+  // authenticated visitor re-enter credentials on a direct visit. It is not
+  // used to grant access; FastAPI still gates every account operation.
+  const showLoginForm = !signedIn || switchAccount;
+  const continuation = continuationFor(next);
+  const heading = signedIn && !switchAccount
+      ? 'Continue with your account'
+      : switchAccount
+        ? 'Sign in to a different account'
+        : 'Sign in';
 
   return (
     // E1: the page system, not a bare column. Brief §4 — "auth pages as small
@@ -220,12 +248,11 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
     <PlayShell signInLabel={justSignedIn ? 'Switch account' : 'Sign in'}>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Sign in
+          <h1 className={PAGE_TITLE}>
+            {heading}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Use the entrant account you signed up with. One account enters you
-            into any tournament on this site.
+            Sign in to manage your tournament entries.
           </p>
         </header>
 
@@ -241,8 +268,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
             byte-identical. */}
         {justSignedUp ? (
           <Notice tone="success">
-            Your entrant account is ready. Sign in below with the address and
-            password you just gave.
+            Account created. Sign in to continue.
           </Notice>
         ) : null}
 
@@ -261,23 +287,20 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
             diagnosis. */}
         {signInFailed ? (
           <Notice tone="warning">
-            We could not sign you in. Check the email address and password, then
-            try again. Nothing about your account has changed.
+            We couldn&apos;t sign you in. Check your email and password, then
+            try again.
           </Notice>
         ) : null}
 
         {/* A sign-in that worked but had nowhere to go (`DEFAULT_NEXT`). A
             browser that followed the redirect carries the entrant cookie, so
             the session-aware branch below offers the next task and no second
-            credential form. A direct visit without a cookie keeps the retry
-            form available, but is not treated as proof of authentication. */}
-        {justSignedIn ? (
+            credential form. A direct visit without a cookie is the ordinary
+            sign-in state — no generic readiness banner, because a direct
+            visit to this outcome URL is not proof anyone authenticated. */}
+        {justSignedIn && !showLoginForm ? (
           <Notice tone="success">
-            {showLoginForm ? (
-              'You are signed in on this device. Open the entry link your organizer gave you to enter a tournament. The form below signs in a different account.'
-            ) : (
-              'You are signed in on this device. Continue to My entries below.'
-            )}
+            Continue with your account. Open My entries below to review your tournament entries.
           </Notice>
         ) : null}
 
@@ -337,7 +360,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
               revealable={false}
             />
 
-            <Button type="submit" className="justify-self-start">
+            <Button type="submit" size="lg" className="justify-self-start">
               Sign in
             </Button>
             <a
@@ -354,7 +377,7 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
                 from the entry page; `tests/login.test.ts` reads every href in
                 this document and fails on any under a FastAPI prefix. */}
             No account yet?{' '}
-            <a className="text-accent underline underline-offset-4" href="/e/signup">
+            <a className="text-accent underline underline-offset-4" href={signupHrefFor(next)}>
               Create one
             </a>
             .
@@ -363,13 +386,13 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
         ) : (
           <section className={`grid gap-4 ${CARD}`}>
             <p className="text-sm text-muted-foreground">
-              Your entrant account is ready to use on this device.
+              Continue with the account currently signed in on this device.
             </p>
-            <a
-              className="inline-flex min-h-10 items-center justify-center justify-self-start rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90"
-              href="/e/me/entries"
-            >
-              Continue to My entries
+            <Button asChild size="lg" className="justify-self-start">
+              <a href={continuation.href}>{continuation.label}</a>
+            </Button>
+            <a className="text-sm text-accent underline underline-offset-4" href={`/e/login?switch=1&next=${encodeURIComponent(next)}`}>
+              Sign in with a different account
             </a>
           </section>
         )}

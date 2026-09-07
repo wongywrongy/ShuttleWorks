@@ -98,6 +98,14 @@ class BracketSession:
     # into every ``TournamentDriver`` solve. Empty = no roster extras
     # (uniform round-window behaviour, exactly as before).
     player_extras: Dict[str, PlayerExtras] = field(default_factory=dict)
+    # v3 package 29: bracket-roster id -> display name, read at hydrate time
+    # from the same ``bracketPlayers`` roster blob ``player_extras`` comes
+    # from. It is what lets ``_bracket_side`` emit a doubles pair as TWO
+    # persons instead of one composite label (V3-10-1), without a schema
+    # change and without ``bracket`` reading an ``entries`` table. Empty for a
+    # session built straight off a wire payload (preview/generate paths):
+    # those fall back to the participant's composite name, as before.
+    roster_names: Dict[str, str] = field(default_factory=dict)
 
 
 def register_draw(state: TournamentState, draw: Draw) -> None:

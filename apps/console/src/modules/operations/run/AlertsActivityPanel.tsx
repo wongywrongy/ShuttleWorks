@@ -69,12 +69,12 @@ function EntryRow({
           >
             {entry.title}
           </span>
-          <span className="flex-shrink-0 text-3xs tabular-nums text-muted-foreground">
+          <span className="flex-shrink-0 text-xs tabular-nums text-muted-foreground">
             {relativeTime(entry.ts, nowMs)}
           </span>
         </div>
         {entry.message && (
-          <div className="mt-0.5 text-2xs text-muted-foreground">{entry.message}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{entry.message}</div>
         )}
         {canReview && (
           <Button
@@ -139,7 +139,7 @@ export function AlertsActivityPanel({
       {!collapsed && (
         <div className="min-h-0 flex-1 overflow-y-auto">
           {entries.length === 0 ? (
-            <p className="px-4 py-3 text-2xs text-muted-foreground">No alerts or activity yet.</p>
+            <p className="px-4 py-3 text-xs text-muted-foreground">No alerts or activity yet.</p>
           ) : (
             <ul className="divide-y divide-border/60">
               {entries.map((e) => (

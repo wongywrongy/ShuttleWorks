@@ -79,49 +79,6 @@ const PLAYERS = {
   missingNameCount: 1,
 };
 
-const SEEDS = {
-  published: true,
-  events: [
-    {
-      eventCode: "MS",
-      discipline: "Men's Singles",
-      seeds: [
-        { seed: 1, persons: [ref('11111111-1111-4111-8111-111111111111', "Ada Lovelace")], club: "Analytical BC" },
-        { seed: 2, persons: [ref(null, "Grace Hopper")], club: null },
-      ],
-    },
-  ],
-};
-
-const WINNERS = {
-  published: true,
-  events: [
-    {
-      eventCode: "MS",
-      discipline: "Men's Singles",
-      decided: true,
-      winner: { persons: [ref('11111111-1111-4111-8111-111111111111', "Ada Lovelace")], club: "Analytical BC" },
-      runnerUp: { persons: [ref(null, "Grace Hopper")], club: null },
-      semifinalists: [{ persons: [ref(null, "Katherine Johnson")], club: "Orbit SC" }],
-      finalScore: [[21, 15], [21, 12]],
-      finalists: [],
-    },
-    {
-      eventCode: "WS",
-      discipline: "Women's Singles",
-      decided: false,
-      winner: null,
-      runnerUp: null,
-      semifinalists: [],
-      finalScore: null,
-      finalists: [
-        { persons: [ref(null, "Ann Ito")], club: null },
-        { persons: [ref(null, "Bea Osei")], club: null },
-      ],
-    },
-  ],
-};
-
 const SE_DRAW = {
   drawKey: "MS",
   eventCode: "MS",
@@ -382,22 +339,14 @@ async function render(path: string): Promise<string> {
 }
 
 describe("the tab bar under full publication", () => {
-  it("puts the published-draw Players directory before Draws", async () => {
+  it("renders the four ADR 0028 entries: Overview · Schedule · Draws · Players", async () => {
     stubApi({});
     const html = await render("/e/spring-open");
     const nav =
       html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ??
       "";
     const labels = [...nav.matchAll(/>([^<]+)<\/a>/g)].map((m) => m[1]);
-    expect(labels).toEqual([
-      "Overview",
-      "Schedule / Live",
-      "Events",
-      "Players",
-      "Draws",
-      "Seeded entries",
-      "Winners",
-    ]);
+    expect(labels).toEqual(["Overview", "Schedule", "Draws", "Players"]);
   });
 });
 
@@ -414,17 +363,19 @@ describe("the Players tab", () => {
   });
 });
 
-describe("the Draws tab (§3.4)", () => {
-  it("lists draw cards with kind, size and links into each draw", async () => {
+describe("the Draws panel (§3.4, ADR 0028)", () => {
+  it("lists every event with its draw facts and a View draw button into each draw", async () => {
     stubApi({ "/draws": DRAWS_INDEX });
     const html = await render("/e/spring-open?tab=draws");
 
     expect(html).toContain('href="/e/spring-open/draws/MS"');
-    expect(html).toContain("MS · Elimination · 4 players");
-    expect(html).toContain("WS · Round robin · 3 players");
+    expect(html).toContain(">View draw</a>");
+    expect(html).toContain("Elimination");
+    expect(html).toContain("4 players");
+    expect(html).toContain("2 rounds");
   });
 
-  it("keeps the whole-card draw link and person links as siblings", async () => {
+  it("names the champion on a decided row, as a person link beside the Draw button", async () => {
     const champion = ref(
       '11111111-1111-4111-8111-111111111111',
       'Ada Lovelace',
@@ -442,15 +393,10 @@ describe("the Draws tab (§3.4)", () => {
       },
     });
     const html = await render("/e/spring-open?tab=draws");
-    const card = html.match(/<article[^>]*>[\s\S]*?<\/article>/)?.[0] ?? '';
 
-    expect(card).toContain('aria-label="Men&#x27;s Singles draw"');
-    expect(card).toContain('/players/11111111-1111-4111-8111-111111111111');
-    const drawLinkStart = card.indexOf('aria-label="Men&#x27;s Singles draw"');
-    const drawLinkClose = card.indexOf('</a>', drawLinkStart);
-    const personLinkStart = card.indexOf('/players/11111111-1111-4111-8111-111111111111');
-    expect(drawLinkClose).toBeGreaterThan(drawLinkStart);
-    expect(drawLinkClose).toBeLessThan(personLinkStart);
+    expect(html).toContain("Champion");
+    expect(html).toContain('/players/11111111-1111-4111-8111-111111111111');
+    expect(html).toContain('aria-label="Men&#x27;s singles draw"');
   });
 
   it("says plainly when a published tier has no draws", async () => {
@@ -484,35 +430,29 @@ describe("the Draws tab (§3.4)", () => {
     expect(html).toContain("MD, MS, WS");
     expect(html).not.toContain("No draws yet.");
   });
-});
 
-describe("the Seeded entries tab (§3.5)", () => {
-  it("renders ordered seed lines with [n], names and clubs", async () => {
-    stubApi({ "/seeds": SEEDS });
-    const html = await render("/e/spring-open?tab=seeds");
-
-    expect(html).toContain("[1]");
-    expect(html).toContain("Ada Lovelace");
-    expect(html).toContain("Analytical BC");
-    expect(html.indexOf("[1]")).toBeLessThan(html.indexOf("[2]"));
-  });
-});
-
-describe("the Winners tab (§3.6)", () => {
-  it("renders typographic honors and the undecided final in the same card", async () => {
-    stubApi({ "/winners": WINNERS });
-    const html = await render("/e/spring-open?tab=winners");
-
-    expect(html).toContain("Champion");
-    expect(html).toContain("Runner-up");
-    expect(html).toContain("Semifinalist");
-    expect(html).toContain("The final is still to be decided.");
-    expect(html).toContain("Ann Ito");
+  // ADR 0028: Seeded entries and Winners are no longer tabs. Seeds ride the
+  // draw page as `[n]`; the champion rides the Draws row. Their bookmarks
+  // land on the Draws panel rather than on Overview.
+  it.each(["seeds", "winners"])("folds the retired %s bookmark onto Draws", async (legacy) => {
+    stubApi({ "/draws": DRAWS_INDEX });
+    const html = await render(`/e/spring-open?tab=${legacy}`);
+    const nav =
+      html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    expect(nav).toMatch(/aria-current="page"[^>]*>Draws<\/a>/);
+    expect(html).toContain('href="/e/spring-open/draws/MS"');
   });
 });
 
 describe("the elimination draw page", () => {
-  it("renders rounds as columns with seeds, byes, placeholders and results", async () => {
+  // Rewritten for V3-PE10.2 / contract §4.3 P5: with no explicit `?view=`,
+  // the response now renders BOTH the Round block (the mobile default,
+  // `md:hidden`) and the Bracket canvas (`hidden md:block`) — CSS decides
+  // which one a given viewport shows, so a first mobile visit gets Round
+  // without any client redirect or JavaScript. The old assertion that the
+  // default response was bracket-only, with no match detail, no longer
+  // holds; this test now covers both blocks in one response.
+  it("renders both the Round default and the Bracket canvas, CSS-toggled by width", async () => {
     stubApi({ "/draws/MS": SE_DRAW });
     const html = await render("/e/spring-open/draws/MS");
 
@@ -523,9 +463,13 @@ describe("the elimination draw page", () => {
     expect(html).toContain("Bye");
     expect(html).toContain("Winner of SF 2");
     expect(html).toContain("21");
-    expect(html).not.toContain("10:30 · Court 1");
+    // D12: the raw ISO date is never in prose — humanized instead.
     expect(html).not.toContain("2026-08-01");
+    expect(html).toContain("Saturday, August 1");
     expect(html).not.toContain("demo-generated:");
+    // The two adaptive containers are both present in the one response.
+    expect(html).toContain('<div class="md:hidden">');
+    expect(html).toContain('<div class="hidden md:block">');
     // Wide content scrolls in its own container (R11).
     expect(html).toContain("overflow-x-auto");
     expect(html).toContain('data-testid="public-bracket-canvas"');
@@ -534,10 +478,22 @@ describe("the elimination draw page", () => {
     expect(html).toContain('data-bracket-links="true"');
     expect(html).toContain('src="/e/assets/bracket-path.js"');
     expect(html).not.toContain("/e/assets/bracket-connectors.js");
-    expect((html.match(/<article/g) ?? []).length).toBe(3);
+    // 2 Round-block cards (the default round, Semifinals) + 3 Bracket nodes.
+    expect((html.match(/<article/g) ?? []).length).toBe(5);
+    // V3-PE10.1: every bracket node carries a visible human match number.
+    expect(html).toContain("Match 1");
+    expect(html).toContain("Match 2");
+
+    const bracketOnly = await render("/e/spring-open/draws/MS?view=bracket");
+    expect(bracketOnly).not.toContain('<div class="md:hidden">');
+    expect((bracketOnly.match(/<article/g) ?? []).length).toBe(3);
+
+    const roundOnly = await render("/e/spring-open/draws/MS?view=round");
+    expect(roundOnly).not.toContain('data-testid="public-bracket-canvas"');
+    expect(roundOnly).toMatch(/Round[\s\S]{0,20}1[\s\S]{0,20}of[\s\S]{0,20}2/);
 
     const list = await render("/e/spring-open/draws/MS?view=list");
-    expect(list).toContain("2026-08-01");
+    expect(list).toContain("Saturday, August 1");
     expect(list).toContain("10:30 · Court 1");
   });
 
@@ -552,6 +508,24 @@ describe("the elimination draw page", () => {
     // gone; the pills remain for the way back.
     expect(consolation).not.toContain("Ada Lovelace [1]");
     expect(consolation).toContain("?segment=MAIN");
+  });
+
+  // V3-PE12.1: the banner names the actual behaviour — a plural-aware count
+  // of what was found for the query — rather than the old "Showing matches
+  // for X." wording, which did not say whether that was filtering,
+  // highlighting, or the whole draw. "Clear player filter" is renamed
+  // "Clear search" for the same reason (plan §3's ruled recommendation).
+  it('makes a player-path search visibly identifiable and preserves its view context', async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const html = await render('/e/spring-open/draws/MS?view=list&segment=MAIN&player=Ada');
+    expect(html).toMatch(/matches[\s\S]{0,20}found for/);
+    expect(html).toContain('Ada Lovelace');
+    expect(html).not.toContain('Showing matches for');
+    expect(html).toContain('Clear search');
+    expect(html).not.toContain('Clear player filter');
+    expect(html).toContain('view=list');
+    expect(html).toMatch(/font-semibold underline decoration-2/);
+    expect(html).toContain('Find a player or pair');
   });
 });
 

@@ -65,7 +65,7 @@ export function UnsavedBanner() {
         onClick={handleSave}
         disabled={saving}
         data-testid="unsaved-save-now"
-        className="rounded border border-current/40 bg-card px-2.5 py-0.5 text-xs font-semibold hover:bg-card/80 disabled:opacity-50"
+        className="rounded border border-current/40 bg-card px-2.5 py-1 text-xs font-semibold hover:bg-card/80 disabled:opacity-50"
       >
         {saving ? 'Saving…' : 'Save now'}
       </button>

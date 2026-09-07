@@ -17,7 +17,7 @@ import { READ_ONLY_MESSAGE } from '../../platform/domain/permissions';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 
 const BASE =
-  `${INTERACTIVE_BASE} inline-flex h-7 items-center rounded-sm px-2 text-2xs font-medium ` +
+  `${INTERACTIVE_BASE} inline-flex h-7 items-center rounded-sm px-2 text-xs font-medium ` +
   `disabled:cursor-not-allowed disabled:opacity-50`;
 const IDLE = 'border border-border bg-card text-foreground hover:bg-muted/50';
 const ARMED = 'bg-destructive text-destructive-foreground hover:brightness-110';

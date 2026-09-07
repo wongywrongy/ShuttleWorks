@@ -213,9 +213,13 @@ books from the live Tailscale endpoints:
 make surface-books
 ```
 
-Each PDF starts with an index, then gives every captured surface a stable
-`S01`, `S02`, … reference, a short purpose description, and paired desktop and
-mobile screenshots. Physical pages are numbered in the footer. The stable
+Each PDF starts with a reviewer brief and linked index, then gives every captured
+surface a stable `S01`, `S02`, … reference, purpose and review focus. Desktop and
+mobile have separate sheets captured at 2× pixel density. Long documents continue
+in labeled vertical segments instead of being shrunk to fit. Physical pages are
+numbered in the footer. The brief documents identity, fixture, capture limitations
+and an annotation format for UI/UX reviewers; these route captures do not certify
+completed journeys or accessibility. The companion HTML is self-contained. The stable
 outputs are written under `docs/screenshots/ui-review/` as
 `operator-console-surface-book.pdf` and `public-entrant-surface-book.pdf`.
 

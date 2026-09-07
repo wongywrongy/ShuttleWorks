@@ -18,6 +18,7 @@ const authority = {
   pending_operations: 1,
   oldest_pending_at: null,
   blocked_operations: 0,
+  acknowledged_operations: 0,
   last_blocked_error_code: null,
 };
 const record = {
@@ -64,9 +65,30 @@ beforeEach(() => {
 });
 
 describe('SyncReconciliationPanel', () => {
+  it('leads with an ordinary-language headline, not jargon (V3-OC27.1)', () => {
+    // `authority.pending_operations` is 1 and `blocked_operations` is 0 in
+    // the shared fixture, so the plain-language pending phrasing applies.
+    render(<SyncReconciliationPanel authority={authority} />);
+    expect(
+      screen.getByRole('heading', { name: '1 change saved on this device, waiting to sync' }),
+    ).toBeInTheDocument();
+    // The technical vocabulary is still available, just behind a disclosure.
+    expect(screen.queryByRole('heading', { name: 'Reconciliation evidence' })).toBeNull();
+    expect(screen.getByText('Reconciliation evidence')).toBeInTheDocument();
+  });
+
+  it('headline says "Changes needing attention" when operations are blocked', () => {
+    render(<SyncReconciliationPanel authority={{ ...authority, pending_operations: 0, blocked_operations: 2 }} />);
+    expect(screen.getByRole('heading', { name: 'Changes needing attention' })).toBeInTheDocument();
+  });
+
+  it('headline says nothing needs attention when there is nothing pending or blocked', () => {
+    render(<SyncReconciliationPanel authority={{ ...authority, pending_operations: 0, blocked_operations: 0 }} />);
+    expect(screen.getByRole('heading', { name: 'No changes need attention' })).toBeInTheDocument();
+  });
+
   it('shows durable failure evidence and requires reason plus confirmation', async () => {
     render(<SyncReconciliationPanel authority={authority} />);
-    expect(screen.getByRole('heading', { name: 'Reconciliation evidence' })).toBeInTheDocument();
     expect(screen.getByTestId('quarantine-q1')).toHaveTextContent('sequence_gap');
     expect(screen.getByTestId('quarantine-q1')).toHaveTextContent('seq 3 · expected 2');
 

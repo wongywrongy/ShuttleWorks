@@ -77,7 +77,10 @@ describe('the hero band', () => {
     expect(html).toMatch(/<h1[^>]*>Spring Open<\/h1>/);
     expect(html).toContain('Kingsway BC');
     expect(html).toContain('Saturday 12 September 2026');
-    expect(html).toContain('Kingsway Centre, 4 Kingsway');
+    // Overview presents venue name and address as labelled facts rather than
+    // repeating a combined hero metadata string (PE03.3).
+    expect(html).toContain('Kingsway Centre');
+    expect(html).toContain('4 Kingsway');
     expect(html).toContain('Entries open');
   });
 
@@ -106,8 +109,10 @@ describe('the tab bar and its panels (Z6)', () => {
     const nav = html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? '';
     expect(nav).not.toBe('');
     expect(nav).toContain('>Overview<');
-    expect(nav).toContain('>Events<');
+    expect(nav).toContain('>Schedule<');
+    expect(nav).toContain('>Draws<');
     expect(nav).toContain('>Players<');
+    expect(nav).not.toContain('>Events<');
     const active = nav.match(/<a[^>]*aria-current="page"[^>]*>[^<]*/g) ?? [];
     expect(active).toHaveLength(1);
     expect(active[0]).toContain('Overview');
@@ -116,13 +121,20 @@ describe('the tab bar and its panels (Z6)', () => {
   });
 
   it('renders exactly one panel, chosen by a validated ?tab', async () => {
-    const events = await render(PAGE, '/e/spring-open?tab=events');
+    const draws = await render(PAGE, '/e/spring-open?tab=draws');
 
-    // The Events panel is on the page…
-    expect(events).toContain('7 entered');
+    // The Draws panel is on the page…
+    expect(draws).toContain('7 players');
     // …and the Overview panel is not.
-    expect(events).not.toContain('Key dates');
-    expect(events).not.toContain('Bank transfer on the day.');
+    expect(draws).not.toContain('Key dates');
+    expect(draws).not.toContain('Bank transfer on the day.');
+  });
+
+  it('folds the retired Events bookmark onto the Draws panel (ADR 0028)', async () => {
+    const html = await render(PAGE, '/e/spring-open?tab=events');
+    const nav = html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ?? '';
+    expect(nav).toMatch(/aria-current="page"[^>]*>Draws<\/a>/);
+    expect(html).toContain('7 players');
   });
 
   it('maps a legacy Entrants bookmark to the unified Players panel', async () => {
@@ -133,7 +145,7 @@ describe('the tab bar and its panels (Z6)', () => {
   });
 
   it('renders Overview for an unknown or gate-hidden ?tab', async () => {
-    const unknown = await render(PAGE, '/e/spring-open?tab=draws');
+    const unknown = await render(PAGE, '/e/spring-open?tab=results');
     expect(unknown).toContain('Key dates');
 
     // SP-P7 §4: the entrants tab is the PUBLICATION's, not the list
@@ -191,14 +203,14 @@ describe('the tab bar and its panels (Z6)', () => {
 
     expect(html).toContain('Tournament sections');
     expect(html).toContain('href="/e/spring-open/schedule"');
-    expect(html).toContain('Schedule / Live');
+    expect(html).toContain('>Schedule<');
     expect(html).not.toContain('?tab=');
   });
 
   it.each([
     ['open', PAGE, '/e/spring-open'],
     ['closed', CLOSED, '/e/spring-open'],
-    ['events tab', PAGE, '/e/spring-open?tab=events'],
+    ['draws tab', PAGE, '/e/spring-open?tab=draws'],
     ['players tab', PAGE, '/e/spring-open?tab=players'],
     ['no events/entrants', { ...PAGE, events: [], entrants: [] }, '/e/spring-open'],
   ])(
@@ -215,18 +227,19 @@ describe('the tab bar and its panels (Z6)', () => {
 });
 
 describe('the panels', () => {
-  it('Overview: timeline, fees pointer, regulations document row, venue (SP-P7 §3.7)', async () => {
+  it('Overview: key-date rows, fees pointer, regulations document row, venue (SP-P7 §3.7, ADR 0028)', async () => {
     const html = await render();
 
+    // Key dates are plain label/value rows now; the timeline rail and its
+    // "you are here" marker went with the entrant-site port.
     expect(html).toContain('Key dates');
-    // Inline ("← you are here") or standalone ("You are here — …") depending
-    // on where the real clock falls between the fixture's moments — the
-    // marker itself must exist either way.
-    expect(html).toMatch(/you are here/i);
+    expect(html).not.toMatch(/you are here/i);
     expect(html).toContain('Entries open');
+    expect(html).toContain('Withdrawal deadline');
     // The fixture's XD event closes earlier than MS/WD, so "Entries close"
-    // is a per-event range, pointing at the Events tab.
+    // is a per-event range, pointing at the Draws panel.
     expect(html).toContain('Varies by event');
+    expect(html).toContain('href="/e/spring-open?tab=draws"');
     expect(html).toContain('4 Kingsway');
 
     // FEES LEFT THE OVERVIEW (Kyle's mockup-review ruling): no price, no
@@ -234,7 +247,7 @@ describe('the panels', () => {
     // receipt keeps the payment instructions (`receipt.tsx`).
     expect(html).not.toContain('25.00');
     expect(html).not.toContain('Bank transfer on the day.');
-    expect(html).toContain('Pricing is quoted on the entry form before you submit.');
+    expect(html).toContain('Quoted on the entry form before you submit');
     expect(html).toContain('href="/e/spring-open/enter"');
 
     // Regulations became a DOCUMENT ROW: identity + version + updated date
@@ -244,6 +257,29 @@ describe('the panels', () => {
     expect(html).toContain('href="/e/spring-open/regulations"');
     expect(html).not.toContain('BWF laws apply.');
     expect(html).not.toContain('<details');
+  });
+
+  it('shows the entered-so-far count only while it answers an entry question (V3-PE03.2)', async () => {
+    const html = await render();
+    expect(html).toContain('Entered so far');
+    expect(html).toContain('>12<');
+
+    // Entries fully closed: the registration aggregate is a different,
+    // unrelated source from any published draw roster — no unexplained
+    // zero, and no count printed at all once it stops being an entry
+    // question.
+    const closedHtml = await render(CLOSED);
+    expect(closedHtml).not.toContain('Entered so far');
+  });
+
+  it('leads a live tournament header with its real state, not "Entries closed" (V3-PE03.3)', async () => {
+    const live = { ...PAGE, tournament: { ...PAGE.tournament, phase: 'live' } };
+    const html = await render(live, '/e/spring-open?tab=draws');
+
+    expect(html).toMatch(/text-status-live[^>]*>Live now</);
+    expect(html).not.toMatch(/text-status-live[^>]*>Entries/);
+    // Entry closure still reads somewhere — the Overview's Key dates row —
+    // just no longer as the header's first line.
   });
 
   it('renders no document row when the director wrote no regulations (rule 4)', async () => {
@@ -256,17 +292,21 @@ describe('the panels', () => {
     expect(html).not.toContain('/regulations"');
   });
 
-  it('Events: rows with counts ("N entered", G2 declined) linking into Players', async () => {
-    const html = await render(PAGE, '/e/spring-open?tab=events');
+  it('Draws: one row per event with counts ("N entered", G2 declined) and an Entrants button', async () => {
+    const html = await render(PAGE, '/e/spring-open?tab=draws');
 
-    expect(html).toContain('7 entered');
+    expect(html).toContain('7 players');
     expect(html).not.toMatch(/7 of \d/);
     // The by-event anchors died with the by-event grouping (SP-P7 §3.2):
-    // "N entered" links to the alphabetical tab itself.
+    // the Entrants button links to the alphabetical tab itself.
     expect(html).toContain('href="/e/spring-open?tab=players"');
+    expect(html).toContain('>Entrants</a>');
     expect(html).not.toContain('#event-MS');
     expect(html).toContain('>Open<');
     expect(html).toContain('>Closed<');
+    // Draws are published in the fixture but this render stubs no draw
+    // index, so no row grows a Draw button it cannot honour.
+    expect(html).not.toContain('>Draw</a>');
   });
 
   it('Players: public directory, one row per person (SP-P7 §3.2)', async () => {

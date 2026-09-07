@@ -57,6 +57,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from db.short_reference import new_reference
 from db.blob_version import CURRENT_TOURNAMENT_SCHEMA_VERSION, VersionedJSON
 
 
@@ -1334,6 +1335,9 @@ class SolveJob(Base):
     Two distinct dedup mechanisms (do not conflate):
     - ``uq_solve_jobs_idempotency_key`` — client retry safety (Stripe
       semantics): a resubmit with the same key returns the original job.
+      Scoped to ``(tournament_id, idempotency_key)``, never the key alone
+      — the key is caller-chosen, so a global scope let one workspace's
+      key resolve to another workspace's job.
     - ``uq_solve_jobs_active`` — business rule: at most one *active*
       job per ``(tournament_id, type)``, enforced declaratively by a
       partial unique index (works on both SQLite and Postgres; no
@@ -1391,8 +1395,13 @@ class SolveJob(Base):
     )
 
     __table_args__ = (
+        # Composite, not global (SEC, 2026-09-07): the key is caller-chosen,
+        # so a global unique index made one workspace's key collide with —
+        # and, through the enqueue lookup, hand back — another workspace's
+        # job. Tenancy is the scope every other solve-job index already uses.
         Index(
             "uq_solve_jobs_idempotency_key",
+            "tournament_id",
             "idempotency_key",
             unique=True,
         ),
@@ -1792,6 +1801,22 @@ class Submission(Base):
     )
 
     # ---- the act (R13) ------------------------------------------------
+    # The entrant-facing handle (V3-24-1): eight characters a human can read
+    # aloud, quote at a desk and re-type, in place of the 36-character UUID
+    # the receipt used to print. Server-minted, globally unique, and NOT a
+    # capability — ``entries_me._own_submission`` still resolves it only
+    # inside the calling session's account. See ``db/short_reference.py``
+    # for the alphabet and the reasoning.
+    #
+    # The ``default`` is what makes the NOT NULL safe to rely on: every path
+    # that inserts a submission — the entry form, a partner accepting a
+    # nomination, a fixture — gets a reference without having to remember
+    # to. The entries service mints its own with a uniqueness pre-check on
+    # top of this (``entries/submissions.py``); this is the backstop, and
+    # the unique index is what actually enforces the claim.
+    short_reference: Mapped[str] = mapped_column(
+        String(8), nullable=False, default=new_reference
+    )
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     # Q11: acknowledgment gates the submission, and the version agreed to is
     # recorded at that instant. "They agreed to something at some point" is
@@ -1843,6 +1868,13 @@ class Submission(Base):
             unique=True,
         ),
         Index("ix_submissions_account", "account_id"),
+        # GLOBAL, unlike the idempotency index above, and deliberately so:
+        # that key is client-supplied, so its scope is a disclosure boundary,
+        # while this one is server-minted and never compared against anything
+        # a caller sends. The only question it answers is "does this code name
+        # one row", and the honest answer is "yes, everywhere" — an entrant
+        # quoting a reference to an organizer does not also quote a workspace.
+        Index("uq_submissions_short_reference", "short_reference", unique=True),
     )
 
 
@@ -2083,6 +2115,18 @@ class Entry(Base):
     partner_accepted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Whether the mailed invite actually sent (V3-PE37.1 / package 05 debt
+    # "Partner-invite delivery failure has no entrant-facing recovery
+    # path"). ``entries_json._send_partner_invite`` already returned a real
+    # bool (ruling R4); the gap this column closes is that the outcome was
+    # logged for an operator and never reached the nominating entrant. NULL
+    # means no invite was ever attempted on this row (most entries); it is
+    # never backfilled for rows written before this column existed, because
+    # "unknown" and "failed" are different facts and only one of them is
+    # true here.
+    partner_invite_mail_sent: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
 
     # ---- publication ---------------------------------------------------
     # Absent from the public entrant list; still fully entered (Q4/I6). The
@@ -2234,6 +2278,9 @@ class EntryPage(Base):
     )
     slug: Mapped[str] = mapped_column(String(100), nullable=False)
     is_open: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Public audience is owned by the entry page, alongside its content gates.
+    # ``private`` is the safe default for newly-created pages.
+    audience: Mapped[str] = mapped_column(String(16), default="private", server_default="private", nullable=False)
     intro_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     regulations_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     waiver_required: Mapped[bool] = mapped_column(
@@ -2266,6 +2313,7 @@ class EntryPage(Base):
     results_published: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+
 
     # ---- money & payment (R14) ----------------------------------------
     # CUMULATIVE totals in cents by event count — {"1":4000,"2":5500} — not
@@ -2313,4 +2361,7 @@ class EntryPage(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
-    __table_args__ = (Index("uq_entry_pages_slug", "slug", unique=True),)
+    __table_args__ = (
+        Index("uq_entry_pages_slug", "slug", unique=True),
+        CheckConstraint("audience IN ('private', 'unlisted', 'public')", name="ck_entry_pages_audience"),
+    )

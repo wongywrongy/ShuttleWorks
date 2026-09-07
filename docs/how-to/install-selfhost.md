@@ -143,7 +143,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `SESSION_TTL_DAYS` / `SESSION_COOKIE_NAME` / `SESSION_COOKIE_DOMAIN` | `30` / `sw_session` / `''` | ✓ | ✓ | not read | **`SESSION_COOKIE_DOMAIN` must stay blank and the API refuses to start otherwise.** Host-only cookies are the entire mechanism keeping the two hostnames apart; a `Domain=` cookie is sent to every subdomain, handing the operator session to the public entrant tier. `Path=` is not a substitute — it is not enforced against same-origin script. |
 | `PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH` / `RESET_TOKEN_TTL_MINUTES` | `8` / `128` / `60` | ✓ | ✓ | not read | NIST 800-63B: length only. |
 | `INVITE_TTL_DAYS` | `14.0` | ✓ | ✓ | not read | Email-invite expiry. |
-| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | Cloudflare's **dummy always-pass pair** | leave | **real keys, once entries are public** | not read | The defaults always pass, which is right while nothing routes to `/e/` and wrong the moment something does — an always-pass challenge is no challenge. Get a pair from Cloudflare → Turnstile; the secret belongs in a secret file (`TURNSTILE_SECRET_KEY_FILE`), not in `.env`. |
+| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | none — **required, no fallback** | leave | **real keys, both required** | not read | **The always-pass dummy defaults were removed 2026-09-07.** `${PLAY_HOSTNAME}` publishes a live public entry form, so an inert challenge is bot protection that is present, green, and does nothing. The API refuses to start under `ENVIRONMENT=cloud` on a blank key or a Cloudflare test key, and `docker-compose.selfhost.yml` now fails at `docker compose config` time before an image is pulled. Get a pair from Cloudflare → Turnstile; the secret belongs in a secret file (`TURNSTILE_SECRET_KEY_FILE`), not in `.env`. |
 | `ENTRIES_MAX_PER_IP` / `ENTRIES_WINDOW_SECONDS` / `ENTRIES_LOCK_SECONDS` | `20` / `600` / `300` | ✓ | ✓ | not read | The durable per-IP budget for public entry submissions, on its own `entry:` namespace so an entry flood cannot lock a venue out of signing in. Too low interrupts a club secretary entering a squad. |
 | `DATA_DIR` | `/app/data` | ✓ | ✓ | ✓ | Runtime scratch; the readiness probe checks it is writable. |
 | `LOG_LEVEL` / `HOST` / `PORT` | `info` / `0.0.0.0` / `8000` | ✓ | ✓ | ✓ | The image hardcodes its bind; `HOST`/`PORT` only affect the API entrypoint. |
@@ -334,10 +334,12 @@ own hostname and its own origin — step 2 of the exposure gate below is **done*
 Steps 1 and 3 are where things stand:
 
 1. **Real Turnstile keys** (`TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`) —
-   **STILL REQUIRED, and a blocker for publishing `${PLAY_HOSTNAME}`.** The
-   shipped defaults are Cloudflare's documented dummy always-pass pair, which
-   is right for a deployment where nothing routes to `/e/` and wrong the
-   moment one does: an always-pass challenge is no challenge. Get a pair from
+   **REQUIRED, and now ENFORCED rather than documented (2026-09-07).** The
+   dummy always-pass defaults are gone from `docker-compose.selfhost.yml`:
+   both are `${VAR:?required in cloud mode}`, so the stack refuses to render
+   without them, and the API independently refuses to start under
+   `ENVIRONMENT=cloud` on a blank key or on a Cloudflare test key. This is no
+   longer a step an operator can forget past first boot. Get a pair from
    Cloudflare → Turnstile and put the secret in a secret file.
 2. **Ingress by hostname, not by another Access exclusion** — **done by
    SP-HOST-1.** The entry site is served under `${PLAY_HOSTNAME}` with no

@@ -42,7 +42,9 @@ import { narrowEvents, parseEcho, type FormEcho, type PlayerEcho } from '../lib/
 import type { EntryEventDTO, EntryPageDTO } from '../lib/entryPage.types';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
+import { hasEntrantSession } from '../lib/session.server';
 import { formatCents } from '../lib/money';
+import { capChipCountdown } from '../lib/format';
 import { eventCodeLabel } from '../lib/draws.types';
 import {
   chipState,
@@ -51,7 +53,7 @@ import {
   visibleBlocks,
 } from '../lib/phase';
 import type { Route } from './+types/enter';
-import { BUTTON_SECONDARY, CARD, INPUT_SKIN } from '../lib/ui';
+import { BUTTON_SECONDARY, CARD, INPUT_SKIN, PAGE_TITLE, SECTION_TITLE } from '../lib/ui';
 
 export interface EnterLoaderData {
   page: EntryPageDTO;
@@ -71,6 +73,13 @@ export interface EnterLoaderData {
    * `justSignedIn`: an outcome, not an identity. It says the ACCOUNT exists,
    * never that this reader is signed in. */
   justSignedUp: boolean;
+  /** V3-PE16.2: cookie PRESENCE only (`hasEntrantSession`, same read
+   * `PlayShell`'s header uses) — never a credential relay (R8-D). Drives the
+   * ONE state-aware account action in the page footer: a stranger sees
+   * "Sign in" and nothing else; a signed-in device sees "Sign out" and
+   * nothing else. Distinct from `justSignedIn`, which is a one-time outcome
+   * carried by the URL, not a durable session read. */
+  signedIn: boolean;
   /** SSR render instant, ms — `now` stays a parameter below the loader. */
   nowMs: number;
 }
@@ -116,6 +125,7 @@ export async function loader({
     echo: parseEcho(url.searchParams),
     justSignedIn: url.pathname.endsWith(SIGNED_IN_SUFFIX),
     justSignedUp: url.pathname.endsWith(SIGNED_UP_SUFFIX),
+    signedIn: hasEntrantSession(request),
     nowMs: Date.now(),
   };
   return data(payload, csrf.responseInit);
@@ -234,7 +244,7 @@ function PlayerBlock({
         <div>
           <label
             htmlFor={`${prefix}gender`}
-            className="mb-1 block text-xs font-medium text-foreground"
+            className="mb-2 block text-xs font-medium text-foreground"
           >
             Gender
           </label>
@@ -245,7 +255,7 @@ function PlayerBlock({
             name="gender"
             required={index === 0}
             defaultValue={said.gender}
-            className={`h-9 w-full rounded-sm px-3 ${INPUT_SKIN}`}
+              className={`h-10 w-full rounded-sm px-3 ${INPUT_SKIN}`}
           >
             {GENDERS.map(([value, label]) => (
               <option key={value} value={value}>
@@ -292,9 +302,9 @@ function PlayerBlock({
               // event to enter it — at exactly the WCAG 2.2 AA 24px
               // target-size floor with zero margin. `py-1.5` clears it with
               // real room (~32px) for a mobile-heavy audience.
-              className="flex flex-wrap items-center gap-2 rounded px-1 py-1.5 text-sm text-foreground"
+              className="flex flex-wrap items-center gap-2 rounded-sm px-1 py-1.5 text-sm text-foreground hover:bg-surface-sunken"
             >
-              <input type="checkbox" name="events" value={value} defaultChecked={ticked.has(value)} />
+              <input type="checkbox" name="events" value={value} defaultChecked={ticked.has(value)} className="h-4 w-4 accent-accent" />
               <span>
                 {event.discipline} <span className="text-muted-foreground">({eventCodeLabel(event.code)})</span>
               </span>
@@ -330,7 +340,7 @@ function PlayerBlock({
                 type="email"
                 maxLength={320}
                 defaultValue={said.partners?.[event.id] ?? ''}
-                hint="We email them an invitation. Nothing is entered in their name until they accept, and you can leave this blank and add them later."
+                hint="We'll try to email them an invitation. Nothing is entered in their name until they accept, and you can leave this blank and add them later."
               />
             </div>
           ))}
@@ -345,7 +355,7 @@ function PlayerBlock({
       <div data-entry-section="participant">
         <label
           htmlFor={`${prefix}remarks`}
-          className="mb-1 block text-xs font-medium text-foreground"
+          className="mb-2 block text-xs font-medium text-foreground"
         >
           Anything the organizer should know (optional)
         </label>
@@ -356,7 +366,7 @@ function PlayerBlock({
           maxLength={2000}
           placeholder="e.g. can't play before 6pm Saturday"
           defaultValue={said.remarks}
-          className={`w-full rounded-sm p-2 ${INPUT_SKIN}`}
+          className={`w-full resize-y rounded-sm p-2 ${INPUT_SKIN}`}
         />
       </div>
     </section>
@@ -364,7 +374,7 @@ function PlayerBlock({
 }
 
 export default function Enter({ loaderData, actionData }: Route.ComponentProps) {
-  const { page, idempotencyKey, formCsrf, justSignedIn, justSignedUp, nowMs } = loaderData;
+  const { page, idempotencyKey, formCsrf, justSignedIn, justSignedUp, signedIn, nowMs } = loaderData;
   // The re-posted body wins when there is one: on the 307 landing the loader
   // sees only the query string, and the entrant's own typing arrives in the
   // POST the action read. Same parser both times.
@@ -372,8 +382,10 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
   const blocks = visibleBlocks(echo, actionData?.addPlayer ?? false);
   const bar = totalBarState(echo);
   const now = new Date(nowMs);
-  const chip = chipState(page.events, now);
   const deadline = nearestCloseAt(page.events);
+  // V3-26-5: cap the relative countdown at an absolute date past the
+  // threshold — StatusChip and StickyTotalBar both read this same `chip`.
+  const chip = capChipCountdown(chipState(page.events, now), deadline, page.tournament.timeZone);
   const slug = page.page.slug;
   // Whichever variant is rendering, the add-player round trip lands back on
   // it — a plain `/enter` would drop the outcome the URL states.
@@ -405,10 +417,10 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             </a>
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-              Enter this tournament
+            <h1 className={PAGE_TITLE}>
+              {openEvents.length > 0 ? 'Enter this tournament' : 'Entries are closed'}
             </h1>
-            <StatusChip state={chip} />
+            {openEvents.length > 0 ? <StatusChip state={chip} /> : null}
           </div>
           {cap !== null || feeTiers.length > 0 ? (
             <p className="mt-2 max-w-prose text-sm text-muted-foreground">
@@ -439,6 +451,8 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
       </section>
 
       <main className="mx-auto w-full max-w-5xl px-4 py-6 md:py-8">
+        {openEvents.length > 0 ? (
+          <>
         <nav aria-label="Entry progress" className="mb-6 overflow-x-auto rounded-lg border border-rule-soft bg-surface-raised p-4">
           <ol className="flex min-w-max items-center gap-2 text-xs font-medium text-muted-foreground sm:justify-between sm:gap-3">
             {[
@@ -453,16 +467,16 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
               <li key={key} data-entry-step={key} className="flex items-center gap-2">
                 {key === 'submitted' ? (
                   <span className="inline-flex min-h-8 items-center gap-2 px-2 py-1.5" aria-disabled="true">
-                    <span className="grid h-6 w-6 place-items-center rounded-full border border-rule-control tabular-nums">{index + 1}</span>
+                    <span className="grid h-6 w-6 place-items-center rounded-xs border border-rule-control tabular-nums">{index + 1}</span>
                     <span>{label}</span>
                   </span>
                 ) : (
                   <a
                     href={`#entry-${key}`}
                     data-wizard-step-link={key}
-                    className="inline-flex min-h-8 items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-sunken hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                    className="inline-flex min-h-8 items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-surface-sunken hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
                   >
-                    <span className="grid h-6 w-6 place-items-center rounded-full border border-rule-control tabular-nums">{index + 1}</span>
+                    <span className="grid h-6 w-6 place-items-center rounded-xs border border-rule-control tabular-nums">{index + 1}</span>
                     <span>{label}</span>
                   </a>
                 )}
@@ -475,10 +489,10 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
         <section id="entry-eligibility" data-entry-wizard-panel="eligibility" className="mb-6 grid gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Before you begin</p>
-              <h2 className="mt-1 font-display text-lg font-semibold tracking-tight text-foreground">Check eligibility and cost</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">Before you begin</p>
+              <h2 className={`mt-1 ${SECTION_TITLE}`}>Check eligibility and cost</h2>
             </div>
-            <span className="rounded-full border border-rule-control px-2.5 py-1 text-xs font-medium text-muted-foreground">{openEvents.length} open {openEvents.length === 1 ? 'event' : 'events'}</span>
+            <span className="text-sm text-muted-foreground">{openEvents.length} open {openEvents.length === 1 ? 'event' : 'events'}</span>
           </div>
           <dl className="grid gap-3 text-sm sm:grid-cols-3">
             <div>
@@ -548,11 +562,19 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
           )}
         </section>
 
+          </>
+        ) : null}
+
         {openEvents.length === 0 ? (
+          // V3-PE16.1: one heading (the page's own "Entries are closed",
+          // above), one paragraph naming this tournament, no repetition, and
+          // no reopening promise — `EntryPageDTO` carries no published
+          // entry-window field to point to, so none is claimed. See
+          // `docs/reference/debt-log.md` for the field this would need.
           <section className="mt-6 grid justify-items-start gap-3 rounded-lg border border-rule-soft bg-surface-raised p-5" data-entry-closed>
-            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">Entries are not available right now</h2>
             <p className="max-w-prose text-sm text-muted-foreground">
-              No event is taking entries right now. Your tournament information is still available, and the organizer may publish a new entry window or timetable there.
+              {`Entries are closed for ${page.tournament.name ?? 'this tournament'}. `}
+              View the tournament page for schedules and results.
             </p>
             <a
               href={`/e/${encodeURIComponent(slug)}`}
@@ -598,18 +620,18 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
               ))}
 
               <div hidden data-entry-wizard-controls="participant" className="flex flex-wrap gap-2">
-                <button type="button" data-wizard-next="participant" className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90">Continue to events</button>
+                <button type="button" data-wizard-next="participant" className="inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">Continue to events</button>
               </div>
 
               <div hidden data-entry-wizard-controls="events" className="flex flex-wrap gap-2">
                 <button type="button" data-wizard-back="events" className={BUTTON_SECONDARY}>Back to participant</button>
-                <button type="button" data-wizard-next="events" className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90">{hasDoubles ? 'Continue to partner' : 'Review entry'}</button>
+                <button type="button" data-wizard-next="events" className="inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">{hasDoubles ? 'Continue to partner' : 'Review entry'}</button>
               </div>
 
               {hasDoubles ? (
                 <div hidden data-entry-wizard-controls="partner" className="flex flex-wrap gap-2">
                   <button type="button" data-wizard-back="partner" className={BUTTON_SECONDARY}>Back to events</button>
-                  <button type="button" data-wizard-next="partner" className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:bg-accent/90">Review entry</button>
+                  <button type="button" data-wizard-next="partner" className="inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">Review entry</button>
                 </div>
               ) : null}
 
@@ -637,10 +659,11 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                     name="showAllEvents"
                     value="on"
                     defaultChecked={echo.showAllEvents}
+                    className="mt-0.5 h-4 w-4 accent-accent"
                   />
                   <span>
                     Show every event, including ones not usually open to a player. A
-                    mismatch is accepted &mdash; the organizer sees a flag and decides.
+                    mismatch is accepted, the organizer sees a flag and decides.
                   </span>
                 </label>
               </div>
@@ -676,38 +699,42 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
           </form>
         )}
 
-        {/* Signing out lives here: the enter page is the page a signed-in
-            entrant is on, and it already mints the nonce this form needs —
-            a standalone page would mint a second nonce at Path=/ and
+        {/* V3-PE16.2: ONE state-aware account action, derived from the real
+            session (cookie PRESENCE — `hasEntrantSession`, the same read
+            `PlayShell`'s header uses; never a credential relay, R8-D). A
+            stranger sees "Sign in" and nothing about signing out; a signed-in
+            device sees "Sign out" and nothing asking it to diagnose its own
+            auth state. The enter page is where the sign-out form lives (not a
+            standalone page) because it already mints the nonce this form
+            needs — a standalone page would mint a second nonce at Path=/ and
             last-issuance-wins would invalidate a half-filled form in another
-            tab. Rendered on both variants (no node page can see the session;
-            logout is idempotent); what changes is the claim. A POST, never a
-            link: a GET that signed out would be CSRF-able by any prefetch. */}
-        <footer className="mt-10 grid gap-1 border-t border-rule-soft pt-4 text-sm">
-          {justSignedIn ? null : (
+            tab. A POST, never a link: a GET that signed out would be
+            CSRF-able by any prefetch. */}
+        <footer className="mt-10 border-t border-rule-soft pt-4 text-sm">
+          {signedIn ? (
+            <form method="post" action="/e/account/logout" className="flex flex-wrap items-baseline gap-3">
+              <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+              {/* Never omitted: `logout`'s own fallback is `/e/account/login`,
+                  which is POST-only — a 405 after a successful sign-out. */}
+              <input type="hidden" name="next" value={`/e/${encodeURIComponent(slug)}`} />
+              <Button type="submit" variant="outline" size="sm">
+                Sign out
+              </Button>
+              <span className="text-muted-foreground">
+                Signs out this device only. Entries you have already submitted
+                are unaffected.
+              </span>
+            </form>
+          ) : (
             <p className="text-muted-foreground">
-              Signed in on this device? You can sign out here.
+              <a
+                href={`/e/login?next=/e/${encodeURIComponent(slug)}/enter/signed-in`}
+                className="underline underline-offset-4"
+              >
+                Sign in
+              </a>
             </p>
           )}
-          <form method="post" action="/e/account/logout" className="flex flex-wrap items-baseline gap-3">
-            <input type="hidden" name={FORM_FIELD} value={formCsrf} />
-            {/* Never omitted: `logout`'s own fallback is `/e/account/login`,
-                which is POST-only — a 405 after a successful sign-out. */}
-            <input type="hidden" name="next" value={`/e/${encodeURIComponent(slug)}`} />
-            {/* E4: outline, not the glow button. This page cannot know who
-                is reading it, so the control is unconditional — and a
-                control the page cannot know applies must not be dressed as
-                the page's primary action, which here is submitting the
-                entry. The hedge above it is the copy half of the same
-                argument. */}
-            <Button type="submit" variant="outline" size="sm">
-              Sign out
-            </Button>
-            <span className="text-muted-foreground">
-              Signs you out on this device only. Entries you have already submitted
-              are unaffected.
-            </span>
-          </form>
         </footer>
         <script type="module" src="/e/assets/entry-wizard.js" />
       </main>

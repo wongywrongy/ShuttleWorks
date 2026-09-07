@@ -138,7 +138,7 @@ describe('Bracket Configuration — one merged surface', () => {
     // one declared bracket-specific knob. Simultaneously visible — no click
     // between the two groups.
     expect(screen.getByLabelText('Score type')).toBeInTheDocument();
-    expect(screen.getByLabelText('Points per set')).toBeInTheDocument();
+    expect(screen.getByLabelText('Points per game')).toBeInTheDocument();
     expect(screen.getByLabelText('Match format')).toBeInTheDocument();
     expect(screen.getByLabelText('Deuce enabled')).toBeInTheDocument();
     expect(screen.getByLabelText(/Rest between rounds/i)).toBeInTheDocument();
@@ -174,7 +174,7 @@ describe('Bracket Configuration — one merged surface', () => {
 
     expect(screen.getAllByRole('button', { name: /^Save/i })).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Sets' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Game scores' }));
     expect(setConfig).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Save engine settings/i }));
     await waitFor(() => expect(setConfig).toHaveBeenCalled());

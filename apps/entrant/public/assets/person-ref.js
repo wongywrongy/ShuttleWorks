@@ -28,7 +28,9 @@ export function personHref(slug, identity) {
  * identity/link decisions. `text` remains the one formatter seam above.
  */
 export function personRefModel({ slug, identity, state = 'resolved', label, className = '' }) {
-  const text = identity ? formatPersonIdentity(identity) : (label ?? 'TBD');
+  // State-and-formatting contract §6.2: the generic unresolved fallback is
+  // "To be decided" — never "TBD", "–" or "No players".
+  const text = identity ? formatPersonIdentity(identity) : (label ?? 'To be decided');
   const href = state === 'dead' ? null : personHref(slug, identity);
   return {
     text,
@@ -36,7 +38,7 @@ export function personRefModel({ slug, identity, state = 'resolved', label, clas
     personId: href ? identity.id : null,
     className: [
       'person-ref',
-      href ? 'text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent' : 'text-muted-foreground',
+      href ? 'text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent' : 'text-foreground',
       state === 'winner' && href ? 'font-[650]' : '',
       className,
     ].filter(Boolean).join(' '),

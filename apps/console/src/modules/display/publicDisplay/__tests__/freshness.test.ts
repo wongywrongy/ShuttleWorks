@@ -5,7 +5,7 @@
  * future edit can't silently widen/narrow them.
  */
 import { describe, expect, it } from 'vitest';
-import { deriveFreshness, DELAYED_MULTIPLIER, STALE_MS, STALE_CAPTION } from '../freshness';
+import { deriveFreshness, DELAYED_MULTIPLIER, STALE_MS, staleCaption } from '../freshness';
 
 describe('deriveFreshness', () => {
   it('is live right after a successful sync', () => {
@@ -36,14 +36,27 @@ describe('deriveFreshness', () => {
   });
 });
 
-describe('STALE_CAPTION', () => {
+describe('staleCaption', () => {
+  // package 17 (v3 consolidated plan, signage density) changed this from a
+  // fixed string to a function of the sync's actual age (V3-OC24.2: the
+  // board's staleness must be truthful about HOW old the data is, not a
+  // constant "a few minutes" whether the gap is 4 minutes or 4 hours).
   it('never surfaces operator/technical connection language to spectators', () => {
     // The public boards must never render this vocabulary — a past
     // regression used "Results may be out of date — reconnecting".
-    expect(STALE_CAPTION).not.toMatch(/reconnect|offline|server|backend/i);
+    expect(staleCaption(STALE_MS)).not.toMatch(/reconnect|offline|server|backend/i);
   });
 
-  it('is the exact calm, mechanism-free copy shared by both boards', () => {
-    expect(STALE_CAPTION).toBe('Results may be a few minutes behind.');
+  it('is calm, mechanism-free copy shared by both boards, stating the age', () => {
+    expect(staleCaption(STALE_MS)).toBe('Results may be 4 minutes behind.');
+  });
+
+  it('states the actual age rather than a fixed figure', () => {
+    expect(staleCaption(10 * 60_000)).toBe('Results may be 10 minutes behind.');
+    expect(staleCaption(60_000)).toBe('Results may be 1 minute behind.');
+  });
+
+  it('floors at 1 minute rather than claiming "0 minutes behind"', () => {
+    expect(staleCaption(5_000)).toBe('Results may be 1 minute behind.');
   });
 });

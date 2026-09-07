@@ -18,23 +18,41 @@
 import { Button } from '@scheduler/design-system/components';
 
 import { PlayShell } from './PlayShell';
-import { CARD } from '../lib/ui';
+import { CARD, PAGE_TITLE } from '../lib/ui';
 
-export function MessagePage({ heading, body }: { heading: string; body: string }) {
+export function MessagePage({
+  heading,
+  body,
+  secondaryAction,
+}: {
+  heading: string;
+  body: string;
+  /** An additional, honest offer beside "Browse tournaments" — e.g. "Check
+   * My entries" for a dead invite that might already be accepted (V3-PE35.1).
+   * Optional: every existing caller renders the one action it always has. */
+  secondaryAction?: { href: string; label: string };
+}) {
   return (
     <PlayShell>
       <main className="mx-auto grid w-full max-w-md gap-4 px-4 py-16 md:py-24">
         <div className={`grid justify-items-start gap-3 ${CARD}`}>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+          <h1 className={PAGE_TITLE}>
             {heading}
           </h1>
           <p className="text-sm text-muted-foreground">{body}</p>
-          {/* One action, and it is the listing: the whole complaint about
-              this page was that it was a dead end. Same outline link-button
-              the discovery empty state uses. */}
-          <Button asChild variant="outline" size="sm">
-            <a href="/e/">Browse tournaments</a>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {/* One action, and it is the listing: the whole complaint about
+                this page was that it was a dead end. Same outline link-button
+                the discovery empty state uses. */}
+            <Button asChild variant="outline" size="sm">
+              <a href="/e/">Browse tournaments</a>
+            </Button>
+            {secondaryAction ? (
+              <Button asChild variant="outline" size="sm">
+                <a href={secondaryAction.href}>{secondaryAction.label}</a>
+              </Button>
+            ) : null}
+          </div>
         </div>
       </main>
     </PlayShell>

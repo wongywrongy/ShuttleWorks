@@ -19,6 +19,7 @@ import { BracketScoreEntry } from './BracketScoreEntry';
 import { BracketInlineNotice } from './BracketInlineNotice';
 import { applyOptimisticResult } from './optimisticResult';
 import { WinnerButton } from './WinnerButton';
+import { formatSideCondensed, meetSideFromIds } from '../../platform/domain/sides';
 
 interface Props {
   data: BracketTournamentDTO;
@@ -29,13 +30,13 @@ interface Props {
 // Shared hand-rolled button styles (mirror meet's MatchDetailsPanel pattern).
 const actionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded border border-border ` +
-  `bg-card px-2 py-1 text-2xs font-medium text-card-foreground ` +
+  `bg-card px-2 py-1 text-xs font-medium text-card-foreground ` +
   `hover:bg-muted/40 hover:text-foreground ` +
   `disabled:cursor-not-allowed disabled:opacity-50`;
 
 const primaryActionBtn =
   `${INTERACTIVE_BASE} inline-flex items-center justify-center gap-1 rounded ` +
-  `bg-primary px-2 py-1 text-2xs font-medium text-primary-foreground ` +
+  `bg-primary px-2 py-1 text-xs font-medium text-primary-foreground ` +
   `hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50`;
 
 export function BracketMatchControls({ data, onChange, matchId }: Props) {
@@ -61,8 +62,11 @@ export function BracketMatchControls({ data, onChange, matchId }: Props) {
   if (!pu) return null;
 
   const nameById = Object.fromEntries(data.participants.map((p) => [p.id, p.name]));
-  const labelA = (pu.side_a ?? []).map((id) => nameById[id] ?? id).join(' / ') || '–';
-  const labelB = (pu.side_b ?? []).map((id) => nameById[id] ?? id).join(' / ') || '–';
+  // D14/D15 — `sides.ts` is the one side formatter; never a hand-rolled
+  // `.join(' / ') || '–'` (match-card §2.1/§2.4 forbids the em dash
+  // placeholder — an unclaimed side reads "To be decided").
+  const labelA = formatSideCondensed(meetSideFromIds(pu.side_a ?? undefined, nameById));
+  const labelB = formatSideCondensed(meetSideFromIds(pu.side_b ?? undefined, nameById));
 
   return (
     <div key={matchId} className="space-y-3" data-testid="bracket-match-controls">

@@ -141,7 +141,7 @@ export function AppStatusPopover() {
             <button
               type="button"
               onClick={() => void refreshHealth()}
-              className={`${INTERACTIVE_BASE} rounded border border-border px-2 py-0.5 text-3xs text-muted-foreground hover:bg-muted/40 hover:text-foreground`}
+              className={`${INTERACTIVE_BASE} rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground`}
               aria-label="Refresh health"
             >
               Refresh
@@ -207,7 +207,7 @@ export function AppStatusPopover() {
               disabled={backingUp}
               data-testid="app-status-backup"
               aria-busy={backingUp}
-              className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-0.5 text-2xs text-card-foreground hover:bg-muted/40 hover:text-foreground`}
+              className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-xs text-card-foreground hover:bg-muted/40 hover:text-foreground`}
             >
               {backingUp ? 'Backing up…' : 'Back up now'}
             </button>
@@ -217,14 +217,14 @@ export function AppStatusPopover() {
                 setActiveTab('setup');
                 setOpen(false);
               }}
-              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-2xs text-card-foreground hover:bg-muted/40 hover:text-foreground`}
+              className={`${INTERACTIVE_BASE} inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-xs text-card-foreground hover:bg-muted/40 hover:text-foreground`}
             >
               Manage backups
               <CaretRight aria-hidden="true" className="h-3 w-3" />
             </button>
           </div>
 
-          <p className="mt-2 text-3xs text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             To quit {BRAND.productName}, close its launcher window (or run the Stop
             script).
           </p>

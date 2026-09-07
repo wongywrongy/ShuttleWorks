@@ -16,11 +16,18 @@ declares its own client/page/entrant, lifted not reinvented).
 from __future__ import annotations
 
 import json
+import re
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 
 from tests.backend._helpers import isolate_test_database
+
+# V3-24-1: the shape the receipt route accepts, written out here rather than
+# imported, so a change to the alphabet has to be made deliberately in both
+# places instead of following the implementation silently.
+SHORT_REFERENCE = re.compile(r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$")
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 GOOD_PW = "a perfectly fine passphrase"
@@ -64,6 +71,7 @@ def page(client):
                 tournament_id=uuid.UUID(tid),
                 slug="winter-cup",
                 is_open=True,
+                audience="public",
                 fee_schedule={"1": 4000, "2": 5500},
                 venue_name="North Hall",
             )
@@ -144,9 +152,83 @@ def _seed_submission(page, email, player_name="Robin Seeded", state="pending",
         session.commit()
         return {
             "submission": str(submission.id),
+            # V3-24-1: the handle the receipt route and the receipt page
+            # take. Read off the row rather than fabricated, so these tests
+            # exercise the generator that actually ran.
+            "reference": submission.short_reference,
             "entry": str(entry.id),
             "player": str(player.id),
         }
+    finally:
+        session.close()
+
+
+def _age_submission(page, submission_id, moment):
+    """Backdate one submission so "newest" is a fact, not a race."""
+    from db.models import Submission
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        # Composite primary key: submissions are keyed (tournament, id).
+        submission = session.get(
+            Submission, (uuid.UUID(page["tid"]), uuid.UUID(submission_id))
+        )
+        submission.submitted_at = moment
+        session.commit()
+    finally:
+        session.close()
+
+
+def _set_withdraws_until(page, moment):
+    """Give the card's one event a self-serve withdrawal deadline (R14 §3)."""
+    from db.models import EntryEvent
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        event = session.get(
+            EntryEvent, (uuid.UUID(page["tid"]), uuid.UUID(page["ms"]))
+        )
+        event.withdraws_until = moment
+        session.commit()
+    finally:
+        session.close()
+
+
+def _make_page(client, name, slug):
+    """A second (third, ninth...) workspace with an entry page and one event.
+
+    Lifted from the ``page`` fixture rather than parameterised into it: the
+    N+1 guard is the only test that needs more than one, and it needs them
+    created BEFORE any entrant signs in (workspace creation is an operator
+    act).
+    """
+    from db.models import EntryEvent, EntryPage
+    from db.session import SessionLocal
+
+    tid = client.post("/tournaments", json={"name": name}, headers=CSRF).json()["id"]
+    session = SessionLocal()
+    try:
+        session.add(
+            EntryPage(
+                tournament_id=uuid.UUID(tid),
+                slug=slug,
+                is_open=True,
+                audience="public",
+                fee_schedule={"1": 4000},
+                venue_name="North Hall",
+            )
+        )
+        ms = EntryEvent(
+            tournament_id=uuid.UUID(tid),
+            code="MS",
+            discipline="Men's Singles",
+            entry_type="singles",
+        )
+        session.add(ms)
+        session.commit()
+        return {"tid": tid, "slug": slug, "ms": str(ms.id)}
     finally:
         session.close()
 
@@ -171,8 +253,8 @@ def test_a_bare_request_is_401(client):
 
 
 def test_a_bare_receipt_request_is_401(client):
-    submission_id = "44444444-4444-4444-8444-444444444444"
-    assert client.get(f"/e/api/me/submissions/{submission_id}").status_code == 401
+    reference = "H4KJ29QW"
+    assert client.get(f"/e/api/me/submissions/{reference}").status_code == 401
 
 
 def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile):
@@ -185,12 +267,13 @@ def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile)
         fee_total_cents=5500,
     )
 
-    response = client.get(f"/e/api/me/submissions/{seeded['submission']}")
+    response = client.get(f"/e/api/me/submissions/{seeded['reference']}")
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "private, no-store"
     body = response.json()
     assert set(body) == {
         "submissionId",
+        "shortReference",
         "slug",
         "tournamentName",
         "orgName",
@@ -205,6 +288,10 @@ def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile)
         "events",
     }
     assert body["submissionId"] == seeded["submission"]
+    # V3-24-1: the receipt's printed "Reference" and its own URL are the
+    # same eight characters, and neither is the UUID.
+    assert body["shortReference"] == seeded["reference"]
+    assert SHORT_REFERENCE.match(body["shortReference"])
     assert body["slug"] == "winter-cup"
     assert body["tournamentName"] == "Winter Cup"
     assert body["venueName"] == "North Hall"
@@ -227,10 +314,18 @@ def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile)
 
     client.cookies.clear()
     _sign_in(client, "stranger@example.com")
-    foreign = client.get(f"/e/api/me/submissions/{seeded['submission']}")
-    invalid = client.get("/e/api/me/submissions/not-a-uuid")
-    assert foreign.status_code == invalid.status_code == 404
-    assert foreign.json() == invalid.json()
+    # V3-24-1's load-bearing claim: a reference is an identifier, never
+    # access. This one is REAL, WELL-FORMED and belongs to another account -
+    # exactly the case a short, guessable handle makes worth stating - and
+    # it is answered identically to a string that could not name anything.
+    foreign = client.get(f"/e/api/me/submissions/{seeded['reference']}")
+    unknown = client.get("/e/api/me/submissions/H4KJ29QW")
+    invalid = client.get("/e/api/me/submissions/not-a-reference")
+    assert foreign.status_code == unknown.status_code == invalid.status_code == 404
+    assert foreign.json() == unknown.json() == invalid.json()
+    # And the UUID buys nothing either: the old handle is not a second door.
+    stale = client.get(f"/e/api/me/submissions/{seeded['submission']}")
+    assert stale.status_code == 404
 
 
 def test_the_answer_is_private_and_uncacheable(client, page, turnstile):
@@ -276,7 +371,7 @@ def test_publication_flags_do_not_gate_the_owners_view(client, page, turnstile):
 
 def test_card_and_line_key_sets_are_exact(client, page, turnstile):
     _sign_in(client, "parent@example.com")
-    _seed_submission(page, "parent@example.com")
+    seeded = _seed_submission(page, "parent@example.com")
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
 
     assert set(card) == {
@@ -291,7 +386,17 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
         "feeTotalCents",
         "submittedAt",
         "events",
+        # SP-PUB-AUDIT-1 Phase 3: the act this card stands for, and the
+        # moment its withdraw affordance stops working. Neither widens what
+        # the projection discloses - both are this account's own facts.
+        "submissionId",
+        "shortReference",
+        "withdrawsUntil",
     }
+    assert card["submissionId"] == seeded["submission"]
+    assert card["shortReference"] == seeded["reference"]
+    # No deadline configured on the event, so none is invented.
+    assert card["withdrawsUntil"] is None
     assert all(
         set(line)
         == {
@@ -310,6 +415,15 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
             # widening is the STOP-approved ruling this exact-set exists to
             # force; both directions in test_partner_names_on_the_own_card.
             "partner",
+            # V3-PE37.1: whether THIS line's partner invite is durably known
+            # to have failed to send — an honest account-scoped fact, never
+            # widening what the projection discloses.
+            "partnerInviteMailFailed",
+            # V3-24-1: the reference of the act this line came from. Not a
+            # widening - it is a name for this account's own submission,
+            # already on the card - but a line and its card can disagree,
+            # so it has to be per line.
+            "shortReference",
         }
         for line in card["events"]
     )
@@ -477,3 +591,114 @@ def test_two_submissions_fold_into_one_card_with_summed_quotes(
     (card,) = body["tournaments"]
     assert card["feeTotalCents"] == 9500
     assert len(card["events"]) == 2
+
+
+# ---- the withdrawal deadline on the card (SP-PUB-AUDIT-1 Phase 3) ---------
+
+
+def test_withdraws_until_is_the_earliest_open_deadline(client, page, turnstile):
+    """The card names the moment its own withdraw buttons stop working.
+
+    The MINIMUM over the withdrawable lines, because the first deadline to
+    pass is the first one that changes what the card can offer — and it must
+    be the SAME instant the route enforces, not a second copy of the rule.
+    """
+    from entries.entries_public import _moment_iso
+
+    deadline = datetime(2099, 3, 1, 17, 0, tzinfo=timezone.utc)
+    _sign_in(client, "parent@example.com")
+    seeded = _seed_submission(page, "parent@example.com", state="pending")
+    _set_withdraws_until(page, deadline)
+
+    (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+    assert card["submissionId"] == seeded["submission"]
+    assert card["events"][0]["canWithdraw"] is True
+    assert card["withdrawsUntil"] == _moment_iso(deadline)
+
+
+def test_withdraws_until_is_none_when_no_line_can_be_withdrawn(
+    client, page, turnstile
+):
+    """A deadline nobody can act on is not a deadline the card states."""
+    _sign_in(client, "parent@example.com")
+    _seed_submission(page, "parent@example.com", state="withdrawn")
+    _set_withdraws_until(page, datetime(2099, 3, 1, 17, 0, tzinfo=timezone.utc))
+
+    (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+    assert card["events"][0]["canWithdraw"] is False
+    assert card["withdrawsUntil"] is None
+
+
+def test_the_newest_submission_names_the_card(client, page, turnstile):
+    """Two acts, one card, one id: the newest act is the one named."""
+    _sign_in(client, "parent@example.com")
+    older = _seed_submission(page, "parent@example.com", player_name="A Child")
+    newer = _seed_submission(page, "parent@example.com", player_name="B Child")
+    _age_submission(page, older["submission"], datetime(2020, 1, 1, tzinfo=timezone.utc))
+
+    (card,) = client.get("/e/api/me/entries").json()["tournaments"]
+    assert len(card["events"]) == 2
+    assert card["submissionId"] == newer["submission"]
+    assert card["shortReference"] == newer["reference"]
+    # Each LINE names the act it came from, which is not the card's act for
+    # the older of the two - the entrant holding two references needs to
+    # know which line each one answers for.
+    assert {line["shortReference"] for line in card["events"]} == {
+        older["reference"],
+        newer["reference"],
+    }
+
+
+# ---- the batching claim ---------------------------------------------------
+
+
+def test_public_my_entries_no_n_plus_one(client, turnstile):
+    """The read stays batched as the account's history grows (A6).
+
+    One card and eight cards must cost the same number of statements. A
+    per-tournament lookup — the page, the org, the events, the badges — is
+    exactly the regression this counts, and it is invisible to every other
+    test in this file because they all seed a single workspace.
+    """
+    from sqlalchemy import event as sqlalchemy_event
+
+    from db.session import SessionLocal
+
+    pages = [
+        _make_page(client, f"Cup {index}", f"cup-{index}") for index in range(8)
+    ]
+    _sign_in(client, "parent@example.com")
+
+    session = SessionLocal()
+    bind = session.get_bind()
+    statements: list[str] = []
+
+    def record(_connection, _cursor, statement, *_args):
+        statements.append(statement)
+
+    def measured_call() -> int:
+        statements.clear()
+        sqlalchemy_event.listen(bind, "before_cursor_execute", record)
+        try:
+            body = client.get("/e/api/me/entries").json()
+        finally:
+            sqlalchemy_event.remove(bind, "before_cursor_execute", record)
+        assert body["tournaments"]
+        return len(statements)
+
+    try:
+        _seed_submission(pages[0], "parent@example.com", player_name="Child 0")
+        baseline = measured_call()
+
+        for index, extra in enumerate(pages[1:], start=1):
+            _seed_submission(
+                extra, "parent@example.com", player_name=f"Child {index}"
+            )
+        expanded = measured_call()
+
+        assert len(client.get("/e/api/me/entries").json()["tournaments"]) == 8
+        # Identity-map warmth may remove a lookup; scale must never add one.
+        assert expanded <= baseline
+        assert expanded <= 10
+    finally:
+        session.close()

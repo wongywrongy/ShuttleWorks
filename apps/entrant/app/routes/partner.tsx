@@ -30,7 +30,7 @@ import { PlayShell } from '../components/PlayShell';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
-import { CARD } from '../lib/ui';
+import { CARD, PAGE_TITLE } from '../lib/ui';
 import type { Route } from './+types/partner';
 
 const ACCEPTED_SUFFIX = '/accepted';
@@ -54,6 +54,8 @@ export interface PartnerLoaderData {
   invite: PartnerInvite | null;
   accepted: boolean;
   failed: boolean;
+  failureReason?: 'unverified' | 'unusable' | 'retry' | null;
+  entryId?: string;
 }
 
 export async function loader({
@@ -69,6 +71,10 @@ export async function loader({
   const token = raw.length > MAX_TOKEN ? '' : raw;
   const accepted = url.pathname.endsWith(ACCEPTED_SUFFIX);
   const failed = url.pathname.endsWith(FAILED_SUFFIX);
+  const rawReason = url.searchParams.get('reason');
+  const failureReason = rawReason === 'unverified' || rawReason === 'unusable' || rawReason === 'retry'
+    ? rawReason
+    : null;
 
   let invite: PartnerInvite | null = null;
   if (token && !accepted && !failed) {
@@ -93,6 +99,8 @@ export async function loader({
     invite,
     accepted,
     failed,
+    failureReason,
+    entryId: accepted ? url.searchParams.get('entryId') ?? '' : '',
   };
   return data(payload, csrf.responseInit);
 }
@@ -108,18 +116,19 @@ export const meta: Route.MetaFunction = () => [
 const FORM_CARD = `grid gap-4 ${CARD}`;
 
 export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, token, invite, accepted, failed } = loaderData;
+  const { formCsrf, token, invite, accepted, failed, failureReason } = loaderData;
 
   if (accepted) {
     return (
       <PlayShell>
         <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
           <div className={FORM_CARD}>
-            <Notice tone="success">
-              You are entered as their partner. The organizer confirms entries,
-              so this is not final until they do.
-            </Notice>
-            <Button asChild className="justify-self-start">
+            <h1 id="partner-accepted-title" className={PAGE_TITLE}>Partner invitation update</h1>
+            <div id="partner-accepted-details" data-entry-id={loaderData.entryId ?? ''} aria-live="polite">
+              <p className="text-sm text-muted-foreground">Checking your signed-in entries.</p>
+            </div>
+            <script type="module" src="/e/assets/partner-accepted.js" />
+            <Button asChild size="lg" className="justify-self-start">
               <a href="/e/me/entries">See my entries</a>
             </Button>
           </div>
@@ -129,18 +138,46 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
   }
 
   if (failed) {
+    // V3-PE37.1: the action must match the stated remedy. Only the
+    // `unverified` case is actually resolved by an account step; `verify.tsx`
+    // (package 23's file, out of this package's scope) does not accept a
+    // `next=` destination, so the link honestly says only what it does —
+    // confirming the address — rather than promising a return this route
+    // cannot keep. `retry` names a real thing to retry — the invitation
+    // itself. The default (`unusable`) case tells the reader to ask for a
+    // new link; "Sign in" answered a different question, so it is replaced
+    // by the same honest return action the dead-invite state above offers.
+    const returnTo = `/e/partner/${encodeURIComponent(token)}`;
     return (
       <PlayShell>
         <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
           <div className={FORM_CARD}>
+            <h1 className={PAGE_TITLE}>Invitation unavailable</h1>
             <Notice tone="warning">
-              That did not go through. Either the invitation is no longer
-              usable, or your email address is not confirmed yet. Sign in to
-              check.
+              {failureReason === 'unverified'
+                ? 'Confirm your email address before accepting this invitation.'
+                : failureReason === 'retry'
+                  ? 'The tournament is temporarily unavailable for changes. Try again shortly.'
+                  : 'This invitation is no longer usable. Ask the person who invited you to send a new one.'}
             </Notice>
-            <Button asChild variant="outline" className="justify-self-start">
-              <a href="/e/login">Sign in</a>
-            </Button>
+            {failureReason === 'unverified' ? (
+              <Button asChild variant="outline" className="justify-self-start">
+                <a href="/e/verify">Verify your email</a>
+              </Button>
+            ) : failureReason === 'retry' ? (
+              <Button asChild variant="outline" className="justify-self-start">
+                <a href={returnTo}>Try again</a>
+              </Button>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <a href="/e/">Browse tournaments</a>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <a href="/e/me/entries">Check My entries</a>
+                </Button>
+              </div>
+            )}
           </div>
         </main>
       </PlayShell>
@@ -148,11 +185,17 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
   }
 
   if (!invite) {
-    // One message for every dead invite — see the module note.
+    // One message for every dead invite — see the module note. V3-PE35.1:
+    // the API cannot distinguish "never existed" from "already accepted"
+    // (deliberately — see the module docstring), so the copy claims neither
+    // expiry nor acceptance; it states what IS true (this link answers
+    // nothing) and offers both the honest next step and a safe way to check
+    // an already-accepted invitation without claiming that is what happened.
     return (
       <MessagePage
-        heading="That invitation is no longer available"
-        body="Invitations expire, and each one can be accepted once. Ask whoever invited you to send a new one."
+        heading="Invitation unavailable"
+        body="This invitation is unavailable. Ask your partner to send a new one."
+        secondaryAction={{ href: '/e/me/entries', label: 'Check My entries' }}
       />
     );
   }
@@ -163,7 +206,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
     <PlayShell>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
         <header className="grid gap-1">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+          <h1 className={PAGE_TITLE}>
             <PersonRef
               slug={invite.slug ?? ''}
               identity={{ id: null, name: invite.invitedBy }}
@@ -248,7 +291,7 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
               />
             ) : null}
 
-            <Button type="submit" className="justify-self-start">
+            <Button type="submit" size="lg" className="justify-self-start">
               Accept and enter
             </Button>
           </form>

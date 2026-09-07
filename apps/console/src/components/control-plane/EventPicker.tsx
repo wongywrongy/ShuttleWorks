@@ -204,7 +204,7 @@ export function EventPicker(props: EventPickerProps) {
           <span className="min-w-0 break-words text-foreground">{option.name}</span>
         ) : null}
         {option.meta != null || option.occupiedBy != null ? (
-          <span className="ml-auto shrink-0 pl-2 text-2xs text-muted-foreground">
+          <span className="ml-auto shrink-0 pl-2 text-xs text-muted-foreground">
             {option.meta ?? option.occupiedBy}
           </span>
         ) : null}
@@ -229,7 +229,7 @@ export function EventPicker(props: EventPickerProps) {
           return (
             <span
               key={id}
-              className="inline-flex items-center gap-0.5 rounded-sm border border-accent/30 bg-action-selected-bg py-px pl-1 pr-0.5 text-3xs font-semibold text-action-selected-foreground sw-num"
+              className="inline-flex items-center gap-0.5 rounded-sm border border-accent/30 bg-action-selected-bg py-px pl-1 pr-0.5 text-xs font-semibold text-action-selected-foreground sw-num"
             >
               {code}
               {locked ? null : (
@@ -237,7 +237,7 @@ export function EventPicker(props: EventPickerProps) {
                   type="button"
                   aria-label={`Remove ${code}`}
                   onClick={() => pick(id)}
-                  className="rounded-sm p-0.5 text-accent transition-colors duration-fast ease-brand hover:bg-accent/20"
+                  className="rounded-sm p-2 text-accent transition-colors duration-fast ease-brand hover:bg-accent/20"
                 >
                   <X aria-hidden className="h-2.5 w-2.5" weight="bold" />
                 </button>

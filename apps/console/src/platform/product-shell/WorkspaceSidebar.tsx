@@ -139,7 +139,7 @@ export function WorkspaceSidebar({
           className="mx-2 mt-2 rounded-sm border border-status-warning-fg/40 bg-status-warning-bg px-2 py-2 text-status-warning-fg"
         >
           <p className="text-xs font-medium">Modules didn&rsquo;t load</p>
-          <p className="mt-0.5 text-2xs">
+          <p className="mt-0.5 text-xs">
             This workspace&rsquo;s modules are unknown right now, so none are
             listed. They have not been turned off.
           </p>
@@ -147,7 +147,7 @@ export function WorkspaceSidebar({
             <button
               type="button"
               onClick={onRetryModules}
-              className="mt-1.5 rounded-sm border border-current px-1.5 py-0.5 text-2xs font-medium hover:bg-current/10"
+              className="mt-1.5 rounded-sm border border-current px-1.5 py-0.5 text-xs font-medium hover:bg-current/10"
             >
               Retry
             </button>

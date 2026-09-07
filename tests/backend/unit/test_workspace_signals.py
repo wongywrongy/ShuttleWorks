@@ -175,11 +175,40 @@ def test_bracket_match_metrics_and_next_up_from_session_blob():
     assert sig.nextUp[1].timeLabel == "09:30"   # slot1 → +30m
 
 
+def test_bracket_next_up_uses_persisted_coordinates_and_names():
+    units = [
+        {"id": "tenant-a-MS-R0-deadbeef", "event_id": "MS", "round_index": 0,
+         "match_index": 0, "side_a": ["p1"], "side_b": ["p2"]},
+        {"id": "tenant-a-MS-R1-cafebabe", "event_id": "MS", "round_index": 1,
+         "match_index": 0},
+    ]
+    base = {"bracket_session": {"play_units": units, "assignments": [
+        {"play_unit_id": units[0]["id"], "slot_id": 8, "court_id": 1},
+    ]}, "bracketPlayers": [{"id": "p1", "name": "Alex Kim"},
+                           {"id": "p2", "name": "Robin Singh"}]}
+    first = build_signals(_row(kind="bracket", data=base), _bracket_mods(), RowCounts(bracket_matches=2))
+    moved = {**base, "bracket_session": {**base["bracket_session"], "assignments": [
+        {"play_unit_id": units[0]["id"], "slot_id": 1, "court_id": 2},
+    ]}}
+    second = build_signals(_row(kind="bracket", data=moved), _bracket_mods(), RowCounts(bracket_matches=2))
+    assert first.nextUp[0].identity == second.nextUp[0].identity
+    assert first.nextUp[0].identity["phase"]["stage"] == "SF"
+    assert first.nextUp[0].sideA == "Alex Kim"
+    assert first.nextUp[0].sideB == "Robin Singh"
+
+
 def test_bracket_live_assignments_report_court_population_and_status():
     """The bracket action clock is enough to describe the live floor.
 
     Negative controls: an ended assignment and an unstarted assignment are
     present but must not inflate ``playing`` or consume a court.
+
+    V3-OC05.1 (v3 consolidated, package 12): the on-court assignment ("live")
+    used to leak into ``nextUp`` labelled ``status="playing"`` — the console
+    never rendered that status word, so an operator reading "Up next" saw a
+    match already under way with nothing to say so (the reproduced surface-
+    book defect). ``nextUp`` is upcoming-only now, mirroring the meet path;
+    "live" is excluded, leaving only "later".
     """
     data = {"bracket_session": {
         "start_time": "2026-07-28T09:00:00", "interval_minutes": 30,
@@ -200,9 +229,8 @@ def test_bracket_live_assignments_report_court_population_and_status():
     )
     assert sig.matches.playing == 1
     assert sig.matches.courtsFree == 3
-    assert sig.nextUp[0].status == "playing"
-    assert sig.nextUp[0].timeLabel == "09:00"  # day five, not clamped to 23:59
-    assert sig.nextUp[1].status == "scheduled"
+    assert [n.code for n in sig.nextUp] == ["later"]
+    assert sig.nextUp[0].status == "scheduled"
 
 
 def test_bracket_next_up_excludes_finished_units():
@@ -364,6 +392,55 @@ def test_courts_free_is_none_rather_than_zero_when_no_court_count_is_set():
     )
     assert sig.matches.playing == 1
     assert sig.matches.courtsFree is None
+
+
+def test_disputed_court_excluded_from_both_free_and_playing_counts():
+    """Contract §4.1: a disputed court contributes to neither ``playing``
+    nor ``courtsFree`` — only to ``disputedCourts``. Two matches (m1, m2)
+    both claim court 1; m3 alone occupies court 2 cleanly."""
+    data = _live_data()
+    data["schedule"]["assignments"] = [
+        {"matchId": "m1", "slotId": 0, "courtId": 1},
+        {"matchId": "m2", "slotId": 0, "courtId": 1},
+        {"matchId": "m3", "slotId": 1, "courtId": 2},
+        {"matchId": "m4", "slotId": 2, "courtId": 4},
+    ]
+    sig = build_signals(
+        _row(status="active", data=data),
+        [_mod("meet", "enabled")],
+        RowCounts(
+            match_states=3,
+            match_status_by_id={"m1": "playing", "m2": "playing", "m3": "playing"},
+        ),
+    )
+    # 4 courts total: court 1 disputed, court 2 occupied, courts 3/4 free
+    # (court 4 has an assignment but no live match on it).
+    assert sig.matches.playing == 1
+    assert sig.matches.disputedCourts == 1
+    assert sig.matches.courtsFree == 2
+
+
+def test_bracket_disputed_court_excluded_from_both_free_and_playing_counts():
+    data = {"bracket_session": {
+        "start_time": "2026-07-28T09:00:00", "interval_minutes": 30,
+        "courts": 4,
+        "assignments": [
+            {"play_unit_id": "a", "slot_id": 192, "court_id": 0,
+             "actual_start_slot": 192, "actual_end_slot": None},
+            {"play_unit_id": "b", "slot_id": 192, "court_id": 0,
+             "actual_start_slot": 192, "actual_end_slot": None},
+            {"play_unit_id": "c", "slot_id": 192, "court_id": 1,
+             "actual_start_slot": 192, "actual_end_slot": None},
+        ],
+    }}
+    sig = build_signals(
+        _row(kind="bracket", data=data),
+        _bracket_mods(),
+        RowCounts(bracket_matches=3),
+    )
+    assert sig.matches.playing == 1
+    assert sig.matches.disputedCourts == 1
+    assert sig.matches.courtsFree == 2
 
 
 def test_next_up_rows_carry_identity_so_they_can_be_opened():

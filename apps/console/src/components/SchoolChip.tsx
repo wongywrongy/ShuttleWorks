@@ -21,7 +21,7 @@ export function SchoolChip({
   return (
     <span
       title={accent.name}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-sm border border-border bg-muted/40 px-1 py-px text-3xs font-semibold text-muted-foreground ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-sm border border-border bg-muted/40 px-1 py-px text-xs font-semibold text-muted-foreground ${className}`}
     >
       {/* Bare marker, not <SchoolDot/> — the chip's own title already names
           the school, and a second tooltip-bearing element inside it would

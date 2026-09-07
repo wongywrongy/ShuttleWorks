@@ -10,6 +10,10 @@ export interface ReceiptEvent {
 
 export interface SubmissionReceipt {
   submissionId: string;
+  /** V3-24-1: the eight characters the page prints as "Reference" and the
+   *  entrant quotes. `submissionId` is still the row's identity and is no
+   *  longer rendered anywhere. */
+  shortReference: string;
   slug?: string | null;
   tournamentName?: string | null;
   orgName?: string | null;

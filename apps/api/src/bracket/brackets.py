@@ -49,6 +49,17 @@ from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
 from shared.sport.badminton import schedule_config_for_bracket
+from shared.sides import (
+    MatchSideDTO,
+    PersonRefDTO,
+    bye_side,
+    is_pair_discipline,
+    resolved_side,
+    roster_display_names,
+    team_side,
+    undetermined_side,
+    winner_of_side,
+)
 from core.dependencies import (
     AuthUser,
     get_current_user,
@@ -92,6 +103,7 @@ from bracket.formats import (
 )
 from core.limits import (
     MAX_ASSIGNMENTS,
+    MAX_CANDIDATES,
     MAX_COURTS,
     MAX_EVENTS,
     MAX_MATCHES,
@@ -284,12 +296,21 @@ class PlayUnitOut(BaseModel):
     event_id: str
     round_index: int
     match_index: int
+    # DEPRECATED (package 10a, v3 consolidated plan): resolved participant ids
+    # per side, kept for one release for callers that have not moved to
+    # ``sides`` below. Prefer ``sides`` — it also carries the unresolved
+    # reason (bye / winner_of / loser_of / undetermined) ``side_a``/``side_b``
+    # cannot express without the caller re-deriving it from ``slot_a``/
+    # ``slot_b`` (state-and-formatting contract §6, D17).
     side_a: Optional[List[str]] = None
     side_b: Optional[List[str]] = None
     duration_slots: int
     dependencies: List[str] = []
     slot_a: BracketSlotOut
     slot_b: BracketSlotOut
+    # The structured side pair — see ``shared/sides.py``. Always exactly two
+    # entries, ``[side_a, side_b]``, once populated by ``_play_unit_out``.
+    sides: List[MatchSideDTO] = Field(default_factory=list)
     # Segment id for multi-segment formats ('W', 'L', 'GF', 'P5_8', …) —
     # from the unit's metadata; None for single-bracket formats (se/rr).
     segment: Optional[str] = None
@@ -776,6 +797,24 @@ def _bracket_solver_options(time_limit_seconds: float, camel_cfg: dict) -> Solve
     return SolverOptions(time_limit_seconds=time_limit_seconds, log_progress=False)
 
 
+def _session_time_limit_seconds(session_cfg: dict) -> float:
+    """Read the persisted per-session solve budget, clamped to the ceiling.
+
+    Hardening 2026-09-07: the CSV-import route accepted an unbounded
+    ``time_limit_seconds`` and persisted it, so a stored value could ask
+    an in-request CP-SAT solve for an arbitrary wall-clock spend. The
+    query param is now bounded, and this clamp neutralises values already
+    written by the unbounded version.
+    """
+    try:
+        stored = float(session_cfg.get("time_limit_seconds", 5.0))
+    except (TypeError, ValueError):
+        return 5.0
+    if not stored > 0:
+        return 5.0
+    return min(stored, MAX_SOLVE_SECONDS)
+
+
 def _hydrated_session_config(data_blob: dict):
     """Build the session-wide config values stored outside bracket rows."""
     camel_cfg = data_blob.get("config") or {}
@@ -942,6 +981,17 @@ def _hydrate_assignments(session_cfg: dict, state: TournamentState) -> None:
         )
 
 
+def _roster_names_for(repo: LocalRepository, tournament_id: uuid.UUID) -> Dict[str, str]:
+    """Bracket-roster id -> display name for one workspace.
+
+    For the session constructions that do NOT go through
+    ``_hydrate_session`` (create-from-body, JSON import, CSV import), which
+    have a tournament row but no ``data`` blob already in hand.
+    """
+    tournament = repo.tournaments.get_by_id(tournament_id)
+    return roster_display_names(tournament.data if tournament else None)
+
+
 def _hydrate_session(repo: LocalRepository, tournament_id: uuid.UUID) -> Optional[BracketSession]:
     """Reconstruct the in-memory bracket session from persisted rows.
 
@@ -1003,6 +1053,7 @@ def _hydrate_session(repo: LocalRepository, tournament_id: uuid.UUID) -> Optiona
         match_versions=match_versions,
         applied_command_ids=applied_command_ids,
         player_extras=player_extras,
+        roster_names=roster_display_names(data_blob),
     )
 
 
@@ -1218,12 +1269,118 @@ def _slot_out(slot: BracketSlot) -> BracketSlotOut:
     )
 
 
+def _participant_side(
+    participant: Participant,
+    roster_names: Dict[str, str],
+    *,
+    pair_event: bool,
+) -> MatchSideDTO:
+    """A resolved participant as a structured side (match-card §2.1).
+
+    Three shapes, in order:
+
+    * a TEAM whose ``member_ids`` ALL resolve against the bracket roster —
+      one ``PersonRefDTO`` per member, stacked (V3-10-1). Covers both the
+      entries seam's pairs (``entries.py``'s ``team_id`` branch writes the two
+      roster seats into ``member_ids``) and the console's hand-built ones
+      (``ParticipantPicker`` writes ``members: [pickedA.id, pickedB.id]``);
+    * a pair slot known to be one member short — the known person plus
+      ``pending_member`` (V3-10-2). Either a TEAM with a single member id, or
+      an entry-backed PLAYER sitting in a doubles draw, which is exactly what
+      the entries seam leaves behind when a partner invite is unaccepted;
+    * anything else — the stored (possibly composite) name as ONE person,
+      unchanged. A member id with no roster row makes the composite label the
+      only honest text there is, and it is never split on ``' / '`` (D15).
+    """
+    metadata = participant.metadata if isinstance(participant.metadata, dict) else {}
+    seed = metadata.get("seed")
+    member_ids = list(participant.member_ids or [])
+    is_team = participant.type == ParticipantType.TEAM
+
+    if is_team and member_ids:
+        resolved = [
+            PersonRefDTO(id=member_id, name=roster_names[member_id])
+            for member_id in member_ids
+            if member_id in roster_names
+        ]
+        if len(resolved) == len(member_ids):
+            return team_side(
+                resolved,
+                seed=seed,
+                participant_key=participant.id,
+                # A one-member TEAM is a pair slot with a member missing
+                # outright; a two-member one is complete. This one signal is
+                # NOT gated on the discipline: the TEAM type is itself the
+                # claim "this participant is a pair", and it is trustworthy
+                # where a free-text discipline ("Mixed Doubles") is not.
+                missing=1 if len(member_ids) == 1 else 0,
+            )
+        if len(member_ids) == 1:
+            # The one member did not resolve, but the SHAPE is still a pair
+            # slot one member short, and the stored label still names the one
+            # person the draw has. Do not lose the discriminant to a missing
+            # roster row.
+            return team_side(
+                [PersonRefDTO(id=participant.id, name=participant.name)],
+                seed=seed,
+                participant_key=participant.id,
+                missing=1,
+            )
+        # Partial resolution of a full pair: the composite label is the only
+        # text that names everybody. Falls through to the single-person
+        # branch below.
+
+    if (
+        pair_event
+        and not is_team
+        # Entry-backed ONLY. An imported or hand-added PLAYER row may
+        # legitimately hold a whole pair under one name, and "partner to be
+        # confirmed" over that would be a false claim (see shared/sides.py).
+        and (metadata.get("entryPlayerId") or metadata.get("sourceEntryId"))
+    ):
+        return team_side(
+            [PersonRefDTO(id=participant.id, name=participant.name)],
+            seed=seed,
+            participant_key=participant.id,
+            missing=1,
+        )
+
+    return resolved_side(id=participant.id, name=participant.name, seed=seed)
+
+
+def _bracket_side(
+    slot: BracketSlot,
+    participants: Dict[str, Participant],
+    roster_names: Dict[str, str],
+    *,
+    pair_event: bool,
+) -> MatchSideDTO:
+    """One side of a play unit, structured (shared/sides.py, package 10a).
+
+    Mirrors the console's ``sideLabel`` (``modules/bracket/bracketLabels.ts``)
+    exactly, so the two stay in lockstep until the console redirects to this
+    field: a resolved ``participant_id`` wins; otherwise a feeder play unit
+    means "winner/loser of"; otherwise it's a structural bye.
+    """
+    participant_id = slot.participant_id
+    if participant_id and participant_id != "__BYE__":
+        participant = participants.get(participant_id)
+        if participant is not None:
+            return _participant_side(participant, roster_names, pair_event=pair_event)
+        return undetermined_side()
+    if slot.feeder_play_unit_id:
+        return winner_of_side(slot.feeder_play_unit_id, loser=slot.feeder_take == "loser")
+    return bye_side()
+
+
 def _play_unit_out(
     session: BracketSession,
     draw: Draw,
     play_unit_id: str,
     round_index: int,
     match_index: int,
+    *,
+    pair_event: bool,
 ) -> PlayUnitOut:
     play_unit = session.state.play_units[play_unit_id]
     slot_a, slot_b = draw.slots[play_unit_id]
@@ -1234,6 +1391,20 @@ def _play_unit_out(
         match_index=match_index,
         side_a=list(play_unit.side_a) if play_unit.side_a else None,
         side_b=list(play_unit.side_b) if play_unit.side_b else None,
+        sides=[
+            _bracket_side(
+                slot_a,
+                session.state.participants,
+                session.roster_names,
+                pair_event=pair_event,
+            ),
+            _bracket_side(
+                slot_b,
+                session.state.participants,
+                session.roster_names,
+                pair_event=pair_event,
+            ),
+        ],
         duration_slots=play_unit.expected_duration_slots or 1,
         dependencies=list(play_unit.dependencies),
         slot_a=_slot_out(slot_a),
@@ -1248,7 +1419,13 @@ def _play_unit_out(
     )
 
 
-def _draw_play_units_out(session: BracketSession, draw: Draw) -> List[PlayUnitOut]:
+def _draw_play_units_out(
+    session: BracketSession, draw: Draw, event_id: str
+) -> List[PlayUnitOut]:
+    # Whether this draw takes PAIRS is a property of the event, not of a
+    # slot, so it is decided once here rather than per side.
+    meta = session.events.get(event_id)
+    pair_event = is_pair_discipline(meta.discipline if meta else None, event_id)
     output: List[PlayUnitOut] = []
     for round_index, round_play_unit_ids in enumerate(draw.rounds):
         for match_index, play_unit_id in enumerate(round_play_unit_ids):
@@ -1259,6 +1436,7 @@ def _draw_play_units_out(session: BracketSession, draw: Draw) -> List[PlayUnitOu
                     play_unit_id,
                     round_index,
                     match_index,
+                    pair_event=pair_event,
                 )
             )
     return output
@@ -1315,7 +1493,7 @@ def _serialize_session(session: BracketSession) -> TournamentOut:
     events_out: List[EventOut] = []
 
     for event_id, draw in session.draws.items():
-        play_units_out.extend(_draw_play_units_out(session, draw))
+        play_units_out.extend(_draw_play_units_out(session, draw, event_id))
         events_out.append(_event_out(session, event_id, draw))
 
     assignments_out = [
@@ -1744,6 +1922,7 @@ def create_bracket(
                 interval_minutes=body.interval_minutes,
             )
         ),
+        roster_names=_roster_names_for(repo, tournament_id),
         rest_between_rounds=body.rest_between_rounds,
         start_time=body.start_time,
     )
@@ -1878,7 +2057,7 @@ def schedule_next_round(
     tournament = repo.tournaments.get_by_id(tournament_id)
     data_blob = (tournament.data or {}) if tournament else {}
     session_cfg = data_blob.get("bracket_session") or {}
-    time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
+    time_limit_seconds = _session_time_limit_seconds(session_cfg)
 
     driver = TournamentDriver(
         state=session.state,
@@ -1947,7 +2126,8 @@ def _resolve_candidate_pool_size(session_cfg: dict, override: Optional[int]) -> 
 async def schedule_next_round_stream(
     http_request: Request,
     tournament_id: uuid.UUID = Path(...),
-    candidate_pool_size: Optional[int] = Query(None, ge=1),
+    # Hardening 2026-09-07: bounded like every other candidate-pool input.
+    candidate_pool_size: Optional[int] = Query(None, ge=1, le=MAX_CANDIDATES),
     repo: LocalRepository = Depends(get_repository),
 ) -> StreamingResponse:
     """Solve the next ready wave with real-time progress over SSE.
@@ -1975,7 +2155,7 @@ async def schedule_next_round_stream(
     tournament = repo.tournaments.get_by_id(tournament_id)
     data_blob = (tournament.data or {}) if tournament else {}
     session_cfg = data_blob.get("bracket_session") or {}
-    time_limit_seconds = float(session_cfg.get("time_limit_seconds", 5.0))
+    time_limit_seconds = _session_time_limit_seconds(session_cfg)
     pool_size = _resolve_candidate_pool_size(session_cfg, candidate_pool_size)
     solver_options = _bracket_solver_options(time_limit_seconds, data_blob.get("config") or {})
 
@@ -3151,6 +3331,7 @@ def import_tournament_json(
         config=slot.config,
         rest_between_rounds=slot.rest_between_rounds,
         start_time=slot.start_time,
+        roster_names=_roster_names_for(repo, tournament_id),
     )
 
     for ev_id, draw in slot.draws.items():
@@ -3198,12 +3379,16 @@ async def import_tournament_csv(
     request: Request,
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
-    courts: int = Query(2, ge=1),
-    total_slots: int = Query(128, ge=1),
-    interval_minutes: int = Query(30, ge=1),
-    rest_between_rounds: int = Query(1, ge=0),
-    time_limit_seconds: float = Query(5.0, gt=0),
-    duration_slots: int = Query(1, ge=1),
+    # Hardening 2026-09-07: these mirror the JSON-body siblings'
+    # (``CreateTournamentIn`` / ``ImportTournamentIn``) bounds — the query
+    # form had lower bounds only, so an import could persist an
+    # out-of-range session config the JSON path rejects.
+    courts: int = Query(2, ge=1, le=MAX_COURTS),
+    total_slots: int = Query(128, ge=1, le=MAX_SLOT_INDEX),
+    interval_minutes: int = Query(30, ge=1, le=240),
+    rest_between_rounds: int = Query(1, ge=0, le=MAX_SLOT_INDEX),
+    time_limit_seconds: float = Query(5.0, gt=0, le=MAX_SOLVE_SECONDS),
+    duration_slots: int = Query(1, ge=1, le=MAX_DURATION_SLOTS),
 ) -> TournamentOut:
     """Import a pre-paired bracket (CSV).
 
@@ -3248,6 +3433,7 @@ async def import_tournament_csv(
         config=slot.config,
         rest_between_rounds=slot.rest_between_rounds,
         start_time=slot.start_time,
+        roster_names=_roster_names_for(repo, tournament_id),
     )
 
     for ev_id, draw in slot.draws.items():

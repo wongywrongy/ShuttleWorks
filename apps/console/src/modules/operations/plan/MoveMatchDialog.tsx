@@ -267,7 +267,7 @@ export function MoveMatchDialog({ isOpen, onClose, matchId }: Props) {
               onChange={(e) => setPostponeMin(parseInt(e.target.value || '0', 10))}
               className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm tabular-nums"
             />
-            <span className="mt-1 block text-2xs text-muted-foreground">
+            <span className="mt-1 block text-xs text-muted-foreground">
               Rounds up to the next {config.intervalMinutes}-min slot.
             </span>
           </label>

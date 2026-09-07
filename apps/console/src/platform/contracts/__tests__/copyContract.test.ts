@@ -141,6 +141,9 @@ describe('COPY-5 — banned phrases never reach a surface', () => {
       'Sync and backups',
       'Venue and schedule',
     ]));
-    expect(labels).toContain('Links and embeds');
+    expect(labels).not.toContain('Links and embeds');
+    expect(labels).not.toContain('Draws & results');
+    expect(labels).toContain('Site');
+    expect(labels).toContain('Displays');
   });
 });
