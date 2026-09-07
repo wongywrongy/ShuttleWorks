@@ -1,29 +1,47 @@
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
-import { liveMatches, UNDETERMINED_SIDE_LABEL } from './bracketDisplayData';
-import { STATE_WORD } from '../../../lib/stateWords';
-import { COURT_ASSIGNMENT_UNAVAILABLE } from '../publicDisplay/helpers';
+import { liveMatches, type LiveRow } from './bracketDisplayData';
+import { ScoreLane } from '../../../components/control-plane/MatchCard';
 
-/** Read-only "what's playing now" view for the bracket TV — the bracket
- *  analog of the meet display's CourtsView. Oversized match cards, one per
- *  on-court / next-up bracket match, readable across a gym. No controls.
+/**
+ * Read-only "what's playing now" view for the bracket TV — the bracket analog
+ * of the meet display's CourtsView, and held to the same signage contract
+ * (match-card §4.4 / state-and-formatting §9.1, as rewritten by P0):
  *
- *  `isFullscreen` buys the same step up the meet board's court cards take
- *  once the board owns the whole screen. */
+ *  - the **court number is the largest element** on each tile, names next,
+ *    the recorded score readable below them;
+ *  - an empty court, and a DISPUTED one, render the court number and nothing
+ *    else — no "Court assignment unavailable.", no "No next match assigned",
+ *    no warning colour. The board never arbitrates between two claims, and
+ *    the operator keeps the real dispute on the Run surface;
+ *  - the Next preview is the persisted, default-off `showNext` board
+ *    setting, and renders only when both sides are resolved.
+ *
+ * `isFullscreen` buys the same step up the meet board's court cards take
+ * once the board owns the whole screen.
+ */
 export function BracketLiveView({
   data,
   isFullscreen = false,
+  showNext = false,
+  showScores = true,
 }: {
   data: BracketTournamentDTO;
   isFullscreen?: boolean;
+  showNext?: boolean;
+  showScores?: boolean;
 }) {
   const rows = liveMatches(data);
-  const sideSize = isFullscreen ? 'text-5xl' : 'text-3xl';
+  const courtSize = isFullscreen ? 'text-8xl' : 'text-7xl';
+  const nameSize = isFullscreen ? 'text-4xl' : 'text-3xl';
+  const scoreSize = isFullscreen ? 'text-3xl' : 'text-2xl';
 
   if (rows.length === 0) {
     return (
-      <div data-testid="bracket-live-empty" className="flex h-full flex-col items-center justify-center gap-2 p-12 text-center">
+      <div
+        data-testid="bracket-live-empty"
+        className="flex h-full flex-col items-center justify-center gap-2 p-12 text-center"
+      >
         <p className="text-2xl font-semibold text-foreground">No matches on court</p>
-        <p className="text-base text-muted-foreground">Scheduled bracket matches appear here once they&rsquo;re assigned to a court.</p>
       </div>
     );
   }
@@ -33,61 +51,74 @@ export function BracketLiveView({
       {Array.from(new Set(rows.map((row) => row.court))).map((court) => {
         const courtRows = rows.filter((row) => row.court === court);
         const current = courtRows.find((row) => row.status === 'on-court');
-        const conflict = courtRows.filter((row) => row.status === 'conflict');
-        const next = courtRows.find(
-          (row) => row.status === 'next' && row.sideA !== UNDETERMINED_SIDE_LABEL && row.sideB !== UNDETERMINED_SIDE_LABEL,
-        );
-        return <div
-          key={court}
-          className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-              Court {court}
+        const disputed = courtRows.filter((row) => row.status === 'conflict').length > 1;
+        const next = courtRows.find((row) => row.status === 'next' && row.resolved);
+        // A disputed court reads exactly like an empty one to the hall.
+        const shown = disputed ? null : current;
+        return (
+          <div
+            key={court}
+            data-testid={`bracket-court-card-${court}`}
+            className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-5 text-center"
+          >
+            <span
+              data-testid={`bracket-court-number-${court}`}
+              className={`${courtSize} font-black leading-none tabular-nums tracking-tighter text-foreground`}
+            >
+              {court}
             </span>
-            {/* "Next" is the calm state, so it stays a plain muted chip —
-                the warning tint belonged to a "Called" that was never a
-                fact about the data (see bracketDisplayData#liveMatches).
-                Disputed court band word: contract §4.1's exact public label
-                (V3-OC24.1) — never an announcement instruction. */}
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {conflict.length > 1
-                ? 'Court assignment unavailable'
-                : current
-                  ? STATE_WORD.onCourt
-                  : next
-                    ? 'Next'
-                    : 'Court free'}
-            </span>
+            {shown ? (
+              <MatchNames row={shown} nameSize={nameSize} scoreSize={scoreSize} showScores={showScores} />
+            ) : !disputed && showNext && next ? (
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Next
+                </span>
+                <MatchNames row={next} nameSize={nameSize} scoreSize={scoreSize} showScores={false} muted />
+              </div>
+            ) : null}
           </div>
-          {conflict.length > 1 ? (
-            <div className="space-y-2 text-sm">
-              {/* Exactly one sentence, the public label restated (contract
-                  §4.1) — never "the tournament desk is resolving…", never an
-                  instruction to announce anything (V3-OC24.1). */}
-              <p className="font-semibold text-status-warning">{COURT_ASSIGNMENT_UNAVAILABLE}</p>
-            </div>
-          ) : current || next ? (
-            <div className="flex flex-col gap-1.5">
-              {current ? <MatchNames row={current} size={sideSize} /> : null}
-              {current && next ? <div className="my-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next</div> : null}
-              {next ? <MatchNames row={next} size={isFullscreen ? 'text-2xl' : 'text-xl'} /> : null}
-              {current && !next ? <div className="my-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Next · No next match assigned</div> : null}
-            </div>
-          ) : <p className="text-base text-muted-foreground">No next match assigned.</p>}
-        </div>;
+        );
       })}
     </div>
   );
 }
 
-function MatchNames({ row, size }: { row: { sideA: string; sideB: string }; size: string }) {
-  const lines = (value: string) => value.split(' / ').map((name) => (
-    <span key={name} className="block break-words">{name}</span>
-  ));
-  return <>
-    <span className={`${size} font-bold leading-tight text-foreground`}>{lines(row.sideA)}</span>
-    <span className="text-base font-medium text-muted-foreground">vs</span>
-    <span className={`${size} font-bold leading-tight text-foreground`}>{lines(row.sideB)}</span>
-  </>;
+/** Names stacked one participant per line (match-card §3.1) with the shared
+ *  centred score lane between the two sides (§3.4) — the same grammar the
+ *  meet board and every operator surface render. */
+function MatchNames({
+  row,
+  nameSize,
+  scoreSize,
+  showScores,
+  muted = false,
+}: {
+  row: LiveRow;
+  nameSize: string;
+  scoreSize: string;
+  showScores: boolean;
+  muted?: boolean;
+}) {
+  const ink = muted ? 'text-muted-foreground' : 'text-foreground';
+  const lines = (value: string) =>
+    value.split(' / ').map((name) => (
+      <span key={name} className="block break-words">
+        {name}
+      </span>
+    ));
+  return (
+    <>
+      <span className={`${nameSize} font-semibold leading-tight ${ink}`}>{lines(row.sideA)}</span>
+      <ScoreLane
+        sets={showScores ? row.sets : []}
+        size={scoreSize}
+        className="font-bold"
+        sideALabel={row.sideA}
+        sideBLabel={row.sideB}
+        data-testid={`bracket-court-score-${row.court}`}
+      />
+      <span className={`${nameSize} font-semibold leading-tight ${ink}`}>{lines(row.sideB)}</span>
+    </>
+  );
 }

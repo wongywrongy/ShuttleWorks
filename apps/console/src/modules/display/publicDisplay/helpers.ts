@@ -8,13 +8,15 @@
 import { formatDateTime } from '../../../lib/formatDateTime';
 import { meetSideFromIds, formatSideCondensed, formatSideLines, type Side } from '../../../platform/domain/sides';
 
-/**
- * Exact public conflict copy (state-and-formatting contract §4.1 / §9.1,
- * match-card contract §4.4, V3-OC24.1). One constant so the card band, the
- * card body and the list row can never drift apart from each other or from
- * `BracketLiveView`'s copy of the same sentence.
+/*
+ * `COURT_ASSIGNMENT_UNAVAILABLE` is DELETED (operator-visual-fixes P4).
+ * match-card contract §4.4 / state-and-formatting §9.1, as rewritten by P0:
+ * an empty, unavailable or disputed court renders the court number and
+ * nothing else. The sentence "Court assignment unavailable." was error prose
+ * on a public tile that no spectator can act on; the dispute and its
+ * recovery stay visible to the operator instead. Do not reintroduce it, here
+ * or in `BracketLiveView`.
  */
-export const COURT_ASSIGNMENT_UNAVAILABLE = 'Court assignment unavailable.';
 
 /**
  * Safe parse for the `tournamentDate` config field. Returns null on
@@ -107,4 +109,22 @@ export function isCourtClosedNow(
     const t = minToMin(c.toTime) ?? 24 * 60;
     return nowMin >= f && nowMin < t;
   });
+}
+
+/**
+ * Are BOTH sides of this match resolved to real, named people?
+ *
+ * The gate on the board's optional Next preview (match-card §4.4): when a
+ * side is not resolved the preview is OMITTED, rather than printed with a
+ * feeder reference, a "Winner of …" or a raw participant id — none of which
+ * belongs on venue signage. A side with no members, or with a member the
+ * roster lookup cannot name, counts as unresolved.
+ */
+export function hasResolvedSides(
+  match: { sideA?: string[]; sideB?: string[] },
+  playerNames: Map<string, string>,
+): boolean {
+  const resolved = (ids: string[] | undefined) =>
+    !!ids && ids.length > 0 && ids.every((id) => !!playerNames.get(id));
+  return resolved(match.sideA) && resolved(match.sideB);
 }

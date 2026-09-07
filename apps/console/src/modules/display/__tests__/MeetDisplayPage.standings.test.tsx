@@ -164,7 +164,8 @@ describe('MeetDisplayPage — standings placement (task 9)', () => {
 
     // The content area must still render something real (the courts grid) —
     // not fall through every `view === '...'` branch and render nothing.
-    expect(screen.getAllByText(/Court 1/i).length).toBeGreaterThan(0);
+    // The card is the court NUMBER now (match-card §4.4), not "Court 1".
+    expect(screen.getByTestId('court-number-1')).toBeInTheDocument();
   });
 
   it('no longer offers a manual "Standings" tab — placement is director-configured, not spectator-toggled', () => {

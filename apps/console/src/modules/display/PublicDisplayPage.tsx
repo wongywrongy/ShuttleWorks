@@ -26,16 +26,36 @@
  * how the page was reached.
  */
 import { useSearchParams } from 'react-router-dom';
-import { useDisplayKind } from './useDisplayKind';
+import { useBoardContext } from './useDisplayKind';
 import { MeetDisplayPage } from './MeetDisplayPage';
 import { BracketDisplayPage } from './bracketDisplay/BracketDisplayPage';
 
 export function PublicDisplayPage({ preview = false }: { preview?: boolean }) {
-  const kind = useDisplayKind();
+  // ONE read of the board's context here, threaded down as props: the
+  // timezone and the board settings are the same answer for both boards,
+  // and a second hook inside each page would poll the same route twice.
+  const { kind, name, timeZone, board } = useBoardContext();
   const [searchParams] = useSearchParams();
   const hybrid = kind === 'hybrid';
   const showBracket =
     kind === 'bracket' || (hybrid && searchParams.get('board') === 'bracket');
-  if (showBracket) return <BracketDisplayPage hybrid={hybrid} preview={preview} />;
-  return <MeetDisplayPage hybrid={hybrid} preview={preview} />;
+  if (showBracket)
+    return (
+      <BracketDisplayPage
+        hybrid={hybrid}
+        preview={preview}
+        name={name}
+        timeZone={timeZone}
+        board={board}
+      />
+    );
+  return (
+    <MeetDisplayPage
+      hybrid={hybrid}
+      preview={preview}
+      name={name}
+      timeZone={timeZone}
+      board={board}
+    />
+  );
 }

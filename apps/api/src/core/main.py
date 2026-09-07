@@ -587,6 +587,12 @@ app.include_router(
     display_api.manage_router,
     dependencies=[Depends(require_cloud_tournament_write_authority)],
 )
+# Board settings (branding + the Show next / Show scores switches): a
+# workspace-scoped operator surface, gated by its own role dependencies.
+app.include_router(
+    display_api.board_router,
+    dependencies=[Depends(require_cloud_tournament_write_authority)],
+)
 app.include_router(health_api.router)
 
 if telemetry_runtime is not None:

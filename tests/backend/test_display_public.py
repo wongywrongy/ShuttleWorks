@@ -435,3 +435,139 @@ def test_display_bracket_key_set_is_the_serialized_session(client, workspace):
     client.cookies.clear()
     body = client.get(f"/display/{token}/bracket").json()
     assert set(body) == DISPLAY_BRACKET_KEYS
+
+
+# ---- operator-visual-fixes P4: timezone, board settings, score --------
+
+
+def test_summary_carries_the_workspace_timezone_not_a_hardcoded_utc(client):
+    """match-card contract §4.4: "timezone is data, not a constant". Both
+    boards used to hardcode ``BOARD_TIME_ZONE = 'UTC'`` because no zone
+    reached their wire at all."""
+    tid = seed_tournament(client, name="Zoned")
+    assert client.patch(
+        f"/tournaments/{tid}", json={"timeZone": "Asia/Taipei"}, headers=CSRF
+    ).status_code == 200
+    token = client.get(f"/tournaments/{tid}/display-token").json()["token"]
+
+    client.cookies.clear()
+    assert client.get(f"/display/{token}/summary").json()["timeZone"] == "Asia/Taipei"
+
+
+def test_board_settings_default_to_next_off_and_round_trip(client, workspace):
+    """The Next preview is a persisted board setting defaulting to OFF, on
+    Meet, Bracket and hybrid boards alike (contract §4.4)."""
+    tid, token = workspace
+
+    defaults = client.get(f"/tournaments/{tid}/board-settings")
+    assert defaults.status_code == 200
+    assert defaults.json() == {
+        "title": None,
+        "logoUrl": None,
+        "bannerUrl": None,
+        "accent": None,
+        "showNext": False,
+        "showScores": True,
+    }
+
+    body = {
+        "title": "Riverside Open",
+        "logoUrl": "data:image/svg+xml;utf8,<svg/>",
+        "bannerUrl": None,
+        "accent": "#10b981",
+        "showNext": True,
+        "showScores": False,
+    }
+    put = client.put(f"/tournaments/{tid}/board-settings", json=body, headers=CSRF)
+    assert put.status_code == 200, put.text
+    assert put.json() == body
+    # Persisted, not just echoed.
+    assert client.get(f"/tournaments/{tid}/board-settings").json() == body
+
+    # …and published to the board through the public capability projection,
+    # so the bracket board (which never reads the meet config) gets them too.
+    client.cookies.clear()
+    assert client.get(f"/display/{token}/summary").json()["board"] == body
+
+
+def test_board_settings_reject_a_non_hex_accent(client, workspace):
+    tid, _ = workspace
+    r = client.put(
+        f"/tournaments/{tid}/board-settings",
+        json={"accent": "javascript:alert(1)"},
+        headers=CSRF,
+    )
+    assert r.status_code == 422
+
+
+def test_board_settings_are_not_public_writes(client, workspace):
+    tid, token = workspace
+    client.cookies.clear()
+    # The capability token is read-only everywhere; board settings included.
+    assert client.put(f"/display/{token}/board-settings", json={}).status_code in (
+        404,
+        405,
+    )
+    # A non-member gets the uniform 404, not a 403 that proves the id exists.
+    client.post(
+        "/auth/register",
+        json={"email": "stranger@example.com", "password": "a fine passphrase!"},
+    )
+    assert client.get(f"/tournaments/{tid}/board-settings").status_code == 404
+
+
+def test_an_unrecorded_zero_zero_is_not_published_as_a_score(client, workspace):
+    """contract §4.4: "absent scores are not zero". The score editor seeds
+    blank games as 0, so a running match can carry a stored 0/0 that is not
+    a result — the board must not print it as 0–0."""
+    import uuid as _uuid
+
+    from db.session import SessionLocal
+    from repositories.local import LocalRepository
+
+    tid, token = workspace
+    assert client.put(
+        f"/tournaments/{tid}/state",
+        json={
+            "config": {
+                "intervalMinutes": 30, "dayStart": "09:00", "dayEnd": "18:00",
+                "breaks": [], "courtCount": 2, "defaultRestMinutes": 0,
+                "freezeHorizonSlots": 0,
+            },
+            "groups": [], "players": [],
+            "matches": [
+                {"id": "m-live", "sideA": [], "sideB": [], "durationSlots": 1},
+                {"id": "m-done", "sideA": [], "sideB": [], "durationSlots": 1},
+                {"id": "m-real", "sideA": [], "sideB": [], "durationSlots": 1},
+            ],
+        },
+        headers=CSRF,
+    ).status_code == 200
+
+    session = SessionLocal()
+    try:
+        repo = LocalRepository(session)
+        repo.match_states.upsert(
+            _uuid.UUID(tid),
+            "m-live",
+            {"status": "started", "score_side_a": 0, "score_side_b": 0},
+        )
+        repo.match_states.upsert(
+            _uuid.UUID(tid),
+            "m-done",
+            {"status": "finished", "score_side_a": 0, "score_side_b": 0},
+        )
+        repo.match_states.upsert(
+            _uuid.UUID(tid),
+            "m-real",
+            {"status": "started", "score_side_a": 2, "score_side_b": 1},
+        )
+    finally:
+        session.close()
+
+    client.cookies.clear()
+    body = client.get(f"/display/{token}/match-states").json()
+    assert body["m-live"]["score"] is None
+    # A recorded 0–0 outcome is a real (if unusual) result; publish it.
+    assert body["m-done"]["score"] == {"sideA": 0, "sideB": 0}
+    assert body["m-real"]["score"] == {"sideA": 2, "sideB": 1}

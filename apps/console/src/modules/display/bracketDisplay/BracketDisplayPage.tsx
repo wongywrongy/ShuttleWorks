@@ -16,6 +16,9 @@ import { FullscreenButton } from '../publicDisplay/FullscreenButton';
 import { BoardSwitch } from '../publicDisplay/BoardSwitch';
 import { LiveStatusPill } from '../publicDisplay/LiveStatusPill';
 import { staleCaption, STALE_MS } from '../publicDisplay/freshness';
+import { BoardBanner, BoardClock, BoardMark } from '../publicDisplay/boardChrome';
+import { DEFAULT_BOARD_SETTINGS } from '../useDisplayKind';
+import type { BoardSettingsDTO } from '../../../api/dto';
 import { formatDateTime } from '../../../lib/formatDateTime';
 import { useBracketDisplaySync } from './useBracketDisplaySync';
 import { isComplete } from './bracketDisplayData';
@@ -32,18 +35,28 @@ const VIEWS: { id: BracketView; label: string }[] = [
   { id: 'results', label: 'Results' },
 ];
 
-/** See `MeetDisplayPage.tsx`'s identical constant for the full rationale:
- *  no tournament timezone reaches this page's wire data today
- *  (`BracketTournamentDTO` carries no `timeZone` field either), so the
- *  board falls back to UTC and LABELS it rather than silently formatting
- *  in the viewer's own browser zone (state-and-formatting §7.2, D13,
- *  V3-OC24.2). */
-const BOARD_TIME_ZONE = 'UTC';
-
 /** `hybrid` — this workspace also runs a Meet, so the header carries a switch
  *  back to that board (see `PublicDisplayPage` for why the two boards stay
- *  separate rather than merging). */
-export function BracketDisplayPage({ hybrid = false, preview = false }: { hybrid?: boolean; preview?: boolean } = {}) {
+ *  separate rather than merging).
+ *
+ *  `timeZone` and `board` arrive as props from `PublicDisplayPage`, which
+ *  resolves them once for whichever board it renders. The hardcoded
+ *  `BOARD_TIME_ZONE = 'UTC'` this page used to carry is gone: the zone is
+ *  data now (match-card §4.4), and when it is absent the clock is omitted
+ *  rather than guessed. */
+export function BracketDisplayPage({
+  hybrid = false,
+  preview = false,
+  name = null,
+  timeZone = null,
+  board = DEFAULT_BOARD_SETTINGS,
+}: {
+  hybrid?: boolean;
+  preview?: boolean;
+  name?: string | null;
+  timeZone?: string | null;
+  board?: BoardSettingsDTO;
+} = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as BracketView | null;
   const [now, setNow] = useState<Date>(() => new Date());
@@ -59,15 +72,17 @@ export function BracketDisplayPage({ hybrid = false, preview = false }: { hybrid
     viewParam && VIEWS.some((v) => v.id === viewParam) ? viewParam : data && isComplete(data) ? 'results' : 'live';
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
 
+  // On an unusable or expired snapshot the VENUE board withholds the match
+  // content rather than showing it behind a public warning (match-card
+  // §4.4). The operator's preview keeps rendering it, dimmed and captioned,
+  // because the operator is the one who has to act on it.
+  const contentSuppressed = freshness === 'stale' && !preview;
+
   // 1 Hz clock drives the freshness derivation.
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(t);
   }, []);
-
-  // `clock_with_zone` (state-and-formatting §7.1), tournament-tz-aware —
-  // see BOARD_TIME_ZONE's doc comment above for why that is 'UTC', labeled.
-  const currentTime = formatDateTime(now.toISOString(), 'clock_with_zone', BOARD_TIME_ZONE);
 
   // Event selection for the draw/results views — default to the first event.
   const eventParam = searchParams.get('event');
@@ -88,10 +103,16 @@ export function BracketDisplayPage({ hybrid = false, preview = false }: { hybrid
       aria-label={!preview ? 'Tournament bracket display' : undefined}
       className={`flex w-full flex-col bg-background text-foreground ${preview ? 'h-full min-h-0' : 'min-h-[100dvh]'}`}
     >
+      <BoardBanner bannerUrl={board.bannerUrl} />
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         {/* Venue render drops the view tabs and the fullscreen button — the
             board is not operated from the wall (TV-8). */}
         <div className="flex items-center gap-2">
+          <BoardMark
+            logoUrl={board.logoUrl}
+            title={board.title?.trim() || name?.trim() || null}
+            className="mr-2"
+          />
           {preview ? (
             <div role="tablist" aria-label="Display view" className="flex items-center gap-2">
               {VIEWS.map((v) => (
@@ -126,64 +147,78 @@ export function BracketDisplayPage({ hybrid = false, preview = false }: { hybrid
             </span>
           ) : null}
         </div>
+        {/* The clock is secondary and carries no zone abbreviation; it is
+            omitted outright when the workspace has no usable timezone.
+            Freshness diagnostics — the LIVE pill, the sync health dot and
+            the "Updated …" stamp — are OPERATOR controls and render only in
+            the operator's preview (§4.4 / state-and-formatting §8). */}
         <div className="flex items-center gap-3">
-          {/* Signage clock floor: >= 40px (match-card contract §4.4,
-              initial target pending package 27's physical validation).
-              `text-5xl` is 48px. This header is otherwise a slim single-row
-              bar; the visual fit of a 48px clock next to the view tabs is
-              exactly the kind of thing the physical validation pass should
-              confirm or push back on. */}
-          <time dateTime={now.toISOString()} className="tabular-nums text-5xl text-muted-foreground">
-            {currentTime}
-          </time>
-          <LiveStatusPill status={freshness} />
-          <SyncHealthIndicator
-            lastSyncedAt={lastSyncedAt}
-            error={syncError}
-            terminal={terminal}
-            nowMs={now.getTime()}
-          />
-          {lastSyncedAt ? (
-            // `datetime` (date + clock, tournament tz) rather than a bare
-            // time-of-day — V3-OC24.2's exact finding was an unlabeled,
-            // date-less "Updated 04:07 AM" that a board left running
-            // overnight cannot interpret across midnight.
-            <time
-              data-testid="display-last-updated"
-              dateTime={formatDateTime(new Date(lastSyncedAt).toISOString(), 'diagnostic') ?? undefined}
-              className="whitespace-nowrap text-xs text-muted-foreground"
-              title={`Last updated ${formatDateTime(new Date(lastSyncedAt).toISOString(), 'deadline', BOARD_TIME_ZONE)}`}
-            >
-              Updated{' '}
-              {formatDateTime(new Date(lastSyncedAt).toISOString(), 'datetime', BOARD_TIME_ZONE)}
-            </time>
+          <BoardClock now={now} timeZone={timeZone} />
+          {preview ? (
+            <>
+              <LiveStatusPill status={freshness} />
+              <SyncHealthIndicator
+                lastSyncedAt={lastSyncedAt}
+                error={syncError}
+                terminal={terminal}
+                nowMs={now.getTime()}
+              />
+              {lastSyncedAt ? (
+                <time
+                  data-testid="display-last-updated"
+                  dateTime={
+                    formatDateTime(new Date(lastSyncedAt).toISOString(), 'diagnostic') ?? undefined
+                  }
+                  className="whitespace-nowrap text-xs text-muted-foreground"
+                >
+                  Updated{' '}
+                  {formatDateTime(
+                    new Date(lastSyncedAt).toISOString(),
+                    'datetime',
+                    timeZone ?? undefined,
+                  )}
+                </time>
+              ) : null}
+              <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
+            </>
           ) : null}
-          {preview ? <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} /> : null}
         </div>
       </header>
 
       {/* Nice-to-have parity with the meet board's stale treatment (not
           required by this task's scope — see task-4-report.md): a calm
           caption, no red/alarm styling. */}
-      {freshness === 'stale' && data && (
+      {/* An unusable snapshot SUPPRESSES the untrustworthy match content
+          (below) rather than publishing a diagnostic banner over it. The
+          caption is operator information and rides only the preview. */}
+      {freshness === 'stale' && data && preview && (
         <div className="border-b border-border bg-muted/30 px-4 py-1.5 text-center text-sm text-muted-foreground">
-          {/* V3-OC24.2: says HOW old, not a fixed "a few minutes" — see
-              MeetDisplayPage.tsx's identical treatment. */}
           {staleCaption(lastSyncedAt ? now.getTime() - lastSyncedAt : STALE_MS)}
         </div>
       )}
 
-      <main className={`min-h-0 flex-1 overflow-auto ${freshness === 'stale' ? 'opacity-60 transition-opacity' : ''}`}>
-        {!data ? (
+      <main
+        className={`min-h-0 flex-1 overflow-auto ${
+          freshness === 'stale' && preview ? 'opacity-60 transition-opacity' : ''
+        }`}
+      >
+        {!data || contentSuppressed ? (
           <div className="flex h-full items-center justify-center p-12 text-center">
-            <p className="text-2xl text-muted-foreground">{syncError ? 'Waiting to connect…' : 'Loading bracket…'}</p>
+            <p className="text-2xl text-muted-foreground">
+              {!data && syncError ? 'Waiting to connect…' : !data ? 'Loading bracket…' : ''}
+            </p>
           </div>
         ) : view === 'draw' ? (
           <BracketDrawView data={data} eventId={activeEventId} />
         ) : view === 'results' ? (
           <BracketResultsView data={data} isFullscreen={isFullscreen} />
         ) : (
-          <BracketLiveView data={data} isFullscreen={isFullscreen} />
+          <BracketLiveView
+            data={data}
+            isFullscreen={isFullscreen}
+            showNext={board.showNext}
+            showScores={board.showScores}
+          />
         )}
       </main>
     </div>

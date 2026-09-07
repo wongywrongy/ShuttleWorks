@@ -4,6 +4,7 @@
  * and the logic is unit-tested in isolation.
  */
 import type {
+  BracketSetScore,
   BracketTournamentDTO,
   PlayUnitDTO,
   Participant,
@@ -66,6 +67,15 @@ export interface LiveRow {
   sideB: string;
   status: 'on-court' | 'next' | 'conflict' | 'empty';
   matchRef?: string;
+  /** The recorded games for this play unit, when the Bracket engine runs in
+   *  Sets mode and a result has been entered. The venue board renders real
+   *  scores or none — it never synthesises one (match-card §4.4). Empty
+   *  where the result is absent, Simple-mode, or carries no sets. */
+  sets: BracketSetScore[];
+  /** Whether both sides resolved to real names. The optional Next preview
+   *  is omitted when this is false, rather than putting "To be decided"
+   *  (or worse, a feeder reference) on the wall. */
+  resolved: boolean;
 }
 
 /** What a spectator can see happening: the bracket matches on court right
@@ -84,6 +94,9 @@ export interface LiveRow {
  *  on what "next" means. */
 export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
   const puById = new Map(data.play_units.map((u) => [u.id, u]));
+  const setsByPuId = new Map(
+    data.results.map((r) => [r.play_unit_id, r.score?.sets ?? []]),
+  );
   const open = data.assignments.filter((a) => !a.finished);
   const byCourt = new Map<number, typeof open>();
   for (const assignment of open) {
@@ -103,13 +116,18 @@ export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
     for (const { assignment, status } of visible) {
       const pu = puById.get(assignment.play_unit_id);
       if (!pu) continue;
+      const sideA = sideLabel(pu, 'a', data.participants);
+      const sideB = sideLabel(pu, 'b', data.participants);
       rows.push({
         puId: pu.id,
         court: assignment.court_id,
-        sideA: sideLabel(pu, 'a', data.participants),
-        sideB: sideLabel(pu, 'b', data.participants),
+        sideA,
+        sideB,
         status,
         matchRef: assignment.play_unit_id,
+        sets: setsByPuId.get(pu.id) ?? [],
+        resolved:
+          sideA !== UNDETERMINED_SIDE_LABEL && sideB !== UNDETERMINED_SIDE_LABEL,
       });
     }
   }

@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from bracket.brackets import TournamentOut, _hydrate_session, _serialize_session
 from core.dependencies import require_tournament_access
 from core.error_codes import ErrorCode, http_error
+from core.limits import HexColor
 from core.schemas import MeetStandingRowDTO
 from db.models import (
     MatchState,
@@ -40,8 +41,83 @@ public_router = APIRouter(prefix="/display", tags=["display-public"])
 manage_router = APIRouter(
     prefix="/tournaments/{tournament_id}/display-token", tags=["display-manage"]
 )
+board_router = APIRouter(
+    prefix="/tournaments/{tournament_id}/board-settings", tags=["display-manage"]
+)
 
 _OWNER = Depends(require_tournament_access("owner"))
+_VIEWER = Depends(require_tournament_access("viewer"))
+_OPERATOR = Depends(require_tournament_access("operator"))
+
+
+# ---- Venue-board settings --------------------------------------------
+
+#: Ceiling on a stored image source. Board branding is deliberately allowed
+#: to be an inline ``data:`` URI — that is what makes a logo survive a venue
+#: with no internet and the app's own ``img-src 'self' data: blob:`` CSP —
+#: so the cap has to admit a real (downscaled) image rather than a URL. The
+#: console downscales before it uploads; this is the backstop.
+MAX_BOARD_IMAGE_CHARS = 300_000
+
+
+class BoardSettingsDTO(BaseModel):
+    """What the venue board LOOKS like and WHICH optional content it carries.
+
+    Stored on ``tournaments.board_settings`` (one JSON column, this DTO's
+    ``model_dump``) rather than in the state blob, and read by BOTH boards —
+    meet, bracket and hybrid — plus the public token projection. That is the
+    reason it is not another ``tvXxx`` field on ``TournamentConfig``: the
+    bracket board never reads the meet config, and ``showNext`` has to mean
+    the same thing on every board (operator-visual-fixes P4; match-card
+    contract §4.4).
+
+    ``showNext`` defaults to **False**: the venue board's job is to say what
+    is happening on a court now, and a "next" preview is opt-in.
+    """
+
+    title: Optional[str] = Field(default=None, max_length=120)
+    logoUrl: Optional[str] = Field(default=None, max_length=MAX_BOARD_IMAGE_CHARS)
+    bannerUrl: Optional[str] = Field(default=None, max_length=MAX_BOARD_IMAGE_CHARS)
+    accent: Optional[HexColor] = None
+    showNext: bool = False
+    showScores: bool = True
+
+
+def _board_settings(t: Tournament) -> BoardSettingsDTO:
+    """Stored settings, or the board's defaults for a workspace that has
+    never opened the appearance controls. Unknown/legacy keys are ignored
+    rather than 500-ing a screen in a public hall."""
+    stored = t.board_settings or {}
+    known = {k: v for k, v in stored.items() if k in BoardSettingsDTO.model_fields}
+    try:
+        return BoardSettingsDTO(**known)
+    except Exception:  # pragma: no cover - defensive; a bad stored blob
+        return BoardSettingsDTO()
+
+
+@board_router.get("", response_model=BoardSettingsDTO, dependencies=[_VIEWER])
+def get_board_settings(
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> BoardSettingsDTO:
+    t = repo.tournaments.get_by_id(tournament_id)
+    if t is None:
+        raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found")
+    return _board_settings(t)
+
+
+@board_router.put("", response_model=BoardSettingsDTO, dependencies=[_OPERATOR])
+def put_board_settings(
+    body: BoardSettingsDTO,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+) -> BoardSettingsDTO:
+    """Replace the board settings wholesale. Small, self-contained document —
+    a merge would need a per-field "unset" sentinel to clear a logo."""
+    stored = repo.set_board_settings(tournament_id, body.model_dump(mode="json"))
+    if stored is None:
+        raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found")
+    return body
 
 
 # ---- Token management (authenticated) --------------------------------
@@ -95,10 +171,23 @@ def _resolve(repo: LocalRepository, token: str) -> Tournament:
 class DisplaySummaryDTO(BaseModel):
     """``kind`` is the BOARD kind — which engine(s) the display renders —
     not the workspace's legacy ``kind`` column. ``meet`` | ``bracket`` |
-    ``hybrid``."""
+    ``hybrid``.
+
+    ``timeZone`` is the workspace's IANA venue zone, carried here so the
+    board's clock is the TOURNAMENT's clock. Until operator-visual-fixes P4
+    no timezone reached the board's wire at all and both boards hardcoded
+    UTC (match-card contract §4.4: "timezone is data, not a constant"). It
+    is ``None`` when the workspace has no usable zone, and the board then
+    omits the clock rather than inventing one.
+
+    ``board`` is the venue-board settings document — see ``BoardSettingsDTO``.
+    Branding is public by construction: it is what is projected on the wall.
+    """
 
     kind: str
     name: Optional[str] = None
+    timeZone: Optional[str] = None
+    board: BoardSettingsDTO = Field(default_factory=BoardSettingsDTO)
 
 
 def _board_kind(t: Tournament, repo: LocalRepository) -> str:
@@ -131,7 +220,16 @@ def display_summary(
     repo: LocalRepository = Depends(get_repository),
 ) -> DisplaySummaryDTO:
     t = _resolve(repo, token)
-    return DisplaySummaryDTO(kind=_board_kind(t, repo), name=t.name)
+    # A blank/whitespace zone is "unavailable", not "UTC": the column
+    # defaults to UTC for legacy rows, and a real UTC venue is a real
+    # answer, so only an EMPTY value is treated as missing.
+    zone = (t.time_zone or "").strip() or None
+    return DisplaySummaryDTO(
+        kind=_board_kind(t, repo),
+        name=t.name,
+        timeZone=zone,
+        board=_board_settings(t),
+    )
 
 
 class DisplayStateDTO(BaseModel):
@@ -274,10 +372,31 @@ def _display_status_word(raw: str) -> str:
     return canonical_to_legacy(canonical)
 
 
+def _display_score(row: MatchState) -> Optional[DisplayMatchScoreDTO]:
+    """The AUTHORIZED score for the public board, or ``None``.
+
+    match-card contract §4.4: "a synthesised score where none is published
+    (absent scores are not zero)". The score editor seeds blank games as
+    ``0``, so an operator who opens it on a running match and closes it
+    without typing leaves a stored ``0 / 0`` that is not a result — and the
+    board rendered it as a real "0–0" on the wall. A zero-zero pair on a
+    match that has not FINISHED is therefore read as "nothing recorded yet"
+    and omitted; on a finished match 0–0 is a recorded (if unusual) outcome
+    and is published unchanged.
+    """
+    if row.score_side_a is None or row.score_side_b is None:
+        return None
+    if (
+        row.score_side_a == 0
+        and row.score_side_b == 0
+        and _display_status_word(row.status) != "finished"
+    ):
+        return None
+    return DisplayMatchScoreDTO(sideA=row.score_side_a, sideB=row.score_side_b)
+
+
 def _row_to_display_state(row: MatchState) -> DisplayMatchStateDTO:
-    score = None
-    if row.score_side_a is not None and row.score_side_b is not None:
-        score = DisplayMatchScoreDTO(sideA=row.score_side_a, sideB=row.score_side_b)
+    score = _display_score(row)
     return DisplayMatchStateDTO(
         matchId=row.match_id,
         status=_display_status_word(row.status),

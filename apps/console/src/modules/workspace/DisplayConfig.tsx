@@ -1,49 +1,73 @@
 /**
- * Venue board configuration — the workspace's published board sources, an
- * explicit fullscreen preview of the real published board, and (when Meet is
- * enabled) the board's layout controls.
+ * Venue board configuration — the settings half of Display · Board.
  *
- * Built from the shared settings grammar (`Section` + `Row` + `FieldRow`), the
- * same as Meet and Bracket Configuration. It used to run its own third
- * grammar — `<h3 className="text-sm">` headings at the exact weight of the row
- * labels beneath them, rows inside rounded bordered cards, and an explanatory
- * paragraph under every heading — which is why this module looked untouched by
- * the config unification.
+ * The page answers, in this order (operator-visual-fixes P4): **is the board
+ * on**, **what is its link** (owned by `SharingTab`, composed alongside this
+ * component), **which courts does it show**, **does it show Next**, then its
+ * appearance, then a fullscreen preview of the real published board.
  *
- * Package 16 (v3 consolidated plan, superseding V3-OC22.1): the narrow inline
- * iframe preview that used to sit here is gone. Widening it only ever fixed
- * the symptom — a genuinely useful preview has to be full board size, which
- * this settings column cannot offer next to the layout controls. "Preview
- * fullscreen" opens the SAME published board (the minted capability URL) in
- * a new window instead; the configuration page underneath is untouched, so
- * returning to it is not a separate code path to get right. Link/rotate
- * management for that same token lives in `SharingTab` (scope="links"),
- * composed alongside this component on the canonical `/publish/displays`
- * page — this component no longer duplicates that surface's own heading or
- * link controls (V3-OC22.2's "one board name" ruling).
+ * Two things it deliberately does NOT do:
+ *
+ *  - **No "Board sources" catalog.** It used to list Meet and Bracket with a
+ *    status word and a link to Modules — a second, read-only rendering of
+ *    module state that answered nothing an operator could act on here. Board
+ *    availability is module state, so this page drives the ONE existing
+ *    module command (`useWorkspaceModules`) for the Display module itself
+ *    and shows nothing else about the other modules.
+ *  - **No embedded preview frame.** A useful preview is full board size,
+ *    which this settings column cannot offer; "Preview fullscreen" opens the
+ *    same published capability URL in its own window, and the configuration
+ *    page underneath is never unmounted.
+ *
+ * Built from the shared settings grammar (`Section` + `Row`), the same as
+ * Meet and Bracket Configuration.
  */
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
-import { MODULE_LABELS, type WorkspaceModule } from '../../platform/product-shell/types';
+import type { WorkspaceModule } from '../../platform/product-shell/types';
+import { useWorkspaceModules } from '../../platform/domain/useWorkspaceModules';
+import { useAction } from '../../hooks/useAction';
 import { apiClient } from '../../api/client';
-import { Row, Section } from '../../platform/engine-config/SettingsControls';
+import { Row, Seg, Section } from '../../platform/engine-config/SettingsControls';
 import { DisplayLayoutEditor } from './displayConfig/DisplayLayoutEditor';
+import { BoardAppearance } from './displayConfig/BoardAppearance';
 
-const BOARD_SOURCES = [
-  { id: 'meet', label: MODULE_LABELS.meet },
-  { id: 'bracket', label: MODULE_LABELS.bracket },
+const ON_OFF = [
+  { value: 'on' as const, label: 'On' },
+  { value: 'off' as const, label: 'Off' },
 ];
 
-export function DisplayConfig({ tid, modules }: { tid: string; modules: WorkspaceModule[] }) {
-  const moduleById = (id: string) => modules.find((m) => m.id === id);
-  const sourceState = (id: string): 'Enabled' | 'Available' | 'Off' => {
-    const source = moduleById(id);
-    if (source?.status === 'enabled') return 'Enabled';
-    if (source?.status === 'disabled') return 'Off';
-    return 'Available';
-  };
-  const meetEnabled = sourceState('meet') === 'Enabled';
+export function DisplayConfig({
+  tid,
+  modules,
+  linkSlot,
+}: {
+  tid: string;
+  modules: WorkspaceModule[];
+  /** The board's LINK controls (copy / open / replace), composed in by the
+   *  page so this component takes no dependency on the settings module that
+   *  owns them. Rendered directly under the on/off switch, which is the
+   *  order the page's questions come in. */
+  linkSlot?: ReactNode;
+}) {
+  const meetEnabled = modules.some((m) => m.id === 'meet' && m.status === 'enabled');
+  const engineOn = modules.some(
+    (m) => (m.id === 'meet' || m.id === 'bracket') && m.status === 'enabled',
+  );
+  const displayModule = modules.find((m) => m.id === 'display');
+  const boardOn = displayModule?.status === 'enabled';
+
+  // The ONE module command — the same seam Administration · Modules uses, so
+  // this switch cannot become a second owner of module state. A server-side
+  // refusal (Display needs an engine, and the other backend guards) surfaces
+  // as a toast through `useAction`.
+  const { enable, disable } = useWorkspaceModules(tid);
+  const toggleBoard = useAction(
+    useCallback(
+      async (next: boolean) => (next ? enable('display') : disable('display')),
+      [enable, disable],
+    ),
+  );
 
   // The public link is a CAPABILITY link, minted server-side and revocable by
   // rotation (SP-CLOUD-2) — the same `/tournaments/{id}/display-token` seam
@@ -85,42 +109,41 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
       </div>
 
       <div className="max-w-2xl space-y-2">
-        {/* Board availability follows module state. A switch here would create
-            a second owner for module enablement, so these are deliberately
-            plain readouts with a link to the owning settings surface. */}
-        <Section title="Board sources">
-          {BOARD_SOURCES.map((source, index) => {
-            const state = sourceState(source.id);
-            return (
-              <Row
-                key={source.id}
-                readOnly
-                label={source.label}
-                last={index === BOARD_SOURCES.length - 1}
-                control={
-                  <span className="inline-flex items-baseline gap-2">
-                    <span className={state === 'Enabled' ? 'text-foreground' : 'text-muted-foreground'}>
-                      {state}
-                    </span>
-                    {state !== 'Enabled' ? (
-                      <Link
-                        to={`/tournaments/${tid}/administration/modules`}
-                        className="text-xs font-medium text-accent hover:underline"
-                      >
-                        Modules →
-                      </Link>
-                    ) : null}
-                  </span>
-                }
+        <Section title="Board">
+          <Row
+            label="Show this board"
+            last
+            control={
+              <Seg
+                options={ON_OFF}
+                value={boardOn ? 'on' : 'off'}
+                onChange={(next) => {
+                  const wanted = next === 'on';
+                  if (wanted !== boardOn) void toggleBoard.run(wanted);
+                }}
+                ariaLabel="Show this board"
+                disabled={toggleBoard.pending || (!boardOn && !engineOn)}
               />
-            );
-          })}
+            }
+          />
+          {!boardOn && !engineOn ? (
+            <p className="pb-3 text-xs text-muted-foreground">Needs Meet or Bracket on.</p>
+          ) : null}
         </Section>
+
+        {linkSlot}
+
+        {/* Court order and visibility + the meet grid layout. These read the
+            meet config, which the bracket board does not consume — the
+            controls that DO apply to every board (Show next, Show scores,
+            branding) live in `BoardAppearance` below and are always shown. */}
+        {meetEnabled ? <DisplayLayoutEditor tid={tid} /> : null}
+
+        <BoardAppearance tid={tid} />
 
         {/* One explicit action, not an embedded frame: opens the real
             published board (the same minted token every other surface
-            reads) in its own window. The configuration page here never
-            unmounts, so there is nothing to "restore" on return. */}
+            reads) in its own window. */}
         <Section title="Preview">
           {publicUrl ? (
             <Row
@@ -158,12 +181,6 @@ export function DisplayConfig({ tid, modules }: { tid: string; modules: Workspac
             <p className="py-3 text-sm text-muted-foreground">Preparing the board link…</p>
           )}
         </Section>
-
-        {/* The tv* fields only drive MeetDisplayPage; bracket boards do not
-            consume them. Keep those controls scoped to Meet while the
-            fullscreen preview above remains useful for every enabled board
-            source. */}
-        {meetEnabled ? <DisplayLayoutEditor tid={tid} /> : null}
       </div>
     </div>
   );
