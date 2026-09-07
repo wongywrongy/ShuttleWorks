@@ -120,3 +120,34 @@ test('inventory capture adds an internal list-end sheet and valid PDF', {
     await rm(outputDir, { recursive: true, force: true });
   }
 });
+
+// The current book is a product inventory, not a compatibility URL census.
+// It must follow the canonical workflow registry and contain no pre-
+// consolidation aliases. Historical redirect behavior is documented by the
+// route contract and is deliberately excluded from visual capture.
+test('capture inventory covers every canonical workflow route and excludes aliases', async () => {
+  const capture = await readFile(CAPTURE, 'utf8');
+  const nav = await readFile(
+    resolve(ROOT, 'apps/console/src/platform/product-shell/workspaceNav.ts'),
+    'utf8',
+  );
+  const routesBlock = nav.slice(
+    nav.indexOf('export const WORKFLOW_ROUTES'),
+    nav.indexOf('export interface WorkflowRedirect'),
+  );
+  const routePaths = [...routesBlock.matchAll(/path: "([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(routePaths.length >= 20, 'workflow routes should be discoverable');
+
+  const surfacesBlock = capture.slice(
+    capture.indexOf('const CONSOLE_SURFACES = ['),
+    capture.indexOf('const ENTRANT_SURFACES = ['),
+  );
+  assert.equal(capture.includes('const CONSOLE_ALIAS_PATHS = ['), false);
+  assert.equal(capture.includes('const CONSOLE_ALIASES ='), false);
+  for (const routePath of routePaths) {
+    assert.ok(
+      surfacesBlock.includes(`/${routePath}\``) || surfacesBlock.includes(`/${routePath}?`),
+      `capture inventory is missing workflow route ${routePath}`,
+    );
+  }
+});

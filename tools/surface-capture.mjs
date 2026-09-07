@@ -59,38 +59,48 @@ const INVITE_TOKEN = process.env.INVITE_TOKEN ?? "";
 const PARTNER_TOKEN = process.env.PARTNER_TOKEN ?? "";
 const AUTH_ME_URL = process.env.AUTH_ME_URL ?? "";
 const PLAYER_KEY = process.env.PLAYER_KEY ?? "";
+// P0 (operator-visual-fixes.md): a review book must record WHICH dataset it
+// shows and in WHICH event timezone, or a reader cannot tell a deliberate
+// failure fixture from a product defect. `make surface-books-fixture` passes
+// FIXTURE_MODE through from fixture.json; the Tailscale demo is always the
+// clean dataset. EVENT_TIMEZONE is auto-resolved from the public page
+// projection when it is not supplied.
+const FIXTURE_MODE = process.env.FIXTURE_MODE ?? "normal";
+const EVENT_TIMEZONE_ENV = process.env.EVENT_TIMEZONE ?? "";
 const SETTLE_MS = Number(process.env.CAPTURE_SETTLE_MS ?? "1800");
 const CAPTURE_LIMIT = Number(process.env.CAPTURE_LIMIT ?? "0");
 const CAPTURE_LABEL = process.env.CAPTURE_LABEL ?? "";
 const normalizedBase = base.replace(/\/$/, "");
 
+// The operator surface inventory. One entry per canonical destination in
+// `apps/console/src/platform/product-shell/workspaceNav.ts` (`WORKFLOW_ROUTES`)
+// plus non-workspace surfaces (auth, hub, global settings, venue board, invite)
+// and pagination/scope states. Compatibility URLs are deliberately absent from
+// current books: they are route-contract history, not user-facing surfaces.
 const CONSOLE_SURFACES = [
   ["Authentication · Sign in", "/login"],
   ["Hub — workspace list", "/"],
   ["Hub — create workspace", "/new"],
   ["Global settings", "/settings"],
   ["Overview", `/tournaments/${WS}/overview`],
-  ["Setup · General", `/tournaments/${WS}/setup/general`],
-  ["Setup · Dates", `/tournaments/${WS}/setup/dates`],
-  ["Setup · Venue", `/tournaments/${WS}/setup/venue`],
-  ["Setup · Events", `/tournaments/${WS}/setup/events`],
-  ["Setup · Rules", `/tournaments/${WS}/setup/rules`],
+  // Four Setup destinations, one per job (the checklist lives on Overview).
+  ["Setup · Details", `/tournaments/${WS}/setup/details`],
   ["Setup · Entry rules", `/tournaments/${WS}/setup/entries`],
-  ["Setup · Staff", `/tournaments/${WS}/setup/people`],
-  ["Setup · Public information", `/tournaments/${WS}/setup/public-info`],
+  ["Setup · Scoring", `/tournaments/${WS}/setup/scoring`],
+  ["Setup · Public site", `/tournaments/${WS}/setup/public-site`],
+  ["Participants · Entries", `/tournaments/${WS}/participants/entries`],
   ["Participants · Roster", `/tournaments/${WS}/participants/people`],
-  ["Competition · Draws", `/tournaments/${WS}/competition/draws`],
+  ["Bracket · Draws", `/tournaments/${WS}/bracket/draws`],
   [
-    "Competition · Draw canvas",
-    `/tournaments/${WS}/competition/draw?event=${DRAW_KEY}`,
+    "Bracket · Draw canvas",
+    `/tournaments/${WS}/bracket/draw?event=${DRAW_KEY}`,
   ],
-  ["Competition · Matches", `/tournaments/${WS}/competition/matches`],
+  ["Bracket · Matches", `/tournaments/${WS}/bracket/matches`],
+  ["Bracket · Settings", `/tournaments/${WS}/bracket/settings`],
   ["Operations · Plan", `/tournaments/${WS}/operations/plan`],
   ["Operations · Live day", `/tournaments/${WS}/operations/live`],
-  ["Publish · Site", `/tournaments/${WS}/publish/site`],
-  ["Publish · Draws and results", `/tournaments/${WS}/publish/draws-results`],
-  ["Publish · Displays", `/tournaments/${WS}/publish/displays`],
-  ["Publish · Links", `/tournaments/${WS}/publish/links`],
+  ["Display · Board settings", `/tournaments/${WS}/display/board`],
+  ["Display · Board preview", `/tournaments/${WS}/display/preview`],
   [
     DISPLAY_TOKEN
       ? "Display · Fullscreen venue board"
@@ -104,15 +114,18 @@ const CONSOLE_SURFACES = [
   ["Administration · Backups", `/tournaments/${WS}/administration/backups`],
   ["Administration · Activity", `/tournaments/${WS}/administration/activity`],
   ["Administration · Lifecycle", `/tournaments/${WS}/administration/lifecycle`],
-  ["Module guard · Entries unavailable", `/tournaments/${WS}/entries`],
-  ["Module guard · Meet configuration unavailable", `/tournaments/${WS}/setup`],
-  ["Module guard · Meet roster unavailable", `/tournaments/${WS}/roster`],
-  ["Module guard · Meet matches unavailable", `/tournaments/${WS}/matches`],
-  // Pagination and scope states are appended so the original surface IDs in
-  // existing review books remain stable.
-  ["Hub — workspace list · page 2", "/?facet=all&page=2"],
-  ["Hub — completed workspaces", "/?facet=complete"],
-  ["Participants · Entries", `/tournaments/${WS}/participants/entries`],
+  // Kind-mismatched and disabled-module states. `meet/*` on a bracket
+  // workspace keeps its renderer on purpose so the guard can explain the gap.
+  ["Module guard · Meet matches unavailable", `/tournaments/${WS}/meet/matches`],
+  [
+    "Module guard · Meet team structure unavailable",
+    `/tournaments/${WS}/meet/team-structure`,
+  ],
+  // Pagination and scope states are explicit interaction sheets; historical
+  // surface IDs remain in the review register, while current books use this
+  // canonical route inventory.
+  ["Hub — past workspaces", "/?view=past"],
+  ["Hub — live workspaces", "/?view=live"],
   [
     "Participants · Roster · bracket page 2 / 100 rows",
     `/tournaments/${WS}/participants/people?bracket-roster.page=2&bracket-roster.pageSize=100`,
@@ -122,12 +135,12 @@ const CONSOLE_SURFACES = [
     `/tournaments/${WS}/participants/people?bracket-roster.pageSize=25`,
   ],
   [
-    "Competition · Matches · bracket page 2 / 100 rows",
-    `/tournaments/${WS}/competition/matches?bracket-matches.page=2&bracket-matches.pageSize=100`,
+    "Bracket · Matches · page 2 / 100 rows",
+    `/tournaments/${WS}/bracket/matches?bracket-matches.page=2&bracket-matches.pageSize=100`,
   ],
   [
-    "Competition · Matches · bracket 50 rows",
-    `/tournaments/${WS}/competition/matches?bracket-matches.pageSize=50`,
+    "Bracket · Matches · 50 rows",
+    `/tournaments/${WS}/bracket/matches?bracket-matches.pageSize=50`,
   ],
   ["Global settings · Security", "/settings?section=security"],
   ["Global settings · Sessions", "/settings?section=sessions"],
@@ -143,13 +156,15 @@ if (INVITE_TOKEN) {
 
 if (MEET_WS_ID) {
   CONSOLE_SURFACES.push(
+    ["Meet · Matches", `/tournaments/${MEET_WS_ID}/meet/matches`],
+    ["Meet · Team structure", `/tournaments/${MEET_WS_ID}/meet/team-structure`],
     [
       "Participants · Roster · Meet page 2 / 100 rows",
       `/tournaments/${MEET_WS_ID}/participants/people?meet-roster.page=2&meet-roster.pageSize=100`,
     ],
     [
-      "Competition · Matches · Meet page 2 / 100 rows",
-      `/tournaments/${MEET_WS_ID}/competition/matches?meet-matches.page=2&meet-matches.pageSize=100`,
+      "Meet · Matches · page 2 / 100 rows",
+      `/tournaments/${MEET_WS_ID}/meet/matches?meet-matches.page=2&meet-matches.pageSize=100`,
     ],
   );
 }
@@ -158,11 +173,8 @@ const ENTRANT_SURFACES = [
   ["Discovery · Live & upcoming", "/e/"],
   ["Discovery · Completed tournaments", "/e/?view=completed#calendar"],
   ["Tournament · Overview", `/e/${SLUG}`],
-  ["Tournament · Events", `/e/${SLUG}?tab=events`],
   ["Tournament · Players", `/e/${SLUG}?tab=players`],
   ["Tournament · Draws", `/e/${SLUG}?tab=draws`],
-  ["Tournament · Seeded entries", `/e/${SLUG}?tab=seeds`],
-  ["Tournament · Winners", `/e/${SLUG}?tab=winners`],
   ["Tournament · Schedule and live", `/e/${SLUG}/schedule`],
   ["Draw · Singles full bracket", `/e/${SLUG}/draws/${DRAW_KEY}`],
   [
@@ -184,7 +196,10 @@ const ENTRANT_SURFACES = [
   ["Account · Failed sign-in outcome", "/e/login/failed"],
   ["Account · Signed-in outcome", "/e/login/signed-in"],
   ["Account · Create account", "/e/signup"],
-  ["Account · Create account for tournament", `/e/signup/${SLUG}`],
+  [
+    "Account · Create account for tournament",
+    `/e/signup?next=${encodeURIComponent(`/e/${SLUG}/enter`)}`,
+  ],
   ["Account · Verify address", "/e/verify"],
   ["Account · Verification complete", "/e/verify/done"],
   ["Account · Verification failed", "/e/verify/failed"],
@@ -195,7 +210,6 @@ const ENTRANT_SURFACES = [
   ["Account · Password reset complete", "/e/reset/done"],
   ["Account · Password reset failed", "/e/reset/failed"],
   ["Account · New password failed", "/e/reset/password-failed"],
-  ["Doubles partner invitation", "/e/partner"],
   ["Doubles partner accepted", "/e/partner/accepted"],
   ["Doubles partner failed", "/e/partner/failed"],
   ["My entries (signed out)", "/e/me/entries"],
@@ -210,10 +224,6 @@ const ENTRANT_SURFACES = [
     "/e/?view=completed&page=2#calendar",
   ],
   ["Partner invitation · Missing fixture token", "/e/partner/missing-fixture-token"],
-  [
-    "Partner signup · Missing fixture token",
-    "/e/signup/partner/missing-fixture-token",
-  ],
 ];
 
 if (PARTNER_TOKEN) {
@@ -295,20 +305,26 @@ function descriptionFor(label) {
   if (label.startsWith("Participants · ")) {
     return "Operator participant workspace for roster identity, eligibility, and event involvement.";
   }
-  if (label.startsWith("Competition · Draws")) {
+  if (label.startsWith("Bracket · Draws")) {
     return "Operator draw index for generation state, coverage, and opening an event bracket.";
   }
-  if (label === "Competition · Draw canvas") {
+  if (label === "Bracket · Draw canvas") {
     return "Interactive operator bracket canvas for reviewing progression and recording results.";
   }
-  if (label === "Competition · Matches") {
-    return "Operator match inventory for search, status review, corrections, and result entry.";
+  if (label.startsWith("Bracket · Matches") || label.startsWith("Meet · Matches")) {
+    return "Operator match inventory for search, review, corrections, and result entry.";
+  }
+  if (label === "Bracket · Settings") {
+    return "Event definitions, draw format, and draw size for the bracket engine.";
+  }
+  if (label === "Meet · Team structure") {
+    return "Operator team and lineup structure for a meet workspace.";
+  }
+  if (label.startsWith("Display · ")) {
+    return `Venue board surface for ${label.slice("Display · ".length).toLowerCase()}.`;
   }
   if (label.startsWith("Operations · ")) {
     return `Day-of operator workflow for ${label.slice("Operations · ".length).toLowerCase()} scheduling and court control.`;
-  }
-  if (label.startsWith("Publish · ")) {
-    return `Publication control surface for ${label.slice("Publish · ".length).toLowerCase()} visibility and sharing.`;
   }
   if (label.startsWith("Administration · ")) {
     return `Workspace administration for ${label.slice("Administration · ".length).toLowerCase()} management.`;
@@ -322,6 +338,23 @@ function descriptionFor(label) {
   return "Product surface captured for visual design and user-flow review.";
 }
 
+async function resolveEventTimeZone() {
+  if (EVENT_TIMEZONE_ENV) return EVENT_TIMEZONE_ENV;
+  // Same-origin only on the entrant tier; the console origin proxies /api and
+  // does not serve /e/api, so a console run simply records "unavailable"
+  // unless EVENT_TIMEZONE is supplied.
+  try {
+    const response = await fetch(
+      `${normalizedBase}/e/api/page/${encodeURIComponent(SLUG)}/matches`,
+    );
+    if (!response.ok) return "";
+    const payload = await response.json();
+    return payload.timeZone ?? "";
+  } catch {
+    return "";
+  }
+}
+
 async function resolvePublicPersonKey() {
   if (PLAYER_KEY) return PLAYER_KEY;
   try {
@@ -330,14 +363,20 @@ async function resolvePublicPersonKey() {
     );
     if (!response.ok) return "";
     const payload = await response.json();
-    return payload.players?.find((player) => player.personKey)?.personKey ?? "";
+    const resolved = payload.players?.find(
+      (player) =>
+        player.person?.resolution === "resolved" &&
+        typeof player.person?.identity?.id === "string" &&
+        player.person.identity.id.length > 0,
+    );
+    return resolved?.person.identity.id ?? "";
   } catch {
     return "";
   }
 }
 
-let surfaces =
-  tier === "console" ? [...CONSOLE_SURFACES] : [...ENTRANT_SURFACES];
+let surfaces = tier === "console" ? [...CONSOLE_SURFACES] : [...ENTRANT_SURFACES];
+const omittedOptionalStates = [];
 if (tier === "entrant") {
   const playerKey = await resolvePublicPersonKey();
   if (playerKey) {
@@ -348,10 +387,12 @@ if (tier === "entrant") {
       `/e/${SLUG}/players/${encodeURIComponent(playerKey)}`,
     ]);
   } else {
-    surfaces.push([
-      "Player detail · Missing fixture person",
-      `/e/${SLUG}/players/missing-fixture-person`,
-    ]);
+    // A player page requires an authorized, resolved public person identity.
+    // Do not manufacture a 404 sheet when a fixture has no routable person.
+    omittedOptionalStates.push({
+      label: "Player detail",
+      reason: "Selected fixture has no routable published person identity",
+    });
   }
 }
 
@@ -366,6 +407,17 @@ if (CAPTURE_LABEL) {
 if (CAPTURE_LIMIT > 0) {
   surfaces = surfaces.slice(0, CAPTURE_LIMIT);
 }
+// Route coverage describes product screens only. Compatibility URLs are
+// intentionally absent: historical redirect behavior belongs in the route
+// contract, never in the current visual surface book. Compute after optional
+// filtering so the manifest matches the actual sheets in this run.
+const canonicalDestinationCount = new Set(
+  surfaces.map(([, path]) => path.split(/[?#]/, 1)[0]),
+).size;
+const routeCoverage = {
+  canonicalDestinations: canonicalDestinationCount,
+  stateSheets: surfaces.length,
+};
 const VIEWPORTS = [
   ["desktop", 1440, 900],
   ["mobile", 390, 844],
@@ -386,11 +438,25 @@ const artifactStem = outPath.slice(0, -extname(outPath).length);
 const manifestPath = `${artifactStem}.manifest.json`;
 const runningPath = `${artifactStem}.running.json`;
 const startedAt = new Date();
+const eventTimeZone = (await resolveEventTimeZone()) || "unavailable";
+// The capture context every reviewer needs before reading a single sheet:
+// which dataset, which event timezone, which viewports, which routes (the
+// per-surface `path` / `finalUrl` below).
+const captureContext = {
+  fixtureMode: FIXTURE_MODE,
+  eventTimeZone,
+  workspaceId: tier === "console" ? WS : null,
+  publicSlug: tier === "entrant" ? SLUG : null,
+  viewports: VIEWPORTS.map(([name, width, height]) => ({ name, width, height, deviceScaleFactor: 2 })),
+  routeCoverage,
+  omittedStates: tier === "entrant" ? omittedOptionalStates : [],
+};
 const runState = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   status: "running",
   tier,
   baseUrl: normalizedBase,
+  captureContext,
   output: outPath,
   startedAt: startedAt.toISOString(),
   updatedAt: startedAt.toISOString(),
@@ -665,7 +731,8 @@ const html = `<!doctype html>
 <p><strong>Design direction:</strong> preserve readable match identity and stored participant names; use restrained semantic colour, flat ordinary surfaces, consistent property panels and explicit saved/unsaved feedback. Backend terms belong in the UI only when they help a user make a decision.</p>
 <p><strong>Annotate:</strong> cite surface ID, viewport and segment, then state the observed problem, affected task, severity, proposed change and measurable acceptance criterion. Distinguish a visual observation from an interaction hypothesis.</p>
 <p><strong>Further validation:</strong> keyboard/focus order, screen-reader output, dark theme, form errors, authenticated entry outcomes, offline recovery and physical venue viewing distance require separate testing. Internal scroll panels, horizontal canvases and virtualized regions show their initial visible position only. Document continuations do not scroll these panels.</p>
-<p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; reduced motion. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Timing is live demo data, not a frozen cross-surface snapshot. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
+<p><strong>Capture context:</strong> fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> canonical destinations and <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets. Compatibility URLs are excluded from current books; historical redirect behavior is documented separately in the route contract. Every sheet records its requested route and the final URL reached.</p>
+<p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; reduced motion. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Timing is live demo data, not a frozen cross-surface snapshot. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
 </div></section>
 <section class="index"><h1>Surface index</h1><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>
 ${pages.map(({card:c,index,viewport,shot,segment,count,kind})=>`<section class="sheet ${viewport} ${kind === 'scroll-end' ? 'scroll-end' : ''}" ${viewport==='desktop'&&segment===0&&kind==='document'?`id="s${index}"`:''}>

@@ -16,6 +16,27 @@ canonical set and its own single authority module. See
 [ADR 0029](/explanation/decisions/0029-state-and-formatting-contract).
 :::
 
+::: danger Amended 2026-09-07 — operator visual fixes, package P0
+`operator-visual-fixes.md` is approved product direction and **supersedes** the rules below wherever
+they disagree. Six changes, each also applied in place below and marked *(P0)*:
+
+1. **Module vocabulary.** The operator sections are **Setup · Participants · Bracket · Operations ·
+   Display · Administration**, with **Overview** the workspace landing page. *Competition* and
+   *Publish* are retired as section words; **Meet** names Meet-specific destinations where the Meet
+   module is enabled. Every label, breadcrumb, accessible name and route-coverage count in this
+   contract's scope uses that set.
+2. **Court queues are the default Plan view** (§3). The time-scaled board is a secondary
+   **Timeline** toggle. Raw slot labels (`S152`, `Slot 52`) are internal identifiers and never
+   appear in operator copy.
+3. **Paired score summaries, no per-game bolding** (§5.1). See the match-card contract §2.7/§3.4.
+4. **Court-first signage with no public diagnostics** (§9.1). A board tile's court number is its
+   largest element; an empty, unavailable or disputed court renders the court number alone.
+5. **A board "Next" preview is a persisted setting, default off** (§9.1).
+6. **Diagnostics are operator-owned** (§4, §8, §9). Conflict detail, connection state, freshness
+   and recovery live in operator surfaces; the public board receives no alert, no banner and no
+   task.
+:::
+
 ## How to read a domain section
 
 Every section has the same four parts.
@@ -197,6 +218,21 @@ A pending *participant* does not make a slot pending: plan §5 is explicit that 
 participant can still have a genuinely approved slot". A match whose second side is *Winner of QF1*
 and whose 14:00 slot is approved is publicly **Scheduled · 14:00**.
 
+::: warning Presentation of the schedule *(P0, 2026-09-07)*
+Two presentation rules travel with this domain, from `operator-visual-fixes.md`:
+
+1. **Court queues are the default Plan view.** Each court is an ordered lane of uniform match cells
+   with the estimated time beneath each cell in muted text. The time-scaled board stays available
+   behind a secondary **Timeline** toggle, and the zoom/`Time · Auto` controls belong to that
+   toggle alone. Reordering within and across lanes goes through the existing validated schedule
+   commands, with a keyboard-accessible equivalent; CP-SAT, slot/time data, rest constraints,
+   overlap checks, court availability, session boundaries and pinned assignments are unchanged.
+2. **Slot indices are storage, never copy.** `S152`, `Slot 52` and every equivalent raw slot label
+   are removed from the queue, the call list and every other operator surface. A slot is rendered
+   as its wall-clock time (§7) or not at all. Routine "scheduled" checkmarks are removed too: the
+   lane already conveys that the match is scheduled.
+:::
+
 ### 3.2 Missing data
 
 This is where the current tier lies, and the rules are absolute.
@@ -252,7 +288,7 @@ implementations answer it with a boolean and disagree about which bucket the thi
 | --- | --- | --- | --- |
 | `free` | No match is on this court and none is disputed. | Free | Court free |
 | `occupied` | Exactly one match is `playing` on this court. | On court | On court |
-| `disputed` | Two or more matches claim this court as currently in play. | **Needs resolution** | **Court assignment unavailable** |
+| `disputed` | Two or more matches claim this court as currently in play. | **Needs resolution** | *(P0, 2026-09-07)* **no public label and no match content — the court number alone.** The board never picks one of the competing claims, and the court is **not** reported free in operational data. |
 
 Two predicates replace the four ad-hoc occupancy rules (D20), and the difference between them is the
 `called` question:
@@ -368,7 +404,7 @@ axes: the **ledger** (what points exist) and the **outcome** (how the match ende
 | --- | --- | --- | --- |
 | `unplayed` | The game has not started. | *(cell omitted)* | *(cell omitted)* |
 | `in_progress` | Points are being recorded; the game has not met the completion rule. | the two scores, neither emphasised | the two scores, neither emphasised |
-| `complete` | The game met the configured completion rule. | the two scores, **winner's emphasised** | same |
+| `complete` | The game met the configured completion rule. | the two scores, **neither emphasised** *(P0, 2026-09-07 — per-game emphasis is deleted everywhere)* | same |
 
 **Ledger, per match:** `no_games_recorded` (the whole ledger is absent) vs `partial` vs `complete`.
 
@@ -389,11 +425,15 @@ live score is a lead, not a won game.* The rule is:
 1. A game is `complete` only when the **configured scoring rules** say so — the workspace's
    `scoringFormat` (`simple \| badminton`), `pointsPerSet`, `deuceEnabled` and, where configured,
    `setsToWin` (`apps/api/src/workspaces/setup.py:139, 640`).
-2. Only a `complete` game has a winner, and only a `complete` game's winner gets emphasis.
+2. Only a `complete` game has a winner. *(P0, 2026-09-07)* **No game score carries emphasis**,
+   complete or not: the recorded games render as one centred pair sequence — `18–21, 21–15, 21–13`
+   — whose first number always belongs to the first-listed side. Winner emphasis is carried by the
+   winning side's **name** and nothing else.
 3. **The match winner is never inferred from the ledger.** It comes from the authoritative match
    outcome. Retirement and walkover in particular can contradict the point totals entirely.
-4. **A losing side can win individual games**, so per-game emphasis is computed per game and is
-   independent of the match-winner mark (a mockup correction plan §3 calls out explicitly).
+4. **A losing side can win individual games**, and that stays legible from the numbers in the
+   paired sequence rather than from ink *(P0, 2026-09-07 — this rule previously required per-game
+   emphasis independent of the match-winner mark; that emphasis is now deleted)*.
 5. **The match-winner mark is absent during an unfinished match** and carries an accessible text
    equivalent when present (e.g. `aria-label="Winner"` on the mark, or visually hidden text) — never
    a bare glyph.
@@ -724,9 +764,24 @@ Contact fields never cross the boundary in any state.
 2. **Results-off must not synthesise a play state.** Turning results off hides *scores*; it is not a
    licence to reshape *states*.
 
-**Board projection** follows the same rules plus its own density (§6.1). Per plan §3 the board's
-conflict copy is **"Court assignment unavailable."** — no "wait for the next announcement", and no
-claim that staff are already resolving it unless that is a confirmed venue process.
+**Board projection** *(rewritten by P0, 2026-09-07)* follows the same rules plus its own density
+(§6.1), and is governed by one further rule: **the venue board carries no diagnostics.**
+
+- The **court number is the largest element** on a board card; names next; live scores readable;
+  the clock secondary.
+- An empty, unavailable or **disputed** court renders **the court number alone**. The strings
+  "Court assignment unavailable.", "No next match assigned" and every equivalent placeholder or
+  error prose are deleted from public signage. (This supersedes the plan §3 conflict-copy ruling.)
+- No public error colours, alert messages, LIVE pill or "Updated …" timestamp. Connection and
+  freshness diagnostics stay in operator controls (§8); an unusable or expired snapshot
+  **suppresses** the untrustworthy match content rather than adding a public banner.
+- A **"Next" preview is a persisted board setting defaulting to off**, on Meet, Bracket and hybrid
+  boards alike. When on, only resolved names render; an unresolved side reads **TBD** or is
+  omitted — never `Winner of …`, a feeder reference, or a UUID.
+- The board shows the tournament name and a small clock in the **tournament's own timezone**,
+  passed through the board data contract, **with no zone abbreviation** on venue signage. If the
+  timezone is unavailable the clock is **omitted** and the setup problem is surfaced to the
+  operator.
 
 ### 9.2 Missing data
 
@@ -753,7 +808,7 @@ claim that staff are already resolving it unless that is a confirmed venue proce
 | D7 | `entries_site.py:2409`, `:2316-2323` unknown → `scheduled` | deleted (see §2.4) | 04 |
 | D17 | `entries_site.py` structured `persons[]` | becomes authority — the console adopts this shape, not the reverse | 04, 10 |
 | — | `entries_json.py:296, 374, 574-600`; `entries_me.py:171-200` twins | redirect to authority | 04 |
-| — | `apps/console/src/modules/display/publicDisplay/CourtsView.tsx:302-309` "Two current matches claim this court." | redirects to authority; operator wording is *Needs resolution*, public/board wording is **"Court assignment unavailable."** | 17 |
+| — | `apps/console/src/modules/display/publicDisplay/CourtsView.tsx:302-309` "Two current matches claim this court." | *(P0, 2026-09-07)* operator wording stays *Needs resolution*; the public/board string is **deleted** — a disputed court renders the court number alone | 17, P4 |
 
 ---
 
@@ -808,7 +863,7 @@ event-type branches; and test **game completion**, not which score is larger.
 | Match layout | `__tests__/matchRowLayout.test.tsx` (operations) | Game columns align across rows for 1/3/5-game configurations; each score cell is associated with a named side | 10 |
 | Match layout | `matchCard.emptyLedger.test.tsx` (entrant) | With no games recorded the ledger contributes no cells, no reserved width and no winner mark to the DOM | 09, 11 |
 | Match outcome | `platform/domain/__tests__/score.test.ts` | A game leading 15–12 under `pointsPerSet: 21` has no winner; 21–19 does; 20–19 with `deuceEnabled` does not | 09, 10 |
-| Match outcome | `platform/domain/__tests__/score.test.ts` | The losing side of a completed match retains per-game emphasis on the game it won | 09, 10 |
+| Match outcome | `platform/domain/__tests__/score.test.ts` | *(P0, 2026-09-07; replaces "the losing side retains per-game emphasis")* **no game score carries emphasis** on any fixture, and the paired sequence's first number is the first-listed side | 09, 10, P3 |
 | Match outcome | `matchCard.outcome.test.tsx` (entrant) | A retirement shows the partial ledger, the word *Retired*, and the winner mark on the side the **outcome** names, not the side with more points | 09, 11 |
 | Match outcome | `matchCard.outcome.test.tsx` (entrant) | No winner mark exists in the DOM while the match outcome is `in_play`; when present the mark has an accessible text equivalent | 09, 11 |
 | Public permissions | `tests/backend/test_entries_site_api.py` (extend) | With results off, a `called` match is published as `called` — never `live` — and an unknown status is omitted rather than coerced to `scheduled` | 04, 15 |
@@ -823,7 +878,8 @@ event-type branches; and test **game completion**, not which score is larger.
 | Accessibility | `matchCard.a11y.test.tsx` (entrant) | The match's accessible name is `"{sideA} versus {sideB}"` built from the structured side, joins partners with "and", and never contains a slash | 11, 26 |
 | Accessibility | `apps/console/src/modules/operations/__tests__/conflictAssignment.a11y.test.tsx` | A dispute is a focusable, keyboard-operable assignment with named actions — not a banner | 03, 26 |
 | Responsive / signage | `matchCard.responsive.test.tsx` (entrant) | At 320 px a doubles card keeps both sides distinguishable and no name is truncated without a reachable full value; no fixed-height assertion is used | 11, 26 |
-| Responsive / signage | `__tests__/boardDensity.test.tsx` (display) | The board renders an explicit side separator so two stacked names cannot read as one pair, and its conflict copy is exactly "Court assignment unavailable." | 17 |
+| Responsive / signage | `__tests__/boardDensity.test.tsx` (display) | *(P0, 2026-09-07)* The board renders an explicit side separator so two stacked names cannot read as one pair; the **court number is its largest element**; an empty/unavailable/disputed court renders the court number alone, with no conflict copy, no LIVE pill and no "Updated …" value | 17, P4 |
+| Responsive / signage | `__tests__/boardDensity.test.tsx` (display) | *(P0)* The "Next" preview is absent by default and renders only resolved names (or `TBD`) when the persisted setting is on | 17, P4 |
 
 ---
 
@@ -834,7 +890,7 @@ All five were **confirmed by the orchestrator on 2026-09-06** as written; the re
 | # | Question | Ruling | Applies to |
 | --- | --- | --- | --- |
 | C1 | Is a court dispute derived or persisted? | Derive the dispute; persist the resolution on the existing command path (§4.2) | 03 |
-| C2 | Does a disputed court hide the matches, or only the court field? | Only the court field; both matches stay publicly visible (§4.2) | 04 |
+| C2 | Does a disputed court hide the matches, or only the court field? | ~~Only the court field; both matches stay publicly visible.~~ **Superseded 2026-09-07 (P0):** on the **venue board** a disputed court renders the court number alone — the board never picks arbitrarily between competing claims. Elsewhere on the public tier the §4.2 rule stands, and the dispute plus its recovery stay operator-owned (§9.1). | 04, P4 |
 | C3 | Is there a configured point cap? | Add a nullable `pointCap` in package 13; until then print "Win by 2" with no cap claim (§5.1) | 09, 13 |
 | C4 | Does structured sides on the operator wire get its own slice? | Yes — split package 10 into 10a (DTO) and 10b (presentation) (§6.4) | 10 |
 | C5 | What does the durability chip say in pure local mode? | "Saved on this device", with backups named as the recovery route; no *Syncing* / *Synced* offered (§8.1) | 19 |

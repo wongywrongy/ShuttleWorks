@@ -197,10 +197,13 @@ surface-books:
 	workspace_id="$$(jq -er '.tournaments.T029.workspaceId' "$$seed_manifest")"; \
 	display_token="$$(jq -er '.tournaments.T029.displayToken' "$$seed_manifest")"; \
 	entrant_slug="$$(jq -er '.tournaments.T030.slug' "$$seed_manifest")"; \
+	event_tz="$$(curl -fsS "http://$$demo_ip:8092/tournaments/$$workspace_id" | jq -r '.timeZone // empty')"; \
 	AUTH_ME_URL="http://$$demo_ip:8090/api/auth/me" \
+	FIXTURE_MODE="$${FIXTURE_MODE:-normal}" EVENT_TIMEZONE="$$event_tz" \
 	WS_ID="$$workspace_id" DISPLAY_TOKEN="$$display_token" \
 		node tools/surface-capture.mjs console "http://$$demo_ip:8090" \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
+	FIXTURE_MODE="$${FIXTURE_MODE:-normal}" \
 	SLUG="$$entrant_slug" node tools/surface-capture.mjs entrant "http://$$demo_ip:8091" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
 	@$(MAKE) --no-print-directory surface-books-status
@@ -521,10 +524,15 @@ surface-books-fixture:
 	workspace_id="$$(jq -er .taipeiTid "$$fixture_json")"; \
 	display_token="$$(jq -er .displayToken "$$fixture_json")"; \
 	entrant_slug="$$(jq -er .koreaSlug "$$fixture_json")"; \
+	fixture_mode="$$(jq -r '.fixtureMode // "normal"' "$$fixture_json")"; \
+	api_url="$$(jq -er .apiBaseUrl "$$fixture_json")"; \
+	event_tz="$$(curl -fsS "$$api_url/tournaments/$$workspace_id" | jq -r '.timeZone // empty')"; \
 	mkdir -p "$(SURFACE_REPORT_DIR)"; \
+	FIXTURE_MODE="$$fixture_mode" EVENT_TIMEZONE="$$event_tz" \
 	WS_ID="$$workspace_id" DISPLAY_TOKEN="$$display_token" \
 		node tools/surface-capture.mjs console "$$console_url" \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
+	FIXTURE_MODE="$$fixture_mode" \
 	SLUG="$$entrant_slug" node tools/surface-capture.mjs entrant "$$entrant_url" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
 	@$(MAKE) --no-print-directory surface-books-status

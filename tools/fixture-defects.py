@@ -1,6 +1,13 @@
 """Reconstruct a handful of known-messy operational states on the shared
 Taipei/Korea fixture, idempotently, through public HTTP APIs only.
 
+**FAILURE MODE ONLY.** `tools/fixture-up.sh` runs this script only under
+``FIXTURE_MODE=failure``. The default ``normal`` mode is the clean
+visual-review dataset a surface book is captured from, and the deliberately
+corrupted and conflicting states below must never appear in it
+(operator-visual-fixes.md, package P0). Nothing here is deleted — it is
+kept, behind that flag, for failure and recovery testing.
+
 Work package 01 of the v3 consolidated plan (docs/audits/v3-consolidated/
 plan.md §1 row 01) wants both apps reviewed against a fixture that looks
 like a live event mid-tournament rather than a pristine demo: at least one
