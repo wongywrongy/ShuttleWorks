@@ -29,10 +29,13 @@ export function sortBy(
 ): TournamentSummaryDTO[] {
   switch (sortId) {
     case 'recent':
-      return [...list].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+      return [...list].sort((a, b) =>
+        (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.id.localeCompare(b.id),
+      );
     case 'name':
       return [...list].sort((a, b) =>
-        (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }),
+        (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }) ||
+        a.id.localeCompare(b.id),
       );
     case 'date':
       return sortWorkspaces(list, todayKey);

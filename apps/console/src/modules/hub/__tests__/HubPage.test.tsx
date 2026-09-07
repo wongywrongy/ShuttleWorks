@@ -31,9 +31,18 @@ function LocationProbe({ refObj }: { refObj: { current: string } }) {
   return null;
 }
 
-function mount(refObj: { current: string }) {
+function SearchProbe({ refObj }: { refObj: { current: string } }) {
+  refObj.current = useLocation().search;
+  return null;
+}
+
+function mount(
+  refObj: { current: string },
+  searchRef?: { current: string },
+  initialEntry = '/',
+) {
   return render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route
           path="/"
@@ -41,6 +50,7 @@ function mount(refObj: { current: string }) {
             <>
               <HubPage />
               <LocationProbe refObj={refObj} />
+              {searchRef ? <SearchProbe refObj={searchRef} /> : null}
             </>
           }
         />
@@ -89,6 +99,99 @@ describe('HubPage navigation', () => {
 });
 
 describe('HubPage time-oriented control plane', () => {
+  it('keeps implicit Active distinct from explicit facet intent in the URL', async () => {
+    const loc = { current: '' };
+    const search = { current: '' };
+    const view = mount(loc, search);
+    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /^Active\b/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(search.current).toBe('');
+
+    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: 'Meet' } });
+    expect(search.current).toContain('q=Meet');
+    expect(search.current).toContain('facet=all');
+    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: '' } });
+    expect(search.current).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Active\b/ }));
+    expect(search.current).toContain('facet=active');
+    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: 'Bracket' } });
+    expect(search.current).toContain('facet=active');
+    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: '' } });
+    expect(search.current).toContain('facet=active');
+    view.unmount();
+    mount(loc, undefined, '/?q=Bracket&facet=active');
+    await waitFor(() => expect(screen.getByDisplayValue('Bracket')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /^Active\b/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('restores the implicit search scope after reloading a promoted query', async () => {
+    const search = { current: '' };
+    const view = mount({ current: '' }, search, '/?q=Meet&facet=all&scope=search');
+    await waitFor(() => expect(screen.getByDisplayValue('Meet')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /^All\b/ })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: '' } });
+    expect(search.current).toBe('');
+    view.unmount();
+  });
+
+  it('keeps a deep-linked page through the initial loading pass', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue(
+      Array.from({ length: 21 }, (_, index) => ({
+        id: `deep-${String(index + 1).padStart(2, '0')}`,
+        name: `Deep ${String(index + 1).padStart(2, '0')}`,
+        kind: 'meet' as const,
+        role: 'owner' as const,
+        tournamentDate: '2026-12-01',
+        status: 'draft' as const,
+      })) as never,
+    );
+    mount({ current: '' }, undefined, '/?facet=all&page=2');
+    await waitFor(() => expect(screen.getByText('Deep 21')).toBeInTheDocument());
+    expect(screen.queryByText('Deep 01')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('paginates the active hub at twenty rows and exposes an honest count', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue(
+      Array.from({ length: 21 }, (_, index) => ({
+        id: `w${String(index + 1).padStart(2, '0')}`,
+        name: `Workspace ${String(index + 1).padStart(2, '0')}`,
+        kind: 'meet' as const,
+        role: 'owner' as const,
+        tournamentDate: `2026-12-${String((index % 9) + 1).padStart(2, '0')}`,
+        status: 'draft' as const,
+      })) as never,
+    );
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Workspace 01')).toBeInTheDocument());
+    expect(screen.getByTestId('hub-pagination')).toHaveTextContent('Showing 1–20 of 21 workspaces');
+    expect(screen.queryByText('Workspace 21')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByTestId('hub-pagination')).toHaveTextContent('Showing 21–21 of 21 workspaces');
+    expect(screen.getByText('Workspace 21')).toBeInTheDocument();
+    expect(screen.queryByText('Workspace 01')).not.toBeInTheDocument();
+  });
+
+  it('bounds numbered hub pages for very large collections', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue(
+      Array.from({ length: 1000 }, (_, index) => ({
+        id: `bound-${String(index + 1).padStart(4, '0')}`,
+        name: `Bound ${String(index + 1).padStart(4, '0')}`,
+        kind: 'meet' as const,
+        role: 'owner' as const,
+        tournamentDate: '2026-12-01',
+        status: 'draft' as const,
+      })) as never,
+    );
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByTestId('hub-pagination')).toBeInTheDocument());
+    expect(screen.getAllByRole('button', { name: /^Page / })).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Page 1' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Page 50' })).toBeInTheDocument();
+  });
+
   it('is a control plane with search + module language, not "New event"', async () => {
     mount({ current: '' });
     await waitFor(() =>
@@ -108,9 +211,11 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByRole('button', { name: /^All\b/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Setup\b/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Needs attention/ })).toBeInTheDocument();
-    for (const name of [/^Ready\b/, /^Live\b/, /^Complete\b/, /^Shared\b/, /^Archived\b/]) {
+    for (const name of [/^Ready\b/, /^Live\b/, /^Shared\b/]) {
       expect(screen.queryByRole('button', { name })).toBeNull();
     }
+    expect(screen.getByRole('button', { name: /^Active\b/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Complete\b/ })).toBeInTheDocument();
   });
 
   it('a lifecycle facet filters the flat list (Setup shows the un-started pair)', async () => {
@@ -170,7 +275,9 @@ describe('HubPage time-oriented control plane', () => {
         tournamentDate: null, status: 'archived' as const },
     ] as never);
     mount({ current: '' });
-    await waitFor(() => expect(screen.getByText('Done Cup')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Archived\b/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /^Archived\b/ }));
+    expect(screen.getByText('Done Cup')).toBeInTheDocument();
     expect(screen.getByTestId('hub-footer')).toHaveTextContent('1 archived');
   });
 
@@ -190,8 +297,9 @@ describe('HubPage time-oriented control plane', () => {
         tournamentDate: '2026-07-02', status: 'active' as const, signals: completeSignals },
     ] as never);
     mount({ current: '' });
-    await waitFor(() => expect(screen.getByText('Complete One')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Complete\b/ })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /^Complete\b/ }));
+    expect(screen.getByText('Complete One')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Complete\b/ })).toHaveTextContent('2');
     expect(screen.queryByTestId('row-lifecycle')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('row-attention')).toHaveLength(2);

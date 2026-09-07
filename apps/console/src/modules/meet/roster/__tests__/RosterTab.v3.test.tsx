@@ -8,7 +8,7 @@
  * be reachable and operable from the keyboard, per the same contract
  * `selectableRowProps` gives `BandedTable`/`DenseDataTable` rows elsewhere.
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlayerDTO, RosterGroupDTO, TournamentConfig } from '../../../../api/dto';
 import { useTournamentStore } from '../../../../store/tournamentStore';
@@ -40,6 +40,9 @@ const player = (id: string, name: string): PlayerDTO =>
   ({ id, name, groupId: 'g1', ranks: [], availability: [] }) as PlayerDTO;
 
 beforeEach(() => {
+  // URL-backed dense state is global: without this, one test's filter params
+  // leak into the next and the suite becomes order-dependent.
+  window.history.replaceState(null, '', '/');
   useUiStore.setState({ activeTournamentRole: 'operator' });
 });
 
@@ -97,5 +100,52 @@ describe('RosterTab — player row keyboard access', () => {
     const row = screen.getByTestId('player-row-p1');
     fireEvent.click(row);
     expect(row).toHaveAttribute('data-selected', 'true');
+  });
+});
+
+describe('RosterTab — 100-row inventory contract', () => {
+  it('shows 100 players by default, reaches page two, and searches the full roster', () => {
+    const players = Array.from({ length: 101 }, (_, index) => player(
+      `p-${index + 1}`,
+      index === 100 ? 'Zzz Late Roster Player' : `Player ${index + 1}`,
+    ));
+    useTournamentStore.setState({ config, groups, players });
+    render(<RosterTab />);
+
+    expect(screen.getAllByTestId(/^player-row-/)).toHaveLength(100);
+    expect(within(screen.getByTestId('player-list')).queryByTestId('player-row-p-101')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(within(screen.getByTestId('player-list')).getByTestId('player-row-p-101')).toBeInTheDocument();
+
+    const search = screen.getByPlaceholderText('Filter players…');
+    fireEvent.change(search, { target: { value: 'Zzz Late Roster Player' } });
+    expect(within(screen.getByTestId('player-list')).getByTestId('player-row-p-101')).toBeInTheDocument();
+    expect(within(screen.getByTestId('player-list')).getAllByTestId(/^player-row-/)).toHaveLength(1);
+  });
+});
+describe('RosterTab — default school selection', () => {
+  it('shows the first school without writing a filter the operator never chose', () => {
+    useTournamentStore.setState({
+      config,
+      groups,
+      players: [player('p1', 'Alex Tan')],
+    });
+    render(<RosterTab />);
+
+    expect(screen.getByTestId('player-row-p1')).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+  });
+
+  it('clears a persisted school that no longer exists', () => {
+    window.history.replaceState(null, '', '/?meet-roster-filters.filter.school=gone');
+    useTournamentStore.setState({
+      config,
+      groups,
+      players: [player('p1', 'Alex Tan')],
+    });
+    render(<RosterTab />);
+
+    expect(screen.getByTestId('player-row-p1')).toBeInTheDocument();
+    expect(window.location.search).not.toContain('school');
   });
 });

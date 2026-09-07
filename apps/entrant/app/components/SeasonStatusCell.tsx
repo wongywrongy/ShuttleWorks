@@ -49,7 +49,7 @@ export function SeasonStatusCell({ cell }: { cell: StatusCell }) {
         href={cell.href}
         className="relative z-10 text-sm font-semibold text-status-live underline-offset-4 hover:underline"
       >
-        {cell.label}
+        {cell.label} →
       </a>
     );
   }

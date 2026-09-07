@@ -85,20 +85,22 @@ interface RowProps {
  * 240px is the widest segmented control the app renders ("Best of 1 / Best of
  * 3 / Best of 5", 226px) rounded to the spacing ladder.
  */
-const CONTROL_COL = 'w-60';
-
 export function Row({ label, control, last, readOnly, pane }: RowProps) {
   return (
     <div
       className={[
-        'flex items-center justify-between gap-6',
-        readOnly ? 'h-9' : 'h-11',
+        // The shared 240px control column fits desktop settings surfaces, but
+        // cannot coexist with a narrow workspace shell. Stack the label and
+        // control below the small breakpoint so setup/display rows remain
+        // reachable at 320px instead of extending past the card.
+        'flex min-w-0 flex-col items-stretch gap-2 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:py-0',
+        readOnly ? 'sm:h-9' : 'sm:h-11',
         last || readOnly ? '' : 'border-b border-border/60',
       ].join(' ')}
     >
       <span
         className={[
-          'flex-1 text-sm',
+          'min-w-0 flex-1 text-sm',
           readOnly ? 'text-foreground' : 'font-medium text-foreground',
         ].join(' ')}
       >
@@ -106,8 +108,8 @@ export function Row({ label, control, last, readOnly, pane }: RowProps) {
       </span>
       <div
         className={[
-          'flex flex-shrink-0 items-center justify-end',
-          pane ? '' : CONTROL_COL,
+          'flex min-w-0 flex-shrink-0 items-center justify-end',
+          pane ? 'w-full sm:w-auto' : 'w-full sm:w-60',
           readOnly ? 'text-sm text-muted-foreground' : '',
         ].join(' ')}
       >
@@ -273,7 +275,7 @@ export function Seg<T extends string | number>({
             semantics="radio"
             disabled={disabled}
             onClick={() => onChange(opt.value)}
-            className={`px-3 py-1 text-xs font-medium ${fill ? 'flex-1 whitespace-nowrap' : ''}`}
+            className={`min-w-0 px-3 py-1 text-center text-xs font-medium ${fill ? 'flex-1 whitespace-normal' : ''}`}
           >
             {opt.label}
           </ActiveChoice>

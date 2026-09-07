@@ -401,7 +401,7 @@ describe('<BracketMatchesTab /> — export', () => {
   it('exports XLSX, like every other surface, and says so', async () => {
     renderWithRouter(<BracketMatchesTab data={makeRichData()} />);
     const button = screen.getByTestId('bracket-export-matches');
-    expect(button).toHaveTextContent('Export XLSX');
+    expect(button).toHaveTextContent('Export filtered matches');
     expect(button.tagName).toBe('BUTTON');
     expect(button).not.toHaveAttribute('href');
     fireEvent.click(button);

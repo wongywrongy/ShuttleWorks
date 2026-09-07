@@ -413,7 +413,10 @@ def _meet_match_signals(data: dict, to_do: int, status_by_id: dict):
         key=slot_of,
     )
     next_up: List[NextMatchDTO] = []
-    for a in ordered[:3]:
+    # Dashboard previews show five upcoming matches.  Keep this bounded here
+    # so the hub/overview payload stays small while the full inventory remains
+    # available from the Matches destination.
+    for a in ordered[:5]:
         mid = _first(a, "matchId", "match_id")
         m = by_id.get(mid) or {}
         # ``eventRank`` (MS1/WD2…) is the operator-facing match name across
@@ -560,7 +563,10 @@ def _bracket_match_signals(data: dict, counts: RowCounts, to_do: int):
         key=slot_of,
     )
     next_up: List[NextMatchDTO] = []
-    for a in ordered[:3]:
+    # Dashboard previews show five upcoming matches.  Keep this bounded here
+    # so the hub/overview payload stays small while the full inventory remains
+    # available from the Matches destination.
+    for a in ordered[:5]:
         raw_id = str(a.get("play_unit_id") or "")
         unit = units_by_id.get(raw_id)
         identity = None

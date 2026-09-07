@@ -84,11 +84,6 @@ function CalendarRow({ row }: { row: SeasonRow }) {
             <p className="break-words text-sm text-muted-foreground">{meta.join(' · ')}</p>
           )}
         </div>
-        {/* The event count is the first thing to go at 380px: the name, the
-            date and the status are the row's answer; the count is texture. */}
-        <span className="hidden text-sm tabular-nums text-muted-foreground sm:block">
-          {`${row.eventCount} ${row.eventCount === 1 ? 'event' : 'events'}`}
-        </span>
         {/* v3-consolidated work package 26b: `min-w-0` below `sm:`. This
             flex item had no width constraint below `sm:` at all (the
             `sm:`-prefixed utilities are inert here), so its one child — a
@@ -127,7 +122,7 @@ function Months({ groups }: { groups: readonly MonthGroup[] }) {
   return (
     <>
       {groups.map((group) => (
-        <Section key={group.key} label={group.label} rows={group.rows} />
+        <Section key={`${group.key}:${group.rows[0]?.slug}`} label={group.label} rows={group.rows} />
       ))}
     </>
   );
@@ -167,6 +162,7 @@ export function SeasonCalendar({ rows, view }: { rows: SeasonRow[]; view: View }
         )
       ) : (
         <>
+          <Section label={UNDATED_LABEL} rows={sections.undatedLive} />
           <Months groups={sections.months} />
           <Section label={UNDATED_LABEL} rows={sections.undated} />
           <Section label="Completed" rows={sections.completed} />

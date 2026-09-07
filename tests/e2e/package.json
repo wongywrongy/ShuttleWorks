@@ -7,6 +7,7 @@
     "test": "playwright test",
     "test:entrant-evidence": "playwright test tests/10-entrant-r11-evidence.spec.ts",
     "test:bracket-geometry": "playwright test --config playwright.geometry.config.ts",
+    "test:pagination": "playwright test --config playwright.pagination.config.ts",
     "test:console-contracts": "playwright test tests/console-browser-contracts.spec.ts",
     "test:console-a11y": "playwright test tests/console-a11y.spec.ts",
     "test:entrant-a11y": "playwright test tests/entrant-a11y.spec.ts",

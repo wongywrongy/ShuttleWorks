@@ -237,8 +237,8 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
     // centered cards" — the same shape `login.tsx` wears, so the two pages a
     // visitor bounces between read as one place.
     <PlayShell>
-      <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
-        <header className="grid gap-1">
+      <main className="mx-auto grid min-w-0 w-full max-w-md gap-6 px-4 py-10 md:py-14">
+        <header className="grid min-w-0 gap-1">
           <h1 className={PAGE_TITLE}>
             {entryPath
               ? `Create your account to enter ${tournamentName ?? 'this tournament'}`
@@ -251,7 +251,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
           </p>
         </header>
 
-        <div className={`grid gap-6 ${CARD}`}>
+        <div className={`grid min-w-0 gap-6 ${CARD}`}>
           {/*
             Posts ACROSS the tier boundary, not to this page's own URL: all of
             `/e/account/*` is FastAPI's (R8-A), and this page is node's, which
@@ -267,7 +267,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
             page is allowed to become the distinction the backend refuses to
             be.
           */}
-          <form method="post" action="/e/account/signup" className="grid gap-4">
+          <form method="post" action="/e/account/signup" className="grid min-w-0 gap-4">
             {/* Channel two. There is no session on this page — obtaining one
                 is what it is for — so the proof-of-intent is the `sw_play_csrf`
                 nonce set on this very response, and this is its digest. The
@@ -305,6 +305,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               maxLength={320}
               autoComplete="email"
               hint="Use the email where you want entry updates."
+              className="min-w-0"
             />
 
             <TextField
@@ -328,6 +329,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               // with an `onClick`; this form's only module is reserved for the
               // Turnstile lifecycle, so the credential reveal stays absent.
               revealable={false}
+              className="min-w-0"
             />
 
             <TextField
@@ -337,6 +339,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               maxLength={200}
               autoComplete="name"
               hint="Name shown to the organizer."
+              className="min-w-0"
             />
 
             <TextField
@@ -347,6 +350,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
               maxLength={200}
               autoComplete="tel"
               hint="Only used if the organizer needs to reach you about an entry."
+              className="min-w-0"
             />
 
             {/* Cloudflare's widget writes its solution into a hidden input
@@ -361,7 +365,7 @@ export default function SignupPage({ loaderData, params }: Route.ComponentProps)
                 (`services/turnstile.verify_turnstile`), so a scriptless
                 submission is refused as "the human check did not pass" — which
                 reads as an accusation rather than as a missing capability. */}
-            <div className="grid gap-2 rounded-sm border border-rule-control bg-surface-sunken p-3">
+            <div className="grid min-w-0 gap-2 rounded-sm border border-rule-control bg-surface-sunken p-3">
               <p className={EYEBROW}>Human check</p>
               <div
                 id="turnstile-widget"

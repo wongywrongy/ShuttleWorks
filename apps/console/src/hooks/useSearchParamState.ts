@@ -8,7 +8,7 @@
  * paste "the view I'm looking at right now" into chat and a teammate
  * sees the same set of rows.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 interface UseSearchParamStateOptions {
@@ -23,6 +23,9 @@ export function useSearchParamState(
   { debounceMs = 250 }: UseSearchParamStateOptions = {},
 ): [string, (next: string) => void] {
   const [params, setParams] = useSearchParams();
+  const latestParams = useRef(params);
+  useEffect(() => { latestParams.current = params; }, [params]);
+  const urlValue = params.get(key) ?? initial;
 
   // Local state mirrors the URL so the component re-renders on every
   // keystroke without waiting for the debounced URL flush.
@@ -31,23 +34,23 @@ export function useSearchParamState(
   // External URL changes (back/forward, deep-link paste, programmatic
   // setParams from elsewhere) flow into local state.
   useEffect(() => {
-    const fromUrl = params.get(key) ?? initial;
-    if (fromUrl !== value) setLocal(fromUrl);
+    setLocal(urlValue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params, key]);
+  }, [urlValue, key]);
 
   // Debounced URL flush: schedule on every change, cancel previous.
   useEffect(() => {
     const t = window.setTimeout(() => {
-      setParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (value === '' || value === initial) next.delete(key);
-          else next.set(key, value);
-          return next;
-        },
-        { replace: true },
-      );
+      // A pending search must merge with the latest page/filter URL, not the
+      // router snapshot from when this timer was scheduled. An unchanged
+      // field must never write its old snapshot over another control's URL.
+      const current = latestParams.current;
+      if ((current.get(key) ?? initial) === value) return;
+      const next = new URLSearchParams(current);
+      if (value === '' || value === initial) next.delete(key);
+      else next.set(key, value);
+      latestParams.current = next;
+      setParams(next, { replace: true });
     }, debounceMs);
     return () => window.clearTimeout(t);
   }, [value, key, initial, debounceMs, setParams]);

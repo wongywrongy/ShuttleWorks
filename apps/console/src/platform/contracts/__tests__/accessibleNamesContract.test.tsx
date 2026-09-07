@@ -131,7 +131,7 @@ describe('accessible names contract — shared interactive components', () => {
       />,
     );
     expect(screen.getByRole('button', { name: /Name: Sort/ })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Select page' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select these 1' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select 1' })).toBeInTheDocument();
   });
 
@@ -145,7 +145,7 @@ describe('accessible names contract — shared interactive components', () => {
     ];
     render(
       <DenseDataTable
-        rows={[{ id: '1', name: 'Mina Park' }]}
+        rows={Array.from({ length: 51 }, (_, index) => ({ id: String(index + 1), name: `Player ${index + 1}` }))}
         columns={columns}
         state={DEFAULT_DENSE_DATA_STATE}
         onStateChange={vi.fn()}

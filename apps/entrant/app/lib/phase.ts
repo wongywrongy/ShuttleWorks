@@ -167,14 +167,20 @@ export interface SeasonRow {
 
 export interface SeasonList {
   tournaments: SeasonRow[];
-  /** Unfiltered, server-side segment counts (§2.3) — the labels never move. */
+  /**
+   * Unfiltered, server-side segment counts (§2.3). The discovery page no
+   * longer labels its segments with these: the list-pagination contract puts
+   * counts on the full FILTERED collection, so the loader derives them from
+   * the rows `rowMatches` kept. They stay on the wire as the platform-wide
+   * totals.
+   */
   counts: { takingEntries: number; completed: number };
   /** The happening-now strip, or null when nothing is in window. */
   now: { slug: string; moreCount: number } | null;
 }
 
 /** The three segments of the calendar. A view is navigation, not a filter. */
-export type View = 'season' | 'open' | 'completed';
+export type View = 'season' | 'open' | 'completed' | 'all';
 
 export type DatePreset = '7d' | '30d' | '90d';
 
@@ -183,7 +189,10 @@ export interface Filters {
   preset: DatePreset | null;
   from: string | null;
   to: string | null;
+  year?: number | null;
   q: string;
+  /** Whether the URL deliberately selected a view/status scope. */
+  scopeExplicit?: boolean;
 }
 
 /** A month header plus its rows (§2.4). `key` is `year-monthIndex`. */
@@ -422,9 +431,15 @@ function presetDays(preset: DatePreset): number {
  * name, ORGANIZER and venue (D2 — there is no city on the wire). A custom
  * from/to wins over a preset; a row whose date is unparseable matches only
  * when no date filter is set. The VIEW is not applied here: it selects and
- * orders (`viewRows`), it does not filter the counts.
+ * orders (`viewRows`). That is what keeps the segment counts, which the
+ * discovery loader takes over the rows this kept, from moving when the
+ * entrant switches segment — they follow the search and the dates only.
  */
 export function rowMatches(row: SeasonRow, filters: Filters, now: Date): boolean {
+  if (filters.year !== null && filters.year !== undefined) {
+    const date = parseIsoDate(row.date);
+    if (date === null || date.getUTCFullYear() !== filters.year) return false;
+  }
   const from = parseIsoDate(filters.from);
   const to = parseIsoDate(filters.to);
   if (from !== null || to !== null || filters.preset !== null) {
@@ -449,7 +464,7 @@ export function rowMatches(row: SeasonRow, filters: Filters, now: Date): boolean
 }
 
 // Frozen literals — the safe-to-share form the mutable-bindings guard exempts.
-const VIEW_CHOICES = Object.freeze<View[]>(['season', 'open', 'completed']);
+const VIEW_CHOICES = Object.freeze<View[]>(['season', 'open', 'completed', 'all']);
 const PRESET_CHOICES = Object.freeze<DatePreset[]>(['7d', '30d', '90d']);
 const COMPLETED_STATUSES = Object.freeze<PageStatus[]>(['completed', 'completed_winners']);
 
@@ -467,21 +482,58 @@ export function parseFilters(params: URLSearchParams): Filters {
   const view = params.get('view');
   const legacy = params.get('status');
   const preset = params.get('preset');
+  const yearValue = params.get('year');
+  const year = yearValue !== null && /^\d{4}$/.test(yearValue) ? Number(yearValue) : null;
+  const explicitScope = params.has('view') || params.has('status');
+  const requestedView = VIEW_CHOICES.includes(view as View)
+    ? (view as View)
+    : legacy !== null && Object.hasOwn(LEGACY_STATUS_VIEWS, legacy)
+      ? LEGACY_STATUS_VIEWS[legacy]
+      : 'season';
   return {
     // `Object.hasOwn`, never `legacy in LEGACY_STATUS_VIEWS`: `in` walks the
     // prototype chain, so `?status=toString` would answer true and put
     // `Object.prototype.toString` — a FUNCTION — into `view`. This parses a
     // public URL, which is typeable by anyone.
-    view: VIEW_CHOICES.includes(view as View)
-      ? (view as View)
-      : legacy !== null && Object.hasOwn(LEGACY_STATUS_VIEWS, legacy)
-        ? LEGACY_STATUS_VIEWS[legacy]
-        : 'season',
+    view: !explicitScope && (params.get('q') ?? '').trim() !== '' ? 'all' : requestedView,
     preset: PRESET_CHOICES.includes(preset as DatePreset) ? (preset as DatePreset) : null,
     from: params.get('from') || null,
     to: params.get('to') || null,
+    year,
     q: params.get('q') ?? '',
+    scopeExplicit: explicitScope,
   };
+}
+
+/**
+ * The inverse of `parseFilters`: a `Filters` back to the query string that
+ * parses to it. One serialiser, because the `view` rule is subtle enough that
+ * a second copy of it drifts.
+ *
+ * **`view` is written only when the URL it came from named a scope.** A bare
+ * `?q=Open` parses to `{ view: 'all', scopeExplicit: false }` — the search
+ * scope is IMPLIED by the query, not chosen — so re-emitting `view=all` would
+ * promote it: the next parse sets `scopeExplicit`, the control row's hidden
+ * `view` field then posts it, and clearing the search box lands the entrant on
+ * "All tournaments" instead of the calendar they started from. `season` is
+ * likewise the parse of a URL that names no view, so it is never written
+ * unless it was deliberately selected. Every other view is a real selection
+ * and is always written.
+ *
+ * `page` is NOT included: a filter change starts from page one, so the caller
+ * that paginates appends it.
+ */
+export function filtersToParams(filters: Filters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.q.trim() !== '') params.set('q', filters.q);
+  if ((filters.view !== 'season' && filters.view !== 'all') || filters.scopeExplicit) {
+    params.set('view', filters.view);
+  }
+  if (filters.preset !== null) params.set('preset', filters.preset);
+  if (filters.from !== null && filters.from !== '') params.set('from', filters.from);
+  if (filters.to !== null && filters.to !== '') params.set('to', filters.to);
+  if (filters.year !== null && filters.year !== undefined) params.set('year', String(filters.year));
+  return params;
 }
 
 /** Is a DATE filter active? Drives the chips row and its badge, which say
@@ -530,7 +582,36 @@ export function viewRows(rows: readonly SeasonRow[], view: View): SeasonRow[] {
       .filter((row) => COMPLETED_STATUSES.includes(row.status))
       .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug));
   }
-  return [...rows];
+  if (view === 'all') {
+    return [...rows].sort((a, b) =>
+      (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug),
+    );
+  }
+  // The default landing view is bounded to live and upcoming work. Completed
+  // events have their own archive and must never consume the front door.
+  return rows
+    .filter((row) => !COMPLETED_STATUSES.includes(row.status))
+    .sort((a, b) => {
+      const liveA = a.status === 'in_progress_live' || a.status === 'in_progress' ? 0 : 1;
+      const liveB = b.status === 'in_progress_live' || b.status === 'in_progress' ? 0 : 1;
+      return liveA - liveB || (a.date ?? '\uffff').localeCompare(b.date ?? '\uffff') || a.slug.localeCompare(b.slug);
+    });
+}
+
+/** Stable, storage-agnostic page slicing shared by the public loader tests and
+ * the rendered discovery route. Invalid and overrun pages resolve to a valid
+ * page so a deleted final record cannot leave an empty phantom page. */
+export function paginateRows<T>(rows: readonly T[], requestedPage: number, pageSize: number): {
+  rows: T[];
+  page: number;
+  pageCount: number;
+} {
+  const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : 1;
+  const pageCount = Math.max(1, Math.ceil(rows.length / safeSize));
+  const page = Number.isFinite(requestedPage) && requestedPage > 0
+    ? Math.min(Math.floor(requestedPage), pageCount)
+    : 1;
+  return { rows: [...rows.slice((page - 1) * safeSize, page * safeSize)], page, pageCount };
 }
 
 /**
@@ -566,15 +647,21 @@ export function seasonSections(rows: readonly SeasonRow[]): {
   months: MonthGroup[];
   completed: SeasonRow[];
   undated: SeasonRow[];
+  undatedLive: SeasonRow[];
 } {
   const isCompleted = (row: SeasonRow) => COMPLETED_STATUSES.includes(row.status);
+  const isLive = (row: SeasonRow) => row.status === 'in_progress_live' || row.status === 'in_progress';
   const active = rows.filter((row) => !isCompleted(row));
   return {
     months: groupByMonth(active.filter((row) => parseIsoDate(row.date) !== null)),
     completed: rows
       .filter(isCompleted)
       .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug)),
-    undated: active.filter((row) => parseIsoDate(row.date) === null),
+    // Keep undated live courts at the front of the Season view, matching
+    // viewRows' live-first ordering even though month grouping cannot place
+    // them in a dated section.
+    undatedLive: active.filter((row) => parseIsoDate(row.date) === null && isLive(row)),
+    undated: active.filter((row) => parseIsoDate(row.date) === null && !isLive(row)),
   };
 }
 
@@ -597,7 +684,7 @@ export function statusCell(row: SeasonRow): StatusCell {
   const page = `/e/${encodeURIComponent(row.slug)}`;
   switch (row.status) {
     case 'in_progress_live':
-      return { kind: 'chip-live', label: 'In progress · follow live', href: `${page}?tab=draws` };
+      return { kind: 'chip-live', label: 'Follow live', href: `${page}?tab=draws` };
     case 'in_progress':
       return { kind: 'chip-muted', label: 'In progress' };
     case 'entries_open':

@@ -61,6 +61,10 @@ import { ConfirmDeleteButton } from '../../../components/ConfirmDeleteButton';
 import { decomposeMeetEventRank } from '../../../platform/domain/matchIdentity';
 import { ActiveChoice } from '../../../components/ActiveChoice';
 import { SELECTABLE_ROW_FOCUS } from '../../../lib/selectableRow';
+import { useInventoryPage } from '../../../hooks/useInventoryPage';
+import { useListScrollRestore } from '../../../hooks/useListScrollRestore';
+import { useDenseDataState } from '../../../hooks/useDenseDataState';
+import { DenseDataPagination } from '../../../components/control-plane/DenseDataTable';
 
 export function RosterTab() {
   const tid = useTournamentId();
@@ -70,6 +74,7 @@ export function RosterTab() {
   useMatchStateSync(tid);
   const groups = useTournamentStore((s) => s.groups);
   const players = useTournamentStore((s) => s.players);
+  const hydrated = useTournamentStore((s) => s.hydrated);
   const config = useTournamentStore((s) => s.config);
   const addGroup = useTournamentStore((s) => s.addGroup);
   const addPlayer = useTournamentStore((s) => s.addPlayer);
@@ -78,28 +83,34 @@ export function RosterTab() {
   const { assignRank, moveRank, seatUnslotted } = useRankAssignment();
   const canEditWorkspace = useCanEdit();
 
-  const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
+  const [rosterState, rosterActions] = useDenseDataState({}, 'meet-roster-filters');
+  const schoolParam = rosterState.filters.school?.[0] ?? '';
+  const setSchoolParam = (id: string) => rosterActions.setState({ ...rosterState, filters: { ...rosterState.filters, school: id ? [id] : [] } });
+  // The first school is a read-time default, not a choice: writing it to the
+  // URL on mount would replaceState a school filter the operator never picked.
+  const activeSchoolId = groups.find((g) => g.id === schoolParam)?.id ?? groups[0]?.id ?? null;
+  const setActiveSchoolId = (id: string | null) => setSchoolParam(id ?? '');
   // Detail drawer targets — a clicked grid position (rank) OR a clicked
   // list player. Only one is open at a time; opening one clears the other.
   const [selectedRank, setSelectedRank] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [eventFilter, setEventFilter] = useState('all');
-  const [issueFilter, setIssueFilter] = useState('all');
+  const query = rosterState.search;
+  const setQuery = rosterActions.setSearch;
+  const eventFilter = rosterState.filters.event?.[0] ?? 'all';
+  const issueFilter = rosterState.filters.issue?.[0] ?? 'all';
+  const setEventFilter = (value: string) => rosterActions.setState({ ...rosterState, filters: { ...rosterState.filters, event: value === 'all' ? [] : [value] } });
+  const setIssueFilter = (value: string) => rosterActions.setState({ ...rosterState, filters: { ...rosterState.filters, issue: value === 'all' ? [] : [value] } });
   // Name of the player currently being dragged — drives the DragOverlay
   // preview so a chip can leave the grid's overflow-auto without clipping.
   const [activeDragName, setActiveDragName] = useState<string | null>(null);
 
-  // Keep activeSchoolId valid as groups change.
+  // Only a persisted school that no longer exists is written back — clearing
+  // it returns the view to the read-time default above.
   useEffect(() => {
-    if (groups.length === 0) {
-      if (activeSchoolId !== null) setActiveSchoolId(null);
-      return;
+    if (schoolParam && groups.length > 0 && !groups.some((g) => g.id === schoolParam)) {
+      setSchoolParam('');
     }
-    if (!activeSchoolId || !groups.find((g) => g.id === activeSchoolId)) {
-      setActiveSchoolId(groups[0].id);
-    }
-  }, [groups, activeSchoolId]);
+  }, [groups, schoolParam]);
 
   // Singles-invariant cleanup. Singles ranks must have ≤1
   // player per school; existing demo/seed data and historic state
@@ -219,8 +230,8 @@ export function RosterTab() {
       players
         .filter((p) => p.groupId === activeSchoolId)
         .slice()
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [players, activeSchoolId],
+        .sort((a, b) => a.name.localeCompare(b.name) * (rosterState.sort?.direction === 'desc' ? -1 : 1) || a.id.localeCompare(b.id)),
+    [players, activeSchoolId, rosterState.sort?.direction],
   );
   const filteredPlayers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -234,6 +245,7 @@ export function RosterTab() {
       return true;
     });
   }, [schoolPlayers, query, eventFilter, issueFilter, config?.rankCounts]);
+  const inventory = useInventoryPage(filteredPlayers, players, (p) => p.id, 'meet-roster', JSON.stringify([activeSchoolId, query, eventFilter, issueFilter, rosterState.sort]), hydrated);
   const eventOptions = useMemo(() => {
     const codes = new Set<string>();
     for (const rank of Object.keys(config?.rankCounts ?? {})) {
@@ -342,7 +354,7 @@ export function RosterTab() {
               className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
             >
               <Download aria-hidden="true" className="h-3.5 w-3.5" />
-              Export XLSX
+              Export full roster
             </button>
             <AddSchoolMenu onAddSchool={(name) => addGroup({ id: uuid(), name })} />
           </MeetActionsBar>
@@ -436,15 +448,14 @@ export function RosterTab() {
                   had to guess at (RST-2). */}
               {schoolPlayers.length > 0 && (
                 <div
-                  aria-hidden
                   className={`flex items-center justify-between gap-2 border-b border-border/60 px-4 py-1 ${EYEBROW_CLASS} text-ink-faint`}
                 >
-                  <span>Player</span>
+                  <button type="button" className="min-h-9 text-left focus-visible:ring-2 focus-visible:ring-ring" onClick={() => rosterActions.setSort({ id: 'player', direction: rosterState.sort?.direction === 'desc' ? 'asc' : 'desc' })} aria-label={`Sort players ${rosterState.sort?.direction === 'desc' ? 'A to Z' : 'Z to A'}`}>Player ({rosterState.sort?.direction === 'desc' ? 'Z–A' : 'A–Z'})</button>
                   <span>Events</span>
                 </div>
               )}
               <PlayerListSection
-                players={filteredPlayers}
+                players={inventory.page.rows}
                 schoolId={activeSchoolId}
                 selectedPlayerId={selectedPlayerId}
                 onTogglePlayer={togglePlayer}
@@ -452,6 +463,8 @@ export function RosterTab() {
                 emptyAllMessage={schoolPlayers.length === 0 ? 'No players yet.' : null}
                 query={query}
               />
+              {inventory.pending && <button type="button" className="min-h-9 px-3 text-sm text-accent" onClick={inventory.refresh}>Refresh results</button>}
+              <DenseDataPagination page={inventory.page} onPageChange={inventory.actions.setPage} onPageSizeChange={inventory.actions.setPageSize} />
             </aside>
 
             {/* CENTER — position grid (always full width; scrolls). A <div>,
@@ -806,6 +819,7 @@ function PlayerListSection({
   emptyAllMessage: string | null;
   query: string;
 }) {
+  const listScrollRef = useListScrollRestore<HTMLUListElement>('meet-roster', players.length > 0);
   if (!schoolId) {
     return (
       <div className="flex-1 px-3 py-4 text-center text-xs text-muted-foreground">
@@ -830,6 +844,8 @@ function PlayerListSection({
   }
   return (
     <ul
+      ref={listScrollRef}
+      data-list-scroll="meet-roster"
       data-testid="player-list"
       className="flex-1 space-y-0.5 overflow-y-auto px-2 py-2"
     >

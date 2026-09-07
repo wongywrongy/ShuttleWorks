@@ -1,5 +1,5 @@
 /**
- * "Up next" list — a workspace's next ≤3 scheduled matches (from
+ * "Up next" list — a workspace's next ≤5 scheduled matches (from
  * `signals.nextUp`). Each row: match code · time · court. Renders nothing
  * when there's nothing scheduled. The match code (e.g. "MS1") carries the
  * discipline, so no separate module glyph is needed. (The old trailing
@@ -28,9 +28,12 @@ export function NextUpList({
   linkFor?: (n: NextMatchDTO) => string | null;
 }) {
   if (items.length === 0) return null;
+  // Keep the embedded preview bounded even when an older or alternate
+  // producer sends more than the dashboard contract allows.
+  const previewItems = items.slice(0, 5);
   return (
     <div className="flex flex-col gap-[3px]">
-      {items.map((n, i) => {
+      {previewItems.map((n, i) => {
         const label = n.identity
           ? formatMatchIdentity(n.identity, n.matchId ?? undefined)
           : n.code;

@@ -19,6 +19,7 @@ import {
   monthGroupsDesc,
   nearestCloseAt,
   parseFilters,
+  paginateRows,
   parseIsoDate,
   parseMoment,
   rowMatches,
@@ -347,7 +348,17 @@ describe('parseFilters (SP-P8 §2.3 + old-deep-link compatibility)', () => {
   it('reads the rest of the vocabulary, dropping unknown values', () => {
     expect(
       parseFilters(new URLSearchParams('preset=1y&from=2026-09-01&to=&q=gold')),
-    ).toEqual({ view: 'season', preset: null, from: '2026-09-01', to: null, q: 'gold' });
+    ).toMatchObject({ view: 'all', preset: null, from: '2026-09-01', to: null, year: null, q: 'gold' });
+  });
+  it('keeps deliberate status and year scope when searching', () => {
+    expect(parseFilters(new URLSearchParams('view=completed&year=2026&q=gold'))).toMatchObject({
+      view: 'completed', year: 2026, q: 'gold',
+    });
+  });
+  it('uses All only for implicit search and returns to the landing view when q clears', () => {
+    expect(parseFilters(new URLSearchParams('q=gold')).view).toBe('all');
+    expect(parseFilters(new URLSearchParams()).view).toBe('season');
+    expect(parseFilters(new URLSearchParams('view=all&q=gold')).scopeExplicit).toBe(true);
   });
 });
 
@@ -398,6 +409,11 @@ describe('rowMatches', () => {
   it('matches everything when no filter is set', () => {
     expect(rowMatches(row({}), NO_FILTERS, now)).toBe(true);
   });
+  it('matches a separate tournament year filter', () => {
+    expect(rowMatches(row({ date: '2026-09-19' }), { ...NO_FILTERS, year: 2026 }, now)).toBe(true);
+    expect(rowMatches(row({ date: '2025-09-19' }), { ...NO_FILTERS, year: 2026 }, now)).toBe(false);
+    expect(rowMatches(row({ date: null }), { ...NO_FILTERS, year: 2026 }, now)).toBe(false);
+  });
 });
 
 describe('viewRows', () => {
@@ -424,9 +440,38 @@ describe('viewRows', () => {
     ];
     expect(viewRows(rows, 'completed').map((r) => r.slug)).toEqual(['new', 'old']);
   });
-  it('season: everything, in the server order', () => {
-    const rows = [row({ slug: 'a' }), row({ slug: 'b' })];
-    expect(viewRows(rows, 'season')).toEqual(rows);
+  it('season: live first, then upcoming by date, excluding completed', () => {
+    const rows = [
+      row({ slug: 'later', status: 'entries_open', date: '2026-10-01' }),
+      row({ slug: 'live-b', status: 'in_progress', date: '2026-09-12' }),
+      row({ slug: 'live-a', status: 'in_progress_live', date: '2026-09-20' }),
+      row({ slug: 'done', status: 'completed', date: '2026-09-01' }),
+      row({ slug: 'undated', status: 'entries_closed', date: null }),
+    ];
+    expect(viewRows(rows, 'season').map((r) => r.slug)).toEqual([
+      'live-b', 'live-a', 'later', 'undated',
+    ]);
+  });
+  it('all: newest first with slug tie-breaker', () => {
+    const rows = [
+      row({ slug: 'b', status: 'completed', date: '2026-09-01' }),
+      row({ slug: 'a', status: 'completed_winners', date: '2026-09-01' }),
+      row({ slug: 'old', status: 'entries_open', date: '2025-01-01' }),
+    ];
+    expect(viewRows(rows, 'all').map((r) => r.slug)).toEqual(['a', 'b', 'old']);
+  });
+});
+
+describe('paginateRows boundaries', () => {
+  it.each([0, 1, 10, 11, 20, 21, 1000])('handles %i records without phantom pages', (count) => {
+    const rows = Array.from({ length: count }, (_, index) => index);
+    const first = paginateRows(rows, 1, 10);
+    expect(first.page).toBe(1);
+    expect(first.pageCount).toBe(Math.max(1, Math.ceil(count / 10)));
+    expect(first.rows.length).toBe(Math.min(10, count));
+    const last = paginateRows(rows, 999, 10);
+    expect(last.page).toBe(first.pageCount);
+    expect(last.rows.length).toBe(count === 0 ? 0 : count - (first.pageCount - 1) * 10);
   });
 });
 
@@ -444,6 +489,16 @@ describe('seasonSections (§2.4: active months ascending, Completed trailing)', 
     expect(s.months[0].rows.map((r) => r.slug)).toEqual(['sep1', 'sep2']);
     expect(s.completed.map((r) => r.slug)).toEqual(['done']);
     expect(s.undated.map((r) => r.slug)).toEqual(['tbc']);
+    expect(s.undatedLive).toEqual([]);
+  });
+
+  it('keeps an undated live tournament ahead of dated upcoming months', () => {
+    const s = seasonSections([
+      row({ slug: 'upcoming', status: 'entries_open', date: '2026-09-11' }),
+      row({ slug: 'live-tbc', status: 'in_progress_live', date: null }),
+    ]);
+    expect(s.undatedLive.map((r) => r.slug)).toEqual(['live-tbc']);
+    expect(s.months.flatMap((m) => m.rows).map((r) => r.slug)).toEqual(['upcoming']);
   });
 });
 
@@ -466,7 +521,7 @@ describe('monthGroupsDesc (the Completed view keeps its incoming order)', () => 
 describe('statusCell — the §2.4 table, one arm per enum case', () => {
   it('in_progress_live is a live chip deep-linking to draws', () => {
     expect(statusCell(row({ slug: 'x', status: 'in_progress_live' }))).toEqual({
-      kind: 'chip-live', label: 'In progress · follow live', href: '/e/x?tab=draws',
+      kind: 'chip-live', label: 'Follow live', href: '/e/x?tab=draws',
     });
   });
   it('in_progress without published draws is a plain chip — no link', () => {

@@ -826,6 +826,7 @@ function SetupEditor({ tid }: { tid: string }) {
                     saving={saving}
                     error={error ?? undefined}
                     cleanReason={saved ? 'Section saved' : 'No changes'}
+                    className="flex-wrap justify-end"
                     onDiscard={() => { dirtyRef.current = false; setDirty(false); setSaved(false); setDraft(selected?.data ?? null); setEditorRevision((value) => value + 1); void load(); }}
                     onSave={() => void save()}
                     saveLabel="Save section"
@@ -839,6 +840,7 @@ function SetupEditor({ tid }: { tid: string }) {
                       lockedReason={selected.key === 'venue'
                         ? 'Locked: venue details and courts are used by the current schedule. Manage them in Operations · Plan below.'
                         : 'Locked: real draws or divisions already exist. Manage them from the link below.'}
+                      className="max-w-full"
                       onSave={() => {}}
                     />
                   ) : undefined

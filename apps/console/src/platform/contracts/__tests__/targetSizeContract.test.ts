@@ -231,11 +231,6 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
       'a full match row), not a compact control.',
   },
   {
-    file: 'apps/console/src/modules/hub/HubPage.tsx',
-    line: 402,
-    why: 'explicit `h-9` (36px) on the tag — the scan reads it correctly; listed for documentation, not a real finding.',
-  },
-  {
     file: 'apps/console/src/components/ActiveChoice.tsx',
     line: 98,
     why:
@@ -248,7 +243,7 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
-    line: 768,
+    line: 801,
     why:
       'Previous-page button: className is `${CONTROL} ...` where `CONTROL` ' +
       '(module-level const, this file) is literally `"min-h-9 ..."` = 36px — ' +
@@ -256,8 +251,23 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
-    line: 780,
-    why: 'Next-page button — same `${CONTROL}` (min-h-9 = 36px) indirection as line 768.',
+    line: 816,
+    why: 'Next-page button — same `${CONTROL}` (min-h-9 = 36px) indirection as the previous-page control.',
+  },
+  {
+    file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
+    line: 750,
+    why: 'Refresh-results button uses the module-level CONTROL (min-h-9), which the static scan cannot resolve.',
+  },
+  {
+    file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
+    line: 814,
+    why: 'Numbered page button uses the module-level CONTROL (min-h-9), which the static scan cannot resolve.',
+  },
+  {
+    file: 'apps/console/src/modules/hub/WorkspaceInspector.tsx',
+    line: 318,
+    why: 'View-all link is an intentional inline text affordance with no literal size class.',
   },
   {
     file: 'apps/console/src/modules/operations/run/MeetMatchControls.tsx',

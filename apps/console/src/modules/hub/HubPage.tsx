@@ -10,7 +10,7 @@
  * routes to the dedicated `/new` create surface.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { ShuttleWorksMark } from '../../components/ShuttleWorksMark';
@@ -35,11 +35,21 @@ import { HUB_DOCK_MIN_CONTENT_WIDTH, HUB_DOCK_WIDTH } from './hubDockGeometry';
 import { EYEBROW_CLASS, TEXT_MUTED_XS, TEXT_TITLE } from '../../lib/utils';
 import { ActiveChoice } from '../../components/ActiveChoice';
 import { DialogFooter } from '../../components/DialogFooter';
+import { focusListPage, useListScrollRestore } from '../../hooks/useListScrollRestore';
 
 /** The ⌘K handler accepts Ctrl too — the hint should name the key the
  *  user's OS actually has. */
 const IS_MAC =
   typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.userAgent);
+
+const HUB_PAGE_SIZE = 20;
+const HUB_FACET_IDS = new Set(HUB_FACETS.map((item) => item.id));
+const HUB_SORT_IDS = new Set(['recent', 'date', 'name']);
+
+function positivePage(value: string | null): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
 
 /** Relative "updated" label for the footer (from a refresh timestamp vs now). */
 function sinceLabel(ms: number): string {
@@ -93,20 +103,70 @@ function FilterChip({
 
 export function HubPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tournaments, setTournaments] = useState<TournamentSummaryDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
+  const initialFacetParam = searchParams.get('facet');
+  const implicitQueryOrigin = useRef<HubFacetId | null>(
+    searchParams.get('q') && (!initialFacetParam || searchParams.get('scope') === 'search')
+      ? 'active'
+      : null,
+  );
+  const explicitActiveFacet = useRef(initialFacetParam === 'active');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Footer "Updated Nm ago": refresh stamp + a ticking `now` (both set only in
   // effects/callbacks — never the render body — to stay purity-clean).
   const [refreshedAt, setRefreshedAt] = useState<number | null>(null);
   const [now, setNow] = useState<number | null>(null);
   /** Status facet; 'all' shows everything (facets overlap — see hubFacets). */
-  const [facet, setFacet] = useState<HubFacetId>('all');
+  const [facet, setFacet] = useState<HubFacetId>(() => {
+    const candidate = initialFacetParam;
+    return candidate && HUB_FACET_IDS.has(candidate as HubFacetId)
+      ? (candidate as HubFacetId)
+      : searchParams.get('q')
+        ? 'all'
+        : 'active';
+  });
   /** List sort order (redesign); 'recent' = most-recently-updated first. */
-  const [sort, setSort] = useState<HubSortId>('recent');
+  const [sort, setSort] = useState<HubSortId>(() => {
+    const candidate = searchParams.get('sort');
+    return candidate && HUB_SORT_IDS.has(candidate) ? (candidate as HubSortId) : 'recent';
+  });
+  const [page, setPage] = useState(() => positivePage(searchParams.get('page')));
+  const listScrollRef = useListScrollRestore<HTMLDivElement>('hub', !loading);
+
+  const updateListUrl = useCallback(
+    (updates: { q?: string; facet?: HubFacetId | null; sort?: HubSortId; page?: number; scope?: 'search' | null }) => {
+      setSearchParams((previous) => {
+        const next = new URLSearchParams(previous);
+        if (updates.q !== undefined) {
+          if (updates.q) next.set('q', updates.q);
+          else next.delete('q');
+        }
+        if (updates.facet !== undefined) {
+          if (updates.facet === null) next.delete('facet');
+          else next.set('facet', updates.facet);
+        }
+        if (updates.sort !== undefined) {
+          if (updates.sort === 'recent') next.delete('sort');
+          else next.set('sort', updates.sort);
+        }
+        if (updates.page !== undefined) {
+          if (updates.page <= 1) next.delete('page');
+          else next.set('page', String(updates.page));
+        }
+        if (updates.scope !== undefined) {
+          if (updates.scope === null) next.delete('scope');
+          else next.set('scope', updates.scope);
+        }
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
 
   // ⌘K / Ctrl+K focuses the search field (the kbd hint inside it says so).
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -176,6 +236,61 @@ export function HubPage() {
     () => sortBy(nameFiltered.filter((t) => matchesFacet(t, facet)), sort, todayKey),
     [nameFiltered, facet, sort, todayKey],
   );
+  const pageCount = Math.max(1, Math.ceil(visible.length / HUB_PAGE_SIZE));
+  const pageRows = useMemo(
+    () => visible.slice((page - 1) * HUB_PAGE_SIZE, page * HUB_PAGE_SIZE),
+    [visible, page],
+  );
+
+  // A delete or a refresh can make the current page disappear. Keep the URL
+  // canonical and move to the last valid page without disturbing other state.
+  useEffect(() => {
+    if (!loading && page > pageCount) {
+      setPage(pageCount);
+      updateListUrl({ page: pageCount });
+    }
+  }, [loading, page, pageCount, updateListUrl]);
+
+  const changeQuery = (value: string) => {
+    let nextFacet = facet;
+    let facetUrl: HubFacetId | null = facet;
+    if (value && !implicitQueryOrigin.current && facet === 'active' && !explicitActiveFacet.current) {
+      implicitQueryOrigin.current = facet;
+      nextFacet = 'all';
+      facetUrl = 'all';
+    } else if (!value && implicitQueryOrigin.current) {
+      nextFacet = implicitQueryOrigin.current;
+      facetUrl = nextFacet === 'active' && !explicitActiveFacet.current ? null : nextFacet;
+      implicitQueryOrigin.current = null;
+    }
+    setQuery(value);
+    if (nextFacet !== facet) setFacet(nextFacet);
+    setPage(1);
+    updateListUrl({
+      q: value.trim(),
+      facet: facetUrl,
+      page: 1,
+      scope: value.trim() && nextFacet === 'all' && implicitQueryOrigin.current ? 'search' : null,
+    });
+  };
+  const changeFacet = (nextFacet: HubFacetId) => {
+    implicitQueryOrigin.current = null;
+    if (nextFacet === 'active') explicitActiveFacet.current = true;
+    setFacet(nextFacet);
+    setPage(1);
+    updateListUrl({ facet: nextFacet, page: 1, scope: null });
+  };
+  const changeSort = (nextSort: HubSortId) => {
+    setSort(nextSort);
+    setPage(1);
+    updateListUrl({ sort: nextSort, page: 1 });
+  };
+  const changePage = (nextPage: number) => {
+    const safePage = Math.min(Math.max(nextPage, 1), pageCount);
+    setPage(safePage);
+    updateListUrl({ page: safePage });
+    requestAnimationFrame(() => focusListPage(listScrollRef.current));
+  };
   const facetLabel = HUB_FACETS.find((f) => f.id === facet)!.label;
 
   // Hide the whole DATE column when no visible row has a date — a rail of
@@ -261,7 +376,7 @@ export function HubPage() {
               ref={searchRef}
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => changeQuery(e.target.value)}
               placeholder="Search or jump to…"
               aria-label="Search workspaces"
               className="h-8 w-full rounded-md border border-border bg-bg-elev px-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
@@ -307,7 +422,12 @@ export function HubPage() {
                   "All" always shows, and the ACTIVE facet stays visible even
                   at zero so a selection that empties remains escapable. */}
               {HUB_FACETS.filter(
-                (f) => f.id === 'all' || counts[f.id] > 0 || facet === f.id,
+                (f) =>
+                  f.id === 'all' ||
+                  f.id === 'active' ||
+                  f.id === 'complete' ||
+                  counts[f.id] > 0 ||
+                  facet === f.id,
               ).map((f) => (
                 <FilterChip
                   key={f.id}
@@ -317,11 +437,11 @@ export function HubPage() {
                   emphasize={
                     f.id === 'attention' ? 'attention' : f.id === 'live' ? 'live' : undefined
                   }
-                  onClick={() => setFacet(f.id)}
+                  onClick={() => changeFacet(f.id)}
                 />
               ))}
             </div>
-            <SortControl value={sort} onChange={setSort} />
+            <SortControl value={sort} onChange={changeSort} />
           </div>
         </div>
       ) : null}
@@ -331,7 +451,11 @@ export function HubPage() {
           narrow fallback anchors its overlay layer to this box. */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div
+            ref={listScrollRef}
+            data-list-scroll="hub"
+            className="min-h-0 flex-1 overflow-y-auto"
+          >
           {error && (
             <div
               role="alert"
@@ -379,7 +503,7 @@ export function HubPage() {
                 <span className="w-6 shrink-0" />
               </div>
               <div className="divide-y divide-border">
-                {visible.map((t) => (
+                {pageRows.map((t) => (
                   <WorkspaceRow
                     key={t.id}
                     tournament={t}
@@ -395,6 +519,57 @@ export function HubPage() {
                   />
                 ))}
               </div>
+              {visible.length > HUB_PAGE_SIZE ? (
+                <nav
+                  aria-label="Workspace pages"
+                  data-testid="hub-pagination"
+                  className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs"
+                >
+                  <span className="text-muted-foreground">
+                    Showing {(page - 1) * HUB_PAGE_SIZE + 1}–
+                    {Math.min(page * HUB_PAGE_SIZE, visible.length)} of {visible.length} workspaces
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => changePage(page - 1)}
+                      disabled={page === 1}
+                      aria-label="Previous page"
+                      className="rounded px-2 py-1 text-muted-foreground hover:bg-surface-chip hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    {Array.from(new Set([1, page - 1, page, page + 1, pageCount]))
+                      .filter((pageNumber) => pageNumber > 0 && pageNumber <= pageCount)
+                      .sort((a, b) => a - b)
+                      .map((pageNumber, index, pages) => (
+                        <span key={pageNumber} className="inline-flex items-center gap-1">
+                          {index > 0 && pageNumber - pages[index - 1] > 1 ? (
+                            <span aria-hidden>…</span>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => changePage(pageNumber)}
+                            aria-label={`Page ${pageNumber}`}
+                            aria-current={pageNumber === page ? 'page' : undefined}
+                            className={`min-w-7 rounded px-2 py-1 ${pageNumber === page ? 'bg-accent text-text-on-accent' : 'text-muted-foreground hover:bg-surface-chip hover:text-foreground'}`}
+                          >
+                            {pageNumber}
+                          </button>
+                        </span>
+                      ))}
+                    <button
+                      type="button"
+                      onClick={() => changePage(page + 1)}
+                      disabled={page === pageCount}
+                      aria-label="Next page"
+                      className="rounded px-2 py-1 text-muted-foreground hover:bg-surface-chip hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </nav>
+              ) : null}
               {/* Quiet empty-region treatment (H1.2): a short list leaves the
                   canvas mostly bare — a subdued create affordance makes the
                   emptiness read deliberate. Gone once the list fills out. */}

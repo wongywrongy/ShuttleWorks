@@ -44,6 +44,10 @@ if (
 // Current production-parity demo defaults. Override these for another seed run;
 // the selected values are printed into the report so a review is reproducible.
 const WS = process.env.WS_ID ?? "a86a39b3-0eb4-4c12-9106-5ff1bd1e5aa2";
+// Meet pagination is only meaningful when the selected workspace actually
+// has the Meet dataset. The production-parity default is a Bracket workspace,
+// so never capture Meet query parameters against it and call that coverage.
+const MEET_WS_ID = process.env.MEET_WS_ID ?? "";
 const SLUG = process.env.SLUG ?? "2026-korea-masters-t030";
 const DRAW_KEY = process.env.DRAW_KEY ?? "MS";
 const DOUBLES_DRAW_KEY = process.env.DOUBLES_DRAW_KEY ?? "MD";
@@ -51,9 +55,13 @@ const DOUBLES_DRAW_KEY = process.env.DOUBLES_DRAW_KEY ?? "MD";
 // route 404s anything else — a UUID default here would capture a 404 page.
 const SUBMISSION_ID = process.env.SUBMISSION_ID ?? "H4KJ29QW";
 const DISPLAY_TOKEN = process.env.DISPLAY_TOKEN ?? "";
+const INVITE_TOKEN = process.env.INVITE_TOKEN ?? "";
+const PARTNER_TOKEN = process.env.PARTNER_TOKEN ?? "";
 const AUTH_ME_URL = process.env.AUTH_ME_URL ?? "";
 const PLAYER_KEY = process.env.PLAYER_KEY ?? "";
 const SETTLE_MS = Number(process.env.CAPTURE_SETTLE_MS ?? "1800");
+const CAPTURE_LIMIT = Number(process.env.CAPTURE_LIMIT ?? "0");
+const CAPTURE_LABEL = process.env.CAPTURE_LABEL ?? "";
 const normalizedBase = base.replace(/\/$/, "");
 
 const CONSOLE_SURFACES = [
@@ -100,10 +108,54 @@ const CONSOLE_SURFACES = [
   ["Module guard · Meet configuration unavailable", `/tournaments/${WS}/setup`],
   ["Module guard · Meet roster unavailable", `/tournaments/${WS}/roster`],
   ["Module guard · Meet matches unavailable", `/tournaments/${WS}/matches`],
+  // Pagination and scope states are appended so the original surface IDs in
+  // existing review books remain stable.
+  ["Hub — workspace list · page 2", "/?facet=all&page=2"],
+  ["Hub — completed workspaces", "/?facet=complete"],
+  ["Participants · Entries", `/tournaments/${WS}/participants/entries`],
+  [
+    "Participants · Roster · bracket page 2 / 100 rows",
+    `/tournaments/${WS}/participants/people?bracket-roster.page=2&bracket-roster.pageSize=100`,
+  ],
+  [
+    "Participants · Roster · bracket 25 rows",
+    `/tournaments/${WS}/participants/people?bracket-roster.pageSize=25`,
+  ],
+  [
+    "Competition · Matches · bracket page 2 / 100 rows",
+    `/tournaments/${WS}/competition/matches?bracket-matches.page=2&bracket-matches.pageSize=100`,
+  ],
+  [
+    "Competition · Matches · bracket 50 rows",
+    `/tournaments/${WS}/competition/matches?bracket-matches.pageSize=50`,
+  ],
+  ["Global settings · Security", "/settings?section=security"],
+  ["Global settings · Sessions", "/settings?section=sessions"],
+  ["Global settings · Appearance", "/settings?section=appearance"],
+  ["Invite · Missing fixture token", "/invite/missing-fixture-token"],
 ];
 
+if (INVITE_TOKEN) {
+  CONSOLE_SURFACES.push(
+    ["Invite · Valid token", `/invite/${encodeURIComponent(INVITE_TOKEN)}`],
+  );
+}
+
+if (MEET_WS_ID) {
+  CONSOLE_SURFACES.push(
+    [
+      "Participants · Roster · Meet page 2 / 100 rows",
+      `/tournaments/${MEET_WS_ID}/participants/people?meet-roster.page=2&meet-roster.pageSize=100`,
+    ],
+    [
+      "Competition · Matches · Meet page 2 / 100 rows",
+      `/tournaments/${MEET_WS_ID}/competition/matches?meet-matches.page=2&meet-matches.pageSize=100`,
+    ],
+  );
+}
+
 const ENTRANT_SURFACES = [
-  ["Discovery · Season", "/e/"],
+  ["Discovery · Live & upcoming", "/e/"],
   ["Discovery · Completed tournaments", "/e/?view=completed#calendar"],
   ["Tournament · Overview", `/e/${SLUG}`],
   ["Tournament · Events", `/e/${SLUG}?tab=events`],
@@ -148,7 +200,27 @@ const ENTRANT_SURFACES = [
   ["Doubles partner failed", "/e/partner/failed"],
   ["My entries (signed out)", "/e/me/entries"],
   ["Entry receipt", `/e/${SLUG}/receipt/${SUBMISSION_ID}`],
+  // Public discovery scope states are appended so original surface IDs remain
+  // stable in previously generated review books.
+  ["Discovery · Live & upcoming · requested page 2", "/e/?page=2#calendar"],
+  ["Discovery · Entries open", "/e/?view=open#calendar"],
+  ["Discovery · All results search", "/e/?view=all&q=Open#calendar"],
+  [
+    "Discovery · Completed tournaments · page 2",
+    "/e/?view=completed&page=2#calendar",
+  ],
+  ["Partner invitation · Missing fixture token", "/e/partner/missing-fixture-token"],
+  [
+    "Partner signup · Missing fixture token",
+    "/e/signup/partner/missing-fixture-token",
+  ],
 ];
+
+if (PARTNER_TOKEN) {
+  ENTRANT_SURFACES.push(
+    ["Doubles partner invitation · token", `/e/partner/${encodeURIComponent(PARTNER_TOKEN)}`],
+  );
+}
 
 const EXACT_DESCRIPTIONS = Object.freeze({
   "Authentication · Sign in":
@@ -173,7 +245,7 @@ const EXACT_DESCRIPTIONS = Object.freeze({
     "Capability guard for Meet roster tools in a bracket workspace.",
   "Module guard · Meet matches unavailable":
     "Capability guard for Meet match tools in a bracket workspace.",
-  "Discovery · Season":
+  "Discovery · Live & upcoming":
     "Public tournament discovery page for browsing the active season.",
   "Discovery · Completed tournaments":
     "Historical discovery view focused on completed tournaments.",
@@ -275,6 +347,11 @@ if (tier === "entrant") {
       "Player detail",
       `/e/${SLUG}/players/${encodeURIComponent(playerKey)}`,
     ]);
+  } else {
+    surfaces.push([
+      "Player detail · Missing fixture person",
+      `/e/${SLUG}/players/missing-fixture-person`,
+    ]);
   }
 }
 
@@ -283,6 +360,12 @@ surfaces = surfaces.map(([label, path]) => [
   path,
   descriptionFor(label),
 ]);
+if (CAPTURE_LABEL) {
+  surfaces = surfaces.filter(([label]) => label.includes(CAPTURE_LABEL));
+}
+if (CAPTURE_LIMIT > 0) {
+  surfaces = surfaces.slice(0, CAPTURE_LIMIT);
+}
 const VIEWPORTS = [
   ["desktop", 1440, 900],
   ["mobile", 390, 844],
@@ -341,6 +424,7 @@ if (tier === "console" && AUTH_ME_URL) {
 for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
   const surfaceStartedAt = Date.now();
   const shots = {};
+  const scrollEndShots = {};
   const viewportRuns = {};
   let note = "";
   for (const [vpName, width, height] of VIEWPORTS) {
@@ -381,11 +465,89 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
       await page.waitForTimeout(SETTLE_MS);
       await page.evaluate(() => document.fonts.ready).catch(() => {});
       const documentHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, window.innerHeight));
+      const scrollRegions = await page.evaluate(() => Array.from(document.querySelectorAll('*'))
+        .filter((element) => {
+          const style = window.getComputedStyle(element);
+          return element.clientHeight > 40 && /(auto|scroll)/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 4;
+        })
+        .slice(0, 40)
+        .map((element) => ({
+          tag: element.tagName.toLowerCase(),
+          id: element.id || null,
+          role: element.getAttribute('role'),
+          testId: element.getAttribute('data-testid'),
+          width: element.clientWidth,
+          height: element.clientHeight,
+          scrollWidth: element.scrollWidth,
+          scrollHeight: element.scrollHeight,
+        })));
       shots[vpName] = [];
       for (let top = 0; top < documentHeight; top += height) {
         const segmentHeight = Math.min(height, documentHeight - top);
-        const png = await page.screenshot({ fullPage: true, animations: "disabled", clip: { x: 0, y: top, width, height: segmentHeight } });
+        // Capture a viewport-sized continuation at the real document offset.
+        // Combining fullPage with clip can rasterize the entire long document
+        // first and then scale it down in the review book, making paginated
+        // lists unreadable. Scrolling before a clipped viewport screenshot
+        // preserves the route's actual page state and readable CSS scale.
+        const actualTop = await page.evaluate((y) => {
+          window.scrollTo(0, y);
+          return window.scrollY;
+        }, top);
+        // The final desired offset can exceed maxScroll because the viewport
+        // is taller than the remaining document. Crop from the corresponding
+        // point inside the clamped viewport so the tail is neither duplicated
+        // nor omitted.
+        const clipY = Math.max(0, top - actualTop);
+        const clipHeight = Math.min(height - clipY, documentHeight - top);
+        const png = await page.screenshot({ animations: "disabled", clip: { x: 0, y: clipY, width, height: clipHeight } });
         shots[vpName].push({ png: png.toString("base64"), top, height: segmentHeight, width });
+      }
+      scrollEndShots[vpName] = [];
+      // Inventory surfaces can put the page-size/count controls below an
+      // internal list viewport. Capture that endpoint only when the route is
+      // known to be an inventory; never expand overflow or imply this is the
+      // complete record set. The marker is assigned temporarily and removed
+      // before the next route.
+      if (tier === "console" && /Roster|Matches|Hub/.test(label)) {
+        const regions = await page.evaluate(() => {
+          let index = 0;
+          return Array.from(document.querySelectorAll('*'))
+            .filter((element) => element !== document.body && element !== document.documentElement)
+            .filter((element) => {
+              const style = window.getComputedStyle(element);
+              return element.clientHeight > 40 && /(auto|scroll)/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 4;
+            })
+            .slice(0, 3)
+            .map((element) => {
+              const key = `capture-scroll-${index++}`;
+              element.setAttribute('data-capture-scroll-region', key);
+              return { key, height: element.clientHeight, scrollHeight: element.scrollHeight };
+            });
+        });
+        for (const region of regions) {
+          const before = await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }));
+          const visible = await page.evaluate((key) => {
+            const element = document.querySelector(`[data-capture-scroll-region="${key}"]`);
+            if (!element) return null;
+            element.scrollTop = element.scrollHeight;
+            const top = Math.max(0, element.getBoundingClientRect().top + window.scrollY - 24);
+            window.scrollTo(0, top);
+            return { top, width: window.innerWidth, height: window.innerHeight, scrollTop: element.scrollTop, scrollHeight: element.scrollHeight };
+          }, region.key);
+          if (visible !== null) {
+            const png = await page.screenshot({ animations: "disabled", clip: { x: 0, y: 0, width, height } });
+            scrollEndShots[vpName].push({
+              png: png.toString("base64"), top: visible.top, height, width,
+              kind: "scroll-end", region: region.key,
+              scrollTop: visible.scrollTop, scrollHeight: visible.scrollHeight,
+            });
+          }
+          await page.evaluate(({ key, x, y }) => {
+            const element = document.querySelector(`[data-capture-scroll-region="${key}"]`);
+            if (element) { element.scrollTop = 0; element.scrollLeft = 0; element.removeAttribute('data-capture-scroll-region'); }
+            window.scrollTo(x, y);
+          }, { key: region.key, ...before });
+        }
       }
       viewportRuns[vpName] = {
         ok: (res?.status() ?? 0) < 400,
@@ -395,6 +557,8 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
         viewport: { width, height, deviceScaleFactor: 2 },
         documentHeight,
         segments: shots[vpName].length,
+        scrollRegions,
+        scrollEndSegments: scrollEndShots[vpName].length,
       };
       if ((res?.status() ?? 0) >= 400) {
         viewportRuns[vpName].error = `HTTP ${res.status()}`;
@@ -427,7 +591,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
     durationMs: Date.now() - surfaceStartedAt,
     viewports: viewportRuns,
   };
-  cards.push({ ref, label, path, description, note, shots, viewportRuns });
+  cards.push({ ref, label, path, description, note, shots, scrollEndShots, viewportRuns });
   runState.completedSurfaces = surfaceIndex + 1;
   runState.updatedAt = new Date().toISOString();
   runState.surfaces.push(surfaceRun);
@@ -448,8 +612,13 @@ const reviewFocus = (label) => {
   if (/Draw|Match|Schedule|Operations|Display/i.test(label)) return "Check participant and score alignment, match references, tournament time basis, court assignment, scanning hierarchy and contained scrolling. Colour must not be the only state signal.";
   return "Check the primary task and action, reading order, text contrast, empty/error states and mobile reflow. Flag technical language that does not help the reader decide.";
 };
-const pages = cards.flatMap((card, index) => VIEWPORTS.flatMap(([viewport]) =>
-  (card.shots[viewport]?.length ? card.shots[viewport] : [null]).map((shot, segment, all) => ({ card, index, viewport, shot, segment, count: all.length }))));
+const pages = cards.flatMap((card, index) => VIEWPORTS.flatMap(([viewport]) => {
+  const regular = (card.shots[viewport]?.length ? card.shots[viewport] : [null])
+    .map((shot, segment, all) => ({ card, index, viewport, shot, segment, count: all.length, kind: "document" }));
+  const supplemental = (card.scrollEndShots?.[viewport] ?? [])
+    .map((shot, segment, all) => ({ card, index, viewport, shot, segment, count: all.length, kind: "scroll-end" }));
+  return [...regular, ...supplemental];
+}));
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>
@@ -476,7 +645,11 @@ const html = `<!doctype html>
     h2 {font-size:18px;margin-bottom:4px;} p {margin:4px 0;}
     .frame {margin-top:10px;}
     .desktop .capture {width:330mm;}
-    .mobile .capture {width:94mm;}
+    /* A 390px viewport segment is 844px tall. At 97mm wide it remains more
+       readable than the former 94mm setting while leaving enough room for
+       the heading, caption, and review focus on one A3 continuation sheet. */
+    .mobile .capture {width:97mm;}
+    .scroll-end .focus {display:none;}
     .path,.caption {font-size:10px;}
   }
 </style></head><body>
@@ -495,11 +668,11 @@ const html = `<!doctype html>
 <p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; reduced motion. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Timing is live demo data, not a frozen cross-surface snapshot. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
 </div></section>
 <section class="index"><h1>Surface index</h1><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>
-${pages.map(({card:c,index,viewport,shot,segment,count})=>`<section class="sheet ${viewport}" ${viewport==='desktop'&&segment===0?`id="s${index}"`:''}>
-<p class="eyebrow">${esc(c.ref)} · ${viewport} · segment ${segment+1} / ${count}</p>
+${pages.map(({card:c,index,viewport,shot,segment,count,kind})=>`<section class="sheet ${viewport} ${kind === 'scroll-end' ? 'scroll-end' : ''}" ${viewport==='desktop'&&segment===0&&kind==='document'?`id="s${index}"`:''}>
+<p class="eyebrow">${esc(c.ref)} · ${viewport} · ${kind === 'scroll-end' ? 'supplemental list end' : `segment ${segment+1} / ${count}`}</p>
 <h2>${esc(c.label)}</h2><p>${esc(c.description)}</p>
 <p class="path">Requested <code>${esc(c.path)}</code> · ${esc(`HTTP ${c.viewportRuns[viewport]?.httpStatus ?? "unavailable"} · final ${c.viewportRuns[viewport]?.finalUrl ?? "unavailable"} · ${c.viewportRuns[viewport]?.consoleErrors?.length ?? 0} console errors`)}</p>
-<div class="frame"><div class="capture">${shot?`<img src="data:image/png;base64,${shot.png}" alt="${escAttr(c.label)} ${escAttr(viewport)} segment ${segment+1}"><p class="caption">${shot.width} CSS px wide · document y=${shot.top}–${shot.top+shot.height} · 2× capture. ${segment?'Continuation of the same page; top navigation may be outside this segment.':'Initial document position; no interactive controls changed.'}</p>`:'<p class="err">Capture unavailable. Consult the manifest; do not treat this as an empty product state.</p>'}</div>
+<div class="frame"><div class="capture">${shot?`<img src="data:image/png;base64,${shot.png}" alt="${escAttr(c.label)} ${escAttr(viewport)} ${kind === 'scroll-end' ? 'list end' : `segment ${segment+1}`}"><p class="caption">${shot.width} CSS px wide · document y=${shot.top}–${shot.top+shot.height} · 2× capture. ${kind === 'scroll-end' ? `Supplemental list-end view; internal region ${escAttr(shot.region)} at scroll ${shot.scrollTop}/${shot.scrollHeight}. This does not represent a complete record capture.` : segment?'Continuation of the same page; top navigation may be outside this segment.':'Initial document position; no interactive controls changed.'}</p>`:'<p class="err">Capture unavailable. Consult the manifest; do not treat this as an empty product state.</p>'}</div>
 <aside><h2>Reviewer notes</h2><p>${esc(reviewFocus(c.label))}</p><p>Compare this surface with its desktop sheets. Review at a comfortable zoom; printed screenshot size is not the physical target size.</p><p>Record: observation → user impact → proposed treatment → acceptance criterion.</p></aside></div>
 <p class="focus"><strong>Review focus:</strong> ${esc(reviewFocus(c.label))}</p></section>`).join('')}
 </body></html>`;

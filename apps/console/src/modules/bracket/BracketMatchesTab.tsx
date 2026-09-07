@@ -14,6 +14,8 @@ import { Download } from '@phosphor-icons/react';
 import type { BracketTournamentDTO, PlayUnitDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
+import { useDenseDataState } from '../../hooks/useDenseDataState';
+import { useListScrollRestore } from '../../hooks/useListScrollRestore';
 import { useCanEdit } from '../../hooks/useCanEdit';
 import {
   ActionsBar,
@@ -21,7 +23,6 @@ import {
   DenseDataToolbar,
   DetailDock,
   EmptyState,
-  DEFAULT_DENSE_DATA_STATE,
   MatchStatusFilter,
   BRACKET_MATCH_CELL,
   BRACKET_MATCH_LIST_COLUMNS,
@@ -87,14 +88,14 @@ export function BracketMatchesTab({
   onData?: (next: BracketTournamentDTO) => void;
 }) {
   const api = useBracketApi();
+  const listScrollRef = useListScrollRestore<HTMLDivElement>('bracket-matches', data.play_units.length > 0);
   const canEdit = useCanEdit();
-  // Preserve the existing shared `?q=` deep-link contract. Other dense table
-  // state remains local until the matches route can own a complete query
-  // namespace; search is the high-value handoff for this surface.
+  // Preserve the shared ?q= deep-link contract alongside namespaced table state.
   const [query, setQuery] = useSearchParamState('q', '');
-  const [denseState, setDenseStateLocal] = useState(() => ({ ...DEFAULT_DENSE_DATA_STATE, search: query }));
+  const [storedDenseState, denseActions] = useDenseDataState({ pageSize: 100 }, 'bracket-matches');
+  const denseState = { ...storedDenseState, search: query };
   const setDenseState = (next: typeof denseState) => {
-    setDenseStateLocal(next);
+    denseActions.setState(next);
     if (next.search !== query) setQuery(next.search);
   };
   // Status facet (?status=) — the same strip Meet Matches renders.
@@ -319,7 +320,7 @@ export function BracketMatchesTab({
   // by round / match index within the event. Each unit is numbered
   // BEFORE the search filter runs so a row's `#` is a stable per-event
   // identifier (mirrors Meet, where filtering never renumbers rows).
-  const groups = useMemo(() => {
+  const allGroups = useMemo(() => {
     const byEvent = new Map<string, BracketTournamentDTO['play_units']>();
     for (const pu of data.play_units) {
       const arr = byEvent.get(pu.event_id) ?? [];
@@ -329,39 +330,38 @@ export function BracketMatchesTab({
     return data.events
       .slice()
       // Same discipline banding order as Meet Matches (doubles-first
-      // dual-meet convention); ties keep the events-list order.
+      // dual-meet convention); stable event identifiers break ties.
       .sort(
         (a, b) =>
-          disciplineOrderIndex(a.discipline) - disciplineOrderIndex(b.discipline),
+          disciplineOrderIndex(a.discipline) - disciplineOrderIndex(b.discipline) || a.id.localeCompare(b.id),
       )
       .map((ev) => {
         const units = (byEvent.get(ev.id) ?? [])
           .slice()
           .sort(
             (a, b) =>
-              a.round_index - b.round_index || a.match_index - b.match_index,
+              a.round_index - b.round_index || a.match_index - b.match_index || a.id.localeCompare(b.id),
           )
-          .map((pu, idx) => ({ pu, n: idx + 1 }))
-          .filter(({ pu }) => {
-            if (statusFilter !== 'all' && statusOf(pu.id) !== statusFilter)
-              return false;
-            if (!q) return true;
-            const hay = [
-              pu.id,
-              ev.id,
-              ev.discipline,
-              formatSideCondensed(sideOf(pu, 'A')),
-              formatSideCondensed(sideOf(pu, 'B')),
-            ]
-              .join(' ')
-              .toLowerCase();
-            return hay.includes(q);
-          });
+          .map((pu, idx) => ({ pu, n: idx + 1 }));
         return { ev, units };
-      })
-      .filter((g) => g.units.length > 0);
+      });
+  }, [data.play_units, data.events]);
+  const liveRows = useMemo(() => allGroups.flatMap(({ units }) => units), [allGroups]);
+  const groups = useMemo(() => allGroups.map(({ ev, units }) => ({
+    ev,
+    units: units.filter(({ pu }) => {
+      if (statusFilter !== 'all' && statusOf(pu.id) !== statusFilter) return false;
+      if (!q) return true;
+      const hay = [
+        pu.id, ev.id, ev.discipline,
+        formatSideCondensed(sideOf(pu, 'A')),
+        formatSideCondensed(sideOf(pu, 'B')),
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    }),
+  })).filter((g) => g.units.length > 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.play_units, data.events, q, statusFilter, assignmentByPu, resultByPu, participantById]);
+  [allGroups, q, statusFilter, assignmentByPu, resultByPu, participantById]);
 
   const total = data.play_units.length;
   const shown = groups.reduce((n, g) => n + g.units.length, 0);
@@ -520,12 +520,12 @@ export function BracketMatchesTab({
           type="button"
           onClick={() => void exportBracketMatchesXlsx(exportRows)}
           disabled={exportRows.length === 0}
-          title="Export the listed matches to a spreadsheet"
+          title="Export all filtered matches, across every page, to a spreadsheet"
           data-testid="bracket-export-matches"
           className={`${INTERACTIVE_BASE} inline-flex h-7 items-center gap-1.5 rounded-sm border border-border bg-card px-2.5 text-xs text-card-foreground transition-colors duration-fast ease-brand hover:bg-muted/40 hover:text-foreground disabled:opacity-50`}
         >
           <Download aria-hidden="true" className="h-3.5 w-3.5" />
-          Export XLSX
+          Export filtered matches
         </button>
       </ActionsBar>
 
@@ -545,7 +545,7 @@ export function BracketMatchesTab({
               <MatchStatusFilter
                 counts={statusCounts}
                 active={statusFilter}
-                onChange={(v) => setStatusParam(v === 'all' ? '' : v)}
+                onChange={(v) => { denseActions.setPage(1); setStatusParam(v === 'all' ? '' : v); }}
                 testIdPrefix="bracket-matches"
               />
               <DenseDataToolbar
@@ -554,12 +554,14 @@ export function BracketMatchesTab({
                 searchTestId="bracket-matches-search"
                 searchPlaceholder="Search event or player…"
               />
-              <div className="min-h-0 flex-1 overflow-auto">
+              <div ref={listScrollRef} data-list-scroll="bracket-matches" className="min-h-0 flex-1 overflow-auto">
                 <DenseDataTable
                   columns={matchColumns}
                   rows={groups.flatMap(({ units }) => units)}
-                  state={denseState}
-                  onStateChange={setDenseState}
+                  liveSource={liveRows}
+                  liveScope={JSON.stringify([statusFilter, query])}
+                  state={{ ...denseState, search: '' }}
+                  onStateChange={(next) => setDenseState({ ...next, search: query })}
                   rowId={({ pu }) => pu.id}
                   rowTestId={({ pu }) => `bracket-match-row-${pu.id}`}
                   onRowClick={({ pu }) => setSelectedId((prev) => (prev === pu.id ? null : pu.id))}

@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import {
   getDenseDataPage,
+  getDenseDataRows,
   isDenseColumnVisible,
   setDenseSort,
   type DenseDataColumn,
@@ -22,6 +23,8 @@ import {
   SELECTABLE_ROW_FOCUS,
   selectableRowProps,
 } from "../../lib/selectableRow";
+import { useStableInventory } from '../../hooks/useStableInventory';
+import { focusListPage } from '../../hooks/useListScrollRestore';
 
 const CONTROL =
   "min-h-9 rounded-md border border-border bg-card px-2.5 text-sm text-ink shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
@@ -65,6 +68,16 @@ export interface DenseDataTableProps<T> {
   elasticColumnId?: string;
   /** Embedded record lists do not earn a pagination footer. */
   showPagination?: boolean;
+  /**
+   * False while the workspace's first data load is still in flight. An empty
+   * pre-load collection must not clamp a deep-linked `<prefix>.page=2` down to
+   * page one before the rows arrive.
+   */
+  ready?: boolean;
+  /** Full source for refreshing values while a live inventory keeps its ordering. */
+  liveSource?: readonly T[];
+  liveScope?: string;
+  wrapIdentityOnMobile?: boolean;
   className?: string;
 }
 
@@ -219,6 +232,10 @@ export function DenseDataTable<T>({
   strictRowHeight = "compact",
   elasticColumnId: requestedElasticColumnId,
   showPagination = true,
+  liveSource,
+  liveScope = '',
+  ready = true,
+  wrapIdentityOnMobile = false,
   className,
 }: DenseDataTableProps<T>) {
   const [isMobile, setIsMobile] = useState(false);
@@ -240,7 +257,16 @@ export function DenseDataTable<T>({
     ? (safeColumns.find((column) => column.id === requestedElasticColumnId)?.id ??
       safeColumns[0]?.id)
     : null;
-  const page = getDenseDataPage(rows, columns, state);
+  const matching = getDenseDataRows(rows, columns, state, rowId);
+  const stable = useStableInventory(matching, liveSource ?? rows, rowId,
+    JSON.stringify([state.search, state.filters, state.sort, state.page, state.pageSize, liveScope]));
+  const page = liveSource
+    ? getDenseDataPage(stable.rows, [], { ...state, search: '', filters: {}, sort: null })
+    : getDenseDataPage(rows, columns, state, rowId);
+  useEffect(() => {
+    if (!ready) return;
+    if (state.page !== page.page) onStateChange({ ...state, page: page.page });
+  }, [ready, state, page.page, onStateChange]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     () => new Set(),
   );
@@ -435,9 +461,9 @@ export function DenseDataTable<T>({
                 column.cellTitle?.(row) ??
                 String(column.accessor(row) ?? "—")
               }
-              className={strictCellClass(column, elastic, strictRowHeight)}
+              className={`${strictCellClass(column, elastic, strictRowHeight)} ${elastic && wrapIdentityOnMobile && isMobile ? '!h-auto !max-h-none !overflow-visible !whitespace-normal !py-2' : ''}`}
             >
-              <span className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+              <span className={elastic && wrapIdentityOnMobile && isMobile ? 'block min-w-0 whitespace-normal break-words' : 'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap'}>
                 {strictDisplayValue(column, row)}
               </span>
             </td>
@@ -509,7 +535,7 @@ export function DenseDataTable<T>({
                   <input
                     type="checkbox"
                     aria-label={
-                      allPageSelected ? "Clear page selection" : "Select page"
+                      allPageSelected ? "Clear page selection" : `Select these ${pageIds.length}`
                     }
                     checked={allPageSelected}
                     onChange={togglePageSelection}
@@ -682,7 +708,7 @@ export function DenseDataTable<T>({
                     <div className="min-w-0 flex-1 font-medium text-ink">
                       {renderMobileRow
                         ? renderMobileRow(row)
-                        : String(displayValue(safeColumns[0], row))}
+                        : displayValue(safeColumns[0], row)}
                     </div>
                     {renderActions ? (
                       <span
@@ -721,6 +747,7 @@ export function DenseDataTable<T>({
           ) : null}
         </div>
       ) : null}
+      {liveSource && stable.pending && <button type="button" className={`${CONTROL} text-accent`} onClick={stable.refresh}>Refresh results</button>}
       {showPagination ? (
         <DenseDataPagination
           page={page}
@@ -746,12 +773,16 @@ export function DenseDataPagination({
   const first = page.total === 0 ? 0 : (page.page - 1) * page.pageSize + 1;
   const last = Math.min(page.total, page.page * page.pageSize);
   return (
-    <footer className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-3 py-2 text-2sm text-muted-foreground">
+    <footer onClick={(event) => {
+      if (!(event.target instanceof Element) || !event.target.closest('nav button')) return;
+      const host = event.currentTarget.closest('[data-list-scroll]') ?? event.currentTarget.parentElement?.querySelector('[data-list-scroll]');
+      if (host instanceof HTMLElement) requestAnimationFrame(() => focusListPage(host));
+    }} className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-3 py-2 text-2sm text-muted-foreground">
       <span aria-live="polite">
         {first}–{last} of {page.total}
       </span>
-      <div className="flex items-center gap-2">
-        <label className="hidden items-center gap-1.5 sm:flex">
+      <div className="flex max-w-full flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5">
           Rows{" "}
           <select
             aria-label="Rows per page"
@@ -761,10 +792,12 @@ export function DenseDataPagination({
             }
             className={CONTROL}
           >
+            <option value="25">25</option>
             <option value="50">50</option>
             <option value="100">100</option>
           </select>
         </label>
+        {page.pageCount > 1 && <nav aria-label="Pagination" className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           aria-label="Previous page"
@@ -774,9 +807,12 @@ export function DenseDataPagination({
         >
           <CaretLeft aria-hidden size={16} />
         </button>
-        <span className="min-w-16 text-center text-2sm text-ink">
-          Page {page.page} / {page.pageCount}
-        </span>
+        {Array.from(new Set([1, page.page - 1, page.page, page.page + 1, page.pageCount]))
+          .filter((n) => n > 0 && n <= page.pageCount).sort((a, b) => a - b)
+          .map((n, index, pages) => <span key={n} className="inline-flex items-center gap-2">
+            {index > 0 && n - pages[index - 1] > 1 && <span aria-hidden>…</span>}
+            <button type="button" className={CONTROL} aria-label={`Page ${n}`} aria-current={n === page.page ? 'page' : undefined} onClick={() => onPageChange(n)}>{n}</button>
+          </span>)}
         <button
           type="button"
           aria-label="Next page"
@@ -786,6 +822,7 @@ export function DenseDataPagination({
         >
           <CaretRight aria-hidden size={16} />
         </button>
+        </nav>}
       </div>
     </footer>
   );

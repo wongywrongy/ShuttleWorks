@@ -50,6 +50,13 @@ The canonical fixture assertions are deliberately non-vacuous:
 
 ## Entrant evidence
 
+Public discovery list scope and pagination evidence can be run against the
+entrant build with:
+
+```bash
+npm run test:pagination --prefix tests/e2e
+```
+
 The entrant evidence suite is an explicit compose/dev verification run, not a
 PR gate. The CI browser gate runs the console contract suite against its
 isolated canonical fixture; it does not silently substitute for entrant

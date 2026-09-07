@@ -235,9 +235,16 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
             linkFor={(n) =>
               n.matchId && n.source
                 ? `/tournaments/${summary.id}/operations/live?select=${n.source}:${n.matchId}`
-                : null
+              : null
             }
           />
+          <button
+            type="button"
+            onClick={() => onNavigate(seg.matches)}
+            className="mt-2 text-sm text-accent underline underline-offset-2 hover:no-underline"
+          >
+            View all matches →
+          </button>
         </div>
       ) : null}
     </section>

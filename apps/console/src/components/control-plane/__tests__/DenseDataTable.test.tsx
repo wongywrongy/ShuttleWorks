@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { DenseDataTable } from "../DenseDataTable";
 import { DEFAULT_DENSE_DATA_STATE, type DenseDataColumn } from "../denseData";
 
@@ -48,8 +48,147 @@ describe("DenseDataTable", () => {
         onSelectedIdsChange={onSelectedIdsChange}
       />,
     );
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select page" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select these 1" }));
     expect(onSelectedIdsChange).toHaveBeenCalledWith(["1"]);
+  });
+
+  it('shows the page-size selector and numbered navigation for multiple pages', () => {
+    const manyRows = Array.from({ length: 26 }, (_, index) => ({
+      id: String(index + 1), name: `Player ${index + 1}`, status: 'Ready',
+    }));
+    const onStateChange = vi.fn();
+    render(
+      <DenseDataTable
+        rows={manyRows}
+        columns={columns}
+        state={{ ...DEFAULT_DENSE_DATA_STATE, pageSize: 25 }}
+        onStateChange={onStateChange}
+        rowId={(row) => row.id}
+      />,
+    );
+    expect(screen.getByRole('combobox', { name: 'Rows per page' })).toHaveValue('25');
+    expect(screen.getByRole('navigation', { name: 'Pagination' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Page 1' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Page 2' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rows per page' }), { target: { value: '50' } });
+    expect(onStateChange).toHaveBeenCalledWith(expect.objectContaining({ page: 1, pageSize: 50 }));
+  });
+
+  it('keeps a 101-record inventory at the 100-row default and reaches page two', () => {
+    const inventory = Array.from({ length: 101 }, (_, index) => ({
+      id: `player-${index + 1}`,
+      name: index === 100 ? 'Late Match Player' : `Player ${index + 1}`,
+      status: 'Ready',
+    }));
+    const onStateChange = vi.fn();
+    const state = { ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const };
+    const { rerender } = render(
+      <DenseDataTable
+        rows={inventory}
+        columns={columns}
+        state={state}
+        onStateChange={onStateChange}
+        rowId={(row) => row.id}
+        rowTestId={(row) => `inventory-${row.id}`}
+      />,
+    );
+    expect(screen.getAllByTestId(/^inventory-/)).toHaveLength(100);
+    expect(screen.queryByText('Late Match Player')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Page 2' }));
+    expect(onStateChange).toHaveBeenCalledWith(expect.objectContaining({ page: 2, pageSize: 100 }));
+    rerender(
+      <DenseDataTable
+        rows={inventory}
+        columns={columns}
+        state={{ ...state, page: 2 }}
+        onStateChange={onStateChange}
+        rowId={(row) => row.id}
+        rowTestId={(row) => `inventory-${row.id}`}
+      />,
+    );
+    expect(screen.getAllByTestId(/^inventory-/)).toHaveLength(1);
+    expect(screen.getByText('Late Match Player')).toBeInTheDocument();
+  });
+
+  it('holds a deep-linked page while the workspace data is still loading', async () => {
+    const onStateChange = vi.fn();
+    const { rerender } = render(
+      <DenseDataTable
+        rows={[]}
+        columns={columns}
+        state={{ ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const, page: 2 }}
+        onStateChange={onStateChange}
+        rowId={(row) => row.id}
+        ready={false}
+      />,
+    );
+    await waitFor(() => expect(onStateChange).not.toHaveBeenCalled());
+
+    const loaded = Array.from({ length: 101 }, (_, index) => ({
+      id: String(index + 1), name: `Player ${index + 1}`, status: 'Ready',
+    }));
+    rerender(
+      <DenseDataTable
+        rows={loaded}
+        columns={columns}
+        state={{ ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const, page: 2 }}
+        onStateChange={onStateChange}
+        rowId={(row) => row.id}
+        ready
+      />,
+    );
+    expect(onStateChange).not.toHaveBeenCalled();
+
+    // A page that is genuinely out of range once loaded still canonicalizes.
+    rerender(
+      <DenseDataTable
+        rows={loaded.slice(0, 10)}
+        columns={columns}
+        state={{ ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const, page: 2 }}
+        onStateChange={onStateChange}
+        rowId={(row) => row.id}
+        ready
+      />,
+    );
+    await waitFor(() => expect(onStateChange).toHaveBeenCalledWith(expect.objectContaining({ page: 1 })));
+  });
+
+  it('searches the complete inventory beyond page one and selects only visible page rows', () => {
+    const inventory = Array.from({ length: 101 }, (_, index) => ({
+      id: `match-${index + 1}`,
+      name: index === 100 ? 'Target Match 101' : `Match ${index + 1}`,
+      status: 'Ready',
+    }));
+    const onSelectedIdsChange = vi.fn();
+    render(
+      <DenseDataTable
+        rows={inventory}
+        columns={columns}
+        state={{ ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const, search: 'Target Match 101' }}
+        onStateChange={vi.fn()}
+        rowId={(row) => row.id}
+        selectable
+        onSelectedIdsChange={onSelectedIdsChange}
+      />,
+    );
+    expect(screen.getByText('Target Match 101')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select these 1' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select these 1' }));
+    expect(onSelectedIdsChange).toHaveBeenCalledWith(['match-101']);
+  });
+
+  it('omits pagination navigation when the filtered collection fits one page', () => {
+    render(
+      <DenseDataTable
+        rows={rows}
+        columns={columns}
+        state={{ ...DEFAULT_DENSE_DATA_STATE, pageSize: 25 }}
+        onStateChange={vi.fn()}
+        rowId={(row) => row.id}
+      />,
+    );
+    expect(screen.getByRole('combobox', { name: 'Rows per page' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Pagination' })).not.toBeInTheDocument();
   });
 
   it("renders the mobile representation with an accessible row action", () => {
@@ -67,6 +206,47 @@ describe("DenseDataTable", () => {
     );
     fireEvent.keyDown(screen.getByTestId("row-1"), { key: "Enter" });
     expect(onRowClick).toHaveBeenCalledWith(rows[0]);
+  });
+
+  it('renders a ReactNode first column on a 390px mobile surface without stringifying it', async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    const mobileColumns: DenseDataColumn<Row>[] = [
+      {
+        id: 'name',
+        label: 'Name',
+        accessor: (row) => row.name,
+        render: (_value, row) => <span data-testid="node-name">{row.name}</span>,
+      },
+      ...columns.slice(1),
+    ];
+    try {
+      render(
+        <DenseDataTable
+          rows={rows}
+          columns={mobileColumns}
+          state={DEFAULT_DENSE_DATA_STATE}
+          onStateChange={vi.fn()}
+          rowId={(row) => row.id}
+        />,
+      );
+      await waitFor(() => expect(document.querySelector('article')).not.toBeNull());
+      const mobileArticle = document.querySelector('article');
+      expect(mobileArticle).not.toBeNull();
+      expect(within(mobileArticle as HTMLElement).getByTestId('node-name')).toHaveTextContent('Mina');
+      expect(screen.queryByText('[object Object]')).not.toBeInTheDocument();
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   it("keeps a nested row action from also opening the row", () => {

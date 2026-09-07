@@ -16,7 +16,7 @@
  *   status, phone) round-trip untouched.
  */
 import { Button } from '@scheduler/design-system';
-import { Fragment, useState } from 'react';
+import { Fragment, useState, type CSSProperties } from 'react';
 
 export type SetupRow = Record<string, unknown>;
 
@@ -108,18 +108,22 @@ export function SetupRowsEditor({
       {rows.length ? (
         <div className="overflow-x-auto rounded-sm border border-border/60">
           <div
-            className="grid min-w-0 items-center gap-x-3 gap-y-2 px-3 py-2"
-            style={{ gridTemplateColumns: listColumn ? recordGridTemplate : gridTemplate }}
+            className={`grid min-w-0 items-center gap-x-3 gap-y-2 px-3 py-2 ${listColumn ? 'grid-cols-1 sm:[grid-template-columns:var(--setup-grid-template)]' : ''}`}
+            style={{
+              ...(listColumn
+                ? { '--setup-grid-template': recordGridTemplate }
+                : { gridTemplateColumns: gridTemplate }),
+            } as CSSProperties}
           >
             {(listColumn ? recordColumns : columns).map((column) => (
               <span
                 key={column.field}
-                className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground"
+                className="hidden text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground sm:block"
               >
                 {column.label}
               </span>
             ))}
-            <span aria-hidden="true" />
+            <span aria-hidden="true" className="hidden sm:block" />
             {rows.map((row, index) => {
               const rowKey = String(row.id ?? index);
               if (listColumn) {
@@ -127,37 +131,43 @@ export function SetupRowsEditor({
                   <Fragment key={rowKey}>
                     {recordColumns.map((column) =>
                       column.type === 'checkbox' ? (
-                        <input
-                          key={`${rowKey}-${column.field}`}
-                          type="checkbox"
-                          checked={Boolean(row[column.field])}
-                          onChange={(event) => patchRow(index, column.field, event.target.checked)}
-                          aria-label={`${column.label} for row ${index + 1}`}
-                          className="h-6 w-6 justify-self-start rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
-                        />
+                        <label key={`${rowKey}-${column.field}`} className="flex min-w-0 items-center gap-2 text-sm text-foreground sm:contents">
+                          <span className="sm:hidden">{column.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(row[column.field])}
+                            onChange={(event) => patchRow(index, column.field, event.target.checked)}
+                            aria-label={`${column.label} for row ${index + 1}`}
+                            className="h-6 w-6 justify-self-start rounded border-rule-control accent-accent focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </label>
                       ) : column.type === 'select' ? (
-                        <select
-                          key={`${rowKey}-${column.field}`}
-                          value={cellValue(row, column)}
-                          onChange={(event) => patchRow(index, column.field, event.target.value)}
-                          aria-label={`${column.label} for row ${index + 1}`}
-                          className={INPUT_CLASS}
-                        >
-                          <option value="">Select {column.label.toLowerCase()}</option>
-                          {(column.options ?? []).map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
+                        <label key={`${rowKey}-${column.field}`} className="block min-w-0 sm:contents">
+                          <span className="mb-1 block text-xs font-medium text-muted-foreground sm:hidden">{column.label}</span>
+                          <select
+                            value={cellValue(row, column)}
+                            onChange={(event) => patchRow(index, column.field, event.target.value)}
+                            aria-label={`${column.label} for row ${index + 1}`}
+                            className={INPUT_CLASS}
+                          >
+                            <option value="">Select {column.label.toLowerCase()}</option>
+                            {(column.options ?? []).map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </label>
                       ) : (
-                        <input
-                          key={`${rowKey}-${column.field}`}
-                          type={column.type ?? 'text'}
-                          value={cellValue(row, column)}
-                          placeholder={column.placeholder}
-                          onChange={(event) => patchRow(index, column.field, parsedValue(event.target.value, column))}
-                          aria-label={`${column.label} for row ${index + 1}`}
-                          className={INPUT_CLASS}
-                        />
+                        <label key={`${rowKey}-${column.field}`} className="block min-w-0 sm:contents">
+                          <span className="mb-1 block text-xs font-medium text-muted-foreground sm:hidden">{column.label}</span>
+                          <input
+                            type={column.type ?? 'text'}
+                            value={cellValue(row, column)}
+                            placeholder={column.placeholder}
+                            onChange={(event) => patchRow(index, column.field, parsedValue(event.target.value, column))}
+                            aria-label={`${column.label} for row ${index + 1}`}
+                            className={INPUT_CLASS}
+                          />
+                        </label>
                       ),
                     )}
                     <Button

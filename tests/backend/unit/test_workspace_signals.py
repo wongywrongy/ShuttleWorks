@@ -118,22 +118,31 @@ def test_meet_match_metrics_and_next_up_from_data_blob():
             {"id": "m1", "eventCode": "MS1", "matchNumber": 1},
             {"id": "m2", "eventCode": "WD2", "matchNumber": 2},
             {"id": "m3", "eventCode": "XD1", "matchNumber": 3},
+            {"id": "m4", "eventCode": "MS2", "matchNumber": 4},
+            {"id": "m5", "eventCode": "WD3", "matchNumber": 5},
+            {"id": "m6", "eventCode": "XD2", "matchNumber": 6},
+            {"id": "m7", "eventCode": "MS3", "matchNumber": 7},
         ],
         "schedule": {"assignments": [
             {"matchId": "m1", "slotId": 0, "courtId": 1, "durationSlots": 1},
             {"matchId": "m2", "slotId": 0, "courtId": 2, "durationSlots": 1},
             {"matchId": "m3", "slotId": 2, "courtId": 3, "durationSlots": 1},
+            {"matchId": "m4", "slotId": 3, "courtId": 1, "durationSlots": 1},
+            {"matchId": "m5", "slotId": 4, "courtId": 2, "durationSlots": 1},
+            {"matchId": "m6", "slotId": 5, "courtId": 3, "durationSlots": 1},
+            {"matchId": "m7", "slotId": 6, "courtId": 4, "durationSlots": 1},
         ]},
     }
     sig = build_signals(_row(data=data), _meet_mods(), RowCounts())
-    assert sig.matches.total == 3
-    assert sig.matches.scheduled == 3
+    assert sig.matches.total == 7
+    assert sig.matches.scheduled == 7
     assert sig.matches.toDo == len(sig.attention)
-    assert [n.code for n in sig.nextUp] == ["MS1", "WD2", "XD1"]  # slot asc, cap 3
+    assert [n.code for n in sig.nextUp] == ["MS1", "WD2", "XD1", "MS2", "WD3"]  # slot asc, cap 5
     first = sig.nextUp[0]
     assert first.timeLabel == "09:00"          # dayStart + slot0*30m
     assert first.courtLabel == "Court 1"
     assert sig.nextUp[2].timeLabel == "10:00"  # slot2 → +60m
+    assert sig.nextUp[-1].code == "WD3"
     assert all(n.status == "scheduled" for n in sig.nextUp)
 
 

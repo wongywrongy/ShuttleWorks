@@ -33,6 +33,44 @@ const rows: Row[] = [
 ];
 
 describe('dense data state', () => {
+  it.each([
+    [0, 0, 1],
+    [1, 1, 1],
+    [25, 25, 1],
+    [26, 26, 1],
+    [50, 50, 1],
+    [51, 51, 1],
+    [100, 100, 1],
+    [101, 100, 2],
+    [1000, 100, 10],
+  ])('keeps boundary totals and page counts for %i rows at page size 100', (count, firstPageRows, pageCount) => {
+    const source = Array.from({ length: count }, (_, index) => ({
+      id: `row-${String(index).padStart(4, '0')}`,
+      name: `Player ${index}`,
+      event: 'MS',
+      rank: index,
+    }));
+    const page = getDenseDataPage(source, columns, {
+      ...DEFAULT_DENSE_DATA_STATE,
+      pageSize: 100,
+    }, (row) => row.id);
+    expect(page.total).toBe(count);
+    expect(page.pageCount).toBe(pageCount);
+    expect(page.rows).toHaveLength(firstPageRows);
+  });
+
+  it('uses the immutable row id to break sort ties', () => {
+    const tied = [
+      { id: 'b', name: 'Same', event: 'MS', rank: 1 },
+      { id: 'a', name: 'Same', event: 'MS', rank: 1 },
+    ];
+    const page = getDenseDataPage(tied, columns, {
+      ...DEFAULT_DENSE_DATA_STATE,
+      sort: { id: 'name', direction: 'asc' },
+    }, (row) => row.id);
+    expect(page.rows.map((row) => row.id)).toEqual(['a', 'b']);
+  });
+
   it('filters, sorts, and pages without mutating the source rows', () => {
     const state = {
       ...DEFAULT_DENSE_DATA_STATE,
@@ -114,10 +152,41 @@ describe('dense data URL state', () => {
   });
 
   it('rejects invalid paging values and defaults unknown directions to ascending', () => {
-    const state = decodeDenseDataState('table.page=-2&table.pageSize=25&table.sort=name&table.dir=sideways');
+    const state = decodeDenseDataState('table.page=-2&table.pageSize=20&table.sort=name&table.dir=sideways');
     expect(state.page).toBe(1);
     expect(state.pageSize).toBe(50);
     expect(state.sort).toEqual({ id: 'name', direction: 'asc' });
+  });
+
+  it('round-trips the 25, 50, and 100 page-size choices while preserving other params', () => {
+    for (const pageSize of [25, 50, 100] as const) {
+      const state = { ...DEFAULT_DENSE_DATA_STATE, pageSize, page: 2 };
+      const merged = mergeDenseDataStateParams(`workspace=abc`, state, 'roster');
+      expect(merged.get('workspace')).toBe('abc');
+      expect(decodeDenseDataState(merged, undefined, 'roster').pageSize).toBe(pageSize);
+      expect(decodeDenseDataState(merged, undefined, 'roster').page).toBe(2);
+    }
+  });
+
+  it('writes pageSize only when it departs from the consumer default', () => {
+    const state = { ...DEFAULT_DENSE_DATA_STATE, pageSize: 50 as const };
+    // A paging inventory whose own default is 100: an explicit 50 must survive.
+    const explicit = mergeDenseDataStateParams('', state, 'meet-roster', { pageSize: 100 });
+    expect(explicit.get('meet-roster.pageSize')).toBe('50');
+    expect(decodeDenseDataState(explicit, { pageSize: 100 }, 'meet-roster').pageSize).toBe(50);
+
+    // A prefix that never pages must not pollute the URL with its own default.
+    const shared = mergeDenseDataStateParams('', state, 'meet-roster-filters');
+    expect(shared.has('meet-roster-filters.pageSize')).toBe(false);
+    const atDefault = mergeDenseDataStateParams('', { ...DEFAULT_DENSE_DATA_STATE, pageSize: 100 as const }, 'meet-roster', { pageSize: 100 });
+    expect(atDefault.has('meet-roster.pageSize')).toBe(false);
+    expect(decodeDenseDataState(atDefault, { pageSize: 100 }, 'meet-roster').pageSize).toBe(100);
+  });
+
+  it('decodes an explicit deep-linked pageSize that equals the consumer default', () => {
+    const decoded = decodeDenseDataState('meet-roster.pageSize=100&meet-roster.page=3', { pageSize: 100 }, 'meet-roster');
+    expect(decoded.pageSize).toBe(100);
+    expect(decoded.page).toBe(3);
   });
 });
 
