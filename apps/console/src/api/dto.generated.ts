@@ -4704,6 +4704,7 @@ export interface components {
             finalists?: components["schemas"]["HonorDTO"][];
             /** Remainingmatchcount */
             remainingMatchCount?: number | null;
+            progress?: components["schemas"]["DrawProgressDTO"] | null;
             /**
              * Historical
              * @default false
@@ -4764,6 +4765,32 @@ export interface components {
             club?: string | null;
             /** Eventcodes */
             eventCodes: string[];
+        };
+        /**
+         * DrawProgressDTO
+         * @description How far a published draw has actually got — the Draws index's one
+         *     progress fact (public-visual-fixes P6).
+         *
+         *     The index used to describe a draw by its topology (format, size, round
+         *     count, "Draw published · rounds to be scheduled"), which is derivable
+         *     from the draw page and says nothing a reader wants to know. What they
+         *     want is where play has reached, so this states exactly that and nothing
+         *     else: ``complete``, or the earliest unfinished round plus how it stands
+         *     (``in_play`` once one of its matches has a result, ``scheduled`` with a
+         *     venue-local ``startTime`` when the grid places it, ``to_play``
+         *     otherwise).
+         *
+         *     Derived from RESULTS, so it is published only under
+         *     ``results_published`` — the same gate the champions and
+         *     ``remainingMatchCount`` on this card already sit behind.
+         */
+        DrawProgressDTO: {
+            /** State */
+            state: string;
+            /** Roundlabel */
+            roundLabel?: string | null;
+            /** Starttime */
+            startTime?: string | null;
         };
         /** DrawsIndexDTO */
         DrawsIndexDTO: {

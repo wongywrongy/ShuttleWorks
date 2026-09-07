@@ -622,39 +622,68 @@ describe('public tournament lifecycle', () => {
   });
 });
 
-describe('timelineModel', () => {
-  it('renders agreed moments singly, disagreements as per-event variance', () => {
+describe('timelineModel (public-visual-fixes P6: currently relevant dates only)', () => {
+  it('states one entries row, the deadline still ahead, and the play day', () => {
     const events = [
       event(),
       event({ isOpen: false, closesAt: '2026-08-01 23:59 UTC' }), // closed early
     ];
 
     expect(timelineModel(events, '2026-09-19', NOW)).toEqual([
-      { label: 'Entries open', at: '2026-06-01 09:00 UTC', state: 'past' },
       // The two deadlines straddle the fixture clock, so the range is where
-      // "now" lives.
-      { label: 'Entries close', at: null, state: 'current', variance: 'per-event' },
-      { label: 'Withdrawal deadline', at: '2026-09-05 18:00 UTC', state: 'future' },
-      { label: 'Tournament', at: '2026-09-19', state: 'future' },
+      // "now" lives — and the elapsed OPENING date is gone entirely: entries
+      // being open is not news once they are.
+      { label: 'Entries', at: null, state: 'current', status: 'Closes', kind: 'entries', variance: 'per-event' },
+      { label: 'Withdrawal deadline', at: '2026-09-05 18:00 UTC', state: 'future', kind: 'withdrawal' },
+      { label: 'Play', at: '2026-09-19', state: 'future', kind: 'play' },
     ]);
+  });
+
+  it('says "Closed" once the window has passed, and drops a passed withdrawal deadline', () => {
+    const closed = [
+      event({
+        isOpen: false,
+        opensAt: '2026-06-01 09:00 UTC',
+        closesAt: '2026-07-22 23:59 UTC',
+        withdrawsUntil: '2026-07-30 18:00 UTC',
+      }),
+    ];
+    expect(timelineModel(closed, '2026-09-19', NOW)).toEqual([
+      { label: 'Entries', at: '2026-07-22 23:59 UTC', state: 'past', status: 'Closed', kind: 'entries' },
+      { label: 'Play', at: '2026-09-19', state: 'future', kind: 'play' },
+    ]);
+  });
+
+  it('leads with the opening date while entries have not opened yet', () => {
+    const upcoming = [
+      event({ isOpen: false, opensAt: '2026-09-01 09:00 UTC', closesAt: '2026-09-20 23:59 UTC' }),
+    ];
+    expect(timelineModel(upcoming, null, NOW)[0]).toEqual({
+      label: 'Entries',
+      at: '2026-09-01 09:00 UTC',
+      state: 'future',
+      status: 'Opens',
+      kind: 'entries',
+    });
   });
 
   it('omits a moment that exists nowhere — no placeholders (rule 4)', () => {
     const bare = [event({ opensAt: null, withdrawsUntil: null })];
-    expect(timelineModel(bare, null, NOW).map((m) => m.label)).toEqual(['Entries close']);
+    expect(timelineModel(bare, null, NOW).map((m) => m.label)).toEqual(['Entries']);
   });
 
-  it('marks the tournament day itself as current, and a finished one as past', () => {
+  it('marks the play day itself as current, and leaves a finished event only its play date', () => {
     const events = [event()];
     expect(timelineModel(events, '2026-08-11', NOW).at(-1)).toEqual({
-      label: 'Tournament',
+      label: 'Play',
       at: '2026-08-11',
       state: 'current',
+      kind: 'play',
     });
-    expect(timelineModel(events, '2026-08-10', NOW).at(-1)).toEqual({
-      label: 'Tournament',
-      at: '2026-08-10',
-      state: 'past',
-    });
+    // Past: the entry windows are history, so the only row left is the day
+    // it was played.
+    expect(timelineModel(events, '2026-08-10', NOW)).toEqual([
+      { label: 'Play', at: '2026-08-10', state: 'past', kind: 'play' },
+    ]);
   });
 });

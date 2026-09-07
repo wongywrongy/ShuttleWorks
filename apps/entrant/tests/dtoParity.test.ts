@@ -106,6 +106,7 @@ const MIRRORS: { file: string; pairs: Record<string, string>; unpaired: Record<s
       file: 'apps/entrant/app/lib/draws.types.ts',
       pairs: {
         DrawCardDTO: 'DrawCardDTO',
+        DrawProgressDTO: 'DrawProgressDTO',
         DrawsIndexDTO: 'DrawsIndexDTO',
         MatchCoverageDTO: 'MatchCoverageDTO',
         DrawPlayerDTO: 'DrawPlayerDTO',

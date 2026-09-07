@@ -227,12 +227,21 @@ export type TotalBarState =
   | { kind: 'refused'; copy: string };
 
 export interface TimelineMoment {
+  /** The row label: `Entries`, `Withdrawal deadline`, `Play`. */
   label: string;
   /** The source wire string for a single agreed moment; null for a range. */
   at: string | null;
   state: 'past' | 'current' | 'future';
   /** Present when events disagree — render a "varies by event" range line. */
   variance?: 'per-event';
+  /** The word before the date in the value cell — `Closed`, `Closes`,
+   *  `Opens`. Absent where the date speaks for itself (`Play`, a withdrawal
+   *  deadline). */
+  status?: string;
+  /** Which moment this is, so a renderer can format it without matching on
+   *  the label text: a calendar day for `play`, a venue-local day-month for
+   *  the two instants. */
+  kind: 'entries' | 'withdrawal' | 'play';
 }
 
 /** The slice of `EntryEventDTO` these functions read. */
@@ -408,6 +417,25 @@ export function visibleTabs(
 export function activeTab(requested: string | null, visible: readonly Tab[]): Tab | null {
   if (requested === null) return 'overview';
   return visible.includes(requested as Tab) ? requested as Tab : null;
+}
+
+/**
+ * The three retired `?tab` names that were all this one Draws surface
+ * (public-visual-fixes P6).
+ *
+ * `?tab=events` was the event list before the draw index merged into it;
+ * `?tab=seeds` and `?tab=winners` were separate panels whose content now
+ * rides the draw page and the index rows. All three are ONE destination and
+ * three aliases, not four surfaces — the distinction the surface book counts
+ * on — and each is in posters, mailing lists and browser history, so a
+ * reader following one lands on Draws rather than on a 404. The canonical
+ * URL is what the address bar ends up showing: this returns the tab to
+ * redirect TO, never a tab to render.
+ */
+export function legacyDrawsTab(requested: string | null): 'draws' | null {
+  return requested === 'events' || requested === 'seeds' || requested === 'winners'
+    ? 'draws'
+    : null;
 }
 
 // Frozen literals — the safe-to-share form the mutable-bindings guard exempts.
@@ -684,10 +712,30 @@ export function totalBarState(echo: FormEcho): TotalBarState {
 }
 
 /**
- * The Overview timeline (Z9). Per field: absent everywhere → omitted (no
- * placeholder, rule 4); one distinct value → a single moment; disagreement →
- * a per-event variance range. States are against `now`; a range straddling
- * `now` is `current`, as is the tournament day itself.
+ * The Overview's key dates — the ones that are still a question, and no
+ * others (public-visual-fixes P6).
+ *
+ * The old model printed every window a director had ever set, so a
+ * tournament being played today led its Overview with the day entries
+ * opened two months ago and the day they closed three weeks ago: four rows
+ * of elapsed timestamps above the one date anybody was looking for. What
+ * survives is:
+ *
+ * - **Play** — the tournament's own day, always, and labelled for what it is
+ *   rather than "Tournament" on a page that is entirely about a tournament.
+ * - **Entries** — one row, not three: `Opens 1 Jun` before the window, then
+ *   `Closes 22 Jul`, then `Closed 22 Jul`. The opening timestamp is not a
+ *   fact once entries are open, so it is dropped rather than restated.
+ * - **Withdrawal deadline** — only while it is still ahead. A passed
+ *   deadline is not something a reader can act on.
+ *
+ * Once the tournament day itself is past, only Play remains: a completed
+ * event's entry windows are history, not information.
+ *
+ * Per field: absent everywhere → omitted (no placeholder, rule 4); one
+ * distinct value → a single moment; disagreement → a per-event variance
+ * range. States are against `now`; a range straddling `now` is `current`, as
+ * is the tournament day itself.
  */
 export function timelineModel(
   events: readonly PhaseEvent[],
@@ -695,33 +743,72 @@ export function timelineModel(
   now: Date,
 ): TimelineMoment[] {
   const moments: TimelineMoment[] = [];
-  const fields: readonly [label: string, key: 'opensAt' | 'closesAt' | 'withdrawsUntil'][] = [
-    ['Entries open', 'opensAt'],
-    ['Entries close', 'closesAt'],
-    ['Withdrawal deadline', 'withdrawsUntil'],
-  ];
-  for (const [label, key] of fields) {
+  const day = parseIsoDate(tournamentDate);
+  const playState =
+    day === null
+      ? null
+      : day.getTime() + DAY_MS <= now.getTime()
+        ? 'past'
+        : day.getTime() > now.getTime()
+          ? 'future'
+          : 'current';
+
+  function field(key: 'opensAt' | 'closesAt' | 'withdrawsUntil') {
     const raw = [...new Set(events.map((event) => event[key]).filter((v): v is string => v !== null))];
     const parsed = raw
       .map(parseMoment)
       .filter((moment): moment is Date => moment !== null)
       .map((moment) => moment.getTime());
-    if (raw.length === 0 || parsed.length === 0) continue;
+    if (raw.length === 0 || parsed.length === 0) return null;
     const min = Math.min(...parsed);
     const max = Math.max(...parsed);
-    const state = max < now.getTime() ? 'past' : min > now.getTime() ? 'future' : 'current';
-    if (raw.length === 1) {
-      moments.push({ label, at: raw[0], state });
-    } else {
-      moments.push({ label, at: null, state, variance: 'per-event' });
+    const state: TimelineMoment['state'] =
+      max < now.getTime() ? 'past' : min > now.getTime() ? 'future' : 'current';
+    return { at: raw.length === 1 ? raw[0] : null, state, varies: raw.length > 1 };
+  }
+
+  const varianceOf = (varies: boolean) =>
+    varies ? ({ variance: 'per-event' } as const) : {};
+
+  if (playState !== 'past') {
+    const opens = field('opensAt');
+    const closes = field('closesAt');
+    if (opens !== null && opens.state === 'future') {
+      // Entries have not opened yet: the opening date is the live fact and
+      // the closing date is not yet worth a row.
+      moments.push({
+        label: 'Entries',
+        at: opens.at,
+        state: opens.state,
+        status: 'Opens',
+        kind: 'entries',
+        ...varianceOf(opens.varies),
+      });
+    } else if (closes !== null) {
+      moments.push({
+        label: 'Entries',
+        at: closes.at,
+        state: closes.state,
+        status: closes.state === 'past' ? 'Closed' : 'Closes',
+        kind: 'entries',
+        ...varianceOf(closes.varies),
+      });
+    }
+
+    const withdraws = field('withdrawsUntil');
+    if (withdraws !== null && withdraws.state !== 'past') {
+      moments.push({
+        label: 'Withdrawal deadline',
+        at: withdraws.at,
+        state: withdraws.state,
+        kind: 'withdrawal',
+        ...varianceOf(withdraws.varies),
+      });
     }
   }
-  const day = parseIsoDate(tournamentDate);
-  if (day !== null) {
-    const start = day.getTime();
-    const state =
-      start + DAY_MS <= now.getTime() ? 'past' : start > now.getTime() ? 'future' : 'current';
-    moments.push({ label: 'Tournament', at: tournamentDate, state });
+
+  if (playState !== null) {
+    moments.push({ label: 'Play', at: tournamentDate, state: playState, kind: 'play' });
   }
   return moments;
 }

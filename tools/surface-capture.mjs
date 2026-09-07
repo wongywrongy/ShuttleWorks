@@ -255,6 +255,13 @@ const ENTRANT_COMPATIBILITY_SURFACES = [
   ["Discovery · Compatibility · completed tournaments", "/e/?view=completed#calendar"],
   ["Discovery · Compatibility · entries-open segment", "/e/?view=open#calendar"],
   ["Discovery · Compatibility · retired pagination", "/e/?page=2#calendar"],
+  // public-visual-fixes P6: Events, Seeds and Winners were three panel names
+  // for the ONE Draws surface captured above. They canonicalise onto it, so
+  // they are three aliases and not three screens — counting them as surfaces
+  // would overstate the tournament page by three sheets.
+  ["Tournament · Compatibility · events tab", `/e/${SLUG}?tab=events`],
+  ["Tournament · Compatibility · seeds tab", `/e/${SLUG}?tab=seeds`],
+  ["Tournament · Compatibility · winners tab", `/e/${SLUG}?tab=winners`],
 ];
 
 if (PARTNER_TOKEN) {

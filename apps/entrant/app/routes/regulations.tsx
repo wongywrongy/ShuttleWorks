@@ -38,10 +38,25 @@ export interface RegulationsLoaderData {
   nowMs: number;
 }
 
+/**
+ * One block of an organizer's regulations: a paragraph, or a bulleted list.
+ *
+ * public-visual-fixes P6: the body used to be ONE `whitespace-pre-line`
+ * paragraph per section, so a rules document's list of eligibility points
+ * printed as a wall of soft-wrapped lines with no indentation and no
+ * spacing. These are the shapes this tier renders — and the only ones. There
+ * is deliberately no HTML shape: authored text is escaped by React and never
+ * passed to `dangerouslySetInnerHTML`, so an uploaded `<script>` or a pasted
+ * `<div>` reads as the characters the organizer typed.
+ */
+export type RegulationBlock =
+  | { kind: 'paragraph'; text: string }
+  | { kind: 'list'; items: string[] };
+
 export interface RegulationSection {
   id: string;
   title: string;
-  body: string;
+  blocks: RegulationBlock[];
 }
 
 function sectionId(title: string, used: Set<string>): string {
@@ -66,43 +81,47 @@ function headingLine(line: string): string | null {
   return null;
 }
 
-/**
- * V3-PE15.2: a director's regulations sometimes end a line with a bare
- * "Source: <url>." or "Source reference: <url>." citation (the historical
- * demo data does this, quoting an upstream results page). Rendered as plain
- * text that reads as an unclickable technical address in the middle of
- * prose. This turns *only* the trailing URL into a link with a readable
- * label derived from the URL itself — the organizer's words are otherwise
- * untouched (R1: content is not rewritten, only its presentation as a link).
- */
-const SOURCE_URL_RE = /(Source(?: reference)?:\s*)(https?:\/\/\S+?)(\.?)(\s*)$/;
+/** `- item`, `* item`, `• item` — the bullets a director actually types.
+ *  Numbered lines are NOT list items here: `1. Eligibility` is already this
+ *  parser's heading shape, and one line cannot be both. */
+const BULLET = /^\s*[-*•–]\s+(\S.*)$/;
 
-function urlLabel(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const last = parsed.pathname.split('/').filter(Boolean).pop();
-    if (!last) return parsed.hostname;
-    return decodeURIComponent(last).replace(/_/g, ' ');
-  } catch {
-    return url;
+/** Group an authored body into paragraphs and bulleted lists. A blank line
+ *  ends a paragraph; consecutive bullets are one list. */
+export function parseRegulationBlocks(body: string): RegulationBlock[] {
+  const blocks: RegulationBlock[] = [];
+  let paragraph: string[] = [];
+  let items: string[] | null = null;
+
+  const flushParagraph = () => {
+    const text = paragraph.join('\n').trim();
+    if (text) blocks.push({ kind: 'paragraph', text });
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (items && items.length > 0) blocks.push({ kind: 'list', items });
+    items = null;
+  };
+
+  for (const line of body.split('\n')) {
+    const bullet = BULLET.exec(line);
+    if (bullet) {
+      flushParagraph();
+      items = items ?? [];
+      items.push(bullet[1].trim());
+      continue;
+    }
+    if (line.trim() === '') {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+    flushList();
+    paragraph.push(line);
   }
-}
-
-function renderBody(body: string): ReactNode {
-  const match = SOURCE_URL_RE.exec(body);
-  if (!match) return body;
-  const [, prefix, url, trailingDot] = match;
-  const before = body.slice(0, match.index);
-  return (
-    <>
-      {before}
-      {prefix}
-      <a href={url} className="text-accent underline-offset-4 hover:underline">
-        {urlLabel(url)}
-      </a>
-      {trailingDot}
-    </>
-  );
+  flushParagraph();
+  flushList();
+  return blocks;
 }
 
 /**
@@ -119,10 +138,11 @@ export function parseRegulationSections(text: string): RegulationSection[] {
 
   const flush = () => {
     const body = currentBody.join('\n').trim();
+    const blocks = parseRegulationBlocks(body);
     if (currentTitle !== null) {
-      sections.push({ id: sectionId(currentTitle, used), title: currentTitle, body });
+      sections.push({ id: sectionId(currentTitle, used), title: currentTitle, blocks });
     } else if (body) {
-      sections.push({ id: sectionId('Full regulations', used), title: 'Full regulations', body });
+      sections.push({ id: sectionId('Full regulations', used), title: 'Full regulations', blocks });
     }
     currentTitle = null;
     currentBody = [];
@@ -140,7 +160,55 @@ export function parseRegulationSections(text: string): RegulationSection[] {
   flush();
   return sections.length > 0
     ? sections
-    : [{ id: 'regulations', title: 'Full regulations', body: text.trim() }];
+    : [{ id: 'regulations', title: 'Full regulations', blocks: parseRegulationBlocks(text.trim()) }];
+}
+
+/**
+ * V3-PE15.2 / public-visual-fixes P6: an organizer's regulations routinely
+ * carry an address — a citation ("Source reference: https://…"), a club's
+ * entry page, the national federation's rulebook. As plain text those read
+ * as unclickable technical strings in the middle of prose, so every http(s)
+ * address in the authored text becomes a real link with a readable label
+ * derived from the address itself.
+ *
+ * The organizer's own words are otherwise untouched (R1: content is not
+ * rewritten, only its presentation as a link), trailing sentence punctuation
+ * stays OUTSIDE the link where it belongs, and everything else on the page —
+ * including anything that looks like markup — is escaped by React.
+ */
+const URL_IN_TEXT = /https?:\/\/[^\s<>"']+/g;
+
+function urlLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const last = parsed.pathname.split('/').filter(Boolean).pop();
+    if (!last) return parsed.hostname;
+    return decodeURIComponent(last).replace(/_/g, ' ');
+  } catch {
+    return url;
+  }
+}
+
+function renderText(text: string): ReactNode {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  for (const match of text.matchAll(URL_IN_TEXT)) {
+    const start = match.index ?? 0;
+    // A sentence's full stop, comma or closing bracket is punctuation, not
+    // part of the address: linking it produces a 404 on click.
+    const href = match[0].replace(/[.,;:!?)\]}]+$/, '');
+    if (!/^https?:\/\/\S+$/.test(href)) continue;
+    if (start > cursor) parts.push(text.slice(cursor, start));
+    parts.push(
+      <a key={`${start}-${href}`} href={href} className="text-accent underline-offset-4 hover:underline">
+        {urlLabel(href)}
+      </a>,
+    );
+    cursor = start + href.length;
+  }
+  if (parts.length === 0) return text;
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return <>{parts}</>;
 }
 
 function notFound(): Response {
@@ -188,6 +256,12 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
   const sections = parseRegulationSections(text);
   const updatedDate = dateOfIso(updatedAt);
   const title = tournamentName ? `${tournamentName} regulations` : 'Tournament regulations';
+  // The identity a PRINTED page needs and the screen already has from the
+  // hero: who is playing what, and when. On screen it is duplicate furniture,
+  // so it renders only on paper.
+  const printIdentity = [tournamentName, formatDateLong(page.tournament.date), page.venue?.name]
+    .filter((part): part is string => Boolean(part))
+    .join(' · ');
   return (
     <PlayShell>
       {/* Contract §11 (public P1): the reader used to carry a floating
@@ -196,17 +270,30 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
           gone: this is the Documents section of the one tournament frame,
           reached through the Documents tab and the breadcrumb. */}
       <TournamentFrame page={page} nowMs={nowMs} active="documents" />
+      {/* Print rules ride a page-scoped stylesheet rather than the shared
+          `app.css`: they exist for THIS document and must not decide how any
+          other public page prints. `media="print"` keeps them out of the
+          screen cascade entirely. */}
+      <link rel="stylesheet" media="print" href="/e/assets/regulations-print.css" />
       <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className={SECTION_TITLE}>Tournament regulations</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {`Version ${version}`}
-              {updatedDate ? ` · updated ${formatDateLong(updatedDate)}` : ''}
-            </p>
-          </div>
+        {/* public-visual-fixes P6: the document's own title band is ONE line.
+            It used to be a section title repeating the word already in the
+            breadcrumb, the tab and the browser tab, over a version/updated
+            line, over an sr-only "Regulations document" heading — three
+            names for one thing before a reader reached a single rule. What
+            is left is the heading the page hierarchy needs (the frame owns
+            the `h1`) and the provenance a rules document must carry. */}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          <h2 className={SECTION_TITLE}>Regulations</h2>
+          <p className="text-sm text-muted-foreground">
+            {`Version ${version}`}
+            {updatedDate ? ` · updated ${formatDateLong(updatedDate)}` : ''}
+          </p>
           {/* Document actions stay with the document, inside the shared page
-              hierarchy — they are not a second navigation. */}
+              hierarchy — they are not a second navigation. `Download` says
+              what the button does and no more: it saves the text of this
+              document, and calling that "Save as PDF" would be a lie about
+              the file the reader gets. */}
           <div id="regulations-actions" hidden className="flex flex-wrap gap-2" data-document-title={title}>
             <button
               type="button"
@@ -220,7 +307,7 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
               data-regulations-download
               className="inline-flex min-h-10 items-center rounded-md border border-rule-soft bg-surface-raised px-3 py-2 text-sm font-semibold text-foreground hover:border-action-primary"
             >
-              Download text
+              Download
             </button>
           </div>
         </div>
@@ -243,15 +330,33 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
           </nav>
         ) : null}
 
-        <article id="regulations-document" className="mt-8 min-w-0 max-w-3xl" aria-labelledby="regulations-heading">
-          <h3 id="regulations-heading" className="sr-only">Regulations document</h3>
-          <div className="grid gap-7">
+        <article id="regulations-document" className="mt-8 min-w-0 max-w-3xl">
+          {printIdentity ? (
+            <p className="hidden text-sm text-muted-foreground print:block">{printIdentity}</p>
+          ) : null}
+          <div className="grid gap-8">
             {sections.map((section) => (
               <section key={section.id} id={section.id} className="scroll-mt-6">
-                <h4 className="font-display text-xl font-bold tracking-tight text-foreground">{section.title}</h4>
-                {section.body ? (
-                  <p className="mt-3 whitespace-pre-line break-words text-base leading-8 text-foreground [overflow-wrap:anywhere]">{renderBody(section.body)}</p>
-                ) : null}
+                <h3 className="font-display text-xl font-bold tracking-tight text-foreground">{section.title}</h3>
+                {section.blocks.map((block, index) =>
+                  block.kind === 'list' ? (
+                    <ul
+                      key={`${section.id}-${index}`}
+                      className="mt-3 grid list-disc gap-2 ps-6 text-base leading-7 text-foreground marker:text-muted-foreground"
+                    >
+                      {block.items.map((item) => (
+                        <li key={item} className="break-words [overflow-wrap:anywhere]">{renderText(item)}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p
+                      key={`${section.id}-${index}`}
+                      className="mt-3 whitespace-pre-line break-words text-base leading-8 text-foreground [overflow-wrap:anywhere]"
+                    >
+                      {renderText(block.text)}
+                    </p>
+                  ),
+                )}
               </section>
             ))}
           </div>

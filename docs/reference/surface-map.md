@@ -101,11 +101,20 @@ surfaces**: the loader canonicalises them off the URL, and `?view=completed`
 lands on `/e/#past`. The surface book captures them under
 `Discovery · Compatibility · …` labels and counts them apart from the product
 sheets (`routeCoverage.compatibilitySheets`).
-| Tournament — overview | `/e/SLUG` | `HeroHeader`, `TabBar` (`SegmentedNav`), `SectionCard` + `SectionRow`, `NowStrip` |
-| Tournament — draws / players | `/e/SLUG?tab=draws`, `?tab=players` (ADR 0028; these are the only public tournament index tabs) | `TabBar`, `EventRow` (+ `Button` Entrants / Draw), `PlayersList`, `EntrantsList`, `PersonRef`/`PersonGroup`, `StatusChip` |
+
+The retired tournament section names (`?tab=events`, `?tab=seeds`,
+`?tab=winners`) are compatibility URLs on the same terms: all three were
+panel names for the ONE Draws surface, the loader redirects them onto
+`?tab=draws`, and the book captures them as
+`Tournament · Compatibility · …` sheets counted apart from the product.
+
+| Surface | Route | Main components |
+| --- | --- | --- |
+| Tournament — overview | `/e/SLUG` | `HeroHeader`, `TabBar` (`SegmentedNav`), `SectionCard` (About, Key dates, Venue, Documents) + `SectionRow`/`SectionProse` |
+| Tournament — draws / players | `/e/SLUG?tab=draws`, `?tab=players` (ADR 0028; these are the only public tournament index tabs) | `TabBar`, `EventRow` (one row-wide link: name · entrants · progress · Open), `PlayersList`, `EntrantsList`, `PersonRef`/`PersonGroup`, `StatusChip` |
 | Schedule and live | `/e/SLUG/schedule` | `HeroHeader`, `SegmentedNav` (days, by time / by court), `MatchCard`, filter card (`FIELD_INPUT` controls) |
 | Draws (full / round / path / list) | `/e/SLUG/draws/KEY` | `SegmentedNav` (view, segments), bracket grid (`.bracket-link-slot` CSS in `apps/entrant/app/app.css`), `MatchCard`, `PersonRef` |
-| Regulations | `/e/SLUG/regulations` | `SectionCard`, prose |
+| Regulations | `/e/SLUG/regulations` | document heading + version line, `Print`/`Download`, section outline, parsed prose/lists, `public/assets/regulations-print.css` (print) |
 | Entry wizard | `/e/SLUG/enter` | `TextField`, `Notice`, `Button` + `BUTTON_SECONDARY`, `StickyTotalBar`, `CARD`, `CHIP`, `StatusChip` |
 | Account (login / signup / verify / reset / partner) | `/e/login`, `/e/signup`, `/e/verify`, `/e/reset`, `/e/partner/:token` | `TextField`, `Notice`, `Button`, `CARD`, `MessagePage` |
 | Doubles partner invitation · token *(optional `PARTNER_TOKEN`)* | `/e/partner/TOKEN` | token-backed partner invitation form or unavailable state |

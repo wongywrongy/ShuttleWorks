@@ -18,6 +18,19 @@ import type { UnresolvedSideDTO } from './side';
  *  (cross-package types), not this slice. */
 export type DrawKind = 'se' | 'de' | 'rr' | 'swiss' | 'compass' | 'monrad';
 
+/** Where play has actually reached in a published draw — the Draws index's
+ *  one progress fact (public-visual-fixes P6). Results-gated on the server,
+ *  so it is absent (null) whenever results are unpublished; the index then
+ *  says nothing about progress rather than guessing at it. */
+export interface DrawProgressDTO {
+  state: 'complete' | 'in_play' | 'scheduled' | 'to_play';
+  /** `R16` / `QF` / `SF` / `Final`, or `Round 3` off the knockout ladder.
+   *  Null only for `complete`. */
+  roundLabel: string | null;
+  /** Venue-local `HH:MM` of that round's earliest unplayed match. */
+  startTime: string | null;
+}
+
 export interface DrawCardDTO {
   drawKey: string;
   eventCode: string;
@@ -36,6 +49,7 @@ export interface DrawCardDTO {
   champions: PersonReferenceDTO[];
   finalists: HonorDTO[];
   remainingMatchCount: number | null;
+  progress?: DrawProgressDTO | null;
 }
 
 export interface MatchCoverageDTO {
@@ -239,6 +253,52 @@ export function roundLabel(raw: string | null): string | null {
   if (folded === 'r32' || folded === 'round 32' || folded === 'round of 32') return 'Round of 32';
   if (folded === 'r64' || folded === 'round 64' || folded === 'round of 64') return 'Round of 64';
   return value;
+}
+
+/**
+ * The COMPACT round code — `R32 · R16 · QF · SF · F` — for the bracket's
+ * round controls (match-card contract §4.3, public-visual-fixes P4).
+ *
+ * It is the display twin of the backend's `_short_round` (entries_site.py),
+ * derived here from the round LABEL the projection already sends rather than
+ * from a second (total rounds, index) ladder that could drift from it. A
+ * label this table does not know keeps its own words, so a historical draw
+ * with organizer-supplied round names still gets a usable control.
+ */
+export function roundShortLabel(raw: string | null): string | null {
+  if (!raw) return null;
+  const value = roundLabel(raw) ?? raw.trim();
+  if (value === 'Final') return 'F';
+  if (value === 'Semifinals') return 'SF';
+  if (value === 'Quarterfinals') return 'QF';
+  const knockout = /^Round of (\d+)$/.exec(value);
+  if (knockout) return `R${knockout[1]}`;
+  const robin = /^Round (\d+)$/.exec(value);
+  if (robin) return `R${robin[1]}`;
+  return value;
+}
+
+/**
+ * The Draws index's progress cell (public-visual-fixes P6): `R16 in play`,
+ * `Final 14:00`, `Complete`.
+ *
+ * One short, TRUE sentence about where play has reached, or nothing. It is
+ * never a description of the draw's shape — format, size and round count are
+ * derivable from the draw itself and belong on the draw page — and it never
+ * states a progress the projection did not publish: results-gated data
+ * arrives as `null`, which renders as an empty cell rather than an invented
+ * "not started".
+ */
+export function drawProgressLabel(progress: DrawProgressDTO | null | undefined): string | null {
+  if (!progress) return null;
+  if (progress.state === 'complete') return 'Complete';
+  const round = progress.roundLabel;
+  if (!round) return null;
+  if (progress.state === 'in_play') return `${round} in play`;
+  if (progress.state === 'scheduled' && progress.startTime) {
+    return `${round} ${progress.startTime}`;
+  }
+  return `${round} to play`;
 }
 
 /** Public count copy: singles are players, doubles are pairs. */

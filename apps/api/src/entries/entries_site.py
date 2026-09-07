@@ -467,6 +467,33 @@ def _hhmm_plus(day_start: str, minutes: int) -> str:
 # ---- DTOs -----------------------------------------------------------------
 
 
+class DrawProgressDTO(BaseModel):
+    """How far a published draw has actually got — the Draws index's one
+    progress fact (public-visual-fixes P6).
+
+    The index used to describe a draw by its topology (format, size, round
+    count, "Draw published · rounds to be scheduled"), which is derivable
+    from the draw page and says nothing a reader wants to know. What they
+    want is where play has reached, so this states exactly that and nothing
+    else: ``complete``, or the earliest unfinished round plus how it stands
+    (``in_play`` once one of its matches has a result, ``scheduled`` with a
+    venue-local ``startTime`` when the grid places it, ``to_play``
+    otherwise).
+
+    Derived from RESULTS, so it is published only under
+    ``results_published`` — the same gate the champions and
+    ``remainingMatchCount`` on this card already sit behind.
+    """
+
+    state: str  # 'complete' | 'in_play' | 'scheduled' | 'to_play'
+    #: Compact round vocabulary — ``R16``/``QF``/``SF``/``Final`` for a
+    #: knockout, ``Round 3`` otherwise. Null only for ``complete``.
+    roundLabel: Optional[str] = None
+    #: Venue-local ``HH:MM`` of the earliest unplayed match of that round,
+    #: when the schedule grid places one.
+    startTime: Optional[str] = None
+
+
 class DrawCardDTO(BaseModel):
     drawKey: str
     eventCode: str
@@ -483,6 +510,7 @@ class DrawCardDTO(BaseModel):
     champions: List[PersonReferenceDTO] = Field(default_factory=list)
     finalists: List["HonorDTO"] = Field(default_factory=list)
     remainingMatchCount: Optional[int] = None
+    progress: Optional[DrawProgressDTO] = None
     historical: bool = False
     sourceUrl: Optional[str] = None
 
@@ -1420,7 +1448,7 @@ def draws_index(
     draws = []
     if payload is not None:
         identities = _public_identities(repo, tournament.id)
-        units, results, _ = _bracket_indexes(payload)
+        units, results, assignments = _bracket_indexes(payload)
         roster_names = _bracket_roster_names(tournament)
         for event in payload.events:
             champions: List[PersonReferenceDTO] = []
@@ -1458,6 +1486,11 @@ def draws_index(
                     remainingMatchCount=(
                         _remaining_match_count(event, units, results)
                         if page.results_published and not winner_key
+                        else None
+                    ),
+                    progress=(
+                        _draw_progress(event, units, results, assignments, payload)
+                        if page.results_published
                         else None
                     ),
                     **_event_projection_meta(event),
@@ -1763,6 +1796,65 @@ def _remaining_match_count(event, units, results) -> int:
             or _BYE in (units[unit_id].side_b or [])
         )
     )
+
+
+def _progress_round_label(total_rounds: int, index: int, knockout: bool) -> str:
+    """The compact round word the Draws index shows: ``R16``/``QF``/``SF`` as
+    on a match reference, but the full ``Final`` — "F in play" is not a
+    sentence, and the index is prose, not a coordinate."""
+    if not knockout:
+        return _round_label(total_rounds, index, knockout)
+    short = _short_round(total_rounds, index, knockout)
+    return "Final" if short == "F" else short
+
+
+def _draw_progress(event, units, results, assignments, payload) -> DrawProgressDTO:
+    """Where play has actually reached in one published draw.
+
+    Walks segments and rounds in order and stops at the first round holding
+    an undecided, non-BYE match: that round IS the front of the draw. A round
+    with some results is ``in_play``; one with none is ``scheduled`` when the
+    grid gives its earliest unplayed match a start, and ``to_play``
+    otherwise. Nothing undecided anywhere means the draw is ``complete``.
+    """
+    knockout = event.format in _KNOCKOUT_FORMATS
+    for segment in _event_segments(event):
+        total = len(segment.rounds)
+        for index, round_ids in enumerate(segment.rounds):
+            playable = [
+                unit_id
+                for unit_id in round_ids
+                if unit_id in units
+                and not (
+                    _BYE in (units[unit_id].side_a or [])
+                    or _BYE in (units[unit_id].side_b or [])
+                )
+            ]
+            if not playable:
+                continue
+            undecided = [unit_id for unit_id in playable if unit_id not in results]
+            if not undecided:
+                continue
+            label = _progress_round_label(total, index, knockout)
+            if len(undecided) < len(playable):
+                return DrawProgressDTO(state="in_play", roundLabel=label)
+            starts = sorted(
+                start
+                for start in (
+                    _slot_time(
+                        payload,
+                        assignments[unit_id].slot_id if unit_id in assignments else None,
+                    )
+                    for unit_id in undecided
+                )
+                if start
+            )
+            if starts:
+                return DrawProgressDTO(
+                    state="scheduled", roundLabel=label, startTime=starts[0]
+                )
+            return DrawProgressDTO(state="to_play", roundLabel=label)
+    return DrawProgressDTO(state="complete")
 
 
 def _decided_sides(unit, result) -> Optional[Tuple[str, str]]:

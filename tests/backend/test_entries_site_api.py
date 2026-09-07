@@ -302,6 +302,7 @@ def test_the_draws_index_lists_the_draw_with_exact_card_keys(client, bracket_pag
         "finalists",
         "drawParticipantCount",
         "remainingMatchCount",
+        "progress",
         "historical",
         "sourceUrl",
     }
@@ -315,6 +316,69 @@ def test_the_draws_index_lists_the_draw_with_exact_card_keys(client, bracket_pag
     assert card["matchCoverage"] == {"imported": 3, "expected": 3, "missing": 0}
     assert card["recordScope"] == "full_draw"
     assert card["topologyScope"] == "full_draw"
+
+
+def test_draw_progress_states_where_play_has_reached(client, bracket_page):
+    """public-visual-fixes P6: the Draws index's one progress fact.
+
+    Results-gated like the champions beside it — an unpublished result is
+    not allowed to leak as "in play" — and it names the earliest unfinished
+    round, its scheduled start when the grid places one, and nothing at all
+    once the draw is decided."""
+    tid, slug = bracket_page["tid"], bracket_page["slug"]
+
+    # Results off: no progress at all, even with a recorded semifinal.
+    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
+    rounds = _units_by_round(state)
+    _record(client, tid, rounds[0][0], winner="A")
+    (card,) = client.get(f"/e/api/page/{slug}/draws").json()["draws"]
+    assert card["progress"] is None
+
+    # Results on: one semifinal decided, the other not — the semifinals are
+    # the front of the draw and they are in play.
+    _set_flags(tid, results_published=True)
+    (card,) = client.get(f"/e/api/page/{slug}/draws").json()["draws"]
+    assert card["progress"] == {
+        "state": "in_play",
+        "roundLabel": "SF",
+        "startTime": None,
+    }
+
+    # Both semifinals decided: the front moves to the final, which the
+    # fixture leaves unassigned, so it is simply still to play.
+    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
+    _record(client, tid, _units_by_round(state)[0][1], winner="A")
+    (card,) = client.get(f"/e/api/page/{slug}/draws").json()["draws"]
+    assert card["progress"]["state"] == "to_play"
+    assert card["progress"]["roundLabel"] == "Final"
+
+    # A scheduled final states its venue-local start instead.
+    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
+    final = _units_by_round(state)[1][0]
+    assert (
+        client.post(
+            f"/tournaments/{tid}/bracket/assign",
+            json={"play_unit_id": final["id"], "court_id": 1, "slot_id": 4},
+            headers=CSRF,
+        ).status_code
+        == 200
+    )
+    (card,) = client.get(f"/e/api/page/{slug}/draws").json()["draws"]
+    assert card["progress"] == {
+        "state": "scheduled",
+        "roundLabel": "Final",
+        "startTime": "11:00",
+    }
+
+    # Decided: complete, with no round left to name.
+    state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
+    _record(client, tid, _units_by_round(state)[1][0], winner="A")
+    (card,) = client.get(f"/e/api/page/{slug}/draws").json()["draws"]
+    assert card["progress"] == {
+        "state": "complete",
+        "roundLabel": None,
+        "startTime": None,
+    }
 
 
 def test_historical_draw_uses_advertised_size_and_source_round_labels(client):

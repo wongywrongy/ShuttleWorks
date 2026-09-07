@@ -130,8 +130,23 @@ describe('the tab bar and its panels (Z6)', () => {
     expect(draws).not.toContain('Bank transfer on the day.');
   });
 
-  it.each(['events', 'entrants', 'seeds', 'winners', 'results'])('returns 404 for removed %s tab URLs', async (removed) => {
+  it.each(['entrants', 'results'])('returns 404 for removed %s tab URLs', async (removed) => {
     const response = await respond(PAGE, 200, `/e/spring-open?tab=${removed}`);
+    expect(response.status).toBe(404);
+  });
+
+  // public-visual-fixes P6: `events`, `seeds` and `winners` were three names
+  // for THIS Draws surface. They are aliases in the surface book and
+  // redirects on the wire — a URL in a poster still has to land somewhere
+  // honest.
+  it.each(['events', 'seeds', 'winners'])('canonicalises the retired %s tab onto Draws', async (alias) => {
+    const response = await respond(PAGE, 200, `/e/spring-open?tab=${alias}`);
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/e/spring-open?tab=draws');
+  });
+
+  it('still 404s a retired alias on a workspace with no Draws section', async () => {
+    const response = await respond({ ...PAGE, events: [] }, 200, '/e/spring-open?tab=seeds');
     expect(response.status).toBe(404);
   });
 
@@ -214,20 +229,39 @@ describe('the tab bar and its panels (Z6)', () => {
 });
 
 describe('the panels', () => {
-  it('Overview: key-date rows, fees pointer, regulations document row, venue (SP-P7 §3.7, ADR 0028)', async () => {
+  it('Overview: About card, currently-relevant key dates, fees pointer, documents, venue (P6)', async () => {
     const html = await render();
+
+    // The organizer's words lead, in a card of their own that spans the
+    // left column (public-visual-fixes P6).
+    expect(html).toContain('>About<');
+    expect(html).toContain('Entries close on the 1st.');
 
     // Key dates are plain label/value rows now; the timeline rail and its
     // "you are here" marker went with the entrant-site port.
     expect(html).toContain('Key dates');
     expect(html).not.toMatch(/you are here/i);
-    expect(html).toContain('Entries open');
-    expect(html).toContain('Withdrawal deadline');
-    // The fixture's XD event closes earlier than MS/WD, so "Entries close"
+    // ONE entries row — the elapsed opening timestamp is gone — and the
+    // play day is labelled Play, not "Tournament", on a tournament page.
+    expect(html).toContain('>Entries<');
+    expect(html).toContain('>Play<');
+    expect(html).not.toContain('>Entries open<');
+    expect(html).not.toContain('>Tournament<');
+    // (A withdrawal deadline shows only while it is still ahead; the
+    // fixture's is clock-relative, so `phase.test.ts` pins that rule.)
+    // The fixture's XD event closes earlier than MS/WD, so the entries row
     // is a per-event range, pointing at the Draws panel.
     expect(html).toContain('Varies by event');
     expect(html).toContain('href="/e/spring-open?tab=draws"');
     expect(html).toContain('4 Kingsway');
+    // No zone abbreviation or offset in public prose (contract §7.1): the
+    // hero already says all times are local to the venue.
+    expect(html).not.toMatch(/\bUTC\b|GMT[+-]/);
+
+    // The Events/Entered-so-far facts card is gone: the Draws tab answers
+    // both, per event, in the unit each event uses.
+    expect(html).not.toContain('Entered so far');
+    expect(html).not.toContain('>Events<');
 
     // FEES LEFT THE OVERVIEW (Kyle's mockup-review ruling): no price, no
     // payment prose — a pointer row into the entry flow instead. The
@@ -246,17 +280,10 @@ describe('the panels', () => {
     expect(html).not.toContain('<details');
   });
 
-  it('shows the entered-so-far count only while it answers an entry question (V3-PE03.2)', async () => {
-    const html = await render();
-    expect(html).toContain('Entered so far');
-    expect(html).toContain('>12<');
-
-    // Entries fully closed: the registration aggregate is a different,
-    // unrelated source from any published draw roster — no unexplained
-    // zero, and no count printed at all once it stops being an entry
-    // question.
-    const closedHtml = await render(CLOSED);
-    expect(closedHtml).not.toContain('Entered so far');
+  it('omits the pricing card entirely once no event is open (no negative filler)', async () => {
+    const html = await render(CLOSED);
+    expect(html).not.toContain('Fees &amp; payment');
+    expect(html).not.toContain('Fees are not published');
   });
 
   it('leads a live tournament header with its real state, not "Entries closed" (V3-PE03.3)', async () => {
@@ -264,9 +291,11 @@ describe('the panels', () => {
     const html = await render(live, '/e/spring-open?tab=draws');
 
     expect(html).toMatch(/text-status-live[^>]*>Live now</);
-    expect(html).not.toMatch(/text-status-live[^>]*>Entries/);
-    // Entry closure still reads somewhere — the Overview's Key dates row —
+    // The HERO leads with the live state. Entry status still reads where it
+    // belongs — a row's progress cell, and the Overview's Key dates row —
     // just no longer as the header's first line.
+    const hero = html.slice(0, html.indexOf('<main'));
+    expect(hero).not.toMatch(/text-status-live[^>]*>Entries/);
   });
 
   it('renders no document row when the director wrote no regulations (rule 4)', async () => {
@@ -279,21 +308,28 @@ describe('the panels', () => {
     expect(html).not.toContain('/regulations"');
   });
 
-  it('Draws: one row per event with counts ("N entered", G2 declined) and an Entrants button', async () => {
+  it('Draws: four cells per row — event · entrants · progress · Open (P6)', async () => {
     const html = await render(PAGE, '/e/spring-open?tab=draws');
+
+    // The column headings say what the cells hold, and there is no STATE
+    // heading over a column of buttons.
+    expect(html).toContain('>Event<');
+    expect(html).toContain('>Entrants<');
+    expect(html).toContain('>Progress<');
+    expect(html).not.toContain('>State<');
 
     expect(html).toContain('7 players');
     expect(html).not.toMatch(/7 of \d/);
-    // The by-event anchors died with the by-event grouping (SP-P7 §3.2):
-    // the Entrants button links to the alphabetical tab itself.
-    expect(html).toContain('href="/e/spring-open?tab=players"');
-    expect(html).toContain('>Entrants</a>');
+    // Without a published draw the progress cell states the entry window —
+    // the one fact that is live at that point.
+    expect(html).toContain('Entries open');
+    expect(html).toContain('Entries closed');
     expect(html).not.toContain('#event-MS');
-    expect(html).toContain('>Open<');
-    expect(html).toContain('>Closed<');
     // Draws are published in the fixture but this render stubs no draw
-    // index, so no row grows a Draw button it cannot honour.
+    // index, so no row grows a link it cannot honour.
+    expect(html).not.toContain('>Entrants</a>');
     expect(html).not.toContain('>Draw</a>');
+    expect(html).not.toContain('>View draw</a>');
   });
 
   it('Players: public directory, one row per person (SP-P7 §3.2)', async () => {

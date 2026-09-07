@@ -754,17 +754,27 @@ describe('SegmentedNav', () => {
 
 // ---- EventRow --------------------------------------------------------------
 
-describe('EventRow', () => {
+/** A published draw card, reduced to what this row now reads. */
+function card(overrides: Partial<DrawCardDTO> = {}): DrawCardDTO {
+  return {
+    drawKey: 'MS', eventCode: 'MS', discipline: "Men's Singles", kind: 'se',
+    size: 16, drawParticipantCount: 16, hasConsolation: true,
+    matchCoverage: { imported: 0, expected: null, missing: null },
+    recordScope: 'full_draw', topologyScope: 'full_draw', historical: false,
+    sourceUrl: null, roundCount: 4, champions: [], finalists: [],
+    remainingMatchCount: 3, progress: null,
+    ...overrides,
+  } as DrawCardDTO;
+}
+
+describe('EventRow (public-visual-fixes P6: name · entrants · progress · Open)', () => {
   it('shows exactly one count, in one unit, once a draw is published (V3-PE04.2)', () => {
-    const draw = {
-      drawKey: 'ms', eventCode: 'MS', discipline: "Men's Singles", kind: 'se',
-      size: 8, drawParticipantCount: 6, hasConsolation: false,
-      matchCoverage: { imported: 0, expected: 7, missing: 7 },
-      recordScope: 'event', topologyScope: 'event', historical: false,
-      sourceUrl: null, roundCount: 3, champions: [], finalists: [],
-      remainingMatchCount: null,
-    } as DrawCardDTO;
-    const html = renderToStaticMarkup(h(EventRow, { event: event({ registrationCount: 7 }), draw, entrantsHref: null }));
+    const html = renderToStaticMarkup(
+      h(EventRow, {
+        event: event({ registrationCount: 7 }),
+        draw: card({ size: 8, drawParticipantCount: 6 }),
+      }),
+    );
     // The draw's own participant count wins over the registration count —
     // never both, and never a zero-looking mismatch between them.
     const countCell = html.match(/<p class="text-sm tabular-nums[^>]*>([^<]*)<\/p>/)?.[1];
@@ -776,7 +786,6 @@ describe('EventRow', () => {
     const html = renderToStaticMarkup(
       h(EventRow, {
         event: event({ code: 'mens_doubles_final', discipline: 'mens_doubles_final' }),
-        entrantsHref: null,
       }),
     );
     expect(html).toContain('Mens Doubles');
@@ -784,87 +793,97 @@ describe('EventRow', () => {
   });
 
   it('labels registration rows with one unit, never "of M" (G2 declined)', () => {
-    const html = renderToStaticMarkup(h(EventRow, { event: event(), entrantsHref: null }));
+    const html = renderToStaticMarkup(h(EventRow, { event: event() }));
     expect(html).toContain('7 players');
     expect(html).not.toMatch(/7 of \d/);
   });
 
-  it('labels the constraints and the open state as text + tone', () => {
-    const html = renderToStaticMarkup(
-      h(EventRow, { event: event({ ageBracketed: true }), entrantsHref: null }),
+  it('states the entry state as progress while there is no draw to describe', () => {
+    expect(renderToStaticMarkup(h(EventRow, { event: event() }))).toMatch(
+      /text-status-live[^>]*>Entries open</,
     );
-    expect(html).toContain('Men');
-    expect(html).toContain('Age-restricted');
-    expect(html).toMatch(/text-status-live[^>]*>Open</);
+    expect(renderToStaticMarkup(h(EventRow, { event: event({ isOpen: false }) }))).toContain(
+      'Entries closed',
+    );
   });
 
   it.each([
-    [null, 'Open to all'],
-    ['F', 'Women'],
-    ['mixed', 'mixed'],
-  ])('labels constraint %o as %s', (genderConstraint, label) => {
+    [{ state: 'in_play', roundLabel: 'R16', startTime: null }, 'R16 in play'],
+    [{ state: 'scheduled', roundLabel: 'Final', startTime: '14:00' }, 'Final 14:00'],
+    [{ state: 'to_play', roundLabel: 'QF', startTime: null }, 'QF to play'],
+    [{ state: 'complete', roundLabel: null, startTime: null }, 'Complete'],
+  ])('states real progress %o as "%s"', (progress, expected) => {
     const html = renderToStaticMarkup(
-      h(EventRow, { event: event({ genderConstraint }), entrantsHref: null }),
+      h(EventRow, {
+        event: event({ isOpen: false }),
+        draw: card({ progress: progress as DrawCardDTO['progress'] }),
+        drawHref: '/e/s/draws/MS',
+        slug: 's',
+      }),
     );
-    expect(html).toContain(label);
+    expect(html).toContain(expected);
   });
 
-  it('marks a closed event with the done tone', () => {
+  it('drops the derivable draw description the index used to repeat', () => {
     const html = renderToStaticMarkup(
-      h(EventRow, { event: event({ isOpen: false }), entrantsHref: null }),
+      h(EventRow, {
+        event: event({ isOpen: false }),
+        draw: card(),
+        drawHref: '/e/s/draws/MS',
+        slug: 's',
+      }),
     );
-    expect(html).toMatch(/text-status-done[^>]*>Closed</);
-  });
-
-  it('offers an Entrants button when given a directory link and entries exist', () => {
-    const html = renderToStaticMarkup(
-      h(EventRow, { event: event(), entrantsHref: '/e/s?tab=players' }),
-    );
-    expect(html).toContain('href="/e/s?tab=players"');
-    expect(html).toContain('>Entrants</a>');
-    expect(html).not.toContain('>Draw</a>');
-  });
-
-  it('adds the Draw button and the draw facts once a card is published (ADR 0028)', () => {
-    const card = {
-      drawKey: 'MS', eventCode: 'MS', discipline: "Men's Singles", kind: 'se' as const, size: 16,
-      hasConsolation: true, matchCoverage: { imported: 0, expected: null, missing: null },
-      recordScope: 'full_draw', topologyScope: 'full_draw', historical: false, sourceUrl: null,
-      roundCount: 4, champions: [], finalists: [], remainingMatchCount: 3,
-    };
-    const html = renderToStaticMarkup(
-      h(EventRow, { event: event({ isOpen: false }), entrantsHref: null, draw: card, drawHref: '/e/s/draws/MS', slug: 's' }),
-    );
-    expect(html).toContain('href="/e/s/draws/MS"');
-    expect(html).toContain('>View draw</a>');
-    expect(html).toContain('4 rounds');
-    expect(html).toContain('with consolation');
-    // V3-PE04.3: the action already says the draw exists — the state column
-    // does not repeat "Draw published" beside it.
+    // Round counts, consolation, eligibility and the publication message are
+    // all either derivable from the draw itself or duplicates of the link.
+    expect(html).not.toContain('4 rounds');
+    expect(html).not.toContain('with consolation');
+    expect(html).not.toContain('Open to all');
     expect(html).not.toContain('Draw published');
+    // The format is not a distinguishing fact when every row shares it.
+    expect(html).not.toContain('Elimination');
   });
 
-  it('explains a published draw that has no rounds yet', () => {
-    const card = {
-      drawKey: 'MS', eventCode: 'MS', discipline: "Men's Singles", kind: 'se' as const, size: 0,
-      hasConsolation: false, matchCoverage: { imported: 0, expected: null, missing: null },
-      recordScope: 'full_draw', topologyScope: 'full_draw', historical: false, sourceUrl: null,
-      roundCount: 0, champions: [], finalists: [], remainingMatchCount: null,
-    };
-    const html = renderToStaticMarkup(h(EventRow, { event: event({ isOpen: false }), entrantsHref: null, draw: card, drawHref: '/e/s/draws/MS', slug: 's' }));
-    expect(html).toContain('Draw published · rounds to be scheduled');
-    expect(html).not.toContain('0 rounds');
+  it('shows the format only when the index says the formats differ', () => {
+    const html = renderToStaticMarkup(
+      h(EventRow, {
+        event: event({ isOpen: false }),
+        draw: card({ kind: 'rr' }),
+        drawHref: '/e/s/draws/MS',
+        slug: 's',
+        showFormat: true,
+      }),
+    );
+    expect(html).toContain('Round robin');
   });
 
-  it('offers no link when the entrants tab is hidden or nobody entered', () => {
-    expect(
-      renderToStaticMarkup(h(EventRow, { event: event(), entrantsHref: null })),
-    ).not.toContain('<a ');
-    expect(
-      renderToStaticMarkup(
-        h(EventRow, { event: event({ entryCount: 0 }), entrantsHref: '/e/s?tab=entrants' }),
-      ),
-    ).not.toContain('<a ');
+  it('is ONE native link per row, with a focus ring and no nested link', () => {
+    const html = renderToStaticMarkup(
+      h(EventRow, {
+        event: event({ isOpen: false }),
+        draw: card({
+          champions: [
+            { identity: { id: 'p1', name: 'Ada Lovelace' }, resolution: 'resolved', label: null },
+          ],
+        }),
+        drawHref: '/e/s/draws/MS',
+        slug: 's',
+      }),
+    );
+    expect((html.match(/<a /g) ?? []).length).toBe(1);
+    expect(html).toContain('href="/e/s/draws/MS"');
+    expect(html).toContain('aria-label="Men&#x27;s singles draw"');
+    expect(html).toContain('focus-visible:ring-accent');
+    expect(html).toContain('>Open<');
+    // The champion still reads, as text: a link inside this link is not a
+    // link, so no `/players/` route escapes here.
+    expect(html).toContain('Ada Lovelace');
+    expect(html).not.toContain('/players/');
+    // The Entrants button is gone with the second link.
+    expect(html).not.toContain('>Entrants</a>');
+  });
+
+  it('offers no link at all before a draw is published', () => {
+    expect(renderToStaticMarkup(h(EventRow, { event: event() }))).not.toContain('<a ');
   });
 });
 

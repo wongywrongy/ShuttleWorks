@@ -1,0 +1,72 @@
+/* Print rules for `/e/{slug}/regulations` — page-scoped, linked with
+ * `media="print"` from that route alone (public-visual-fixes P6).
+ *
+ * A printed regulations sheet is a DOCUMENT: the organizer's rules, plus
+ * enough identity to know which tournament they govern. Everything else on
+ * the screen page is navigation — the site header, the tournament hero with
+ * its entry chip and CTA, the tab bar, the breadcrumb, the table of
+ * contents, the Print/Download buttons themselves — and none of it survives
+ * onto paper, where it cannot be clicked and only pushes the rules onto a
+ * second sheet.
+ *
+ * It lives here rather than in `app/app.css` on purpose: these rules must
+ * decide how THIS document prints and nothing else in the tier.
+ */
+@media print {
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  /* Site chrome and every navigation on the page: the shell header and
+     footer, the tournament hero (the printed identity line inside the
+     document replaces it), the tab bar, breadcrumbs, the document outline,
+     and the action buttons. */
+  body header,
+  body footer,
+  body nav,
+  section[aria-labelledby='tournament-title'],
+  #regulations-actions {
+    display: none !important;
+  }
+
+  /* The document itself takes the sheet: no page gutters, no reading-measure
+     cap, and no ancestor allowed to clip or scroll it away. */
+  main {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #regulations-document {
+    max-width: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  #regulations-document,
+  #regulations-document * {
+    color: #000 !important;
+  }
+
+  /* A heading at the foot of a sheet, with its section overleaf, is the
+     classic printed-rules defect. */
+  #regulations-document h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  #regulations-document p,
+  #regulations-document li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* A link cannot be followed on paper, so it says where it went. */
+  #regulations-document a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 0.85em;
+    word-break: break-all;
+  }
+}

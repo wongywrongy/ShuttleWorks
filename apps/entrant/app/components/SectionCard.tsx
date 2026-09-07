@@ -59,6 +59,23 @@ export function SectionCard({
   );
 }
 
+/**
+ * A `titled` SectionCard's prose body — the Overview's About card
+ * (public-visual-fixes P6).
+ *
+ * The card's own padding stops at its heading band, because its usual
+ * children are `SectionRow`s that carry their own. A paragraph is not a row,
+ * so it brings the padding with it; `max-w-prose` keeps the measure readable
+ * when the card spans a full column.
+ */
+export function SectionProse({ children }: { children: ReactNode }) {
+  return (
+    <p className="max-w-prose text-pretty px-4 pb-4 text-base leading-7 text-foreground">
+      {children}
+    </p>
+  );
+}
+
 /** One label/value row of a `titled` SectionCard. */
 export function SectionRow({ label, children }: { label: string; children: ReactNode }) {
   return (

@@ -108,12 +108,47 @@ describe('/e/{slug}/regulations — the reader (§3.7)', () => {
   it('renders the full text with version, updated date and a way back', async () => {
     const html = await (await respond(PAGE, 200, '/e/spring-open/regulations')).text();
 
-    expect(html).toContain('Tournament regulations');
+    // public-visual-fixes P6: the document's own heading is "Regulations" —
+    // once. The tournament name is the frame's `h1` above it, and the words
+    // "Tournament regulations" used to appear three times before a reader
+    // reached a single rule.
+    expect(html).toContain('>Regulations<');
     expect(html).toContain('BWF laws apply.');
     expect(html).toContain('Version 3');
     expect(html).toContain('12 August 2026');
     expect(html).toContain('href="/e/spring-open"');
     expect(html).toContain('<title>Regulations · Spring Open</title>');
+    // The document actions say what they do; "Download" saves the text.
+    expect(html).toContain('>Download<');
+    expect(html).not.toContain('Download text');
+    expect(html).not.toMatch(/save as pdf/i);
+    // Print output is decided by a page-scoped print stylesheet, not by the
+    // shared screen cascade.
+    expect(html).toContain('href="/e/assets/regulations-print.css"');
+    expect(html).toContain('media="print"');
+  });
+
+  it('escapes authored markup instead of rendering it, and links a bare address', async () => {
+    const authored = {
+      ...PAGE,
+      page: {
+        ...PAGE.page,
+        regulationsText:
+          'ELIGIBILITY\n<script>alert(1)</script>\nSee https://example.org/rules/entry_conditions for detail.\n- Bring photo ID\n- Arrive 30 minutes early',
+      },
+    };
+    const html = await (await respond(authored, 200, '/e/spring-open/regulations')).text();
+
+    // Uploaded markup is CONTENT, never markup: it reads as the characters
+    // the organizer typed.
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+    // A real link, with a readable label, and the address still resolvable.
+    expect(html).toContain('href="https://example.org/rules/entry_conditions"');
+    expect(html).toContain('>entry conditions<');
+    // Bullets render as a list, not as a wall of soft-wrapped lines.
+    expect(html).toContain('<ul');
+    expect(html).toContain('Bring photo ID');
   });
 
   it('answers the uniform 404 when the director wrote no regulations', async () => {
