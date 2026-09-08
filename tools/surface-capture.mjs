@@ -51,6 +51,20 @@ const WS = process.env.WS_ID ?? "a86a39b3-0eb4-4c12-9106-5ff1bd1e5aa2";
 // so never capture Meet query parameters against it and call that coverage.
 const MEET_WS_ID = process.env.MEET_WS_ID ?? "";
 const SLUG = process.env.SLUG ?? "2026-korea-masters-t030";
+// A second public tournament whose RESULTS are published. `SLUG` above is the
+// entry-taking workspace — the one the account and entry-form sheets need —
+// and on that tournament every draw is unplayed, so a book captured from it
+// alone shows no score, no resolved later round and no champion anywhere
+// (public-visual-fixes.md P8). When `RESULTS_SLUG` names a different
+// tournament, the content surfaces below are captured a second time against
+// it, so one book carries both halves of the lifecycle. Empty (the default)
+// leaves the inventory exactly as it was.
+const RESULTS_SLUG = process.env.RESULTS_SLUG ?? "";
+// Public person keys whose pages are SUPPOSED to refuse. They are captured as
+// declared expected-error sheets, counted apart from product surfaces, so a
+// reviewer can tell a designed refusal from a broken page.
+const WITHHELD_PLAYER_KEY = process.env.WITHHELD_PLAYER_KEY ?? "";
+const MISSING_PLAYER_KEY = process.env.MISSING_PLAYER_KEY ?? "";
 const DRAW_KEY = process.env.DRAW_KEY ?? "MS";
 const DOUBLES_DRAW_KEY = process.env.DOUBLES_DRAW_KEY ?? "MD";
 // V3-24-1: the receipt path segment is an eight-character reference, and the
@@ -194,14 +208,6 @@ const ENTRANT_SURFACES = [
   ["Tournament · Draws", `/e/${SLUG}?tab=draws`],
   ["Tournament · Schedule and live", `/e/${SLUG}/schedule`],
   ["Draw · Singles full bracket", `/e/${SLUG}/draws/${DRAW_KEY}`],
-  [
-    "Draw · Singles round view",
-    `/e/${SLUG}/draws/${DRAW_KEY}?view=round&round=1`,
-  ],
-  [
-    "Draw · Singles player path",
-    `/e/${SLUG}/draws/${DRAW_KEY}?view=path&player=Zhu`,
-  ],
   ["Draw · Singles match list", `/e/${SLUG}/draws/${DRAW_KEY}?view=list`],
   ["Draw · Doubles detail", `/e/${SLUG}/draws/${DOUBLES_DRAW_KEY}`],
   ["Regulations reader", `/e/${SLUG}/regulations`],
@@ -237,8 +243,39 @@ const ENTRANT_SURFACES = [
   // remains are the two states a reader actually reaches — a search, and a
   // season other than the current one.
   ["Discovery · Search across seasons", "/e/?q=Open&year=all#calendar"],
-  ["Partner invitation · Missing fixture token", "/e/partner/missing-fixture-token"],
 ];
+
+/**
+ * Sheets that exist to show a REFUSAL working — a designed 404 or a
+ * withheld-person page. They are captured with the product surfaces and
+ * counted apart in `routeCoverage.expectedErrorSheets`, because a reviewer
+ * paging through the book has no other way to tell "this page is supposed to
+ * say no" from "this page is broken".
+ */
+const ENTRANT_EXPECTED_ERROR_SURFACES = [
+  ["Expected refusal · Partner invitation, unknown token", "/e/partner/missing-fixture-token"],
+];
+if (WITHHELD_PLAYER_KEY) {
+  ENTRANT_EXPECTED_ERROR_SURFACES.push([
+    "Expected refusal · Player withheld from publication",
+    `/e/${SLUG}/players/${encodeURIComponent(WITHHELD_PLAYER_KEY)}`,
+  ]);
+}
+if (MISSING_PLAYER_KEY) {
+  ENTRANT_EXPECTED_ERROR_SURFACES.push([
+    "Expected refusal · Unknown person key",
+    `/e/${SLUG}/players/${encodeURIComponent(MISSING_PLAYER_KEY)}`,
+  ]);
+}
+
+/**
+ * Sheets whose point is a PROGRESSIVE-ENHANCEMENT state — a page-scoped
+ * script's result, reachable by URL so the sheet is reproducible without a
+ * scripted interaction. They are product states of a destination already
+ * counted above, not new destinations, and are tallied apart so
+ * `stateSheets` is not read as "screens".
+ */
+const ENTRANT_ENHANCED_SURFACES = [];
 
 /**
  * Retired URLs that still have to ANSWER, captured apart from the product
@@ -262,6 +299,11 @@ const ENTRANT_COMPATIBILITY_SURFACES = [
   ["Tournament · Compatibility · events tab", `/e/${SLUG}?tab=events`],
   ["Tournament · Compatibility · seeds tab", `/e/${SLUG}?tab=seeds`],
   ["Tournament · Compatibility · winners tab", `/e/${SLUG}?tab=winners`],
+  // public-visual-fixes P4: `?view=round` and `?view=path` were two more
+  // renderings of the same draw, and there is now ONE bracket at every width.
+  // Both resolve onto it, so they are aliases of the draw sheet above.
+  ["Draw · Compatibility · round view", `/e/${SLUG}/draws/${DRAW_KEY}?view=round&round=1`],
+  ["Draw · Compatibility · path view", `/e/${SLUG}/draws/${DRAW_KEY}?view=path`],
 ];
 
 if (PARTNER_TOKEN) {
@@ -319,10 +361,6 @@ const EXACT_DESCRIPTIONS = Object.freeze({
     "Filterable public match schedule with courts, timing, and live state.",
   "Draw · Singles full bracket":
     "Complete singles elimination tree with scores and feeder connections.",
-  "Draw · Singles round view":
-    "Focused single-round reading mode for smaller screens and quick review.",
-  "Draw · Singles player path":
-    "Searchable route through the draw for one player or pair.",
   "Draw · Singles match list":
     "Linear, accessible list of every match in the selected draw.",
   "Draw · Doubles detail":
@@ -341,6 +379,34 @@ const EXACT_DESCRIPTIONS = Object.freeze({
     "Submission receipt and recovery state for a tournament entry.",
   "Player detail":
     "One player’s tournament events, draw paths, upcoming matches, and completed matches.",
+  "Draw · Compatibility · round view":
+    "Retired draw view: canonicalises onto the one bracket.",
+  "Draw · Compatibility · path view":
+    "Retired draw view: canonicalises onto the one bracket.",
+  "Results tournament · Overview":
+    "Public tournament summary for a tournament whose results are published.",
+  "Results tournament · Players":
+    "Published player directory for a tournament in play, with reached rounds.",
+  "Results tournament · Draws":
+    "Draw index showing real per-draw progress: complete, in play, and scheduled.",
+  "Results tournament · Schedule and live":
+    "Public schedule carrying live matches on court, finished scores, a walkover and a retirement.",
+  "Results draw · Singles full bracket":
+    "Singles tree with recorded scores, a resolved later round, and matches still to play.",
+  "Results draw · Doubles full bracket":
+    "Doubles tree carrying paired names, recorded scores and progression to a champion.",
+  "Results tournament · Regulations":
+    "Tournament regulations, policies, venue notes, and entry guidance.",
+  "Results tournament · Player detail with history":
+    "A published person’s profile with played results and cross-tournament history.",
+  "Results draw · Highlighted player path":
+    "Enhanced state: the same bracket with one person’s route through it highlighted, reached by URL and rendered without script.",
+  "Expected refusal · Partner invitation, unknown token":
+    "Declared expected error: an unknown partner-invitation token must refuse, not leak.",
+  "Expected refusal · Player withheld from publication":
+    "Declared expected error: a person the organizer has not published must say so without naming them.",
+  "Expected refusal · Unknown person key":
+    "Declared expected error: an unknown person key must answer a plain not-found.",
 });
 
 function descriptionFor(label) {
@@ -401,11 +467,11 @@ async function resolveEventTimeZone() {
   }
 }
 
-async function resolvePublicPersonKey() {
-  if (PLAYER_KEY) return PLAYER_KEY;
+async function resolvePublicPersonKey(slug = SLUG, override = PLAYER_KEY) {
+  if (override) return override;
   try {
     const response = await fetch(
-      `${normalizedBase}/e/api/page/${encodeURIComponent(SLUG)}/players`,
+      `${normalizedBase}/e/api/page/${encodeURIComponent(slug)}/players`,
     );
     if (!response.ok) return "";
     const payload = await response.json();
@@ -422,12 +488,6 @@ async function resolvePublicPersonKey() {
 }
 
 let surfaces = tier === "console" ? [...CONSOLE_SURFACES] : [...ENTRANT_SURFACES];
-// Compatibility URLs ride at the end of the run and are counted apart (see
-// `routeCoverage` below); they are redirect behaviour, not product surfaces.
-const compatibilityLabels = new Set(
-  tier === "entrant" ? ENTRANT_COMPATIBILITY_SURFACES.map(([label]) => label) : [],
-);
-if (tier === "entrant") surfaces.push(...ENTRANT_COMPATIBILITY_SURFACES);
 const omittedOptionalStates = [];
 if (tier === "entrant") {
   const playerKey = await resolvePublicPersonKey();
@@ -446,7 +506,68 @@ if (tier === "entrant") {
       reason: "Selected fixture has no routable published person identity",
     });
   }
+
+  // The published-results half of the lifecycle. Same routes, a tournament
+  // where they carry scores, a resolved later round and a champion; captured
+  // only when a second slug is supplied and it is not the one already walked.
+  if (RESULTS_SLUG && RESULTS_SLUG !== SLUG) {
+    const resultsPlayerKey = await resolvePublicPersonKey(RESULTS_SLUG, "");
+    const resultsSurfaces = [
+      ["Results tournament · Overview", `/e/${RESULTS_SLUG}`],
+      ["Results tournament · Players", `/e/${RESULTS_SLUG}?tab=players`],
+      ["Results tournament · Draws", `/e/${RESULTS_SLUG}?tab=draws`],
+      ["Results tournament · Schedule and live", `/e/${RESULTS_SLUG}/schedule`],
+      [
+        "Results draw · Singles full bracket",
+        `/e/${RESULTS_SLUG}/draws/${DRAW_KEY}`,
+      ],
+      [
+        "Results draw · Doubles full bracket",
+        `/e/${RESULTS_SLUG}/draws/${DOUBLES_DRAW_KEY}`,
+      ],
+      ["Results tournament · Regulations", `/e/${RESULTS_SLUG}/regulations`],
+    ];
+    if (resultsPlayerKey) {
+      resultsSurfaces.push([
+        "Results tournament · Player detail with history",
+        `/e/${RESULTS_SLUG}/players/${encodeURIComponent(resultsPlayerKey)}`,
+      ]);
+      // The bracket's highlighted-path state. P4 resolves `?player=` by
+      // IDENTITY ID only, so this is the URL a real "Show this player's path"
+      // link produces — and it renders without a byte of script, which is the
+      // point of capturing it here rather than scripting a click.
+      ENTRANT_ENHANCED_SURFACES.push([
+        "Results draw · Highlighted player path",
+        `/e/${RESULTS_SLUG}/draws/${DRAW_KEY}?player=${encodeURIComponent(resultsPlayerKey)}`,
+      ]);
+    } else {
+      omittedOptionalStates.push({
+        label: "Results tournament · Player detail with history",
+        reason: "Results fixture has no routable published person identity",
+      });
+    }
+    surfaces.push(...resultsSurfaces);
+  }
+
+  // Enhanced states, then declared refusals, then compatibility URLs — each
+  // group after the product surfaces and each counted on its own line below.
+  surfaces.push(...ENTRANT_ENHANCED_SURFACES);
+  surfaces.push(...ENTRANT_EXPECTED_ERROR_SURFACES);
+  surfaces.push(...ENTRANT_COMPATIBILITY_SURFACES);
 }
+// Four kinds of sheet, tallied apart (see `routeCoverage` below): product
+// surfaces, progressive-enhancement states of one of them, sheets that are
+// SUPPOSED to refuse, and retired URLs proving they still land somewhere
+// honest. Only the first is "the product".
+const compatibilityLabels = new Set(
+  tier === "entrant" ? ENTRANT_COMPATIBILITY_SURFACES.map(([label]) => label) : [],
+);
+const enhancedLabels = new Set(
+  tier === "entrant" ? ENTRANT_ENHANCED_SURFACES.map(([label]) => label) : [],
+);
+const expectedErrorLabels = new Set(
+  tier === "entrant" ? ENTRANT_EXPECTED_ERROR_SURFACES.map(([label]) => label) : [],
+);
 
 surfaces = surfaces.map(([label, path]) => [
   label,
@@ -459,21 +580,28 @@ if (CAPTURE_LABEL) {
 if (CAPTURE_LIMIT > 0) {
   surfaces = surfaces.slice(0, CAPTURE_LIMIT);
 }
-// Route coverage describes product screens, and says separately how many
-// sheets are compatibility URLs. Counting a redirect as a unique surface
-// overstates the product — the season calendar's four retired lifecycle and
-// pagination queries were four such sheets — so the two are tallied apart
-// rather than the compatibility sheets being dropped from the book. Compute
-// after optional filtering so the manifest matches the actual sheets in this
-// run.
-const productSurfaces = surfaces.filter(([label]) => !compatibilityLabels.has(label));
+// Route coverage describes product screens, and says separately what the
+// other sheets are. Counting a redirect as a unique surface overstates the
+// product — the season calendar's four retired lifecycle and pagination
+// queries were four such sheets — and so does counting a designed 404 or a
+// script-enhanced state of a page already in the book. All four are tallied
+// apart rather than dropped, because a reader needs to see the refusal work
+// as much as the success. Computed after optional filtering so the manifest
+// matches the actual sheets in this run.
+const isProduct = ([label]) =>
+  !compatibilityLabels.has(label) &&
+  !enhancedLabels.has(label) &&
+  !expectedErrorLabels.has(label);
+const productSurfaces = surfaces.filter(isProduct);
 const canonicalDestinationCount = new Set(
   productSurfaces.map(([, path]) => path.split(/[?#]/, 1)[0]),
 ).size;
 const routeCoverage = {
   canonicalDestinations: canonicalDestinationCount,
   stateSheets: productSurfaces.length,
-  compatibilitySheets: surfaces.length - productSurfaces.length,
+  enhancedStateSheets: surfaces.filter(([label]) => enhancedLabels.has(label)).length,
+  expectedErrorSheets: surfaces.filter(([label]) => expectedErrorLabels.has(label)).length,
+  compatibilitySheets: surfaces.filter(([label]) => compatibilityLabels.has(label)).length,
 };
 const VIEWPORTS = [
   ["desktop", 1440, 900],
@@ -679,9 +807,17 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
           }, { key: region.key, ...before });
         }
       }
+      // A DECLARED expected-error sheet is one whose whole point is the
+      // refusal — an unknown token, a withheld person, an unknown key. Its
+      // 404 is the evidence, not a failure, so it must not make the run
+      // "partial" and send a reader hunting for a broken page. Anything else
+      // it might answer (a 500, a 200 that leaked the record) still fails.
+      const declaredError = expectedErrorLabels.has(label);
+      const httpStatus = res?.status() ?? 0;
       viewportRuns[vpName] = {
-        ok: (res?.status() ?? 0) < 400,
-        httpStatus: res?.status() ?? 0,
+        ok: httpStatus < 400 || (declaredError && httpStatus === 404),
+        expectedError: declaredError && httpStatus === 404 ? true : undefined,
+        httpStatus,
         finalUrl: page.url(),
         consoleErrors: errors,
         viewport: { width, height, deviceScaleFactor: 2 },
@@ -690,13 +826,15 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
         scrollRegions,
         scrollEndSegments: scrollEndShots[vpName].length,
       };
-      if ((res?.status() ?? 0) >= 400) {
-        viewportRuns[vpName].error = `HTTP ${res.status()}`;
+      if (!viewportRuns[vpName].ok) {
+        viewportRuns[vpName].error = declaredError
+          ? `HTTP ${httpStatus} — this sheet declares a refusal, and a refusal is a 404`
+          : `HTTP ${httpStatus}`;
       }
       if (vpName === "desktop") {
         const status = res?.status() ?? 0;
         const title = await page.title();
-        note = `HTTP ${status} · <code>${esc(title)}</code> · final <code>${esc(new URL(page.url()).pathname + new URL(page.url()).search)}</code>`;
+        note = `HTTP ${status}${declaredError && status === 404 ? " (expected refusal)" : ""} · <code>${esc(title)}</code> · final <code>${esc(new URL(page.url()).pathname + new URL(page.url()).search)}</code>`;
         if (errors.length) {
           note += ` · <span class="err">${errors.length} console error(s): ${esc(errors[0])}</span>`;
         }
@@ -795,7 +933,7 @@ const html = `<!doctype html>
 <p><strong>Design direction:</strong> preserve readable match identity and stored participant names; use restrained semantic colour, flat ordinary surfaces, consistent property panels and explicit saved/unsaved feedback. Backend terms belong in the UI only when they help a user make a decision.</p>
 <p><strong>Annotate:</strong> cite surface ID, viewport and segment, then state the observed problem, affected task, severity, proposed change and measurable acceptance criterion. Distinguish a visual observation from an interaction hypothesis.</p>
 <p><strong>Further validation:</strong> keyboard/focus order, screen-reader output, dark theme, form errors, authenticated entry outcomes, offline recovery and physical venue viewing distance require separate testing. Internal scroll panels, horizontal canvases and virtualized regions show their initial visible position only. Document continuations do not scroll these panels.</p>
-<p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> canonical destinations and <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets, plus <code>${esc(routeCoverage.compatibilitySheets)}</code> compatibility sheets counted separately. A compatibility sheet is a retired URL proving it still lands somewhere honest, not a product surface. Every sheet records its requested route and the final URL reached.</p>
+<p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> unique product surfaces across <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets, plus <code>${esc(routeCoverage.enhancedStateSheets)}</code> enhanced-state, <code>${esc(routeCoverage.expectedErrorSheets)}</code> expected-error and <code>${esc(routeCoverage.compatibilitySheets)}</code> compatibility sheets, each counted separately. An enhanced-state sheet is a progressive-enhancement state of a surface already in the book; an expected-error sheet is a refusal the product is SUPPOSED to give, not a defect; a compatibility sheet is a retired URL proving it still lands somewhere honest. Every sheet records its requested route and the final URL reached.</p>
 <p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; reduced motion. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Timing is live demo data, not a frozen cross-surface snapshot. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
 </div></section>
 <section class="index"><h1>Surface index</h1><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>

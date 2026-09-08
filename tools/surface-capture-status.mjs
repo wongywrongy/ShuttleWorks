@@ -31,9 +31,21 @@ export function summarizeStatus(paths, { now = Date.now() } = {}) {
         ),
       0,
     );
+    // A declared expected-error sheet answers 404 ON PURPOSE (an unknown
+    // token, a withheld person). The capture already counts it as ok, so it
+    // is not in `failedViewports`; report it here anyway, because a reader
+    // scanning this line needs to know the run deliberately contains
+    // refusals rather than wondering which pages broke.
+    const expectedErrors = (run.surfaces ?? []).reduce(
+      (count, surface) =>
+        count +
+        Object.values(surface.viewports ?? {}).filter((viewport) => viewport.expectedError).length,
+      0,
+    );
     lines.push(
       `${run.tier}: ${run.status} · ${run.completedSurfaces}/${run.surfaceCount} surfaces · ` +
         `${(elapsedMs / 1000).toFixed(1)}s · ${failures} failed viewport(s) · ` +
+        `${expectedErrors} declared refusal(s) · ` +
         `${consoleErrors} browser-console error(s)`,
     );
     if (run.artifacts?.pdf) lines.push(`  PDF: ${run.artifacts.pdf}`);

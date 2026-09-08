@@ -76,6 +76,214 @@ const PAGE = JSON.parse(
   fs.readFileSync(path.join(root, 'tests', 'helpers', 'entryPage.fixture.json'), 'utf-8'),
 );
 
+/**
+ * The published-results half of the public tier, measured (public-visual-fixes
+ * P8). `PAGE` above is an entry-taking tournament with no draws, so the three
+ * heaviest public documents this tier serves — the Players directory, a full
+ * bracket, and the schedule — had NO number at all: none of them was in
+ * `MEASURED`, so `bracket-path.js`, `entrants-filter.js` and P7's new
+ * `schedule-filters.js` could grow without the gate noticing.
+ *
+ * Served under a second slug because one page projection cannot be both
+ * "draws not published" (what `/e/spring-open` must stay, so its measurement
+ * does not change) and "results published" (what these three need). The
+ * payloads are generated rather than captured so the numbers describe the
+ * worst case the design has to hold — a full 32 draw with every round
+ * populated, 256 entrants with long names, and a whole schedule page — rather
+ * than whatever one fixture happens to contain.
+ */
+const PLAYED_SLUG = 'season-finals';
+const PLAYED_PAGE = {
+  ...PAGE,
+  publication: { entrants: true, draws: true, results: true },
+};
+
+// Long, real-shaped names: the directory's width is set by its longest row,
+// and a Latin-only short-name fixture measures a page nobody has.
+const SURNAMES = [
+  'Pahlevi Isfahani',
+  'Cahaya Pratiwi',
+  'Wardoyo Ramadhanti',
+  'Kang Khai Xing',
+  'Sabar Karyaman Gutama',
+  'Chettithody Shetty',
+  'Widjaja Kusumawardhani',
+  'Rambitan Sugiarto',
+];
+const GIVEN_NAMES = [
+  'Muhammad Reza',
+  'Amallia',
+  'Bagas',
+  'Jonatan',
+  'Gregoria Mariska',
+  'Pramudya Kusumawardana',
+  'Apriyani',
+  'Fajar Alfian',
+];
+const CLUBS = [
+  'Northgate Badminton Club',
+  'Harbourline Shuttlers',
+  'Riverside Racquet Academy',
+  'Summit Badminton Centre',
+];
+const EVENT_CODES = ['MS', 'WS', 'MD', 'WD', 'XD'];
+
+const personName = (index) =>
+  `${GIVEN_NAMES[index % GIVEN_NAMES.length]} ${SURNAMES[(index >> 3) % SURNAMES.length]}`;
+// Stable, well-formed UUIDs: the person key is a URL segment on every row, so
+// its length is part of the measurement.
+const personId = (index) =>
+  `${String(index).padStart(8, '0')}-0000-4000-8000-${String(index).padStart(12, '0')}`;
+const personRef = (index) => ({
+  identity: { id: personId(index), name: personName(index) },
+  resolution: 'resolved',
+  label: null,
+});
+
+/** A 256-name Players directory — one full draw's worth of every discipline. */
+const PLAYED_PLAYERS = {
+  published: true,
+  players: Array.from({ length: 256 }, (_, index) => ({
+    playerKey: `entry-${personId(index)}`,
+    person: personRef(index),
+    club: CLUBS[index % CLUBS.length],
+    eventCodes: [EVENT_CODES[index % EVENT_CODES.length]],
+  })),
+  referencedPlayerCount: 256,
+  missingNameCount: 0,
+};
+
+/**
+ * A complete 32 draw: five rounds, every node carrying a reference, a real
+ * score and a scheduled time, with the last two rounds fed from the round
+ * before so the feeder-slot rendering is measured too.
+ */
+function playedDraw() {
+  const rounds = [];
+  const labels = ['Round of 32', 'Round of 16', 'Quarterfinals', 'Semifinals', 'Final'];
+  const short = ['R32', 'R16', 'QF', 'SF', 'F'];
+  const nodeKey = (round, position) => `DRAW-MS-${short[round]}-${position}`;
+  for (let round = 0; round < labels.length; round++) {
+    const count = 16 >> round;
+    rounds.push({
+      label: labels[round],
+      matches: Array.from({ length: count }, (_, slot) => {
+        const position = slot + 1;
+        const played = round < labels.length - 1;
+        return {
+          nodeKey: nodeKey(round, position),
+          position,
+          reference: `MS ${short[round]}·${position}`,
+          shortReference: `${short[round]}·${position}`,
+          sides: [0, 1].map((side) => ({
+            participantKey:
+              round === 0 ? `entry-${personId(slot * 2 + side)}` : null,
+            placeholder: null,
+            bye: false,
+            feederNodeKey: round === 0 ? null : nodeKey(round - 1, position * 2 - 1 + side),
+            feederTake: round === 0 ? null : 'winner',
+            unresolved: null,
+          })),
+          result: played
+            ? { winnerSide: 'A', score: [[21, 18], [19, 21], [21, 15]], walkover: false }
+            : null,
+          scheduledTime: '13:00',
+          court: played ? null : ((position % 6) + 1),
+          playedOn: '2026-07-31',
+          localTime: '13:00',
+          courtLabel: `Court ${(position % 6) + 1}`,
+          sourceUrl: null,
+          sourceRef: null,
+        };
+      }),
+    });
+  }
+  return {
+    drawKey: 'MS',
+    eventCode: 'MS',
+    discipline: 'MS',
+    kind: 'se',
+    size: 32,
+    resultsPublished: true,
+    matchCoverage: { imported: 31, expected: 31, missing: 0 },
+    recordScope: 'full_draw',
+    topologyScope: 'full_draw',
+    historical: false,
+    sourceUrl: null,
+    identityScope: 'source_local_name',
+    teams: Array.from({ length: 32 }, (_, index) => ({
+      participantKey: `entry-${personId(index)}`,
+      persons: [personRef(index)],
+      club: CLUBS[index % CLUBS.length],
+      seed: index < 8 ? index + 1 : null,
+    })),
+    segments: [{ id: 'MAIN', label: 'Draw', rounds }],
+    standings: null,
+  };
+}
+
+/** One schedule page at the projection's own page size, all five states. */
+const SCHEDULE_STATES = ['live', 'completed', 'scheduled', 'walkover', 'retired'];
+function playedSchedule() {
+  const items = Array.from({ length: 25 }, (_, index) => {
+    const status = SCHEDULE_STATES[index % SCHEDULE_STATES.length];
+    return {
+      matchKey: `MS:DRAW-MS-R32-${index + 1}`,
+      source: 'bracket',
+      eventCode: EVENT_CODES[index % EVENT_CODES.length],
+      discipline: EVENT_CODES[index % EVENT_CODES.length],
+      roundLabel: 'Round of 32',
+      status,
+      scheduledDate: '2026-07-31',
+      scheduledTime: '13:00',
+      court: status === 'live' ? (index % 6) + 1 : null,
+      sides: [0, 1].map((side) => ({
+        participantKey: `entry-${personId(index * 2 + side)}`,
+        persons: [personRef(index * 2 + side)],
+        placeholder: null,
+        unresolved: null,
+      })),
+      score:
+        status === 'completed' || status === 'retired'
+          ? [[21, 18], [19, 21], [21, 15]]
+          : null,
+      walkover: status === 'walkover',
+      winnerSide: status === 'completed' ? 'A' : null,
+      updatedAt: '2026-07-31T05:00:00',
+      reference: `MS R32·${index + 1}`,
+      shortReference: `R32·${index + 1}`,
+    };
+  });
+  return {
+    published: true,
+    items,
+    facets: {
+      days: [
+        { day: '2026-07-29', count: 74 },
+        { day: '2026-07-30', count: 20 },
+        { day: '2026-07-31', count: 12 },
+        { day: '2026-08-01', count: 15 },
+        { day: '2026-08-02', count: 12 },
+      ],
+      events: EVENT_CODES,
+      courts: [1, 2, 3, 4, 5, 6],
+      states: ['completed', 'live', 'retired', 'scheduled', 'walkover'],
+    },
+    page: 1,
+    pageSize: 25,
+    total: 155,
+    timeZone: 'Asia/Taipei',
+    updatedAt: '2026-07-31T05:00:00',
+    revision: 'measure-fixture',
+  };
+}
+
+const json = (payload) =>
+  new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+
 globalThis.fetch = async (input) => {
   const url = typeof input === 'string' ? input : input.url;
   if (url === `${process.env.API_BASE_URL}/e/api/pages`) {
@@ -145,6 +353,11 @@ globalThis.fetch = async (input) => {
       headers: { 'content-type': 'application/json' },
     });
   }
+  const played = `${process.env.API_BASE_URL}/e/api/page/${PLAYED_SLUG}`;
+  if (url === played) return json(PLAYED_PAGE);
+  if (url === `${played}/players`) return json(PLAYED_PLAYERS);
+  if (url === `${played}/draws/MS`) return json(playedDraw());
+  if (url.startsWith(`${played}/matches`)) return json(playedSchedule());
   throw new Error(`measure-page-weight: unexpected fetch ${url}`);
 };
 
@@ -158,7 +371,19 @@ const handler = createRequestHandler(build, 'production');
  * enter page carries the real CSRF + idempotency fields; the tournament page
  * is the sitemap-listed poster URL; discovery is the front door.
  */
-const MEASURED = ['/e/', '/e/spring-open', '/e/spring-open/enter'];
+const MEASURED = [
+  '/e/',
+  '/e/spring-open',
+  '/e/spring-open/enter',
+  // public-visual-fixes P8: the three published-results documents, which the
+  // gate could not see at all before. Each is measured at the worst case its
+  // design has to hold (see PLAYED_* above), and each references a different
+  // page-scoped script — `entrants-filter.js`, `bracket-path.js` and P7's
+  // `schedule-filters.js` — so the enhancement layer is now inside a number.
+  `/e/${PLAYED_SLUG}?tab=players`,
+  `/e/${PLAYED_SLUG}/draws/MS`,
+  `/e/${PLAYED_SLUG}/schedule`,
+];
 
 /**
  * 2026-08-11 design audit, finding #7 ("the page-weight gate cannot see the
@@ -250,12 +475,22 @@ measured.push(
 // blocking, per the R8-F precedent).
 const PUBLIC_BUDGET_KB = 4;
 const ENTRY_BUDGET_KB = 8;
+// The published-results documents. Their content is a ROSTER, a TREE and a
+// DAY — 256 rows, 31 nodes, 25 match cards — so their floor is the data the
+// reader came for, not chrome, and holding them to the 4 KB poster budget
+// would only say "a full draw is bigger than a poster". Derived from the
+// first measurement (11.1 KB, the Players directory) the same way R8-F
+// derived the numbers above, with the same order of headroom; gate
+// blocking, and deliberately NOT applied to the three documents above: the
+// poster and entry budgets are unchanged, so nothing here buys headroom for
+// them.
+const RESULTS_BUDGET_KB = 14;
 const CI_SLACK = 1.1;
 
 function budgetKbFor(pathname) {
-  return pathname.startsWith('/e/spring-open/enter')
-    ? ENTRY_BUDGET_KB
-    : PUBLIC_BUDGET_KB;
+  if (pathname.startsWith('/e/spring-open/enter')) return ENTRY_BUDGET_KB;
+  if (pathname.startsWith(`/e/${PLAYED_SLUG}`)) return RESULTS_BUDGET_KB;
+  return PUBLIC_BUDGET_KB;
 }
 
 let cssNote = '';
@@ -278,7 +513,7 @@ for (const { pathname, htmlGzipBytes, criticalJsBytes, scriptCount } of measured
       ` = ${totalKb.toFixed(1)} KB  ${verdict} (budget ${budgetKb} KB +10%)`,
   );
 }
-console.log(`Budgets:               public ${PUBLIC_BUDGET_KB} KB; entry ${ENTRY_BUDGET_KB} KB (+10% CI slack)${cssNote}`);
+console.log(`Budgets:               public ${PUBLIC_BUDGET_KB} KB; entry ${ENTRY_BUDGET_KB} KB; results ${RESULTS_BUDGET_KB} KB (+10% CI slack)${cssNote}`);
 
 if (!failed) {
   console.log('PASS');

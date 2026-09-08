@@ -108,12 +108,34 @@ panel names for the ONE Draws surface, the loader redirects them onto
 `?tab=draws`, and the book captures them as
 `Tournament · Compatibility · …` sheets counted apart from the product.
 
+The retired draw views (`?view=round`, `?view=path`) join them: public P4
+made ONE bracket the draw at every width, both queries resolve onto it, and
+the book captures them as `Draw · Compatibility · …`.
+
+The book therefore counts four kinds of sheet, and only the first is the
+product (`routeCoverage` in `tools/surface-capture.mjs`):
+
+| Count | Means |
+| --- | --- |
+| `canonicalDestinations` | unique product surfaces — distinct paths, ignoring query and fragment |
+| `stateSheets` | product sheets, including a surface captured in more than one state |
+| `enhancedStateSheets` | a progressive-enhancement state of a surface already counted (`Results draw · Highlighted player path`) |
+| `expectedErrorSheets` | a refusal the product is SUPPOSED to give — an unknown token, a withheld person, an unknown person key — captured under `Expected refusal · …` so a reader can tell it from a broken page |
+| `compatibilitySheets` | a retired URL proving it still lands somewhere honest |
+
+`RESULTS_SLUG` names a second public tournament whose results are published.
+`SLUG` is the entry-taking one the account and entry-form sheets need, and on
+that tournament every draw is unplayed — so without the second slug no sheet
+in the book carries a score, a resolved later round or a champion. The
+content surfaces are captured against both under `Results tournament · …`
+and `Results draw · …`.
+
 | Surface | Route | Main components |
 | --- | --- | --- |
 | Tournament — overview | `/e/SLUG` | `HeroHeader`, `TabBar` (`SegmentedNav`), `SectionCard` (About, Key dates, Venue, Documents) + `SectionRow`/`SectionProse` |
 | Tournament — draws / players | `/e/SLUG?tab=draws`, `?tab=players` (ADR 0028; these are the only public tournament index tabs) | `TabBar`, `EventRow` (one row-wide link: name · entrants · progress · Open), `PlayersList`, `EntrantsList`, `PersonRef`/`PersonGroup`, `StatusChip` |
 | Schedule and live | `/e/SLUG/schedule` | `HeroHeader`, `SegmentedNav` (days, by time / by court), `MatchCard`, filter card (`FIELD_INPUT` controls) |
-| Draws (full / round / path / list) | `/e/SLUG/draws/KEY` | `SegmentedNav` (view, segments), bracket grid (`.bracket-link-slot` CSS in `apps/entrant/app/app.css`), `MatchCard`, `PersonRef` |
+| Draws (one bracket; `?view=list`, `?player=ID`) | `/e/SLUG/draws/KEY` | scroll region `[data-bracket-scroll]` + sticky round headers (`.bracket-scroll`, `.bracket-round-header`, `.bracket-slot` in `apps/entrant/app/app.css`), `MatchCard`, `PersonRef`, `public/assets/bracket-path.js` |
 | Regulations | `/e/SLUG/regulations` | document heading + version line, `Print`/`Download`, section outline, parsed prose/lists, `public/assets/regulations-print.css` (print) |
 | Entry wizard | `/e/SLUG/enter` | `TextField`, `Notice`, `Button` + `BUTTON_SECONDARY`, `StickyTotalBar`, `CARD`, `CHIP`, `StatusChip` |
 | Account (login / signup / verify / reset / partner) | `/e/login`, `/e/signup`, `/e/verify`, `/e/reset`, `/e/partner/:token` | `TextField`, `Notice`, `Button`, `CARD`, `MessagePage` |

@@ -93,22 +93,26 @@ describe('console workspace nav labels are sentence case', () => {
   });
 });
 
-describe('entrant TabBar labels are sentence case', () => {
-  it('TAB_LABELS are sentence case', async () => {
-    // TAB_LABELS is module-private; assert on the rendered contract instead —
-    // read the source constant the same way emDashContract.test.ts reads
-    // source, since importing a React Router route component here would
-    // pull in server-only deps this contract file must not depend on.
+describe('entrant tournament-frame section labels are sentence case', () => {
+  it('SECTION_LABELS are sentence case', async () => {
+    // The labels are module-private; assert on the source constant the same
+    // way emDashContract.test.ts reads source, since importing a React Router
+    // route module here would pull in server-only deps this contract file
+    // must not depend on. Public P1 moved the tab bar's labels out of
+    // TabBar.tsx — which now receives an already-built bar — and into
+    // `lib/tournamentFrame.ts`, the single authority for section URLs and
+    // labels; this contract follows them there.
     const { readFileSync } = await import('node:fs');
     const { fileURLToPath } = await import('node:url');
     const path = await import('node:path');
     const here = path.dirname(fileURLToPath(import.meta.url));
     const repo = path.resolve(here, '../../../../../..');
     const src = readFileSync(
-      path.join(repo, 'apps/entrant/app/components/TabBar.tsx'),
+      path.join(repo, 'apps/entrant/app/lib/tournamentFrame.ts'),
       'utf8',
     );
-    const labelMatches = [...src.matchAll(/:\s*"([^"]+)",?\s*$/gm)]
+    const block = /SECTION_LABELS[^{]*\{([^}]*)\}/.exec(src)?.[1] ?? '';
+    const labelMatches = [...block.matchAll(/:\s*['"]([^'"]+)['"]/g)]
       .map((m) => m[1])
       .filter((v) => /^[A-Z]/.test(v));
     expect(labelMatches.length).toBeGreaterThan(0);

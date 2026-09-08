@@ -12,6 +12,33 @@ VIEWER_EMAIL = "console-viewer@example.test"
 VIEWER_PASSWORD = "FixtureOnly!2026-aZ"
 
 
+LIVE_COURT_COUNT = 6
+
+
+def _assert_one_live_match_per_court(probe: SimClient, slug: str) -> None:
+    """Every live match publishes a court, and no two share one."""
+    live: list[dict] = []
+    page = 1
+    while True:
+        payload = probe.request(
+            "GET", f"/e/api/page/{slug}/matches?page={page}", expect=(200,)
+        ).json()
+        items = payload.get("items") or []
+        live.extend(item for item in items if item.get("status") == "live")
+        if page * int(payload.get("pageSize") or 25) >= int(payload.get("total") or 0):
+            break
+        page += 1
+    if len(live) != LIVE_COURT_COUNT:
+        raise SystemExit(
+            f"expected {LIVE_COURT_COUNT} live matches, one per court, got {len(live)}"
+        )
+    courts = [item.get("court") for item in live]
+    if any(court is None for court in courts):
+        raise SystemExit("a live match published no court")
+    if len(set(courts)) != len(courts):
+        raise SystemExit(f"two live matches share a court: {sorted(courts)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
@@ -127,6 +154,17 @@ def main() -> int:
             probe.request(
                 "GET", f"/e/api/page/{slug}/players/{key}", expect=(expected,)
             )
+
+        # The live floor, checked where a reader meets it. The seed pins one
+        # match per court on the six-court Taipei floor
+        # (``simulator/tournament_sim/seed.py::_demo_plan``), and the public
+        # schedule shows a court only for a CURRENTLY LIVE claim — so if two
+        # live matches ever land on one court, or a live match publishes no
+        # court at all, the clean fixture is quietly showing the disputed-court
+        # state that belongs exclusively to ``FIXTURE_MODE=failure``. Asserted
+        # against the public projection rather than a table, because that is
+        # the surface the finding is about.
+        _assert_one_live_match_per_court(probe, entries["T029"]["slug"])
     finally:
         probe.close()
 

@@ -8,7 +8,8 @@ The delivery model is SSR-first rather than hydrated SPA: `root.tsx` deliberatel
 scripts. Documents contain the complete public experience and native forms remain the write path.
 Small same-origin route modules are limited to browser-dependent enhancements: `entry-wizard.js`,
 `my-entries.js`, `receipt.js`, `regulations.js`, `entrants-filter.js`, and `bracket-path.js`.
-Poster/discovery pages stay within a blocking 4 KB script budget; the persistent entry journey has
+Poster/discovery pages stay within a blocking 4 KB script budget; the published-results documents
+(Players, a full draw, the schedule) have a blocking 14 KB budget; the persistent entry journey has
 an 8 KB budget. See the [entrant architecture](../../docs/explanation/architecture/entrant-tier.md)
 for the public data contract and publication gates.
 

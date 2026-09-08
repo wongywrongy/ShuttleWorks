@@ -20,7 +20,7 @@ apps/                          the deployable surfaces
 │   └── FRONTEND.md            shell + tabs, the store split, theme system
 ├── entrant/                   PUBLIC tier — React Router 7 SSR + bounded route modules (/e/*)
 │   ├── app/                   routes/ (explicit route table), components/, lib/
-│   ├── scripts/               measure-page-weight.mjs (blocking 4 KB public / 8 KB entry gates)
+│   ├── scripts/               measure-page-weight.mjs (blocking 4 KB public / 8 KB entry / 14 KB results gates)
 │   └── tests/                 vitest, incl. source-scan contracts (no truncation, no em dash, no client fee rules)
 └── api/                       FastAPI + persistence + command log
     ├── alembic/               SQLite + Postgres schema migrations

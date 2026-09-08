@@ -674,6 +674,99 @@ describe("the elimination draw page", () => {
     expect(html).toMatch(/font-semibold underline decoration-2/);
     expect(html).toContain('Find a player or pair');
   });
+
+  // public-visual-fixes P8: the two draw sizes the product actually ships at
+  // scale. The fixture above is a 4 draw, so before this nothing rendered a
+  // full R16 or R32 tree through the route — the round labels, the column
+  // count and the node count all adapt to `size`, and adapting wrongly at 32
+  // is invisible in a two-round fixture.
+  function sizedDraw(size: number) {
+    const labels = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Final"];
+    const shortNames = ["R32", "R16", "QF", "SF", "F"];
+    const roundCount = Math.log2(size);
+    const first = labels.length - roundCount;
+    const rounds = [];
+    for (let round = 0; round < roundCount; round++) {
+      const width = size / 2 ** (round + 1);
+      const short = shortNames[first + round];
+      rounds.push({
+        label: labels[first + round],
+        matches: Array.from({ length: width }, (_, slot) => ({
+          nodeKey: `${short}-${slot + 1}`,
+          position: slot + 1,
+          reference: `MS ${short}${width > 4 ? "\u00b7" : ""}${slot + 1}`,
+          shortReference: `${short}${width > 4 ? "\u00b7" : ""}${slot + 1}`,
+          sides: [0, 1].map((side) => ({
+            participantKey: round === 0 ? `p${slot * 2 + side + 1}` : null,
+            placeholder: null,
+            bye: false,
+            feederNodeKey: round === 0 ? null : `${shortNames[first + round - 1]}-${slot * 2 + side + 1}`,
+            feederTake: round === 0 ? null : "winner",
+            unresolved:
+              round === 0
+                ? null
+                : {
+                    kind: "winner_of",
+                    reference: `${shortNames[first + round - 1]}${
+                      size / 2 ** round > 4 ? "\u00b7" : ""
+                    }${slot * 2 + side + 1}`,
+                  },
+          })),
+          result: null,
+          scheduledTime: null,
+          court: null,
+          playedOn: null,
+          localTime: null,
+          courtLabel: null,
+          sourceUrl: null,
+          sourceRef: null,
+        })),
+      });
+    }
+    return {
+      ...SE_DRAW,
+      size,
+      matchCoverage: { imported: size - 1, expected: size - 1, missing: 0 },
+      teams: Array.from({ length: size }, (_, index) => ({
+        participantKey: `p${index + 1}`,
+        persons: [
+          ref(
+            null,
+            // A long, real-shaped name in every slot: the column width is set
+            // by its longest row, and a short-name fixture measures a tree
+            // nobody has.
+            `Muhammad Reza Pahlevi Isfahani ${index + 1}`,
+          ),
+        ],
+        club: "Northgate Badminton Club",
+        seed: index < 8 ? index + 1 : null,
+      })),
+      segments: [{ id: "MAIN", label: "Draw", rounds }],
+    };
+  }
+
+  it.each([
+    [16, ["Round of 16", "Quarterfinals", "Semifinals", "Final"], 15],
+    [32, ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Final"], 31],
+  ])("renders every round of a %i draw, once", async (size, labels, nodes) => {
+    stubApi({ "/draws/MS": sizedDraw(size) });
+    const html = await render("/e/spring-open/draws/MS");
+
+    for (const label of labels) expect(html).toContain(label);
+    // One column per round, one node per match, and the whole tree once —
+    // not the two CSS-toggled copies P4 removed.
+    const columns = [...html.matchAll(/<section id="draw-round-/g)].length;
+    expect(columns).toBe(labels.length);
+    expect((html.match(/<article/g) ?? []).length).toBe(nodes);
+    // Long names are carried whole; nothing is truncated to make a column fit.
+    expect(html).toContain("Muhammad Reza Pahlevi Isfahani 1");
+    expect(html).not.toContain("text-ellipsis");
+    // Every unreached slot names the node it waits on, in the shared grammar.
+    expect(html).toContain("data-feeder-slot");
+    expect(html).not.toContain("Winner of");
+    expect(html).not.toContain("Match 1");
+  });
+
 });
 
 describe("the round-robin draw page", () => {
