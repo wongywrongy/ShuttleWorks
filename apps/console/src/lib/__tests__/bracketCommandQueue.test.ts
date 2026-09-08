@@ -195,3 +195,37 @@ describe('flush return value', () => {
     expect(outcomes[1].result.kind).toBe('staleVersion');
   });
 });
+
+describe('offline edit converges after reconnect (P7)', () => {
+  // The disconnected operator may temporarily differ from the public tier;
+  // after sync the shared published fields must agree. That rests on two
+  // properties of this queue: the retry carries the SAME idempotency id the
+  // first attempt did (the backend's `/bracket/commands` replay check keys
+  // on it — `tests/backend/test_bracket_commands_seam_c.py`
+  // `test_seam_c_is_idempotent_on_command_id`), and an applied command is
+  // never sent again, so a reconnect converges on exactly one recorded
+  // result rather than a second one.
+  it('replays the same command id once, then sends nothing further', async () => {
+    await enqueue(baseCommand({ id: 'offline-1' }));
+    const sent: string[] = [];
+    const offline: BracketSubmitFn = async (cmd) => {
+      sent.push(cmd.id);
+      return { kind: 'networkError', message: 'offline' };
+    };
+    await flush(offline);
+    await flush(offline);
+    expect(sent).toEqual(['offline-1', 'offline-1']);
+
+    const online: BracketSubmitFn = async (cmd) => {
+      sent.push(cmd.id);
+      return { kind: 'ok', dto: fakeDto };
+    };
+    await flush(online);
+    expect(sent).toEqual(['offline-1', 'offline-1', 'offline-1']);
+    expect((await getById('offline-1'))!.status).toBe('applied');
+
+    await flush(online);
+    expect(sent).toHaveLength(3);
+    expect(await getPending()).toHaveLength(0);
+  });
+});

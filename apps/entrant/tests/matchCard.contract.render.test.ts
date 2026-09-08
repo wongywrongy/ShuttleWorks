@@ -256,3 +256,43 @@ describe('match-card contract — labels come from the discriminant (§2.1/§6.1
     expect(html).not.toMatch(/>TBD</);
   });
 });
+
+describe('operator/public parity — the approved schedule wins (P7)', () => {
+  // The imported source record (`localTime` / `courtLabel`) says where a
+  // match was ORIGINALLY played. Once Operations approves a slot and a
+  // court, those are the published schedule, and the public card must state
+  // them: preferring the source record published "Court 8 / 10:00" on the
+  // draw while the operator console and the public schedule both said
+  // "Court 1 / 13:00" for the same live match.
+  const rescheduled = {
+    ...MC.liveWithLead,
+    scheduledTime: '13:00',
+    court: 1,
+    localTime: '10:00',
+    courtLabel: 'Court 8',
+  };
+
+  it('states the approved court, not the source record\'s court label', () => {
+    const html = renderCard(rescheduled);
+    expect(html).toContain('Court 1');
+    expect(html).not.toContain('Court 8');
+  });
+
+  it('states the approved slot time, not the source record\'s clock', () => {
+    const html = renderCard(rescheduled);
+    expect(html).toContain('13:00');
+    expect(html).not.toContain('10:00');
+  });
+
+  it('still falls back to the source record when nothing is approved', () => {
+    const html = renderCard({
+      ...MC.completedLoserWonAGame,
+      scheduledTime: null,
+      court: null,
+      localTime: '10:00',
+      courtLabel: 'Court 8',
+    });
+    expect(html).toContain('Court 8');
+    expect(html).toContain('10:00');
+  });
+});

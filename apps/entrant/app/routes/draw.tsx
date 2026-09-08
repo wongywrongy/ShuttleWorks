@@ -203,7 +203,12 @@ function nodeToMatch(
     // D12: never the raw ISO date in prose — the same human date label the
     // schedule route already uses for its cards (`scheduleDateLabel`, now
     // itself redirected to the entrant time authority).
-    playedOn: node.playedOn ? formatCalendarDay(node.playedOn) : null,
+    // P7: the APPROVED day when there is one — `playedOn` is the source
+    // record's date, so a live or rescheduled match read a day the desk does
+    // not agree with. The card gains no date it did not already have.
+    playedOn: node.playedOn
+      ? formatCalendarDay(node.scheduledDate ?? node.playedOn)
+      : null,
     localTime: node.localTime,
     courtLabel: node.courtLabel,
     sourceUrl: node.sourceUrl,

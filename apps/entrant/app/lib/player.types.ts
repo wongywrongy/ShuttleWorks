@@ -48,6 +48,8 @@ export interface PlayerMatchDTO {
   decided: boolean;
   /** Venue-local HH:MM; null until scheduled. */
   scheduledTime: string | null;
+  /** The approved slot's venue-local calendar day (P7); null until scheduled. */
+  scheduledDate?: string | null;
   court: number | null;
   courtLabel?: string | null;
   playedOn?: string | null;

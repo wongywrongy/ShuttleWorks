@@ -147,7 +147,13 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
   // one — including in "By time" mode, where omitting it was not quieter,
   // it was wrong. A court that is absent, withheld or disputed renders
   // nothing at all rather than a placeholder line (§3.2).
-  const court = match.courtLabel ?? (match.court !== null && match.court !== undefined ? `Court ${match.court}` : null);
+  // P7 (operator/public parity): the APPROVED court wins. `courtLabel` is the
+  // imported source record's court — provenance, not the published schedule —
+  // and preferring it published a stale court for every live match, so the
+  // draw said "Court 8" while the desk, the operator console and the public
+  // schedule all said "Court 1". It survives only as the fallback for a
+  // historical record that has no operational court at all.
+  const court = match.court !== null && match.court !== undefined ? `Court ${match.court}` : (match.courtLabel ?? null);
   // Contract §3.2: a missing value is OMITTED, never a placeholder apology.
   // A missing time reads as the one honest schedule-state word instead of
   // a blank line; a missing court line disappears entirely.
@@ -159,7 +165,9 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
     // so the card says which clock it is — `Scheduled 10:30` — through the
     // tier's one formatter, and falls back to the honest schedule-state
     // word when there is no approved time at all.
-    labelledClock('scheduled', match.localTime ?? match.scheduledTime) ??
+    // P7: same rule as the court above — the approved slot time is the
+    // schedule; `localTime` is the source record's clock and is the fallback.
+    labelledClock('scheduled', match.scheduledTime ?? match.localTime) ??
       schedulePublicStateLabel(schedulePublicState(match)),
     court,
     match.durationMinutes ? `${match.durationMinutes} min` : null,

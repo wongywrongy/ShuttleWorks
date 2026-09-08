@@ -116,8 +116,11 @@ export const meta: Route.MetaFunction = ({ data }) => {
  * match read two ways on two pages. One authority, both routes.
  */
 function playerMatchCard(match: PlayerMatchDTO) {
+  // P7: prefer the APPROVED slot day over the source record's date — the same
+  // rule `draw.tsx` applies, so a live match does not read as last Wednesday
+  // on the profile while the schedule and the operator agree it is today.
   return match.playedOn
-    ? { ...match, playedOn: formatCalendarDay(match.playedOn) }
+    ? { ...match, playedOn: formatCalendarDay(match.scheduledDate ?? match.playedOn) }
     : match;
 }
 

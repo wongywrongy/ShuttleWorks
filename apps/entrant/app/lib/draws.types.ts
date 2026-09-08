@@ -124,6 +124,8 @@ export interface MatchNodeDTO {
   sides: SideDTO[];
   result: NodeResultDTO | null;
   scheduledTime: string | null;
+  /** The approved slot's venue-local calendar day (P7); null until scheduled. */
+  scheduledDate?: string | null;
   court: number | null;
   playedOn: string | null;
   localTime: string | null;

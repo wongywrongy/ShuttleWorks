@@ -468,6 +468,106 @@ def test_historical_draw_uses_advertised_size_and_source_round_labels(client):
     }
 
 
+def test_draw_node_publishes_the_approved_day_beside_the_source_record(client):
+    """P7 — operator/public parity for a rescheduled imported match.
+
+    ``playedOn`` / ``localTime`` / ``courtLabel`` are the IMPORTED SOURCE
+    record: where and when the match was originally played. Once Operations
+    approves a slot and a court, those are the published schedule, and the
+    projection must state them — the source record stays on the wire as
+    provenance beside them, never instead of them. Before this, the draw node
+    carried an approved ``scheduledTime``/``court`` but no approved DAY at
+    all, so the only date a draw card could show was the source record's, and
+    a live match read as last October while the operator console and the
+    public schedule agreed it was today.
+    """
+    tid = _make_workspace(
+        client, slug="parity-open", draws_published=True, results_published=True
+    )
+    payload = {
+        "courts": 2,
+        "total_slots": 64,
+        "interval_minutes": 30,
+        "start_time": "2026-09-12T09:00:00",
+        "events": [
+            {
+                "id": "MS",
+                "discipline": "MS",
+                "format": "se",
+                "participants": [
+                    {"id": "P1", "name": "Player 1"},
+                    {"id": "P2", "name": "Player 2"},
+                    {"id": "P3", "name": "Player 3"},
+                    {"id": "P4", "name": "Player 4"},
+                ],
+                "rounds": [
+                    [
+                        {
+                            "id": "SF-1",
+                            "side_a": ["P1"],
+                            "side_b": ["P2"],
+                            "played_on": "2025-10-19",
+                            "local_time": "10:00",
+                            "court_label": "Court 1",
+                        },
+                        {"id": "SF-2", "side_a": ["P3"], "side_b": ["P4"]},
+                    ],
+                    [
+                        {
+                            "id": "F-1",
+                            "feeder_a": "SF-1",
+                            "feeder_b": "SF-2",
+                        }
+                    ],
+                ],
+            }
+        ],
+    }
+    imported = client.post(
+        f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF
+    )
+    assert imported.status_code == 200, imported.text
+
+    # The desk approves a different court on a LATER DAY: slot 51 is
+    # 09:00 + 51 × 30min = 25.5h after the 2026-09-12 start, i.e. 10:30 on
+    # the 13th.
+    assigned = client.post(
+        f"/tournaments/{tid}/bracket/assign",
+        json={"play_unit_id": "SF-1", "court_id": 2, "slot_id": 51},
+        headers=CSRF,
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    detail = client.get("/e/api/page/parity-open/draws/MS").json()
+    node = next(
+        match
+        for round_ in detail["segments"][0]["rounds"]
+        for match in round_["matches"]
+        if match["nodeKey"] == "SF-1"
+    )
+    # The approved schedule — day included.
+    assert node["scheduledDate"] == "2026-09-13"
+    assert node["scheduledTime"] == "10:30"
+    assert node["court"] == 2
+    # The source record survives beside it, unchanged and clearly different.
+    assert node["playedOn"] == "2025-10-19"
+    assert node["localTime"] == "10:00"
+    assert node["courtLabel"] == "Court 1"
+
+    # And the two public surfaces state ONE schedule: the schedule
+    # projection's row for the same match agrees with the draw node.
+    row = next(
+        item
+        for item in client.get("/e/api/page/parity-open/matches").json()["items"]
+        if item["matchKey"].endswith("SF-1")
+    )
+    assert (row["scheduledDate"], row["scheduledTime"], row["court"]) == (
+        node["scheduledDate"],
+        node["scheduledTime"],
+        node["court"],
+    )
+
+
 def test_draw_players_are_published_draw_roster_people_with_profiles(client):
     tid = _make_workspace(client, slug="roster-open", draws_published=True)
     _set_bracket_players(

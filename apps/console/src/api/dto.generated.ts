@@ -6122,6 +6122,8 @@ export interface components {
             result?: components["schemas"]["NodeResultDTO"] | null;
             /** Scheduledtime */
             scheduledTime?: string | null;
+            /** Scheduleddate */
+            scheduledDate?: string | null;
             /** Court */
             court?: number | null;
             /** Playedon */
@@ -6872,6 +6874,8 @@ export interface components {
             decided: boolean;
             /** Scheduledtime */
             scheduledTime?: string | null;
+            /** Scheduleddate */
+            scheduledDate?: string | null;
             /** Court */
             court?: number | null;
             /** Playedon */

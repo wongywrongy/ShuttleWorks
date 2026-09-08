@@ -768,6 +768,14 @@ class MatchNodeDTO(BaseModel):
     result: Optional[NodeResultDTO] = None
     # Venue-local naive strings; None until scheduled.
     scheduledTime: Optional[str] = None
+    # The approved slot's venue-local CALENDAR DAY — the twin of
+    # ``scheduledTime`` and the same value the schedule projection publishes
+    # for this match (P7). ``playedOn`` below is the imported SOURCE record's
+    # date, which is provenance, not the published schedule: a rescheduled or
+    # live match keeps its source date while the approved slot moves, and a
+    # card that shows the source date states a day the desk does not agree
+    # with. ``None`` when the unit has no assignment.
+    scheduledDate: Optional[str] = None
     court: Optional[int] = None
     playedOn: Optional[str] = None
     localTime: Optional[str] = None
@@ -884,6 +892,10 @@ class PlayerMatchDTO(BaseModel):
     score: Optional[List[List[int]]] = None
     decided: bool = False
     scheduledTime: Optional[str] = None
+    # The approved slot's venue-local calendar day (P7) — see the identical
+    # field on ``MatchNodeDTO``. ``playedOn`` is the source record's date and
+    # must not be presented as the published schedule when this differs.
+    scheduledDate: Optional[str] = None
     court: Optional[int] = None
     playedOn: Optional[str] = None
     localTime: Optional[str] = None
@@ -1713,6 +1725,11 @@ def draw_detail(
                         ),
                         scheduledTime=_slot_time(
                             payload, assignment.slot_id if assignment else None
+                        ),
+                        scheduledDate=(
+                            _slot_date(payload, assignment.slot_id, None)
+                            if assignment is not None
+                            else None
                         ),
                         court=operational_courts.get(unit.id),
                         playedOn=unit.played_on,
@@ -2880,6 +2897,11 @@ def player_page(
                                 scheduledTime=_slot_time(
                                     payload,
                                     assignment.slot_id if assignment else None,
+                                ),
+                                scheduledDate=(
+                                    _slot_date(payload, assignment.slot_id, None)
+                                    if assignment is not None
+                                    else None
                                 ),
                                 court=operational_courts.get(unit_id),
                                 playedOn=unit.played_on,
