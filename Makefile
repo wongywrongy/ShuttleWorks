@@ -3,7 +3,8 @@
         demo-up demo-update demo-rebuild demo-status demo-down demo-reset \
         demo-backup demo-backup-verify demo-restore-drill demo-restore demo-backup-install \
         demo-seed-preview demo-seed-apply demo-seed-resume demo-seed-status demo-seed-reset \
-        demo-seed-repair-names \
+        demo-seed-repair-names demo-seed-repair-names-locked demo-seed-apply-outcomes \
+        demo-seed-person-map demo-seed-backfill-person-ids demo-seed-drop-stray-match \
         surface-books surface-books-status surface-books-serve surface-books-url \
         entrant-dev full-dev local-dev \
         dev-postgres dev-postgres-stop phase4-observability-rehearsal \
@@ -38,6 +39,18 @@ DEMO_SEED_LOCKED := flock -w 300 "$(shell $(DEMO_COMPOSE) state-dir)/.lifecycle.
 DEMO_MATCH_DATA ?=
 DEMO_JAPAN_RESULTS ?=
 DEMO_CHINA_RESULTS ?=
+# The seed manifest as the API CONTAINER sees it. $(DEMO_SEED_RUN_DIR) is the
+# host side of the same bind mount (DEMO_STATE_DIR/data -> /app/data), so these
+# two paths are one file.
+DEMO_SEED_MANIFEST_IN_API := /app/data/import-runs/$(DEMO_SEED_KEY).json
+DEMO_SEED_PERSON_MAP := $(DEMO_SEED_RUN_DIR)/$(DEMO_SEED_KEY).person-map.json
+DEMO_SEED_PERSON_MAP_IN_API := /app/data/import-runs/$(DEMO_SEED_KEY).person-map.json
+# P7's probe left one Operations matches row behind that no API path can
+# remove (debt-log OPR-0908-8). Pinned by id so the target cannot drop
+# anything else.
+DEMO_STRAY_MATCH_ID ?= T029-MD-R16-da44fceb5e81618542a38708ce78e16e6b71cabf688f6e996594cd773b9ffd63
+DEMO_SEED_REPAIR := flock -w 300 "$(shell $(DEMO_COMPOSE) state-dir)/.lifecycle.lock" \
+	$(DEMO_COMPOSE) seed-repair --manifest $(DEMO_SEED_MANIFEST_IN_API)
 DEMO_SEED_SOURCE_ARGS = $(if $(DEMO_MATCH_DATA),--match-data $(DEMO_MATCH_DATA)) \
 	$(if $(DEMO_JAPAN_RESULTS),--daily-results T027=$(DEMO_JAPAN_RESULTS)) \
 	$(if $(DEMO_CHINA_RESULTS),--daily-results T028=$(DEMO_CHINA_RESULTS)) \
@@ -74,6 +87,10 @@ help:
 	@echo "  make demo-seed-resume   Resume an interrupted fixture import"
 	@echo "  make demo-seed-reset    Delete only workspaces owned by this seed run"
 	@echo "  make demo-seed-repair-names  Re-apply canonical tournament names to this seed run"
+	@echo "  make demo-seed-repair-names-locked  Repair the frozen Setup copy of the title (in-container)"
+	@echo "  make demo-seed-apply-outcomes      Apply the synthetic walkover/retired/forfeit fixtures"
+	@echo "  make demo-seed-drop-stray-match    Delete one stray Operations matches row by id"
+	@echo "  make demo-seed-backfill-person-ids Write personId onto pre-P6 roster rows"
 	@echo "  make surface-books      Capture numbered operator + entrant UI review PDFs"
 	@echo "  make surface-books-status Summarize the latest capture manifests or active run"
 	@echo "  make surface-books-serve  Serve generated books from SURFACE_REPORT_DIR over Tailscale"
@@ -197,6 +214,31 @@ demo-seed-status:
 demo-seed-repair-names:
 	@$(DEMO_SEED_LOCKED) repair-names --seed-key $(DEMO_SEED_KEY) \
 		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
+
+# The Setup document's copy of the title cannot be repaired over HTTP once a
+# workspace has checked out (409 CONFIG_LOCKED), so this one runs inside the
+# API container against the database directly. Manifest-scoped and idempotent.
+demo-seed-repair-names-locked:
+	@$(DEMO_SEED_REPAIR) --include-locked
+
+# Synthetic walkover / retirement / forfeit fixtures, applied through the
+# product's own idempotent bracket command path. Safe to run twice.
+demo-seed-apply-outcomes:
+	@$(DEMO_SEED_LOCKED) apply-outcomes --seed-key $(DEMO_SEED_KEY) \
+		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
+
+demo-seed-drop-stray-match:
+	@$(DEMO_SEED_REPAIR) --drop-match $(DEMO_STRAY_MATCH_ID)
+
+# Two steps: the simulator emits the dataset's reviewed player table beside the
+# manifest (same bind mount), then the in-container tool writes personId onto
+# roster rows that predate the seed writing it.
+demo-seed-person-map:
+	@$(DEMO_SEED) person-map $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) \
+		$(DEMO_SEED_SOURCE_ARGS) --seed-key $(DEMO_SEED_KEY) --out $(DEMO_SEED_PERSON_MAP)
+
+demo-seed-backfill-person-ids: demo-seed-person-map
+	@$(DEMO_SEED_REPAIR) --backfill-person-ids $(DEMO_SEED_PERSON_MAP_IN_API)
 
 demo-seed-reset: demo-backup
 	@$(DEMO_SEED_LOCKED) reset --seed-key $(DEMO_SEED_KEY) --confirm $(DEMO_SEED_KEY) \

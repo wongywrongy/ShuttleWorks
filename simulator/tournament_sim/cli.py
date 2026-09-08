@@ -8,6 +8,8 @@ Examples:
     python -m tournament_sim seed preview data/bwf-finals.txt
     python -m tournament_sim seed apply data/bwf-finals.txt --seed-key bwf-recent
     python -m tournament_sim seed repair-names --seed-key bwf-recent
+    python -m tournament_sim seed apply-outcomes --seed-key bwf-recent
+    python -m tournament_sim seed person-map data/bwf-finals.txt --seed-key bwf-recent --out map.json
 """
 
 from __future__ import annotations
@@ -71,9 +73,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
     seed = sub.add_parser("seed", help="inspect or apply a source dataset")
     seed_sub = seed.add_subparsers(dest="seed_cmd", required=True)
-    for command in ("preview", "apply", "status", "reset", "resume", "repair-names"):
+    for command in (
+        "preview",
+        "apply",
+        "status",
+        "reset",
+        "resume",
+        "repair-names",
+        "apply-outcomes",
+        "person-map",
+    ):
         command_parser = seed_sub.add_parser(command)
-        if command in {"preview", "apply", "resume"}:
+        if command in {"preview", "apply", "resume", "person-map"}:
             command_parser.add_argument("path", help="UTF-8 pipe-delimited source file")
             command_parser.add_argument(
                 "--notes",
@@ -102,16 +113,30 @@ def _build_parser() -> argparse.ArgumentParser:
                 metavar="TID",
                 help="seed only this validated tournament; repeat for multiple ids",
             )
-        if command in {"apply", "resume", "status", "reset", "repair-names"}:
+        if command in {
+            "apply",
+            "resume",
+            "status",
+            "reset",
+            "repair-names",
+            "apply-outcomes",
+            "person-map",
+        }:
             command_parser.add_argument("--seed-key", required=True)
         if command in {"apply", "resume"}:
             command_parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
             command_parser.add_argument("--run-dir", default=".local-testing/demo/data/import-runs")
             command_parser.add_argument("--replace", action="store_true")
-        if command in {"status", "reset", "repair-names"}:
+        if command in {"status", "reset", "repair-names", "apply-outcomes"}:
             command_parser.add_argument("--run-dir", default=".local-testing/demo/data/import-runs")
-        if command == "repair-names":
+        if command in {"repair-names", "apply-outcomes"}:
             command_parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
+        if command == "person-map":
+            command_parser.add_argument(
+                "--out",
+                required=True,
+                help="write the canonical-name -> dataset player id map here",
+            )
         if command == "reset":
             command_parser.add_argument("--confirm", required=True)
             command_parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
@@ -145,8 +170,10 @@ def main(argv: list[str] | None = None) -> int:
         from .seed import (
             attach_historical_sources,
             apply,
+            apply_synthetic_outcomes,
             complete_demo_historical_draws,
             load_file,
+            person_map,
             preview,
             repair_names,
             reset,
@@ -184,6 +211,20 @@ def main(argv: list[str] | None = None) -> int:
             output = status(seed_key=args.seed_key, run_dir=Path(args.run_dir))
         elif args.seed_cmd == "preview":
             output = preview(load_dataset())
+        elif args.seed_cmd == "person-map":
+            output = person_map(load_dataset(), seed_key=args.seed_key)
+            out_path = Path(args.out)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(
+                json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            output = {
+                "seedKey": output["seedKey"],
+                "source": output["source"],
+                "people": len(output["people"]),
+                "out": str(out_path),
+            }
         else:
             from .client import SimClient
 
@@ -191,6 +232,12 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 if args.seed_cmd == "repair-names":
                     output = repair_names(
+                        seed_key=args.seed_key,
+                        client=client,
+                        run_dir=Path(args.run_dir),
+                    )
+                elif args.seed_cmd == "apply-outcomes":
+                    output = apply_synthetic_outcomes(
                         seed_key=args.seed_key,
                         client=client,
                         run_dir=Path(args.run_dir),

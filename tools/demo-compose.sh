@@ -26,6 +26,7 @@ Commands:
   restore-drill [path]  Restore into a throwaway database and compare counts
   restore [path]        Restore the live DB; DEMO_RESTORE_CONFIRM=restore-demo
   install-backup-timer  Install a daily systemd user backup timer
+  seed-repair [args]    Run ops.seed_repair inside the API container
   reset                 Back up and quarantine state; DEMO_RESET_CONFIRM=reset-demo
 EOF
 }
@@ -738,6 +739,13 @@ EOF
       echo "No initialized live Postgres database exists; proceeding after the successful restore drill."
     fi
     restore_live "$target"
+    ;;
+  seed-repair)
+    # The demo Postgres publishes no host port, so a database-level fixture
+    # repair has to run where the database is reachable: inside the API
+    # container, with the API's own models, settings and DATABASE_URL_FILE.
+    # The seed manifest is on the same bind mount the API sees as /app/data.
+    run_compose exec -T backend python -m ops.seed_repair "$@"
     ;;
   install-backup-timer)
     unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"

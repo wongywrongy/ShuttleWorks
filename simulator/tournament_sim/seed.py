@@ -3008,6 +3008,165 @@ def apply(
     return manifest
 
 
+# ---------------------------------------------------------------------------
+# Synthetic, TEST-ONLY match outcomes.
+#
+# The imported BWF fixture is a record of matches that were actually played,
+# so it contains no walkover, no retirement and no bye — the three outcomes an
+# operator surface has to render and the three the surface books had nothing
+# to photograph. These entries add them, on matches the source leaves
+# UNPLAYED, and every one carries ``syntheticOutcome: True`` so nothing
+# downstream can mistake an invented result for a sourced one: the flag rides
+# into the manifest, and the note says in words that the outcome is fixture
+# scaffolding.
+#
+# THE BYE. A structural bye needs a draw slot with no participant. All five
+# Taipei draws are full SE-32s (160 participants, 80 first-round matches, zero
+# empty slots), so there is no bye to reference and creating one would mean
+# regenerating a draw — destructive, and out of bounds for a repair. The third
+# outcome is a FORFEIT instead: the remaining contingency ``reason`` the
+# product supports, and the one that shares the bye's "awarded without play"
+# shape. The auto-walkover-on-BYE path stays covered by the backend unit
+# tests that exercise it directly.
+#
+# Ids are pinned rather than derived: a fixture outcome must land on the same
+# match every time it is applied, on any deployment seeded from this dataset.
+SYNTHETIC_OUTCOMES: tuple[dict[str, Any], ...] = (
+    {
+        "tournamentId": "T029",
+        "kind": "walkover",
+        "reason": "walkover",
+        "playUnitId": (
+            "T029-MS-R32-a358fef8488e68c73f7fe29b0b795dc784bfb6cdd5711c486b9c3cdbc7502944"
+        ),
+        "winnerSide": "A",
+        "score": None,
+        "note": "synthetic: opponent withdrew before play (walkover)",
+    },
+    {
+        "tournamentId": "T029",
+        "kind": "retired",
+        "reason": "retired",
+        "playUnitId": (
+            "T029-WS-R32-df722c0eb5262f38de2e392b2202ef380e5a5176d82123ec622b1910fd40b911"
+        ),
+        "winnerSide": "A",
+        # A retirement keeps the games that WERE played: the product's score
+        # shape carries partial sets, so the second game stops mid-way rather
+        # than being blanked.
+        "score": {"sets": [{"sideA": 21, "sideB": 17}, {"sideA": 11, "sideB": 6}]},
+        "note": "synthetic: retired mid-second game, partial scores retained",
+    },
+    {
+        "tournamentId": "T029",
+        "kind": "forfeit",
+        "reason": "forfeit",
+        "playUnitId": (
+            "T029-MD-R32-2501b37acaf9cd5bf6e064f90f5947ca84e81d1c299cb4b316edbcadf0a13c59"
+        ),
+        "winnerSide": "B",
+        "score": None,
+        "note": "synthetic: forfeited without play (stands in for a bye — the draw has none)",
+    },
+)
+
+
+def apply_synthetic_outcomes(
+    *, seed_key: str, client: SimClient, run_dir: Path = _DEFAULT_RUN_DIR
+) -> dict:
+    """Apply :data:`SYNTHETIC_OUTCOMES` through the product's command path.
+
+    Every write is ``POST /tournaments/{id}/bracket/commands`` with a
+    DETERMINISTIC idempotency key, so the product's own replay machinery makes
+    a second run a no-op even if the local skip check were removed. Scoped to
+    the seed manifest: an outcome whose tournament this run did not create is
+    reported as ``missing`` rather than applied somewhere else.
+    """
+    path = _run_path(run_dir, seed_key)
+    manifest = status(seed_key=seed_key, run_dir=run_dir)
+    applied: list[dict[str, Any]] = []
+    unchanged: list[dict[str, Any]] = []
+    missing: list[str] = []
+    brackets: dict[str, set[str]] = {}
+    for outcome in SYNTHETIC_OUTCOMES:
+        entry = (manifest.get("tournaments") or {}).get(outcome["tournamentId"]) or {}
+        workspace_id = entry.get("workspaceId")
+        if not workspace_id:
+            missing.append(outcome["playUnitId"])
+            continue
+        if workspace_id not in brackets:
+            bracket = client.get_bracket(workspace_id)
+            brackets[workspace_id] = {
+                str(result.get("play_unit_id")) for result in bracket.get("results") or []
+            }
+        record = {
+            "tournamentId": outcome["tournamentId"],
+            "workspaceId": workspace_id,
+            "playUnitId": outcome["playUnitId"],
+            "kind": outcome["kind"],
+            "syntheticOutcome": True,
+            "note": outcome["note"],
+        }
+        if outcome["playUnitId"] in brackets[workspace_id]:
+            unchanged.append(record)
+            continue
+        body: dict[str, Any] = {
+            "id": command_uuid(0, "synthetic-outcome", outcome["playUnitId"], outcome["kind"]),
+            "kind": "record_result",
+            "play_unit_id": outcome["playUnitId"],
+            "winner_side": outcome["winnerSide"],
+            "reason": outcome["reason"],
+        }
+        if outcome["score"] is not None:
+            body["score"] = outcome["score"]
+        client.bracket_command(workspace_id, body)
+        brackets[workspace_id].add(outcome["playUnitId"])
+        applied.append({**record, "commandId": body["id"]})
+    manifest["syntheticOutcomes"] = {
+        "applied": [row["playUnitId"] for row in applied],
+        "unchanged": [row["playUnitId"] for row in unchanged],
+        "missing": missing,
+        "declared": [
+            {
+                "playUnitId": outcome["playUnitId"],
+                "kind": outcome["kind"],
+                "syntheticOutcome": True,
+                "note": outcome["note"],
+            }
+            for outcome in SYNTHETIC_OUTCOMES
+        ],
+    }
+    _write_manifest(path, manifest)
+    return {
+        "seedKey": seed_key,
+        "declared": len(SYNTHETIC_OUTCOMES),
+        "applied": applied,
+        "unchanged": unchanged,
+        "missing": missing,
+    }
+
+
+def person_map(dataset: Dataset, *, seed_key: str) -> dict:
+    """The dataset's reviewed player table, keyed by canonical name.
+
+    The one input ``ops.seed_repair --backfill-person-ids`` needs: rows seeded
+    before the seed wrote ``personId`` correlate across tournaments by NAME,
+    and this is the map that replaces that leg with the dataset's own id
+    (debt-log OPR-0908-9). ``source`` is byte-identical to the value the seed
+    writes as ``personSource``, so a backfilled row is indistinguishable from
+    a freshly seeded one.
+    """
+    return {
+        "seedKey": seed_key,
+        "source": f"{seed_key}:{dataset.source_sha256[:12]}",
+        "sourceSha256": dataset.source_sha256,
+        "scope": "dataset_player_table",
+        "people": {
+            source_name_key(player.name): player.id for player in dataset.players
+        },
+    }
+
+
 def status(*, seed_key: str, run_dir: Path = _DEFAULT_RUN_DIR) -> dict:
     path = _run_path(run_dir, seed_key)
     if not path.exists():

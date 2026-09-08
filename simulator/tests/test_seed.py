@@ -18,8 +18,11 @@ from tournament_sim.seed import (
     _demo_operational_event,
     _demo_plan,
     _write_manifest,
+    SYNTHETIC_OUTCOMES,
     apply,
+    apply_synthetic_outcomes,
     canonical_tournament_name,
+    person_map,
     attach_historical_sources,
     complete_demo_historical_draws,
     parse_notes_text,
@@ -1121,3 +1124,114 @@ def test_repair_names_records_a_frozen_setup_section_instead_of_failing(tmp_path
     again = repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
     assert again["renamed"] == []
     assert again["setupLocked"] == ["T001"]
+
+
+class OutcomeClient:
+    """Just enough bracket surface for :func:`apply_synthetic_outcomes`."""
+
+    def __init__(self, results: list[str] | None = None):
+        self.results = list(results or [])
+        self.commands: list[tuple[str, dict]] = []
+
+    def get_bracket(self, tid):
+        return {"results": [{"play_unit_id": pid} for pid in self.results]}
+
+    def bracket_command(self, tid, body):
+        # The product replays a repeated command id without re-advancing; the
+        # fake mirrors that so a double-apply cannot look like a fresh write.
+        if body["play_unit_id"] not in self.results:
+            self.results.append(body["play_unit_id"])
+        self.commands.append((tid, body))
+        return None
+
+
+def _outcome_manifest(tmp_path: Path) -> None:
+    (tmp_path / "bwf-demo.json").write_text(
+        json.dumps(
+            {
+                "seedKey": "bwf-demo",
+                "seedFormatVersion": 3,
+                "status": "complete",
+                "tournaments": {
+                    "T029": {
+                        "workspaceId": "ws-taipei",
+                        "source": {"name": "Taipei Open", "year": 2026},
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_the_synthetic_outcomes_declare_their_provenance_and_cover_three_kinds():
+    assert {row["kind"] for row in SYNTHETIC_OUTCOMES} == {"walkover", "retired", "forfeit"}
+    assert {row["tournamentId"] for row in SYNTHETIC_OUTCOMES} == {"T029"}
+    # Every declared outcome names a distinct match and says, in the note,
+    # that it is fixture scaffolding rather than a sourced result.
+    assert len({row["playUnitId"] for row in SYNTHETIC_OUTCOMES}) == len(SYNTHETIC_OUTCOMES)
+    assert all(row["note"].startswith("synthetic:") for row in SYNTHETIC_OUTCOMES)
+    # The retirement is the one that keeps the games that were played.
+    retired = next(row for row in SYNTHETIC_OUTCOMES if row["kind"] == "retired")
+    assert len(retired["score"]["sets"]) == 2
+
+
+def test_apply_synthetic_outcomes_writes_once_and_then_reports_no_change(tmp_path: Path):
+    _outcome_manifest(tmp_path)
+    client = OutcomeClient()
+
+    first = apply_synthetic_outcomes(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert len(first["applied"]) == len(SYNTHETIC_OUTCOMES)
+    assert first["unchanged"] == []
+    assert all(row["syntheticOutcome"] is True for row in first["applied"])
+    assert [tid for tid, _ in client.commands] == ["ws-taipei"] * len(SYNTHETIC_OUTCOMES)
+    # Deterministic idempotency keys: the same fixture always carries the same
+    # command id, so a replay is the product's replay and not a second result.
+    ids = [body["id"] for _, body in client.commands]
+
+    second = apply_synthetic_outcomes(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert second["applied"] == []
+    assert len(second["unchanged"]) == len(SYNTHETIC_OUTCOMES)
+    assert len(client.commands) == len(SYNTHETIC_OUTCOMES)
+
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    assert len(manifest["syntheticOutcomes"]["applied"]) == 0
+    assert len(manifest["syntheticOutcomes"]["unchanged"]) == len(SYNTHETIC_OUTCOMES)
+    assert all(row["syntheticOutcome"] for row in manifest["syntheticOutcomes"]["declared"])
+    assert len(set(ids)) == len(ids)
+
+
+def test_apply_synthetic_outcomes_skips_a_tournament_this_run_does_not_own(tmp_path: Path):
+    (tmp_path / "bwf-demo.json").write_text(
+        json.dumps(
+            {
+                "seedKey": "bwf-demo",
+                "seedFormatVersion": 3,
+                "status": "complete",
+                "tournaments": {"T029": {"workspaceId": None, "source": {"name": "Taipei Open"}}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = OutcomeClient()
+
+    output = apply_synthetic_outcomes(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert output["applied"] == []
+    assert len(output["missing"]) == len(SYNTHETIC_OUTCOMES)
+    assert client.commands == []
+
+
+def test_person_map_publishes_the_datasets_own_player_table():
+    dataset = parse_text(SOURCE)
+
+    output = person_map(dataset, seed_key="bwf-demo")
+
+    assert output["source"] == f"bwf-demo:{dataset.source_sha256[:12]}"
+    assert output["scope"] == "dataset_player_table"
+    # Keyed by the canonical name a roster row stores, valued by the dataset's
+    # own reviewed id — never a name heuristic.
+    assert output["people"]["Alice"] == next(p.id for p in dataset.players if p.name == "Alice")
+    assert len(output["people"]) == len(dataset.players)
