@@ -26,6 +26,7 @@ import { PlayersList } from '../components/PlayersList';
 import { SectionCard, SectionProse, SectionRow } from '../components/SectionCard';
 import { TournamentFrame } from '../components/TournamentFrame';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
+import { demoNowMs } from '../lib/demoClock.server';
 import type { DrawCardDTO, DrawsIndexDTO, PlayersDTO } from '../lib/draws.types';
 import { eventCodeLabel } from '../lib/draws.types';
 import type { EntryPageDTO, ReserveRowDTO } from '../lib/entryPage.types';
@@ -104,7 +105,7 @@ export async function loader({
     page,
     tabs,
     active,
-    nowMs: Date.now(),
+    nowMs: demoNowMs(),
   };
   const base = `/e/api/page/${encodeURIComponent(slug)}`;
   if (active === 'players') {

@@ -33,6 +33,7 @@ import { PlayShell } from '../components/PlayShell';
 import { SeasonCalendar } from '../components/SeasonCalendar';
 import { SeasonControls } from '../components/SeasonControls';
 import { apiGet } from '../lib/apiFetch.server';
+import { demoNow } from '../lib/demoClock.server';
 import {
   filtersToParams,
   parseFilters,
@@ -103,7 +104,7 @@ export async function loader({ request }: { request: Request }) {
 
   const filters = parseFilters(url.searchParams);
   const season = await apiGet<SeasonList>('/e/api/pages');
-  const now = new Date();
+  const now = demoNow();
   const model = seasonModel(season.tournaments, filters, now);
   const nowRow =
     season.now === null

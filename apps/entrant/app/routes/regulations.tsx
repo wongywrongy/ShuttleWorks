@@ -20,6 +20,7 @@ import { TournamentFrame } from '../components/TournamentFrame';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { dateOfIso, formatDateLong } from '../lib/format';
+import { demoNowMs } from '../lib/demoClock.server';
 import { ACTION_SECONDARY, SECTION_TITLE } from '../lib/ui';
 import type { Route } from './+types/regulations';
 
@@ -235,7 +236,7 @@ export async function loader({ params }: { params: { slug?: string } }) {
     text: page.page.regulationsText,
     version: page.page.regulationsVersion,
     updatedAt: page.page.regulationsUpdatedAt,
-    nowMs: Date.now(),
+    nowMs: demoNowMs(),
   };
   return payload;
 }
