@@ -11,10 +11,12 @@
  * Not wired into CI: it needs a running stack and is an authoring tool.
  */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, extname } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, join } from "node:path";
+import { tmpdir } from "node:os";
 
 // Playwright is installed in the e2e workspace, not at the repo root, and ESM
 // resolves from THIS file's location — so reach it through that package.
@@ -64,15 +66,17 @@ const RESULTS_SLUG = process.env.RESULTS_SLUG ?? "";
 // declared expected-error sheets, counted apart from product surfaces, so a
 // reviewer can tell a designed refusal from a broken page.
 const WITHHELD_PLAYER_KEY = process.env.WITHHELD_PLAYER_KEY ?? "";
-const MISSING_PLAYER_KEY = process.env.MISSING_PLAYER_KEY ?? "";
 const DRAW_KEY = process.env.DRAW_KEY ?? "MS";
 const DOUBLES_DRAW_KEY = process.env.DOUBLES_DRAW_KEY ?? "MD";
 // V3-24-1: the receipt path segment is an eight-character reference, and the
 // route 404s anything else — a UUID default here would capture a 404 page.
-const SUBMISSION_ID = process.env.SUBMISSION_ID ?? "H4KJ29QW";
+const SUBMISSION_ID = process.env.SUBMISSION_ID ?? "";
 const DISPLAY_TOKEN = process.env.DISPLAY_TOKEN ?? "";
 const INVITE_TOKEN = process.env.INVITE_TOKEN ?? "";
 const PARTNER_TOKEN = process.env.PARTNER_TOKEN ?? "";
+const RESET_TOKEN = process.env.RESET_TOKEN ?? "";
+const ENTRANT_EMAIL = process.env.ENTRANT_EMAIL ?? "";
+const ENTRANT_PASSWORD = process.env.ENTRANT_PASSWORD ?? "";
 const AUTH_ME_URL = process.env.AUTH_ME_URL ?? "";
 const PLAYER_KEY = process.env.PLAYER_KEY ?? "";
 // P0 (operator-visual-fixes.md): a review book must record WHICH dataset it
@@ -97,11 +101,62 @@ const CHECKOUT_SHA = (() => {
     return "unavailable";
   }
 })();
+// The checkout running this script is not necessarily the build served by
+// `base` (the normal book uses a remote demo). Keep those claims separate:
+// REVIEWED_BUILD_SHA is an explicit runtime/build fingerprint supplied by the
+// capture host, while checkoutSha describes this script's local checkout.
+const REVIEWED_BUILD_SHA = process.env.REVIEWED_BUILD_SHA ?? "unprovided";
+const EFFECTIVE_DEMO_INSTANT = process.env.SHUTTLEWORKS_DEMO_NOW ?? "unprovided";
+const REPOSITORY_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const WORKING_TREE_FINGERPRINT = (() => {
+  try {
+    const diff = execFileSync("git", ["diff", "HEAD", "--binary"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "buffer",
+      // A visual-review checkout can contain several source changes; the
+      // default 1 MiB exec buffer made provenance silently become
+      // "unavailable" before the capture even started.
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    const untracked = execFileSync(
+      "git",
+      ["ls-files", "--others", "--exclude-standard", "-z"],
+      {
+        cwd: REPOSITORY_ROOT,
+        encoding: "buffer",
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    );
+    const hash = createHash("sha256");
+    hash.update(diff);
+    for (const file of untracked.toString().split("\0").filter(Boolean)) {
+      // Avoid pulling generated artifacts or large captures into provenance;
+      // source and documentation files are enough to identify a dirty review.
+      if (!/\.(?:[cm]?[jt]sx?|py|md|json|css|html|sh|toml|ya?ml)$/i.test(file)) continue;
+      const contents = readFileSync(join(REPOSITORY_ROOT, file));
+      if (contents.length > 2 * 1024 * 1024) continue;
+      hash.update(file);
+      hash.update(contents);
+    }
+    return hash.digest("hex");
+  } catch {
+    return "unavailable";
+  }
+})();
 const EVENT_TIMEZONE_ENV = process.env.EVENT_TIMEZONE ?? "";
 const SETTLE_MS = Number(process.env.CAPTURE_SETTLE_MS ?? "1800");
 const CAPTURE_LIMIT = Number(process.env.CAPTURE_LIMIT ?? "0");
 const CAPTURE_LABEL = process.env.CAPTURE_LABEL ?? "";
 const normalizedBase = base.replace(/\/$/, "");
+const AUTHENTICATED_CONSOLE_CAPTURE = await (async () => {
+  if (tier !== "console" || !AUTH_ME_URL) return false;
+  // Local mode deliberately returns the bootstrap identity from /auth/me, so
+  // a /login navigation redirects to Hub and is not a sign-in page capture.
+  // Cloud mode returns 401 when signed out and keeps the real login surface.
+  return fetch(AUTH_ME_URL)
+    .then((response) => response.ok)
+    .catch(() => false);
+})();
 
 // The operator surface inventory. One entry per canonical destination in
 // `apps/console/src/platform/product-shell/workspaceNav.ts` (`WORKFLOW_ROUTES`)
@@ -109,7 +164,6 @@ const normalizedBase = base.replace(/\/$/, "");
 // and pagination/scope states. Compatibility URLs are deliberately absent from
 // current books: they are route-contract history, not user-facing surfaces.
 const CONSOLE_SURFACES = [
-  ["Authentication · Sign in", "/login"],
   ["Hub — workspace list", "/"],
   ["Hub — create workspace", "/new"],
   ["Global settings", "/settings"],
@@ -132,26 +186,11 @@ const CONSOLE_SURFACES = [
   ["Operations · Live day", `/tournaments/${WS}/operations/live`],
   ["Display · Board settings", `/tournaments/${WS}/display/board`],
   ["Display · Board preview", `/tournaments/${WS}/display/preview`],
-  [
-    DISPLAY_TOKEN
-      ? "Display · Fullscreen venue board"
-      : "Display · Missing capability",
-    DISPLAY_TOKEN
-      ? `/display?token=${encodeURIComponent(DISPLAY_TOKEN)}`
-      : "/display",
-  ],
   ["Administration · Team", `/tournaments/${WS}/administration/team`],
   ["Administration · Modules", `/tournaments/${WS}/administration/modules`],
   ["Administration · Backups", `/tournaments/${WS}/administration/backups`],
   ["Administration · Activity", `/tournaments/${WS}/administration/activity`],
   ["Administration · Lifecycle", `/tournaments/${WS}/administration/lifecycle`],
-  // Kind-mismatched and disabled-module states. `meet/*` on a bracket
-  // workspace keeps its renderer on purpose so the guard can explain the gap.
-  ["Module guard · Meet matches unavailable", `/tournaments/${WS}/meet/matches`],
-  [
-    "Module guard · Meet team structure unavailable",
-    `/tournaments/${WS}/meet/team-structure`,
-  ],
   // Pagination and scope states are explicit interaction sheets; historical
   // surface IDs remain in the review register, while current books use this
   // canonical route inventory.
@@ -176,8 +215,18 @@ const CONSOLE_SURFACES = [
   ["Global settings · Security", "/settings?section=security"],
   ["Global settings · Sessions", "/settings?section=sessions"],
   ["Global settings · Appearance", "/settings?section=appearance"],
-  ["Invite · Missing fixture token", "/invite/missing-fixture-token"],
 ];
+
+if (!(await AUTHENTICATED_CONSOLE_CAPTURE)) {
+  CONSOLE_SURFACES.unshift(["Authentication · Sign in", "/login"]);
+}
+
+if (DISPLAY_TOKEN) {
+  CONSOLE_SURFACES.push([
+    "Display · Fullscreen venue board",
+    `/display?token=${encodeURIComponent(DISPLAY_TOKEN)}`,
+  ]);
+}
 
 if (INVITE_TOKEN) {
   CONSOLE_SURFACES.push(
@@ -190,12 +239,8 @@ if (MEET_WS_ID) {
     ["Meet · Matches", `/tournaments/${MEET_WS_ID}/meet/matches`],
     ["Meet · Team structure", `/tournaments/${MEET_WS_ID}/meet/team-structure`],
     [
-      "Participants · Roster · Meet page 2 / 100 rows",
-      `/tournaments/${MEET_WS_ID}/participants/people?meet-roster.page=2&meet-roster.pageSize=100`,
-    ],
-    [
-      "Meet · Matches · page 2 / 100 rows",
-      `/tournaments/${MEET_WS_ID}/meet/matches?meet-matches.page=2&meet-matches.pageSize=100`,
+      "Meet · Participants roster",
+      `/tournaments/${MEET_WS_ID}/participants/people`,
     ],
   );
 }
@@ -228,15 +273,11 @@ const ENTRANT_SURFACES = [
   ["Account · Verification failed", "/e/verify/failed"],
   ["Account · Verification email sent", "/e/verify/sent"],
   ["Account · Forgot password", "/e/forgot"],
-  ["Account · Reset password", "/e/reset"],
   ["Account · Reset email sent", "/e/reset/sent"],
   ["Account · Password reset complete", "/e/reset/done"],
   ["Account · Password reset failed", "/e/reset/failed"],
   ["Account · New password failed", "/e/reset/password-failed"],
-  ["Doubles partner accepted", "/e/partner/accepted"],
-  ["Doubles partner failed", "/e/partner/failed"],
   ["My entries (signed out)", "/e/me/entries"],
-  ["Entry receipt", `/e/${SLUG}/receipt/${SUBMISSION_ID}`],
   // Public discovery scope states. P5 retired the lifecycle facets and the
   // pagination with them: the season list has no "Entries open" segment to
   // capture, and a page two of a two-item list was never a real surface. What
@@ -253,7 +294,6 @@ const ENTRANT_SURFACES = [
  * say no" from "this page is broken".
  */
 const ENTRANT_EXPECTED_ERROR_SURFACES = [
-  ["Expected refusal · Partner invitation, unknown token", "/e/partner/missing-fixture-token"],
 ];
 if (WITHHELD_PLAYER_KEY) {
   ENTRANT_EXPECTED_ERROR_SURFACES.push([
@@ -261,11 +301,13 @@ if (WITHHELD_PLAYER_KEY) {
     `/e/${SLUG}/players/${encodeURIComponent(WITHHELD_PLAYER_KEY)}`,
   ]);
 }
-if (MISSING_PLAYER_KEY) {
-  ENTRANT_EXPECTED_ERROR_SURFACES.push([
-    "Expected refusal · Unknown person key",
-    `/e/${SLUG}/players/${encodeURIComponent(MISSING_PLAYER_KEY)}`,
-  ]);
+
+if (SUBMISSION_ID && ENTRANT_EMAIL && ENTRANT_PASSWORD) {
+  ENTRANT_SURFACES.splice(
+    ENTRANT_SURFACES.findIndex(([label]) => label === "Regulations reader") + 1,
+    0,
+    ["Entry receipt", `/e/${SLUG}/receipt/${encodeURIComponent(SUBMISSION_ID)}`],
+  );
 }
 
 /**
@@ -277,39 +319,18 @@ if (MISSING_PLAYER_KEY) {
  */
 const ENTRANT_ENHANCED_SURFACES = [];
 
-/**
- * Retired URLs that still have to ANSWER, captured apart from the product
- * surfaces above and counted apart in `routeCoverage`.
- *
- * These are not screens: `?view=completed` and `?view=open` named lifecycle
- * segments the season calendar replaced, and each now canonicalises onto a
- * position in the one continuous list. They stay in the book because the
- * URLs are in posters and mailing lists and a reader following one must land
- * somewhere honest — but counting them as unique surfaces overstated the
- * product by four sheets, which is the miscount this split fixes.
- */
-const ENTRANT_COMPATIBILITY_SURFACES = [
-  ["Discovery · Compatibility · completed tournaments", "/e/?view=completed#calendar"],
-  ["Discovery · Compatibility · entries-open segment", "/e/?view=open#calendar"],
-  ["Discovery · Compatibility · retired pagination", "/e/?page=2#calendar"],
-  // public-visual-fixes P6: Events, Seeds and Winners were three panel names
-  // for the ONE Draws surface captured above. They canonicalise onto it, so
-  // they are three aliases and not three screens — counting them as surfaces
-  // would overstate the tournament page by three sheets.
-  ["Tournament · Compatibility · events tab", `/e/${SLUG}?tab=events`],
-  ["Tournament · Compatibility · seeds tab", `/e/${SLUG}?tab=seeds`],
-  ["Tournament · Compatibility · winners tab", `/e/${SLUG}?tab=winners`],
-  // public-visual-fixes P4: `?view=round` and `?view=path` were two more
-  // renderings of the same draw, and there is now ONE bracket at every width.
-  // Both resolve onto it, so they are aliases of the draw sheet above.
-  ["Draw · Compatibility · round view", `/e/${SLUG}/draws/${DRAW_KEY}?view=round&round=1`],
-  ["Draw · Compatibility · path view", `/e/${SLUG}/draws/${DRAW_KEY}?view=path`],
-];
-
+// Retired URLs still answer through the route loaders, but are route-contract
+// history rather than user-facing pages and are deliberately absent here.
 if (PARTNER_TOKEN) {
   ENTRANT_SURFACES.push(
     ["Doubles partner invitation · token", `/e/partner/${encodeURIComponent(PARTNER_TOKEN)}`],
   );
+}
+// A failed acceptance is a genuine reachable recovery outcome when an invite
+// is rejected; retain the source route as an error state even without token.
+ENTRANT_SURFACES.push(["Doubles partner failed", "/e/partner/failed"]);
+if (tier === "entrant" && ENTRANT_EMAIL && ENTRANT_PASSWORD) {
+  ENTRANT_SURFACES.push(["My entries (signed in)", "/e/me/entries"]);
 }
 
 const EXACT_DESCRIPTIONS = Object.freeze({
@@ -401,12 +422,8 @@ const EXACT_DESCRIPTIONS = Object.freeze({
     "A published person’s profile with played results and cross-tournament history.",
   "Results draw · Highlighted player path":
     "Enhanced state: the same bracket with one person’s route through it highlighted, reached by URL and rendered without script.",
-  "Expected refusal · Partner invitation, unknown token":
-    "Declared expected error: an unknown partner-invitation token must refuse, not leak.",
   "Expected refusal · Player withheld from publication":
     "Declared expected error: a person the organizer has not published must say so without naming them.",
-  "Expected refusal · Unknown person key":
-    "Declared expected error: an unknown person key must answer a plain not-found.",
 });
 
 function descriptionFor(label) {
@@ -467,7 +484,15 @@ async function resolveEventTimeZone() {
   }
 }
 
-async function resolvePublicPersonKey(slug = SLUG, override = PLAYER_KEY) {
+async function resolvePublicPersonKey(
+  slug = SLUG,
+  override = PLAYER_KEY,
+  // The draw the key has to be USABLE in. `?player=` pins a path inside one
+  // draw, so a key resolved without this lands a doubles player on the
+  // singles bracket, where the sheet can only show "0 matches found" beside
+  // the key it was given. Empty means "any published person".
+  preferredEvent = "",
+) {
   if (override) return override;
   try {
     const response = await fetch(
@@ -475,13 +500,18 @@ async function resolvePublicPersonKey(slug = SLUG, override = PLAYER_KEY) {
     );
     if (!response.ok) return "";
     const payload = await response.json();
-    const resolved = payload.players?.find(
+    const publishedPeople = (payload.players ?? []).filter(
       (player) =>
         player.person?.resolution === "resolved" &&
         typeof player.person?.identity?.id === "string" &&
         player.person.identity.id.length > 0,
     );
-    return resolved?.person.identity.id ?? "";
+    const inPreferredEvent = preferredEvent
+      ? publishedPeople.find((player) =>
+          (player.eventCodes ?? []).includes(preferredEvent),
+        )
+      : null;
+    return (inPreferredEvent ?? publishedPeople[0])?.person.identity.id ?? "";
   } catch {
     return "";
   }
@@ -489,7 +519,41 @@ async function resolvePublicPersonKey(slug = SLUG, override = PLAYER_KEY) {
 
 let surfaces = tier === "console" ? [...CONSOLE_SURFACES] : [...ENTRANT_SURFACES];
 const omittedOptionalStates = [];
+if (tier === "console" && AUTHENTICATED_CONSOLE_CAPTURE) {
+  omittedOptionalStates.push({
+    label: "Authentication · Sign in",
+    reason: "Capture auth probe returned an authenticated bootstrap/session; /login redirects to Hub",
+  });
+}
 if (tier === "entrant") {
+  const discoveryResponse = await fetch(`${normalizedBase}/e/`);
+  const discoveryHtml = discoveryResponse.ok ? await discoveryResponse.text() : "";
+  if (!/id=["']past["']/.test(discoveryHtml)) {
+    surfaces = surfaces.filter(([label]) => label !== "Discovery · Earlier this season");
+    omittedOptionalStates.push({ label: "Discovery · Earlier this season", reason: "The selected season has no earlier-tournament section to visit" });
+  }
+  // The bare success URL cannot establish that an invitation was accepted.
+  // The real invitation form and reachable failure recovery remain separate.
+  omittedOptionalStates.push({
+    label: "Doubles partner accepted",
+    reason: "No accepted invitation transaction was supplied; the bare success URL is excluded",
+  });
+  if (!ENTRANT_EMAIL || !ENTRANT_PASSWORD) {
+    surfaces = surfaces.filter(([label]) => !["Entry form · Signed-in outcome", "Entry form · Account-created outcome"].includes(label));
+    omittedOptionalStates.push({ label: "Authenticated entry continuations", reason: "No real entrant credentials were supplied" });
+  }
+  if (!RESET_TOKEN) {
+    omittedOptionalStates.push({ label: "Account · Reset password", reason: "No real reset token was supplied by the fixture" });
+  } else {
+    const resetIndex = surfaces.findIndex(([label]) => label === "Account · Reset email sent") + 1;
+    surfaces.splice(resetIndex, 0, ["Account · Reset password", `/e/reset?token=${encodeURIComponent(RESET_TOKEN)}`]);
+  }
+  if (!SUBMISSION_ID) {
+    omittedOptionalStates.push({
+      label: "Entry receipt",
+      reason: "No real submission reference was supplied by the fixture",
+    });
+  }
   const playerKey = await resolvePublicPersonKey();
   if (playerKey) {
     const afterPlayers =
@@ -536,9 +600,12 @@ if (tier === "entrant") {
       // IDENTITY ID only, so this is the URL a real "Show this player's path"
       // link produces — and it renders without a byte of script, which is the
       // point of capturing it here rather than scripting a click.
+      const pathPlayerKey =
+        (await resolvePublicPersonKey(RESULTS_SLUG, "", DRAW_KEY)) ||
+        resultsPlayerKey;
       ENTRANT_ENHANCED_SURFACES.push([
         "Results draw · Highlighted player path",
-        `/e/${RESULTS_SLUG}/draws/${DRAW_KEY}?player=${encodeURIComponent(resultsPlayerKey)}`,
+        `/e/${RESULTS_SLUG}/draws/${DRAW_KEY}?player=${encodeURIComponent(pathPlayerKey)}`,
       ]);
     } else {
       omittedOptionalStates.push({
@@ -549,19 +616,13 @@ if (tier === "entrant") {
     surfaces.push(...resultsSurfaces);
   }
 
-  // Enhanced states, then declared refusals, then compatibility URLs — each
-  // group after the product surfaces and each counted on its own line below.
+  // Enhanced states and genuine refusals follow the product surfaces. Retired
+  // compatibility URLs are route-contract history, not book pages.
   surfaces.push(...ENTRANT_ENHANCED_SURFACES);
   surfaces.push(...ENTRANT_EXPECTED_ERROR_SURFACES);
-  surfaces.push(...ENTRANT_COMPATIBILITY_SURFACES);
 }
-// Four kinds of sheet, tallied apart (see `routeCoverage` below): product
-// surfaces, progressive-enhancement states of one of them, sheets that are
-// SUPPOSED to refuse, and retired URLs proving they still land somewhere
-// honest. Only the first is "the product".
-const compatibilityLabels = new Set(
-  tier === "entrant" ? ENTRANT_COMPATIBILITY_SURFACES.map(([label]) => label) : [],
-);
+// Product surfaces, progressive-enhancement states, and genuine refusals are
+// the only sheets in a book. Retired URLs are covered by route tests/docs.
 const enhancedLabels = new Set(
   tier === "entrant" ? ENTRANT_ENHANCED_SURFACES.map(([label]) => label) : [],
 );
@@ -580,16 +641,10 @@ if (CAPTURE_LABEL) {
 if (CAPTURE_LIMIT > 0) {
   surfaces = surfaces.slice(0, CAPTURE_LIMIT);
 }
-// Route coverage describes product screens, and says separately what the
-// other sheets are. Counting a redirect as a unique surface overstates the
-// product — the season calendar's four retired lifecycle and pagination
-// queries were four such sheets — and so does counting a designed 404 or a
-// script-enhanced state of a page already in the book. All four are tallied
-// apart rather than dropped, because a reader needs to see the refusal work
-// as much as the success. Computed after optional filtering so the manifest
-// matches the actual sheets in this run.
+// Route coverage describes product screens and separately identifies genuine
+// refusals and enhanced states. Computed after optional filtering so the
+// manifest matches the actual sheets in this run.
 const isProduct = ([label]) =>
-  !compatibilityLabels.has(label) &&
   !enhancedLabels.has(label) &&
   !expectedErrorLabels.has(label);
 const productSurfaces = surfaces.filter(isProduct);
@@ -601,7 +656,6 @@ const routeCoverage = {
   stateSheets: productSurfaces.length,
   enhancedStateSheets: surfaces.filter(([label]) => enhancedLabels.has(label)).length,
   expectedErrorSheets: surfaces.filter(([label]) => expectedErrorLabels.has(label)).length,
-  compatibilitySheets: surfaces.filter(([label]) => compatibilityLabels.has(label)).length,
 };
 const VIEWPORTS = [
   ["desktop", 1440, 900],
@@ -622,6 +676,8 @@ const escAttr = (s) =>
 const artifactStem = outPath.slice(0, -extname(outPath).length);
 const manifestPath = `${artifactStem}.manifest.json`;
 const runningPath = `${artifactStem}.running.json`;
+const rawAssetDir = `${artifactStem}-assets`;
+const rawAssetDirName = basename(rawAssetDir);
 const startedAt = new Date();
 const eventTimeZone = (await resolveEventTimeZone()) || "unavailable";
 // The capture context every reviewer needs before reading a single sheet:
@@ -634,6 +690,9 @@ const captureContext = {
   // is per sheet — `baselineRoute` is this run's entry point and every sheet
   // additionally records its requested path and the final URL reached.
   checkoutSha: CHECKOUT_SHA,
+  reviewedBuildSha: REVIEWED_BUILD_SHA,
+  workingTreeFingerprint: WORKING_TREE_FINGERPRINT,
+  effectiveDemoInstant: EFFECTIVE_DEMO_INSTANT,
   fixtureMode: FIXTURE_MODE,
   eventTimeZone,
   workspaceId: tier === "console" ? WS : null,
@@ -641,7 +700,7 @@ const captureContext = {
   baselineRoute: surfaces.length ? surfaces[0][1] : null,
   viewports: VIEWPORTS.map(([name, width, height]) => ({ name, width, height, deviceScaleFactor: 2 })),
   routeCoverage,
-  omittedStates: tier === "entrant" ? omittedOptionalStates : [],
+  omittedStates: omittedOptionalStates,
 };
 const runState = {
   schemaVersion: 2,
@@ -657,11 +716,67 @@ const runState = {
   surfaces: [],
 };
 mkdirSync(dirname(outPath), { recursive: true });
+mkdirSync(rawAssetDir, { recursive: true });
 writeFileSync(runningPath, `${JSON.stringify(runState, null, 2)}\n`);
 
 const browser = await chromium.launch();
 const cards = [];
 let cachedAuthMe = null;
+let entrantStorageState;
+if (tier === "entrant" && ENTRANT_EMAIL && ENTRANT_PASSWORD) {
+  const authContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const authPage = await authContext.newPage();
+  await authPage.goto(`${normalizedBase}/e/login?next=${encodeURIComponent('/e/me/entries')}`, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await authPage.locator("#login-email").fill(ENTRANT_EMAIL);
+  await authPage.locator("#login-password").fill(ENTRANT_PASSWORD);
+  await authPage.locator('button[type="submit"]').click();
+  await authPage.waitForTimeout(500);
+  if (!authPage.url().includes('/e/me/entries')) throw new Error(`Entrant authentication did not reach My entries: ${authPage.url()}`);
+  entrantStorageState = await authContext.storageState();
+  await authContext.close();
+}
+// Entries is a cloud-only capability and may be absent from local workspaces.
+// Resolve the real catalog in an authenticated browser context before
+// inventorying sheets; a hard-coded route would create an inaccessible book
+// page that only demonstrates the module guard.
+if (tier === "console") {
+  const catalogContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const catalogPage = await catalogContext.newPage();
+  try {
+    await catalogPage.goto(`${normalizedBase}/`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await catalogPage.waitForTimeout(SETTLE_MS);
+    const modules = await catalogPage.evaluate(async (workspaceId) => {
+      const response = await fetch(`/api/tournaments/${workspaceId}/modules`, { credentials: "include" });
+      if (!response.ok) return null;
+      return response.json();
+    }, WS);
+    const entriesEnabled = Array.isArray(modules) && modules.some((module) => module?.moduleId === "entries" && module?.status === "enabled");
+    if (!entriesEnabled) {
+      surfaces = surfaces.filter(([label]) => label !== "Participants · Entries");
+      omittedOptionalStates.push({
+        label: "Participants · Entries",
+        reason: "Workspace module catalog does not expose Entries as enabled",
+      });
+    }
+  } finally {
+    await catalogContext.close();
+  }
+}
+// Catalog filtering happens after the initial inventory is assembled, so
+// refresh the published counts and the already-created capture context.
+const finalProductSurfaces = surfaces.filter(isProduct);
+Object.assign(routeCoverage, {
+  canonicalDestinations: new Set(finalProductSurfaces.map(([, path]) => path.split(/[?#]/, 1)[0])).size,
+  stateSheets: finalProductSurfaces.length,
+  enhancedStateSheets: surfaces.filter(([label]) => enhancedLabels.has(label)).length,
+  expectedErrorSheets: surfaces.filter(([label]) => expectedErrorLabels.has(label)).length,
+});
+runState.surfaceCount = surfaces.length;
+captureContext.baselineRoute = surfaces[0]?.[1] ?? null;
+const expectedDestination = (path) => {
+  const url = new URL(normalizedBase + path);
+  return `${url.pathname}${url.search}`;
+};
 
 // The production nginx auth budget is intentionally 10 requests/minute. A
 // hard navigation per surface would spend it on the same read-only `/auth/me`
@@ -686,7 +801,9 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
   const viewportRuns = {};
   let note = "";
   for (const [vpName, width, height] of VIEWPORTS) {
-    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, reducedMotion: "reduce" });
+    const usesEntrantSession = label === "My entries (signed in)" || label === "Entry receipt" ||
+      label === "Entry form · Signed-in outcome" || label === "Entry form · Account-created outcome";
+    const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, reducedMotion: "reduce", ...(usesEntrantSession ? { storageState: entrantStorageState } : {}) });
     const page = await ctx.newPage();
     if (tier === "console") {
       await page.route("**/api/auth/me", async (route) => {
@@ -722,6 +839,17 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
       await page.waitForLoadState("load", { timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(SETTLE_MS);
       await page.evaluate(() => document.fonts.ready).catch(() => {});
+      const declaredError = expectedErrorLabels.has(label);
+      const final = new URL(page.url());
+      const finalDestination = `${final.pathname}${final.search}`;
+      const bodyText = await page.locator("body").innerText().catch(() => "");
+      const expectedDestinationMismatch = finalDestination !== expectedDestination(path);
+      const unexpectedErrorPage = !declaredError && /(?:page not found|something went wrong|application error|module unavailable|unexpected error)/i.test(bodyText);
+      const destinationError = expectedDestinationMismatch
+        ? `Final URL ${finalDestination} does not match requested ${expectedDestination(path)}`
+        : unexpectedErrorPage
+          ? "Required surface rendered an error/guard page"
+          : null;
       const documentHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, window.innerHeight));
       const scrollRegions = await page.evaluate(() => Array.from(document.querySelectorAll('*'))
         .filter((element) => {
@@ -740,7 +868,27 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
           scrollHeight: element.scrollHeight,
         })));
       shots[vpName] = [];
-      for (let top = 0; top < documentHeight; top += height) {
+      // Fixed/sticky top chrome sits over document content after every scroll.
+      // Step continuations by the visible content height so each row appears
+      // fully below that chrome at least once. Full-height sidebars and panes
+      // are excluded from this measurement.
+      const stickyHeaderHeight = await page.evaluate(() => Math.max(0, ...Array.from(document.querySelectorAll('*')).map((element) => {
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        if (!['fixed', 'sticky'].includes(style.position) || rect.width < window.innerWidth * 0.5 || rect.height > window.innerHeight * 0.4) return 0;
+        if (style.position === 'fixed') return rect.top <= 4 ? rect.bottom : 0;
+        const inset = Number.parseFloat(style.top);
+        return Number.isFinite(inset) && inset >= 0 ? inset + rect.height : 0;
+      })));
+      const hasNonDocumentOverflow = await page.evaluate(() => Array.from(document.querySelectorAll('*')).some((element) => {
+        if (['TEXTAREA', 'INPUT', 'SELECT', 'HTML', 'BODY'].includes(element.tagName)) return false;
+        const style = window.getComputedStyle(element);
+        return element.clientWidth > 300 && element.clientHeight > 200 &&
+          /(auto|scroll)/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 4;
+      }));
+      let previousActualTop = -1;
+      const segmentStep = Math.max(1, height - stickyHeaderHeight);
+      for (let top = 0; top < documentHeight && !(hasNonDocumentOverflow && top > 0); top += segmentStep) {
         const segmentHeight = Math.min(height, documentHeight - top);
         // Capture a viewport-sized continuation at the real document offset.
         // Combining fullPage with clip can rasterize the entire long document
@@ -751,6 +899,10 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
           window.scrollTo(0, y);
           return window.scrollY;
         }, top);
+        // A fixed shell/internal pane can make document.scrollY clamp at 0;
+        // do not manufacture a blank document continuation in that case.
+        if (top > 0 && actualTop === previousActualTop) break;
+        previousActualTop = actualTop;
         // The final desired offset can exceed maxScroll because the viewport
         // is taller than the remaining document. Crop from the corresponding
         // point inside the clamped viewport so the tail is neither duplicated
@@ -758,7 +910,53 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
         const clipY = Math.max(0, top - actualTop);
         const clipHeight = Math.min(height - clipY, documentHeight - top);
         const png = await page.screenshot({ animations: "disabled", clip: { x: 0, y: clipY, width, height: clipHeight } });
-        shots[vpName].push({ png: png.toString("base64"), top, height: segmentHeight, width });
+        const assetName = `S${String(surfaceIndex + 1).padStart(2, "0")}-${vpName}-segment-${String(shots[vpName].length + 1).padStart(2, "0")}.png`;
+        writeFileSync(join(rawAssetDir, assetName), png);
+        shots[vpName].push({ png: png.toString("base64"), assetPath: `${rawAssetDirName}/${assetName}`, top, height: segmentHeight, width });
+      }
+
+      // Many console products keep the shell fixed while the main content
+      // pane owns overflow. In that shape document scrolling stops at the
+      // first viewport, so the regular loop above can produce a blank-looking
+      // continuation. Capture the meaningful internal pane at each scroll
+      // position, excluding textarea/input scrollports and small sidebars.
+      const internalRegion = await page.evaluate(() => {
+        const candidates = Array.from(document.querySelectorAll('*'))
+          .filter((element) => !['TEXTAREA', 'INPUT', 'SELECT'].includes(element.tagName))
+          .filter((element) => {
+            const style = window.getComputedStyle(element);
+            return element.clientWidth > 300 && element.clientHeight > 200 &&
+              /(auto|scroll)/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 4;
+          })
+          .sort((a, b) => (b.scrollHeight * b.clientWidth) - (a.scrollHeight * a.clientWidth));
+        const element = candidates[0];
+        if (!element) return null;
+        const key = 'capture-primary-scroll-region';
+        element.setAttribute('data-capture-scroll-region', key);
+        return { key, height: element.clientHeight, scrollHeight: element.scrollHeight };
+      });
+      if (internalRegion) {
+        const internalStep = Math.max(1, internalRegion.height - stickyHeaderHeight);
+        for (let scrollTop = internalStep; scrollTop < internalRegion.scrollHeight; scrollTop += internalStep) {
+          const visible = await page.evaluate(({ key, scrollTop }) => {
+            const element = document.querySelector(`[data-capture-scroll-region="${key}"]`);
+            if (!element) return null;
+            element.scrollTop = Math.min(scrollTop, element.scrollHeight - element.clientHeight);
+            const top = Math.max(0, element.getBoundingClientRect().top + window.scrollY - 24);
+            window.scrollTo(0, top);
+            return { scrollTop: element.scrollTop, top, scrollHeight: element.scrollHeight };
+          }, { key: internalRegion.key, scrollTop });
+          if (visible === null) break;
+          const png = await page.screenshot({ animations: "disabled", clip: { x: 0, y: 0, width, height } });
+          const assetName = `S${String(surfaceIndex + 1).padStart(2, "0")}-${vpName}-segment-${String(shots[vpName].length + 1).padStart(2, "0")}.png`;
+          writeFileSync(join(rawAssetDir, assetName), png);
+          shots[vpName].push({ png: png.toString("base64"), assetPath: `${rawAssetDirName}/${assetName}`, top: visible.top, height, width, internalScrollTop: visible.scrollTop, internalScrollHeight: visible.scrollHeight });
+        }
+        await page.evaluate((key) => {
+          const element = document.querySelector(`[data-capture-scroll-region="${key}"]`);
+          if (element) { element.scrollTop = 0; element.removeAttribute('data-capture-scroll-region'); }
+          window.scrollTo(0, 0);
+        }, internalRegion.key);
       }
       scrollEndShots[vpName] = [];
       // Inventory surfaces can put the page-size/count controls below an
@@ -794,8 +992,10 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
           }, region.key);
           if (visible !== null) {
             const png = await page.screenshot({ animations: "disabled", clip: { x: 0, y: 0, width, height } });
+            const assetName = `S${String(surfaceIndex + 1).padStart(2, "0")}-${vpName}-scroll-end-${String(scrollEndShots[vpName].length + 1).padStart(2, "0")}.png`;
+            writeFileSync(join(rawAssetDir, assetName), png);
             scrollEndShots[vpName].push({
-              png: png.toString("base64"), top: visible.top, height, width,
+              png: png.toString("base64"), assetPath: `${rawAssetDirName}/${assetName}`, top: visible.top, height, width,
               kind: "scroll-end", region: region.key,
               scrollTop: visible.scrollTop, scrollHeight: visible.scrollHeight,
             });
@@ -812,10 +1012,9 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
       // 404 is the evidence, not a failure, so it must not make the run
       // "partial" and send a reader hunting for a broken page. Anything else
       // it might answer (a 500, a 200 that leaked the record) still fails.
-      const declaredError = expectedErrorLabels.has(label);
       const httpStatus = res?.status() ?? 0;
       viewportRuns[vpName] = {
-        ok: httpStatus < 400 || (declaredError && httpStatus === 404),
+        ok: !destinationError && (declaredError ? httpStatus === 404 : httpStatus < 400),
         expectedError: declaredError && httpStatus === 404 ? true : undefined,
         httpStatus,
         finalUrl: page.url(),
@@ -824,12 +1023,17 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
         documentHeight,
         segments: shots[vpName].length,
         scrollRegions,
+        stickyHeaderHeight,
         scrollEndSegments: scrollEndShots[vpName].length,
+        assets: [
+          ...(shots[vpName] ?? []).map((shot) => shot.assetPath),
+          ...(scrollEndShots[vpName] ?? []).map((shot) => shot.assetPath),
+        ],
       };
       if (!viewportRuns[vpName].ok) {
-        viewportRuns[vpName].error = declaredError
+        viewportRuns[vpName].error = destinationError ?? (declaredError
           ? `HTTP ${httpStatus} — this sheet declares a refusal, and a refusal is a 404`
-          : `HTTP ${httpStatus}`;
+          : `HTTP ${httpStatus}`);
       }
       if (vpName === "desktop") {
         const status = res?.status() ?? 0;
@@ -932,9 +1136,9 @@ const html = `<!doctype html>
 <p><strong>State matters:</strong> these are route captures, not completed journeys. Outcome URLs, missing invitation tokens and placeholder receipt IDs do not prove a successful action. Redirects, signed-out prompts and access refusals are evidence of the state actually reached. HTTP 200 alone is not a functional pass.</p>
 <p><strong>Design direction:</strong> preserve readable match identity and stored participant names; use restrained semantic colour, flat ordinary surfaces, consistent property panels and explicit saved/unsaved feedback. Backend terms belong in the UI only when they help a user make a decision.</p>
 <p><strong>Annotate:</strong> cite surface ID, viewport and segment, then state the observed problem, affected task, severity, proposed change and measurable acceptance criterion. Distinguish a visual observation from an interaction hypothesis.</p>
-<p><strong>Further validation:</strong> keyboard/focus order, screen-reader output, dark theme, form errors, authenticated entry outcomes, offline recovery and physical venue viewing distance require separate testing. Internal scroll panels, horizontal canvases and virtualized regions show their initial visible position only. Document continuations do not scroll these panels.</p>
-<p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> unique product surfaces across <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets, plus <code>${esc(routeCoverage.enhancedStateSheets)}</code> enhanced-state, <code>${esc(routeCoverage.expectedErrorSheets)}</code> expected-error and <code>${esc(routeCoverage.compatibilitySheets)}</code> compatibility sheets, each counted separately. An enhanced-state sheet is a progressive-enhancement state of a surface already in the book; an expected-error sheet is a refusal the product is SUPPOSED to give, not a defect; a compatibility sheet is a retired URL proving it still lands somewhere honest. Every sheet records its requested route and the final URL reached.</p>
-<p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; reduced motion. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Timing is live demo data, not a frozen cross-surface snapshot. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
+<p><strong>Further validation:</strong> keyboard/focus order, screen-reader output, dark theme, form errors, offline recovery and physical venue viewing distance require separate testing. This run captures document continuations and user-scrollable internal panes; hidden overflow is never forced open. Receipt and signed-in My Entries sheets are included only after a real entrant sign-in, while signed-out account sheets remain signed out. Authentication, receipt, and other outcome states are recorded only when their real token or credential prerequisite is supplied. The demo instant applies to event-facing phase/date decisions; authentication and audit/security clocks continue using real time.</p>
+<p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · reviewed build <code>${esc(REVIEWED_BUILD_SHA)}</code> · dirty-tree fingerprint <code>${esc(WORKING_TREE_FINGERPRINT)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · effective demo instant <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code> · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> unique product surfaces across <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets, plus <code>${esc(routeCoverage.enhancedStateSheets)}</code> enhanced-state and <code>${esc(routeCoverage.expectedErrorSheets)}</code> expected-error sheets. An enhanced-state sheet is a progressive-enhancement state of a surface already in the book; an expected-error sheet is a genuine refusal the product is SUPPOSED to give, not a defect. Retired compatibility URLs are excluded from the book and covered by route tests. Every sheet records its requested route and the final URL reached.</p>
+<p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; reduced motion. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Effective demo instant: <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code>; data is live from the captured stack and may vary between sheets. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
 </div></section>
 <section class="index"><h1>Surface index</h1><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>
 ${pages.map(({card:c,index,viewport,shot,segment,count,kind})=>`<section class="sheet ${viewport} ${kind === 'scroll-end' ? 'scroll-end' : ''}" ${viewport==='desktop'&&segment===0&&kind==='document'?`id="s${index}"`:''}>
@@ -954,28 +1158,49 @@ console.log(
 );
 
 if (extname(outPath) === ".pdf") {
-  const reportPage = await browser.newPage({
-    viewport: { width: 1600, height: 1000 },
-  });
-  await reportPage.setContent(html, { waitUntil: "load", timeout: 120000 });
-  await reportPage.emulateMedia({ media: "print", reducedMotion: "reduce" });
-  const clippedSheets = await reportPage.locator('.sheet').evaluateAll((sheets) =>
-    sheets.flatMap((sheet, index) => sheet.scrollHeight > sheet.clientHeight + 2 ? [index + 1] : []));
-  if (clippedSheets.length) throw new Error(`Review-book content exceeds its sheets: ${clippedSheets.join(', ')}`);
-  await reportPage.pdf({
-    path: outPath,
-    format: "A3",
-    landscape: true,
-    printBackground: true,
-    preferCSSPageSize: true,
-    displayHeaderFooter: true,
-    headerTemplate: "<div></div>",
-    footerTemplate: `<div style="box-sizing:border-box;width:100%;padding:0 12mm;font:10px -apple-system,'Segoe UI',sans-serif;color:#667085;display:flex;justify-content:space-between;align-items:center">
-      <span>${esc(title)}</span>
-      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
-    </div>`,
-    margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" },
-  });
+  // Hundreds of DPR-2 screenshots can exhaust Chromium's print renderer even
+  // when the HTML loads successfully. Print bounded groups, then concatenate
+  // their PDF pages without re-rasterizing the screenshots or selectable text.
+  const sections = [...html.matchAll(/<section\b[\s\S]*?<\/section>/g)].map((match) => match[0]);
+  const prefix = html.slice(0, html.indexOf("<body>") + "<body>".length);
+  const chunkSize = 20;
+  const chunkCount = Math.ceil(sections.length / chunkSize);
+  const temporary = mkdtempSync(join(tmpdir(), "shuttleworks-book-pdf-"));
+  const parts = [];
+  try {
+    for (let start = 0; start < sections.length; start += chunkSize) {
+      const partNumber = parts.length + 1;
+      const reportPage = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+      try {
+        await reportPage.setContent(prefix + sections.slice(start, start + chunkSize).join("") + "</body></html>", { waitUntil: "load", timeout: 120000 });
+        await reportPage.emulateMedia({ media: "print", reducedMotion: "reduce" });
+        const clippedSheets = await reportPage.locator('.sheet').evaluateAll((sheets) =>
+          sheets.flatMap((sheet, index) => sheet.scrollHeight > sheet.clientHeight + 2 ? [index + 1] : []));
+        if (clippedSheets.length) throw new Error(`Review-book content exceeds its sheets in PDF part ${partNumber}: ${clippedSheets.join(', ')}`);
+        const partPath = join(temporary, `part-${partNumber}.pdf`);
+        await reportPage.pdf({
+          path: partPath,
+          format: "A3", landscape: true, printBackground: true, preferCSSPageSize: true,
+          displayHeaderFooter: true, headerTemplate: "<div></div>",
+          footerTemplate: `<div style="box-sizing:border-box;width:100%;padding:0 12mm;font:10px -apple-system,'Segoe UI',sans-serif;color:#667085;display:flex;justify-content:space-between;align-items:center"><span>${esc(title)}</span><span>Part ${partNumber} / ${chunkCount} · Page <span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`,
+          margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" },
+        });
+        parts.push(partPath);
+      } finally {
+        await reportPage.close();
+      }
+    }
+    if (parts.length === 1) {
+      writeFileSync(outPath, readFileSync(parts[0]));
+    } else {
+      // pypdf is also used by the repository's surface-book text extractor.
+      const repoPython = join(dirname(fileURLToPath(import.meta.url)), "../.venv/bin/python");
+      const python = process.env.SURFACE_PDF_PYTHON ?? (existsSync(repoPython) ? repoPython : "python3");
+      execFileSync(python, ["-c", "from pypdf import PdfWriter; import sys; writer = PdfWriter(); [writer.append(path) for path in sys.argv[2:]]; writer.write(sys.argv[1]); writer.close()", outPath, ...parts]);
+    }
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
   console.log(`wrote ${outPath}`);
 }
 
@@ -1000,6 +1225,7 @@ const manifest = {
   artifacts: {
     html: htmlPath,
     pdf: extname(outPath) === ".pdf" ? outPath : null,
+    rawScreenshots: rawAssetDir,
   },
   expectedPdfPages: extname(outPath) === ".pdf" ? pages.length + 2 : null,
   failedViewports,

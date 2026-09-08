@@ -564,8 +564,17 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
         state: selectedPerson.resolution,
       }).text
     : null;
+  // P8: `?player=` carries a MINTED person key (`entry-{uuid}` or the
+  // importer's `player-{sha}`), and a key resolves inside one draw only. When
+  // it names someone who is not in THIS draw, echoing it would print a
+  // 71-character internal identifier into the search box and the status line
+  // - the raw-id leak the plan forbids, and the exact shape the surface book
+  // recorded. A typed name never wears those prefixes.
+  const identityQuery = /^(entry|player)-/.test(playerQuery);
+  const identityNotInThisDraw = identityQuery && !selectedPerson;
   /** The name search — set only when the query did NOT resolve to an id. */
-  const nameQuery = playerQuery !== '' && !selectedPerson ? playerQuery : '';
+  const nameQuery =
+    playerQuery !== '' && !selectedPerson && !identityNotInThisDraw ? playerQuery : '';
   const queryLabel = selectedPersonLabel ?? playerQuery;
   const roundRobin = isRoundRobin(draw.kind);
   const segment =
@@ -798,7 +807,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                 // (which is also what a re-submit searches for), never the
                 // raw key the URL carries — a 71-character `player-<sha>` in
                 // a search box is the raw-identifier leak the plan forbids.
-                defaultValue={selectedPersonLabel ?? playerQuery}
+                defaultValue={selectedPersonLabel ?? (identityNotInThisDraw ? '' : playerQuery)}
                 submitLabel="Find in this draw"
                 className="min-w-0 flex-1 basis-56"
               />
@@ -823,7 +832,13 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
             // though the reader had picked them.
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-s-2 border-action-primary bg-surface-sunken px-3 py-2 text-sm" role="status">
               <span>
-                {matchCount} {matchCount === 1 ? 'match' : 'matches'} found for &lsquo;<strong>{queryLabel}</strong>&rsquo;
+                {identityNotInThisDraw ? (
+                  'That player is not in this draw.'
+                ) : (
+                  <>
+                    {matchCount} {matchCount === 1 ? 'match' : 'matches'} found for &lsquo;<strong>{queryLabel}</strong>&rsquo;
+                  </>
+                )}
               </span>
               {soleNameMatch?.identity ? (
                 <a

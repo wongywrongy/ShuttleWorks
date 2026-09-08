@@ -609,6 +609,24 @@ describe("the elimination draw page", () => {
     expect(folded).toMatch(/>2<[\s\S]{0,60}matches[\s\S]{0,40}found for/);
   });
 
+  // P8: a minted person key resolves inside ONE draw. Pointed at a draw the
+  // person is not in, the page used to echo the 71-character key into the
+  // search box and into "0 matches found for '<key>'" - the raw-identifier
+  // leak the surface book recorded on S44.
+  it("never echoes a person key that belongs to another draw", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const key = "player-b61e72b4391ee25a74ac2bc312736fa6ed87cd6fe653425994067699c123e1dc";
+    const html = await render(`/e/spring-open/draws/MS?player=${key}`);
+
+    expect(html).toContain("That player is not in this draw.");
+    // Never as VISIBLE text: not in the search box, not in the status line.
+    // (The key still rides the view/segment hrefs - that is the URL the
+    // reader arrived on, and "Clear search" is the way out of it.)
+    expect(html).toContain('name="player" value=""');
+    expect(html).not.toContain(`>${key}<`);
+    expect(html).not.toMatch(/found for/);
+  });
+
   // ---- public-visual-fixes P3 -----------------------------------------
 
   it("uses the event-code-dropped reference in this single-event view", async () => {

@@ -35,11 +35,11 @@ EXPECTED = {
     DrawPlayerDTO: {"playerKey", "person", "club", "eventCodes"},
     TeamDTO: {"participantKey", "persons", "club", "seed"},
     HonorDTO: {"persons", "club"},
-    PlayerDrawPathDTO: {"roundLabel", "opponents"},
+    PlayerDrawPathDTO: {"roundLabel", "opponents", "outcome", "score", "reference"},  # operator/public remediation P6: a path STEP states its round, opponents, outcome and score - the arrow-joined sentence is gone
     PlayerEventDTO: {"code", "discipline", "partner", "seed", "drawPath"},
     PlayerMatchSideDTO: {"persons", "placeholder", "winner", "seed", "unresolved"},  # v3 pkg 29: the discriminated Side.unresolved (contract §2.1)
-    PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt", "scoresPublished", "reference", "shortReference"},  # v3 pkg 29; public-visual-fixes P3: the shared match reference (state-and-formatting §6.1)
-    PlayerHistoryEntryDTO: {"slug", "tournamentName", "date", "endDate", "playerKey", "current", "eventCodes", "drawsPublished", "resultsPublished"},  # public-visual-fixes P2 (profile v1)
+    PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt", "scoresPublished", "reference", "shortReference", "scheduledDate"},  # v3 pkg 29; public-visual-fixes P3: the shared match reference (state-and-formatting §6.1); operator/public remediation P7: the APPROVED day beside the approved time and court
+    PlayerHistoryEntryDTO: {"slug", "tournamentName", "date", "endDate", "playerKey", "current", "eventCodes", "drawsPublished", "resultsPublished", "events", "expanded"},  # public-visual-fixes P2 (profile v1); operator/public remediation P6: cross-tournament history carries its per-event detail where it is expanded
     PlayerPageDTO: {"person", "club", "events", "matches", "history"},  # public-visual-fixes P2
     ScheduleDayFacetDTO: {"day", "count"},
     ScheduleSideDTO: {"participantKey", "persons", "placeholder", "unresolved"},  # v3 pkg 29

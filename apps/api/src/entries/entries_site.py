@@ -277,8 +277,10 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
 
 #: Roster-row keys that are ENTRY-BACKED and therefore already answer to the
 #: Entries gates above. ``entries/entries.py::roster_id`` is the one place the
-#: prefix is minted; this is the read side of the same string.
-_ENTRY_ROSTER_PREFIX = "entry-"
+#: prefix is minted, so the read side DERIVES it rather than re-spelling it —
+#: F-DM-05's deletion gate (`test_the_roster_id_prefix_has_exactly_one_definition`)
+#: is what keeps that single definition honest.
+_ENTRY_ROSTER_PREFIX = roster_id("")
 
 
 def _bracket_roster_rows(tournament: Tournament) -> List[dict]:
