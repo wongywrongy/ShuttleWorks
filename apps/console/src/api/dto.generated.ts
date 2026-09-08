@@ -1064,6 +1064,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/bracket/clear-court": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Bracket Court
+         * @description Withdraw the PUBLISHED court while the plan slot stays exactly as it is.
+         *
+         *     The third court verb, and the one the other two could not express
+         *     (OPR-0908-8). ``/bracket/assign`` materializes the Operations ``matches``
+         *     row that the public tier reads as "this match is on court N";
+         *     ``/bracket/unassign`` clears that row but also drops the play unit's plan
+         *     assignment, returning it to the queue. An operator who sent a match to
+         *     court and changed their mind had no way back to "planned at this slot, no
+         *     approved court" — the public tier kept publishing the court.
+         *
+         *     This endpoint un-materializes the court alone: the session assignment
+         *     (slot, court, duration) is untouched, and the ``matches`` row keeps its
+         *     ``time_slot`` with ``court_id`` set to NULL, which is precisely what the
+         *     public projection reads as "no court yet".
+         *
+         *     Idempotent by ``command_id`` like its siblings, and a no-op 200 when the
+         *     unit has no assignment at all.
+         */
+        post: operations["clear_bracket_court_tournaments__tournament_id__bracket_clear_court_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/bracket/import": {
         parameters: {
             query?: never;
@@ -2308,6 +2344,38 @@ export interface paths {
          *     exactly as it clears ``introText``.
          */
         put: operations["upsert_entry_page_tournaments__tournament_id__entry_page_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/entry-page/public-site": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entry Page Public Site
+         * @description The public address of this workspace's entry site (OPR-0908-6).
+         *
+         *     The console cannot build this URL: it runs on the operator origin and
+         *     the entrant tier runs on its own (SP-HOST-1), and no console-visible
+         *     response carried the play origin. So the server composes it, from
+         *     ``settings.play_origin`` — never the raw ``public_*_origin``, which is
+         *     where the tier decision and the trailing-slash normalisation live — and
+         *     the page's own slug. Exactly the shape ``GET
+         *     /tournaments/{id}/display-token`` already uses for the venue board.
+         *
+         *     The publication flags ride along so a caller can tell a live public page
+         *     from a page that exists but publishes nothing; they are the same columns
+         *     ``GET /entry-page`` returns, not a second source of truth.
+         */
+        get: operations["get_entry_page_public_site_tournaments__tournament_id__entry_page_public_site_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -3996,6 +4064,16 @@ export interface components {
             duration_slots: number;
         };
         /**
+         * BracketClearCourtIn
+         * @description Body for POST /bracket/clear-court — drop the published court only.
+         */
+        BracketClearCourtIn: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Command Id */
+            command_id?: string | null;
+        };
+        /**
          * BracketCommandRequest
          * @description Body of ``POST /tournaments/{tournament_id}/bracket/commands``.
          *
@@ -5247,6 +5325,44 @@ export interface components {
              */
             reserves: components["schemas"]["ReserveRowDTO"][];
             viewer: components["schemas"]["ViewerDTO"];
+        };
+        /**
+         * EntryPagePublicSiteDTO
+         * @description Where this workspace's public entry site lives, as an operator link.
+         *
+         *     The console runs on ``app.<domain>`` and the entrant tier on
+         *     ``play.<domain>`` (SP-HOST-1), so the console cannot compose a public URL
+         *     on its own — inventing a hostname is exactly what the two-origin split
+         *     forbids. This is the entry page's twin of ``GET
+         *     /tournaments/{id}/display-token``: the server, which is the only party
+         *     that knows the deployment's origins, hands back the address.
+         *
+         *     ``origin`` is ``settings.play_origin`` — blank in local mode, where one
+         *     host serves both tiers and a relative ``url`` is the correct link.
+         */
+        EntryPagePublicSiteDTO: {
+            /** Origin */
+            origin: string;
+            /** Slug */
+            slug: string;
+            /** Url */
+            url: string;
+            /**
+             * Audience
+             * @default private
+             * @enum {string}
+             */
+            audience: "private" | "unlisted" | "public";
+            /**
+             * Entrantspublished
+             * @default false
+             */
+            entrantsPublished: boolean;
+            /**
+             * Drawspublished
+             * @default false
+             */
+            drawsPublished: boolean;
         };
         /**
          * EntryPagePublicationPatchDTO
@@ -10385,6 +10501,41 @@ export interface operations {
             };
         };
     };
+    clear_bracket_court_tournaments__tournament_id__bracket_clear_court_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BracketClearCourtIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     import_tournament_json_tournaments__tournament_id__bracket_import_post: {
         parameters: {
             query?: never;
@@ -12356,6 +12507,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntryPageDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entry_page_public_site_tournaments__tournament_id__entry_page_public_site_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryPagePublicSiteDTO"];
                 };
             };
             /** @description Validation Error */

@@ -972,6 +972,29 @@ class EntryPageDTO(BaseModel):
         )
 
 
+class EntryPagePublicSiteDTO(BaseModel):
+    """Where this workspace's public entry site lives, as an operator link.
+
+    The console runs on ``app.<domain>`` and the entrant tier on
+    ``play.<domain>`` (SP-HOST-1), so the console cannot compose a public URL
+    on its own — inventing a hostname is exactly what the two-origin split
+    forbids. This is the entry page's twin of ``GET
+    /tournaments/{id}/display-token``: the server, which is the only party
+    that knows the deployment's origins, hands back the address.
+
+    ``origin`` is ``settings.play_origin`` — blank in local mode, where one
+    host serves both tiers and a relative ``url`` is the correct link.
+    """
+
+    origin: str
+    slug: str
+    #: Absolute when an origin is configured, relative otherwise.
+    url: str
+    audience: Literal["private", "unlisted", "public"] = "private"
+    entrantsPublished: bool = False
+    drawsPublished: bool = False
+
+
 class EntryEventCreateDTO(StrictModel):
     """One entry-facing event (spec Q2/§4).
 

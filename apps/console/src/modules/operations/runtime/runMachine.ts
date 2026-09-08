@@ -9,12 +9,16 @@ import { STATE_WORD } from '../../../lib/stateWords';
 import type { MatchStatus } from '../../../platform/domain/match';
 
 export type RunStatus = 'scheduled' | 'called' | 'playing' | 'done';
-export type RunActionKind = 'call' | 'start' | 'record' | 'postpone' | 'assign';
+export type RunActionKind = 'call' | 'start' | 'record' | 'postpone' | 'assign' | 'clearCourt';
 
 /** Legal status→status edges. `assign` is a court change, not a status edge,
- *  so it is handled separately (keeps the match `scheduled`). */
+ *  so it is handled separately (keeps the match `scheduled`). `clearCourt` is
+ *  its inverse and the same shape: it withdraws the published court while the
+ *  match stays planned at its slot, so it too resolves to `scheduled`, and
+ *  only from `scheduled` — a called or playing match leaves the court through
+ *  `postpone`, which is a real status edge (OPR-0908-8). */
 const TRANSITIONS: Record<RunStatus, Partial<Record<RunActionKind, RunStatus>>> = {
-  scheduled: { call: 'called', assign: 'scheduled' },
+  scheduled: { call: 'called', assign: 'scheduled', clearCourt: 'scheduled' },
   called: { start: 'playing', postpone: 'scheduled' },
   playing: { record: 'done', postpone: 'scheduled' },
   done: {},

@@ -106,6 +106,9 @@ export interface BracketApi {
    *  court assignment — no solver, no result change.  No-op when already
    *  unassigned. */
   unassign: (body: { command_id?: string; play_unit_id: string }) => Promise<BracketTournamentDTO>;
+  /** OPR-0908-8: withdraw the published court, keep the plan slot. The verb
+   *  `unassign` could not express — it also drops the assignment. */
+  clearCourt: (body: { command_id?: string; play_unit_id: string }) => Promise<BracketTournamentDTO>;
 }
 
 const BracketApiContext = createContext<BracketApi | null>(null);
@@ -185,6 +188,7 @@ export function BracketApiProvider({
       ),
       assignCourt: guardMutation((body) => apiClient.assignBracketCourt(tournamentId, body)),
       unassign: guardMutation((body) => apiClient.unassignBracketCourt(tournamentId, body)),
+      clearCourt: guardMutation((body) => apiClient.clearBracketCourt(tournamentId, body)),
     }),
     [tournamentId],
   );

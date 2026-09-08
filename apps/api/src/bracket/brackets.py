@@ -520,6 +520,13 @@ class BracketUnassignIn(StrictModel):
     command_id: Optional[uuid.UUID] = None
 
 
+class BracketClearCourtIn(StrictModel):
+    """Body for POST /bracket/clear-court — drop the published court only."""
+
+    play_unit_id: Identifier
+    command_id: Optional[uuid.UUID] = None
+
+
 class EventUpsertIn(StrictModel):
     """Body of POST /bracket/events/{event_id} — upsert one event."""
 
@@ -3274,6 +3281,43 @@ def unassign_bracket_court(
         raise HTTPException(status_code=422, detail="current user id is not a UUID")
     outcome = BracketAssignmentService().apply(
         repo, tournament_id, play_unit_id=body.play_unit_id, action="unassign",
+        slot_id=None, court_id=None, actor_id=actor_id, command_id=body.command_id,
+    )
+    response_cache.invalidate(tournament_id)
+    return _serialize_session(outcome.session)
+
+
+@router.post("/clear-court", response_model=TournamentOut, dependencies=[_OPERATOR])
+def clear_bracket_court(
+    body: BracketClearCourtIn,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
+) -> TournamentOut:
+    """Withdraw the PUBLISHED court while the plan slot stays exactly as it is.
+
+    The third court verb, and the one the other two could not express
+    (OPR-0908-8). ``/bracket/assign`` materializes the Operations ``matches``
+    row that the public tier reads as "this match is on court N";
+    ``/bracket/unassign`` clears that row but also drops the play unit's plan
+    assignment, returning it to the queue. An operator who sent a match to
+    court and changed their mind had no way back to "planned at this slot, no
+    approved court" — the public tier kept publishing the court.
+
+    This endpoint un-materializes the court alone: the session assignment
+    (slot, court, duration) is untouched, and the ``matches`` row keeps its
+    ``time_slot`` with ``court_id`` set to NULL, which is precisely what the
+    public projection reads as "no court yet".
+
+    Idempotent by ``command_id`` like its siblings, and a no-op 200 when the
+    unit has no assignment at all.
+    """
+    from bracket.application import BracketAssignmentService
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise HTTPException(status_code=422, detail="current user id is not a UUID")
+    outcome = BracketAssignmentService().apply(
+        repo, tournament_id, play_unit_id=body.play_unit_id, action="clear-court",
         slot_id=None, court_id=None, actor_id=actor_id, command_id=body.command_id,
     )
     response_cache.invalidate(tournament_id)

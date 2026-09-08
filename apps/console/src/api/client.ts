@@ -49,6 +49,7 @@ import type {
   BoardSettingsDTO,
   DisplaySummaryDTO,
   EntryPageDTO,
+  EntryPagePublicSiteDTO,
   EntryPagePublicationPatchDTO,
   LineupDTO,
   AuthorityStatusDTO,
@@ -585,6 +586,20 @@ class ApiClient {
   async getEntryPage(tid: string): Promise<EntryPageDTO> {
     const r = await this.client.get<EntryPageDTO>(
       `/tournaments/${tid}/entry-page`,
+    );
+    return r.data;
+  }
+
+  /** Where this workspace's public entry site lives (OPR-0908-6).
+   *
+   *  The console cannot compose this URL: SP-HOST-1 puts the entrant tier on
+   *  its own origin and inventing a hostname is exactly what that split
+   *  forbids. The server composes it from `settings.play_origin` and the
+   *  page's slug — the entry page's twin of the display token's `url`.
+   *  404s with the entry page when the workspace has never configured one. */
+  async getEntryPagePublicSite(tid: string): Promise<EntryPagePublicSiteDTO> {
+    const r = await this.client.get<EntryPagePublicSiteDTO>(
+      `/tournaments/${tid}/entry-page/public-site`,
     );
     return r.data;
   }
@@ -1852,6 +1867,23 @@ class ApiClient {
   ): Promise<BracketTournamentDTO> {
     const { data } = await this.client.post<BracketTournamentDTO>(
       `/tournaments/${tid}/bracket/unassign`,
+      { ...body, command_id: body.command_id ?? crypto.randomUUID() },
+    );
+    return data;
+  }
+
+  /**
+   * OPR-0908-8: withdraw the PUBLISHED court and keep the plan slot.
+   * `unassign` returns the match to the queue; this leaves it planned at
+   * its slot with no approved court, which is what the public tier reads
+   * as "no court yet". Idempotent by `command_id`.
+   */
+  async clearBracketCourt(
+    tid: string,
+    body: { command_id?: string; play_unit_id: string },
+  ): Promise<BracketTournamentDTO> {
+    const { data } = await this.client.post<BracketTournamentDTO>(
+      `/tournaments/${tid}/bracket/clear-court`,
       { ...body, command_id: body.command_id ?? crypto.randomUUID() },
     );
     return data;

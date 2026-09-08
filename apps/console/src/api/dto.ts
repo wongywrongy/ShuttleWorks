@@ -1172,6 +1172,24 @@ export interface EntryPageDTO {
   resultsPublished: boolean;
 }
 
+/** Where the workspace's public entry site lives (`GET
+ *  /tournaments/{id}/entry-page/public-site`), OPR-0908-6.
+ *
+ *  The console runs on the operator origin and the entrant tier on its own
+ *  (SP-HOST-1), so the console cannot compose a public URL — the server,
+ *  which is the only party that knows the deployment's origins, hands it
+ *  back. `origin` is blank in local mode, where one host serves both tiers
+ *  and `url` is therefore relative. */
+export interface EntryPagePublicSiteDTO {
+  origin: string;
+  slug: string;
+  /** Absolute when an origin is configured, relative otherwise. */
+  url: string;
+  audience: 'private' | 'unlisted' | 'public';
+  entrantsPublished: boolean;
+  drawsPublished: boolean;
+}
+
 /** PATCH body for the publication card — patch semantics: only the flags
  *  the operator actually toggled travel. */
 export interface EntryPagePublicationPatchDTO {

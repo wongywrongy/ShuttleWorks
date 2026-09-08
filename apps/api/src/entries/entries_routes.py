@@ -54,6 +54,7 @@ from core.schemas import (
     EntryEventDTO,
     EntryPageDTO,
     EntryPagePublicationPatchDTO,
+    EntryPagePublicSiteDTO,
     EntryPageUpsertDTO,
 )
 from db.models import (
@@ -1070,6 +1071,43 @@ def get_entry_page(
     ending that.
     """
     return EntryPageDTO.from_row(_page_or_404(repo, tournament_id))
+
+
+@router.get(
+    "/{tournament_id}/entry-page/public-site",
+    response_model=EntryPagePublicSiteDTO,
+    dependencies=[Depends(require_tournament_access("operator"))],
+)
+def get_entry_page_public_site(
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """The public address of this workspace's entry site (OPR-0908-6).
+
+    The console cannot build this URL: it runs on the operator origin and
+    the entrant tier runs on its own (SP-HOST-1), and no console-visible
+    response carried the play origin. So the server composes it, from
+    ``settings.play_origin`` — never the raw ``public_*_origin``, which is
+    where the tier decision and the trailing-slash normalisation live — and
+    the page's own slug. Exactly the shape ``GET
+    /tournaments/{id}/display-token`` already uses for the venue board.
+
+    The publication flags ride along so a caller can tell a live public page
+    from a page that exists but publishes nothing; they are the same columns
+    ``GET /entry-page`` returns, not a second source of truth.
+    """
+    from core.config import settings
+
+    row = _page_or_404(repo, tournament_id)
+    origin = settings.play_origin
+    return EntryPagePublicSiteDTO(
+        origin=origin,
+        slug=row.slug,
+        url=f"{origin}/e/{row.slug}",
+        audience=row.audience,
+        entrantsPublished=bool(row.entrants_published),
+        drawsPublished=bool(row.draws_published),
+    )
 
 
 @router.patch(

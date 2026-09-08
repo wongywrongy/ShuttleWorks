@@ -210,17 +210,22 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/modules/operations/run/RunMatchControls.tsx',
-    line: 105,
+    line: 102,
+    why: 'className is the module-level `actionBtn` constant (py-1 + text-xs = 24px), not a literal on this line.',
+  },
+  {
+    file: 'apps/console/src/modules/operations/run/RunMatchControls.tsx',
+    line: 136,
     why: 'className is the module-level `primaryBtn` constant (py-1 + text-xs = 24px), not a literal on this line.',
   },
   {
     file: 'apps/console/src/modules/operations/run/RunMatchControls.tsx',
-    line: 117,
+    line: 148,
     why: 'className is the module-level `primaryBtn` constant (py-1 + text-xs = 24px), not a literal on this line.',
   },
   {
     file: 'apps/console/src/modules/operations/run/RunMatchControls.tsx',
-    line: 129,
+    line: 160,
     why: 'className is a ternary between the module-level `armedBtn`/`primaryBtn` constants (both py-1 + text-xs = 24px).',
   },
   {

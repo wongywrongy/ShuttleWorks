@@ -38,8 +38,9 @@ import { useBracket } from '../../hooks/useBracket';
 import { useDenseDataState } from '../../hooks/useDenseDataState';
 import { useListScrollRestore } from '../../hooks/useListScrollRestore';
 import { lockedPlayerIds, ROSTER_LOCKED_REASON } from './lockedPlayers';
+import { apiClient } from '../../api/client';
 import type { BracketTournamentDTO } from '../../api/bracketDto';
-import type { BracketPlayerDTO } from '../../api/dto';
+import type { BracketPlayerDTO, EntryPagePublicSiteDTO } from '../../api/dto';
 import { playerSlug } from '../../lib/playerSlug';
 import { badgesByPlayerId } from './rosterEvents';
 import { type CommitEventFn } from './BracketPlayerFields';
@@ -91,11 +92,31 @@ function BracketRosterTabInner() {
     },
     [api, setData],
   );
+  // OPR-0908-6. The console runs on the operator origin and the entrant tier
+  // on its own (SP-HOST-1), so the public URL cannot be composed here — the
+  // server hands it back. A workspace with no entry page 404s, which is a
+  // normal state (nothing public exists), not an error to surface.
+  const [publicSite, setPublicSite] = useState<EntryPagePublicSiteDTO | null>(null);
+  useEffect(() => {
+    let live = true;
+    apiClient
+      .getEntryPagePublicSite(api.tournamentId)
+      .then((site) => {
+        if (live) setPublicSite(site);
+      })
+      .catch(() => {
+        if (live) setPublicSite(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [api.tournamentId]);
   return (
     <BracketRosterTabCore
       bracketData={bracket}
       onCommitEvent={commitEvent}
       tid={api.tournamentId}
+      publicSite={publicSite}
     />
   );
 }
@@ -106,12 +127,17 @@ function BracketRosterTabCore({
   bracketData,
   onCommitEvent,
   tid = null,
+  publicSite = null,
 }: {
   bracketData: BracketTournamentDTO | null;
   onCommitEvent: CommitEventFn | null;
   /** The workspace, when one is known. ``null`` provider-less (tests), which
    *  is the only state in which the record link is omitted. */
   tid?: string | null;
+  /** The public entry site's address, straight from the server (OPR-0908-6).
+   *  ``null`` when the workspace has no entry page, when the fetch failed, or
+   *  provider-less — in every one of those there is no public page to open. */
+  publicSite?: EntryPagePublicSiteDTO | null;
 }) {
   const players = useTournamentStore((s) => s.bracketPlayers);
   const hydrated = useTournamentStore((s) => s.hydrated);
@@ -163,6 +189,16 @@ function BracketRosterTabCore({
     window.history.replaceState(window.history.state, '', url);
   }, []);
   const selected = players.find((p) => p.id === selectedId) ?? null;
+
+  // OPR-0908-6: the selected person's PUBLIC profile, or null when there is
+  // no public page to open. A person page rides `entrantsPublished` /
+  // `drawsPublished` — with both off the entrant tier answers the uniform 404
+  // for every profile on the page, so offering the link would be a promise the
+  // public tier does not keep.
+  const publicSitePlayerHref =
+    selected && publicSite && (publicSite.entrantsPublished || publicSite.drawsPublished)
+      ? `${publicSite.url}/players/${encodeURIComponent(selected.id)}`
+      : null;
 
   const duplicateNames = useMemo(() => {
     const counts = new Map<string, number>();
@@ -420,15 +456,35 @@ function BracketRosterTabCore({
                   record: their matches in this workspace, named by them.
                   Omitted provider-less, where there is no workspace to
                   address. */}
-              {tid ? (
-                <Link
-                  to={`/tournaments/${tid}/bracket/matches?q=${encodeURIComponent(selected.name || '')}`}
-                  className="mb-3 inline-flex text-xs text-accent underline-offset-4 hover:underline"
-                  data-testid="bracket-player-matches-link"
-                >
-                  View this player&rsquo;s matches
-                </Link>
-              ) : null}
+              <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1">
+                {tid ? (
+                  <Link
+                    to={`/tournaments/${tid}/bracket/matches?q=${encodeURIComponent(selected.name || '')}`}
+                    className="inline-flex text-xs text-accent underline-offset-4 hover:underline"
+                    data-testid="bracket-player-matches-link"
+                  >
+                    View this player&rsquo;s matches
+                  </Link>
+                ) : null}
+                {/* OPR-0908-6: the other half of the same person — what the
+                    PUBLIC sees. Shown only once the entrant tier actually
+                    publishes people (an unpublished page answers the uniform
+                    404 for every profile on it), and it opens on the other
+                    origin, so it is a plain anchor with a new tab rather than
+                    a router Link. The roster row id IS the public person key
+                    (P6's one key space). */}
+                {publicSitePlayerHref ? (
+                  <a
+                    href={publicSitePlayerHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex text-xs text-accent underline-offset-4 hover:underline"
+                    data-testid="bracket-player-public-profile-link"
+                  >
+                    View public profile
+                  </a>
+                ) : null}
+              </div>
               <BracketPlayerDetailFields
                 key={selected.id}
                 player={selected}
