@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import re
 
 import pytest
@@ -10,15 +11,22 @@ from tournament_sim.seed import (
     DatasetError,
     Tournament,
     _HistoricalIdentityRegistry,
+    _demo_setup_sections,
+    _demo_dates,
+    _demo_entry_window,
     _historical_event_payload,
+    _demo_operational_event,
+    _demo_plan,
     _write_manifest,
     apply,
+    canonical_tournament_name,
     attach_historical_sources,
     complete_demo_historical_draws,
     parse_notes_text,
     parse_score,
     parse_text,
     preview,
+    repair_names,
     reset,
     select_tournaments,
     status,
@@ -40,6 +48,43 @@ P|P0004|Dave
 P|P0005|Eve
 P|P0006|Nur Izzuddin
 """
+
+
+def test_demo_setup_keeps_real_public_slug_without_dead_regulations_link():
+    source = parse_text(
+        Path("simulator/fixtures/bwf-recent-completed.txt").read_text(encoding="utf-8")
+    )
+    tournament = next(item for item in source.tournaments if item.id == "T029")
+    setup = _demo_setup_sections(tournament, [], slug="2026-taipei-open-t029")
+    assert setup["public-info"]["publicSlug"] == "2026-taipei-open-t029"
+    assert "regulationsUrl" not in setup["public-info"]
+
+
+def test_demo_setup_dates_are_offset_aware_and_match_entry_window():
+    source = parse_text(
+        Path("simulator/fixtures/bwf-recent-completed.txt").read_text(encoding="utf-8")
+    )
+    tournament = next(item for item in source.tournaments if item.id == "T029")
+    setup = _demo_setup_sections(tournament, [], slug="2026-taipei-open-t029")
+    start, end = _demo_dates(tournament, [])
+    dates = setup["dates"]
+
+    opening, deadline = _demo_entry_window(
+        tournament, "MS", start, demo_seed=True
+    )
+    assert dates["entryOpening"] == opening
+    assert dates["entryDeadline"] == deadline
+    for key in (
+        "entryOpening",
+        "entryDeadline",
+        "withdrawalDeadline",
+        "drawPublication",
+        "tournamentStart",
+        "tournamentEnd",
+    ):
+        assert "+" in dates[key] or dates[key].endswith("Z"), key
+    assert dates["tournamentStart"].startswith(start.isoformat())
+    assert dates["tournamentEnd"].startswith(end.isoformat())
 
 NOTES = """# companion test fixture
 TNOTE|T001|Demo Open|2025
@@ -495,6 +540,42 @@ def test_historical_archive_embeds_results_and_disables_scheduling_commands(tmp_
     assert output["tournaments"]["T001"]["topologyEdgeCount"] == 0
 
 
+def test_live_demo_results_precede_live_wave_and_respect_sessions_and_feeders():
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures"
+    dataset = parse_text((fixtures / "bwf-recent-completed.txt").read_text(encoding="utf-8"))
+    attach_historical_sources(dataset, source_map_path=fixtures / "bwf-full-match-sources.json")
+    dataset = select_tournaments(dataset, ["T029"])
+    complete_demo_historical_draws(dataset)
+    tournament = dataset.tournaments[0]
+    rows = dataset.historical_by_tournament["T029"]
+    events = [
+        _demo_operational_event(
+            _historical_event_payload(tournament, event, [row for row in rows if row.event == event], dataset.historical_coverage["T029"]),
+            "T029",
+        )
+        for event in _EVENTS
+    ]
+    _, _, assignments, live = _demo_plan(tournament, rows, events)
+    assigned = {item["play_unit_id"]: item for item in assignments}
+    units = {unit["id"]: unit for event in events for round_units in event["rounds"] for unit in round_units}
+    completed = [unit for unit in units.values() if unit.get("result") is not None]
+    assert len(completed) == 103
+    assert len(live) == 6
+    assert len({assigned[key]["court_id"] for key in live}) == 6
+    for unit in completed:
+        placement = assigned[unit["id"]]
+        start = placement["slot_id"]
+        end = start + placement["duration_slots"]
+        assert end < min(assigned[key]["slot_id"] for key in live)
+        assert start % 48 + placement["duration_slots"] <= 20  # 09:00–19:00
+        for feeder in (unit.get("feeder_a"), unit.get("feeder_b")):
+            if feeder:
+                assert assigned[feeder]["slot_id"] + assigned[feeder]["duration_slots"] < start
+    for court in range(1, 7):
+        court_rows = sorted((row for row in assignments if row["court_id"] == court), key=lambda row: row["slot_id"])
+        assert all(a["slot_id"] + a["duration_slots"] <= b["slot_id"] for a, b in zip(court_rows, court_rows[1:]))
+
+
 def test_complete_demo_draws_fills_all_events_and_marks_generated_rows(tmp_path: Path):
     fixtures = Path(__file__).resolve().parents[1] / "fixtures"
     dataset = parse_text((fixtures / "bwf-recent-completed.txt").read_text(encoding="utf-8"))
@@ -821,3 +902,186 @@ def test_historical_source_rejects_conflicting_normalized_aliases(tmp_path: Path
     )
     with pytest.raises(DatasetError, match="normalizes to both"):
         attach_historical_sources(dataset, source_map_path=source_map)
+
+
+# --- P5: canonical tournament names ------------------------------------
+#
+# One rule: the tournament display name carries no year or date suffix.
+# The year stays structured (Setup ``general.season``, the ``dates`` block,
+# the workspace date fields, the slug and the manifest's ``source.year``).
+
+
+def test_canonical_name_strips_only_a_trailing_parenthesised_year():
+    assert canonical_tournament_name("Taipei Open (2026)") == "Taipei Open"
+    assert canonical_tournament_name("Korea Masters (2026)") == "Korea Masters"
+    assert canonical_tournament_name("Taipei Open") == "Taipei Open"
+    # A number that carries meaning is not a suffix and is left alone.
+    assert canonical_tournament_name("Super 300 Finals") == "Super 300 Finals"
+    assert canonical_tournament_name("U.S. Open (2026) Qualifying") == (
+        "U.S. Open (2026) Qualifying"
+    )
+    assert canonical_tournament_name("Yunavero Club Open 2026") == (
+        "Yunavero Club Open 2026"
+    )
+
+
+def test_seeded_workspace_and_setup_names_carry_no_year(tmp_path: Path):
+    client = FakeClient()
+    dataset = parse_text(SOURCE)
+    output = apply(dataset, client, seed_key="bwf-demo", run_dir=tmp_path)
+
+    assert client.created[0][1] == "Demo Open"
+    # The year is still structured data on the same fixture.
+    assert output["tournaments"]["T001"]["source"]["year"] == 2025
+    assert output["tournaments"]["T001"]["slug"].startswith("2025-demo-open")
+
+    sections = _demo_setup_sections(
+        dataset.tournaments[0], [], slug="2025-demo-open-t001"
+    )
+    assert sections["general"]["name"] == "Demo Open"
+    assert sections["general"]["publicName"] == "Demo Open"
+    assert sections["general"]["season"] == "2025"
+
+
+class RenameClient:
+    """Just enough workspace surface for :func:`repair_names`."""
+
+    def __init__(self, workspaces):
+        self.workspaces = workspaces
+        self.patched = []
+        self.setup_patched = []
+
+    def get_tournament(self, tid):
+        return self.workspaces.get(tid)
+
+    def update_tournament(self, tid, body):
+        self.workspaces[tid].update(body)
+        self.patched.append((tid, body))
+        return self.workspaces[tid]
+
+    def get_setup(self, tid):
+        return {
+            "sections": [
+                {"key": "general", "data": self.workspaces[tid]["setupGeneral"]}
+            ]
+        }
+
+    def seed_setup_sections(self, tid, sections):
+        self.workspaces[tid]["setupGeneral"] = sections["general"]
+        self.setup_patched.append((tid, sections))
+        return {}
+
+
+def _rename_fixture(tmp_path: Path):
+    (tmp_path / "bwf-demo.json").write_text(
+        json.dumps(
+            {
+                "seedKey": "bwf-demo",
+                "seedFormatVersion": 3,
+                "status": "complete",
+                "tournaments": {
+                    "T001": {
+                        "workspaceId": "ws-1",
+                        "slug": "2025-demo-open-t001",
+                        "source": {"name": "Demo Open", "year": 2025},
+                    },
+                    "T002": {
+                        "workspaceId": "ws-gone",
+                        "source": {"name": "Deleted Open", "year": 2025},
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = RenameClient(
+        {
+            "ws-1": {
+                "id": "ws-1",
+                "name": "Demo Open (2025)",
+                "setupGeneral": {
+                    "name": "Demo Open (2025)",
+                    "publicName": "Demo Open 2025",
+                    "season": "2025",
+                },
+            }
+        }
+    )
+    return client
+
+
+def test_repair_names_rewrites_seeded_rows_and_is_idempotent(tmp_path: Path):
+    client = _rename_fixture(tmp_path)
+
+    first = repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert [row["to"] for row in first["renamed"]] == ["Demo Open"]
+    assert first["setupRepaired"] == ["T001"]
+    # A workspace the manifest names but the deployment no longer holds is
+    # reported, not an error.
+    assert first["missingWorkspaces"] == ["T002"]
+    assert client.workspaces["ws-1"]["name"] == "Demo Open"
+    assert client.workspaces["ws-1"]["setupGeneral"] == {
+        "name": "Demo Open",
+        "publicName": "Demo Open",
+        "season": "2025",
+    }
+
+    second = repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert second["renamed"] == []
+    assert second["setupRepaired"] == []
+    assert second["unchanged"] == ["T001"]
+    # No further writes on the second pass — the repair is idempotent.
+    assert len(client.patched) == 1
+    assert len(client.setup_patched) == 1
+    # Ids and slugs are untouched by the repair.
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    assert manifest["tournaments"]["T001"]["workspaceId"] == "ws-1"
+    assert manifest["tournaments"]["T001"]["slug"] == "2025-demo-open-t001"
+
+
+def test_repair_names_ignores_workspaces_the_manifest_does_not_own(tmp_path: Path):
+    client = _rename_fixture(tmp_path)
+    # A director-authored workspace living in the same deployment.
+    client.workspaces["ws-user"] = {
+        "id": "ws-user",
+        "name": "Yunavero Club Open (2026)",
+        "setupGeneral": {"name": "Yunavero Club Open (2026)"},
+    }
+
+    repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert client.workspaces["ws-user"]["name"] == "Yunavero Club Open (2026)"
+    assert [tid for tid, _ in client.patched] == ["ws-1"]
+
+
+def test_repair_names_records_a_frozen_setup_section_instead_of_failing(tmp_path: Path):
+    """A checked-out tournament freezes Setup; the title still gets fixed.
+
+    ``CONFIG_LOCKED`` is the product's preparation fence, not a repair
+    failure — and the workspace ``name`` the fence does not cover is what
+    the Hub, the workspace header, the public tier and the venue board all
+    render.
+    """
+    client = _rename_fixture(tmp_path)
+
+    class Locked(Exception):
+        status = 409
+
+    def refuse(tid, sections):
+        raise Locked()
+
+    client.seed_setup_sections = refuse
+
+    output = repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert [row["to"] for row in output["renamed"]] == ["Demo Open"]
+    assert output["setupLocked"] == ["T001"]
+    assert output["setupRepaired"] == []
+    assert client.workspaces["ws-1"]["name"] == "Demo Open"
+
+    # Re-running renames nothing further; the frozen section stays reported.
+    again = repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+    assert again["renamed"] == []
+    assert again["setupLocked"] == ["T001"]

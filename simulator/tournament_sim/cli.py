@@ -7,6 +7,7 @@ Examples:
     python -m tournament_sim list
     python -m tournament_sim seed preview data/bwf-finals.txt
     python -m tournament_sim seed apply data/bwf-finals.txt --seed-key bwf-recent
+    python -m tournament_sim seed repair-names --seed-key bwf-recent
 """
 
 from __future__ import annotations
@@ -70,7 +71,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     seed = sub.add_parser("seed", help="inspect or apply a source dataset")
     seed_sub = seed.add_subparsers(dest="seed_cmd", required=True)
-    for command in ("preview", "apply", "status", "reset", "resume"):
+    for command in ("preview", "apply", "status", "reset", "resume", "repair-names"):
         command_parser = seed_sub.add_parser(command)
         if command in {"preview", "apply", "resume"}:
             command_parser.add_argument("path", help="UTF-8 pipe-delimited source file")
@@ -101,14 +102,16 @@ def _build_parser() -> argparse.ArgumentParser:
                 metavar="TID",
                 help="seed only this validated tournament; repeat for multiple ids",
             )
-        if command in {"apply", "resume", "status", "reset"}:
+        if command in {"apply", "resume", "status", "reset", "repair-names"}:
             command_parser.add_argument("--seed-key", required=True)
         if command in {"apply", "resume"}:
             command_parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
             command_parser.add_argument("--run-dir", default=".local-testing/demo/data/import-runs")
             command_parser.add_argument("--replace", action="store_true")
-        if command in {"status", "reset"}:
+        if command in {"status", "reset", "repair-names"}:
             command_parser.add_argument("--run-dir", default=".local-testing/demo/data/import-runs")
+        if command == "repair-names":
+            command_parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
         if command == "reset":
             command_parser.add_argument("--confirm", required=True)
             command_parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
@@ -145,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
             complete_demo_historical_draws,
             load_file,
             preview,
+            repair_names,
             reset,
             status,
         )
@@ -185,7 +189,13 @@ def main(argv: list[str] | None = None) -> int:
 
             client = SimClient(args.base_url)
             try:
-                if args.seed_cmd == "reset":
+                if args.seed_cmd == "repair-names":
+                    output = repair_names(
+                        seed_key=args.seed_key,
+                        client=client,
+                        run_dir=Path(args.run_dir),
+                    )
+                elif args.seed_cmd == "reset":
                     output = reset(
                         seed_key=args.seed_key,
                         client=client,

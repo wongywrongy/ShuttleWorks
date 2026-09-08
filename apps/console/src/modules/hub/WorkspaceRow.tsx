@@ -28,7 +28,7 @@ import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/modul
 import { attentionReasons, workspaceHealth } from './hubSignals';
 import { rowActionFor } from './nextAction';
 import { type HubGroupId } from './hubGrouping';
-import { displayWorkspaceName, formatEventRange } from './workspaceLabel';
+import { formatEventRange } from './workspaceLabel';
 
 /** The attention dot. Silent when nothing is wrong — a calm list is the point.
  *  When something is, it is a focusable control whose accessible name states
@@ -162,7 +162,7 @@ export function WorkspaceRow({
       <span className="flex min-w-[12rem] flex-1 items-center gap-2.5">
         <AttentionDot tournament={tournament} onOpenDetails={onSelect} />
         <span className="min-w-0 break-words text-2sm font-semibold text-foreground">
-          {displayWorkspaceName(tournament)}
+          {(tournament.name ?? '').trim() || 'Untitled'}
         </span>
         {showDate && dateLabel ? (
           <span

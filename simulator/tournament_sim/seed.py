@@ -49,6 +49,7 @@ _DEMO_GENERATOR_VERSION = 5
 _DEMO_DEFAULT_COURT_COUNT = 8
 _DEMO_LIVE_COURT_COUNT = 6
 _DEMO_INTERVAL_MINUTES = 30
+_DEMO_ENTRY_FEE_CENTS = 5000
 # Branding assets for the demo/visual-review dataset. These used to be
 # `https://example.test/<slug>/logo.svg` links, which resolve to nothing and —
 # because the app's CSP is `img-src 'self' data: blob:` — were blocked before
@@ -1405,7 +1406,9 @@ def _demo_withheld_person(
     return once[-1] if once else None
 
 
-def _demo_entry_accounts(client: SimClient) -> dict[str, str]:
+def _demo_entry_accounts(
+    client: SimClient, featured: dict[str, str] | None = None
+) -> dict[str, str]:
     """Create (or reuse) the six entrant accounts and return ``email -> id``.
 
     Signup is throttled per IP, and deliberately answers with a
@@ -1415,7 +1418,10 @@ def _demo_entry_accounts(client: SimClient) -> dict[str, str]:
     """
     display_names = {email: f"{club} entries" for club, email in _DEMO_CLUBS}
     display_names.update(
-        {email: f"{code} entrant" for code, email in _FEATURED_PERSONAL_ACCOUNTS}
+        {
+            email: (featured or {}).get(code, f"{code} entrant")
+            for code, email in _FEATURED_PERSONAL_ACCOUNTS
+        }
     )
     accounts: dict[str, str] = {}
     for email in display_names:
@@ -1507,6 +1513,30 @@ def _register_demo_entrants(
         for row in client.list_entries(tid)
         if row.get("entryPlayerId")
     }
+
+
+# One canonical tournament display name (P5, 2026-09-08).
+#
+# The title a reader sees is the tournament's NAME and nothing else. The
+# year is already carried as structured data everywhere it matters: Setup
+# ``general.season``, the Setup ``dates`` block, the workspace row's
+# ``tournamentDate``/``tournamentEndDate``, the public slug, and the
+# manifest's ``source.year``. A title that repeats it is redundant, and the
+# operator console, the public entrant tier and the venue display all read
+# the same ``tournaments.name`` string, so fixing it once fixes all three.
+_YEAR_SUFFIX_RE = re.compile(r"\s*\((?:19|20)\d{2}\)\s*$")
+
+
+def canonical_tournament_name(name: str) -> str:
+    """Strip a trailing parenthesised fixture year from a tournament name.
+
+    Deliberately narrow: only a four-digit year **in parentheses at the very
+    end** is removed, so a name whose number carries meaning ("Super 300",
+    "Thomas Cup 2026 Qualification") survives untouched. The generator no
+    longer writes the suffix at all; :func:`repair_names` removes it from
+    rows seeded before this rule existed.
+    """
+    return _YEAR_SUFFIX_RE.sub("", name).strip()
 
 
 def _slug(tournament: Tournament) -> str:
@@ -2056,6 +2086,7 @@ def _demo_setup_sections(
 ) -> dict[str, dict]:
     start, end = _demo_dates(tournament, rows)
     timezone_name = _demo_timezone(tournament)
+    venue_zone = ZoneInfo(timezone_name)
     courts = [
         {
             "id": f"court-{number}",
@@ -2089,7 +2120,7 @@ def _demo_setup_sections(
             "category": "Open",
             "eligibility": "BWF member in good standing; one entry per discipline.",
             "capacity": 32,
-            "entryFeeMinor": 7500 if code in {"MD", "WD", "XD"} else 5000,
+            "entryFeeMinor": _DEMO_ENTRY_FEE_CENTS,
             "status": "published" if tournament.id == _DEMO_UPCOMING_TOURNAMENT else "complete" if end < date(2026, 7, 31) else "open",
         }
         for code in _EVENTS
@@ -2098,16 +2129,22 @@ def _demo_setup_sections(
     # dates onto the entry EVENTS the public tier actually reads. These
     # Setup values are the operator-facing copy of the same schedule; a
     # reader who sees two different deadlines has found a fixture bug.
-    opening = start - timedelta(days=120)
-    deadline = start - timedelta(days=14)
-    withdrawal = start - timedelta(days=10)
-    draw_publication = start - timedelta(days=7)
+    opening = datetime.combine(start - timedelta(days=120), time(9, 0), tzinfo=venue_zone)
+    deadline = datetime.combine(start - timedelta(days=14), time(23, 59), tzinfo=venue_zone)
+    withdrawal = datetime.combine(start - timedelta(days=10), time(23, 59), tzinfo=venue_zone)
+    draw_publication = datetime.combine(start - timedelta(days=7), time(12, 0), tzinfo=venue_zone)
+    tournament_start = datetime.combine(start, time(9, 0), tzinfo=venue_zone)
+    tournament_end = datetime.combine(end, time(19, 0), tzinfo=venue_zone)
     map_query = quote_plus(f"{tournament.venue}, {tournament.host}")
-    safe_slug = slug.removesuffix(f"-{tournament.id.lower()}")
     return {
         "general": {
-            "name": f"{tournament.name} ({tournament.year})",
-            "publicName": f"{tournament.name} {tournament.year}",
+            # Both spellings are the canonical name (see
+            # ``canonical_tournament_name``); the season below is where the
+            # year belongs. ``publicName`` is an operator override and is
+            # kept in step with the workspace title rather than restating it
+            # with a suffix.
+            "name": canonical_tournament_name(tournament.name),
+            "publicName": canonical_tournament_name(tournament.name),
             "organizer": "ShuttleWorks BWF Demo Circuit",
             "tournamentNumber": tournament.id,
             "tournamentType": tournament.level.lower().replace(" ", "-"),
@@ -2116,12 +2153,12 @@ def _demo_setup_sections(
             "timezone": timezone_name,
         },
         "dates": {
-            "entryOpening": f"{opening.isoformat()}T09:00:00",
-            "entryDeadline": f"{deadline.isoformat()}T23:59:00",
-            "withdrawalDeadline": f"{withdrawal.isoformat()}T23:59:00",
-            "drawPublication": f"{draw_publication.isoformat()}T12:00:00",
-            "tournamentStart": f"{start.isoformat()}T09:00:00",
-            "tournamentEnd": f"{end.isoformat()}T19:00:00",
+            "entryOpening": opening.isoformat(),
+            "entryDeadline": deadline.isoformat(),
+            "withdrawalDeadline": withdrawal.isoformat(),
+            "drawPublication": draw_publication.isoformat(),
+            "tournamentStart": tournament_start.isoformat(),
+            "tournamentEnd": tournament_end.isoformat(),
             "dailySessions": sessions,
         },
         "venue": {
@@ -2168,7 +2205,6 @@ def _demo_setup_sections(
                 f"{tournament.name} {tournament.year} at {tournament.venue}, "
                 f"{tournament.host}. All five disciplines, {tournament.date_range}.",
             ),
-            "regulationsUrl": f"https://example.test/{safe_slug}/regulations.pdf",
             "logoUrl": _DEMO_LOGO_DATA_URI,
             "bannerUrl": _DEMO_BANNER_DATA_URI,
         },
@@ -2342,6 +2378,48 @@ def _demo_startable_units(event: dict) -> list[str]:
     return startable
 
 
+def _demo_completed_placements(events: list[dict], court_count: int) -> dict[str, tuple[int, int]]:
+    """Place the live demo's results before its live wave, in sporting order.
+
+    Historical source dates describe a completed event. The live demo keeps
+    only some of those results, so it needs its own chronology: completed
+    feeders first, 09:00–19:00 sessions, and rest before a player's next match.
+    Slot 152 is the fixed 31 July 13:00 live wave on the Taipei floor.
+    """
+    free = dict.fromkeys(range(1, court_count + 1), 0)
+    rested: dict[str, int] = {}
+    placements: dict[str, tuple[int, int]] = {}
+    round_start = 0
+
+    def session_slot(slot: int, duration: int) -> int:
+        day, within = divmod(slot, 48)
+        return (day + 1) * 48 if within + duration > 20 else slot
+
+    for round_index in range(max((len(event["rounds"]) for event in events), default=0)):
+        round_end = round_start
+        for event in events:
+            if round_index >= len(event["rounds"]):
+                continue
+            for unit in event["rounds"][round_index]:
+                if unit.get("result") is None:
+                    continue
+                people = [str(person) for side in ("side_a", "side_b") for person in unit.get(side, [])]
+                duration = int(unit.get("duration_slots") or 2)
+                earliest = max(round_start, max((rested.get(person, 0) for person in people), default=0))
+                court = min(free, key=lambda key: (session_slot(max(free[key], earliest), duration), key))
+                slot = session_slot(max(free[court], earliest), duration)
+                end = slot + duration
+                if end >= 152:
+                    raise ValueError("Completed demo matches must finish before the fixed live wave")
+                placements[unit["id"]] = (slot, court)
+                free[court] = end
+                for person in people:
+                    rested[person] = end + 1
+                round_end = max(round_end, end)
+        round_start = round_end + 1
+    return placements
+
+
 def _demo_plan(
     tournament: Tournament,
     rows: list[HistoricalMatch],
@@ -2351,6 +2429,10 @@ def _demo_plan(
     zone = ZoneInfo(_demo_timezone(tournament))
     start_at = datetime.combine(start, time(9, 0), tzinfo=zone)
     court_count = _demo_court_count(tournament.id)
+    completed = (
+        _demo_completed_placements(events, court_count)
+        if tournament.id == _DEMO_LIVE_TOURNAMENT else {}
+    )
     requests: list[dict] = []
     live_candidates: list[str] = []
     queued_ids: set[str] = set()
@@ -2396,6 +2478,11 @@ def _demo_plan(
                 # sequentially and can never overlap.
                 court_id: int | None = None
                 slot_id = minute_offset // _DEMO_INTERVAL_MINUTES
+                if unit["id"] in completed:
+                    slot_id, court_id = completed[unit["id"]]
+                    played_at = start_at + timedelta(minutes=slot_id * _DEMO_INTERVAL_MINUTES)
+                    unit["played_on"] = played_at.date().isoformat()
+                    unit["local_time"] = played_at.strftime("%H:%M")
                 if tournament.id == _DEMO_LIVE_TOURNAMENT and unit.get("result") is None:
                     if unit["id"] in live_position:
                         position = live_position[unit["id"]]
@@ -2515,7 +2602,7 @@ def apply(
     entrant_accounts: dict[str, str] = {}
     if demo_tournaments:
         featured_people = _demo_featured_people(demo_tournaments)
-        entrant_accounts = _demo_entry_accounts(client)
+        entrant_accounts = _demo_entry_accounts(client, featured_people)
         manifest["publicEntrants"] = {
             "accounts": entrant_accounts,
             "featured": featured_people,
@@ -2532,7 +2619,7 @@ def apply(
         )
         if not entry.get("workspaceId"):
             workspace = client.create_tournament(
-                f"{tournament.name} ({tournament.year})",
+                canonical_tournament_name(tournament.name),
                 kind="bracket",
                 modules=[
                     {"moduleId": "bracket", "status": "enabled"},
@@ -2642,6 +2729,12 @@ def apply(
                     "collectPhone": False,
                     "venueName": tournament.venue,
                     "venueAddress": f"{tournament.venue}, {tournament.host}",
+                    # The public entry page owns pricing for submissions.
+                    # Keep its per-event tiers aligned with Setup's fees.
+                    **({
+                        "feeSchedule": {str(count): count * _DEMO_ENTRY_FEE_CENTS for count in range(1, len(_EVENTS) + 1)},
+                        "paymentInstructions": "Pay the entry fee at tournament check-in; include your entry reference.",
+                    } if demo_seed else {}),
                 },
             )
             entry_event_ids: dict[str, str] = {}
@@ -2688,7 +2781,7 @@ def apply(
             token = client.display_token(tid)
             entry["displayToken"] = token.get("token")
             entry["urls"] = {
-                "console": f"/tournaments/{tid}/bracket",
+                "console": f"/tournaments/{tid}/overview",
                 "entrant": f"/e/{entry['slug']}",
                 "display": token.get("url", f"/display?token={token.get('token', '')}"),
             }
@@ -2875,6 +2968,110 @@ def status(*, seed_key: str, run_dir: Path = _DEFAULT_RUN_DIR) -> dict:
     if not path.exists():
         raise FileNotFoundError(f"no import run for seed key {seed_key!r}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def repair_names(
+    *, seed_key: str, client: SimClient, run_dir: Path = _DEFAULT_RUN_DIR
+) -> dict:
+    """Bring already-seeded workspaces onto the canonical-name rule.
+
+    Idempotent and **scoped to this seed run**: the only workspaces touched
+    are the ones this manifest's ``workspaceId`` entries name, and the name
+    written is derived from that entry's recorded ``source.name`` — never a
+    regex sweep over whatever titles the deployment happens to hold. A
+    workspace a director authored by hand is invisible to this command even
+    if its title looks the same shape.
+
+    Nothing else moves: ids, slugs, routes, dates, seasons, module state and
+    the archive/season split are all untouched. Re-running reports every
+    workspace as ``unchanged``.
+    """
+    path = _run_path(run_dir, seed_key)
+    manifest = status(seed_key=seed_key, run_dir=run_dir)
+    renamed: list[dict[str, str]] = []
+    setup_repaired: list[str] = []
+    setup_locked: list[str] = []
+    unchanged: list[str] = []
+    missing: list[str] = []
+    checked = 0
+    for tournament_id, entry in sorted(manifest.get("tournaments", {}).items()):
+        workspace_id = entry.get("workspaceId")
+        source = entry.get("source") or {}
+        source_name = source.get("name")
+        if not workspace_id or not source_name:
+            continue
+        checked += 1
+        canonical = canonical_tournament_name(str(source_name))
+        summary = client.get_tournament(workspace_id)
+        if summary is None:
+            missing.append(tournament_id)
+            continue
+        touched = False
+        if summary.get("name") != canonical:
+            client.update_tournament(workspace_id, {"name": canonical})
+            renamed.append(
+                {
+                    "tournamentId": tournament_id,
+                    "workspaceId": workspace_id,
+                    "from": summary.get("name"),
+                    "to": canonical,
+                }
+            )
+            touched = True
+        # The Setup ``general`` section carries the operator-facing copy of
+        # the same two names. Leaving it behind would put a stale title back
+        # on the next Setup save.
+        general = _setup_section_data(client.get_setup(workspace_id), "general")
+        if general is not None and (
+            general.get("name") != canonical or general.get("publicName") != canonical
+        ):
+            try:
+                client.seed_setup_sections(
+                    workspace_id,
+                    {"general": {**general, "name": canonical, "publicName": canonical}},
+                )
+            except Exception as exc:  # noqa: BLE001 - narrowed on the status below
+                # A tournament that has checked out freezes its preparation
+                # inputs (``CONFIG_LOCKED``). That fence is the product's,
+                # not a repair failure: the Setup section is operator-facing
+                # preparation copy, while every title a reader sees — Hub,
+                # workspace header, public tier, venue board — comes from the
+                # workspace ``name`` repaired above. Record it and move on
+                # rather than forcing a frozen checkpoint open.
+                if getattr(exc, "status", None) != 409:
+                    raise
+                setup_locked.append(tournament_id)
+            else:
+                setup_repaired.append(tournament_id)
+            touched = True
+        if not touched:
+            unchanged.append(tournament_id)
+    manifest["nameRepair"] = {
+        "renamed": [row["tournamentId"] for row in renamed],
+        "setupRepaired": setup_repaired,
+        "setupLocked": setup_locked,
+        "unchanged": unchanged,
+        "missingWorkspaces": missing,
+    }
+    _write_manifest(path, manifest)
+    return {
+        "seedKey": seed_key,
+        "checked": checked,
+        "renamed": renamed,
+        "setupRepaired": setup_repaired,
+        "setupLocked": setup_locked,
+        "unchanged": unchanged,
+        "missingWorkspaces": missing,
+    }
+
+
+def _setup_section_data(setup: dict | None, key: str) -> dict | None:
+    """Pull one section's ``data`` out of the Setup document."""
+    for section in (setup or {}).get("sections", []) or []:
+        if section.get("key") == key:
+            data = section.get("data")
+            return data if isinstance(data, dict) else None
+    return None
 
 
 def reset(

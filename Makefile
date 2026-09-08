@@ -1,9 +1,10 @@
 .PHONY: help \
         scheduler scheduler-dev scheduler-rebuild \
-        demo-up demo-rebuild demo-status demo-down demo-reset \
+        demo-up demo-update demo-rebuild demo-status demo-down demo-reset \
         demo-backup demo-backup-verify demo-restore-drill demo-restore demo-backup-install \
         demo-seed-preview demo-seed-apply demo-seed-resume demo-seed-status demo-seed-reset \
-        surface-books surface-books-status \
+        demo-seed-repair-names \
+        surface-books surface-books-status surface-books-serve surface-books-url \
         entrant-dev full-dev local-dev \
         dev-postgres dev-postgres-stop phase4-observability-rehearsal \
         stop logs ps clean \
@@ -45,7 +46,7 @@ SURFACE_REPORT_DIR ?= docs/screenshots/ui-review
 
 # Every Python tree ruff is expected to lint. Spelled out rather than `.`
 # because pyproject.toml now sits at the repo root, so a bare `ruff check .`
-# would walk archive/ and node_modules looking for reasons to fail.
+# would walk node_modules looking for reasons to fail.
 PY_SOURCES := apps/api tests/backend tests/e2e simulator tools packages/scheduler-core
 
 # Default target — list everything.
@@ -58,6 +59,7 @@ help:
 	@echo "  make scheduler-dev      API in Docker, Vite dev server on :5173"
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
 	@echo "  make demo-up            Start the Tailscale-only tech demo"
+	@echo "  make demo-update        Back up and rebuild current worktree without reseeding"
 	@echo "  make demo-rebuild       Rebuild and restart the tech demo"
 	@echo "  make demo-status        Show tech demo container status and URLs"
 	@echo "  make demo-down          Back up and stop the tech demo"
@@ -71,8 +73,11 @@ help:
 	@echo "  make demo-seed-status   Show the resumable import manifest"
 	@echo "  make demo-seed-resume   Resume an interrupted fixture import"
 	@echo "  make demo-seed-reset    Delete only workspaces owned by this seed run"
+	@echo "  make demo-seed-repair-names  Re-apply canonical tournament names to this seed run"
 	@echo "  make surface-books      Capture numbered operator + entrant UI review PDFs"
 	@echo "  make surface-books-status Summarize the latest capture manifests or active run"
+	@echo "  make surface-books-serve  Serve generated books from SURFACE_REPORT_DIR over Tailscale"
+	@echo "  make surface-books-url    Print the Tailscale URL for the served books"
 	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host API on :8600"
 	@echo "  make full-dev           Both surfaces at once: operator :5173 + entrant :5174"
 	@echo "                          (local only — see docs/how-to/running-locally)"
@@ -143,6 +148,9 @@ scheduler-rebuild:
 demo-up:
 	$(DEMO_COMPOSE) up
 
+demo-update:
+	$(DEMO_COMPOSE) update
+
 demo-rebuild:
 	$(DEMO_COMPOSE) rebuild
 
@@ -184,6 +192,12 @@ demo-seed-resume:
 demo-seed-status:
 	@$(DEMO_SEED) status --seed-key $(DEMO_SEED_KEY) --run-dir $(DEMO_SEED_RUN_DIR)
 
+# Idempotent, manifest-scoped title repair. Only workspaces this seed run
+# created are touched; user-authored tournaments are never rewritten.
+demo-seed-repair-names:
+	@$(DEMO_SEED_LOCKED) repair-names --seed-key $(DEMO_SEED_KEY) \
+		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
+
 demo-seed-reset: demo-backup
 	@$(DEMO_SEED_LOCKED) reset --seed-key $(DEMO_SEED_KEY) --confirm $(DEMO_SEED_KEY) \
 		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
@@ -197,13 +211,14 @@ surface-books:
 	workspace_id="$$(jq -er '.tournaments.T029.workspaceId' "$$seed_manifest")"; \
 	display_token="$$(jq -er '.tournaments.T029.displayToken' "$$seed_manifest")"; \
 	entrant_slug="$$(jq -er '.tournaments.T030.slug' "$$seed_manifest")"; \
+	results_slug="$$(jq -er '.tournaments.T029.slug' "$$seed_manifest")"; \
 	event_tz="$$(curl -fsS "http://$$demo_ip:8092/tournaments/$$workspace_id" | jq -r '.timeZone // empty')"; \
 	AUTH_ME_URL="http://$$demo_ip:8090/api/auth/me" \
 	FIXTURE_MODE="$${FIXTURE_MODE:-normal}" EVENT_TIMEZONE="$$event_tz" \
 	WS_ID="$$workspace_id" DISPLAY_TOKEN="$$display_token" \
 		node tools/surface-capture.mjs console "http://$$demo_ip:8090" \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
-	FIXTURE_MODE="$${FIXTURE_MODE:-normal}" \
+	FIXTURE_MODE="$${FIXTURE_MODE:-normal}" RESULTS_SLUG="$$results_slug" \
 	SLUG="$$entrant_slug" node tools/surface-capture.mjs entrant "http://$$demo_ip:8091" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
 	@$(MAKE) --no-print-directory surface-books-status
@@ -212,6 +227,12 @@ surface-books-status:
 	@node tools/surface-capture-status.mjs \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.manifest.json" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.manifest.json"
+
+surface-books-serve:
+	@SURFACE_REPORT_DIR="$(SURFACE_REPORT_DIR)" bash tools/serve-surface-books.sh up "$(SURFACE_REPORT_DIR)"
+
+surface-books-url:
+	@SURFACE_REPORT_DIR="$(SURFACE_REPORT_DIR)" bash tools/serve-surface-books.sh url "$(SURFACE_REPORT_DIR)"
 
 scheduler-dev:
 	@echo "Starting development environment..."
@@ -522,23 +543,35 @@ surface-books-fixture:
 	console_url="$$(jq -er .consoleBaseUrl "$$fixture_json")"; \
 	entrant_url="$$(jq -er .entrantBaseUrl "$$fixture_json")"; \
 	workspace_id="$$(jq -er .taipeiTid "$$fixture_json")"; \
+	meet_workspace_id="$$(jq -r '.meetTid // ""' "$$fixture_json")"; \
+	meet_invite_token="$$(jq -r '.meetInviteToken // ""' "$$fixture_json")"; \
 	display_token="$$(jq -er .displayToken "$$fixture_json")"; \
 	entrant_slug="$$(jq -er .koreaSlug "$$fixture_json")"; \
 	fixture_mode="$$(jq -r '.fixtureMode // "normal"' "$$fixture_json")"; \
+	demo_now="$$(jq -er .demoNow "$$fixture_json")"; \
+	reviewed_build_sha="$$(jq -r '.reviewedBuildSha // "unprovided"' "$$fixture_json")"; \
 	player_key="$$(jq -r '.playerKey // ""' "$$fixture_json")"; \
 	results_slug="$$(jq -r '.taipeiSlug // ""' "$$fixture_json")"; \
+	submission_id="$$(jq -r '.submissionId // ""' "$$fixture_json")"; \
+	partner_token="$$(jq -r '.partnerToken // ""' "$$fixture_json")"; \
+	reset_token="$$(jq -r '.resetToken // ""' "$$fixture_json")"; \
+	entrant_email="$$(jq -r '.reviewEntrantEmail // ""' "$$fixture_json")"; \
+	entrant_password="$$(jq -r '.reviewEntrantPassword // ""' "$$fixture_json")"; \
 	withheld_key="$$(jq -r '.withheldPlayerKey // ""' "$$fixture_json")"; \
-	missing_key="$$(jq -r '.missingPlayerKey // ""' "$$fixture_json")"; \
 	api_url="$$(jq -er .apiBaseUrl "$$fixture_json")"; \
 	event_tz="$$(curl -fsS "$$api_url/tournaments/$$workspace_id" | jq -r '.timeZone // empty')"; \
 	mkdir -p "$(SURFACE_REPORT_DIR)"; \
+	AUTH_ME_URL="$$console_url/api/auth/me" \
+	SHUTTLEWORKS_DEMO_NOW="$$demo_now" REVIEWED_BUILD_SHA="$${REVIEWED_BUILD_SHA:-$$reviewed_build_sha}" \
 	FIXTURE_MODE="$$fixture_mode" EVENT_TIMEZONE="$$event_tz" \
-	WS_ID="$$workspace_id" DISPLAY_TOKEN="$$display_token" \
+	WS_ID="$$workspace_id" MEET_WS_ID="$$meet_workspace_id" DISPLAY_TOKEN="$$display_token" \
+	INVITE_TOKEN="$$meet_invite_token" \
 		node tools/surface-capture.mjs console "$$console_url" \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
-	FIXTURE_MODE="$$fixture_mode" PLAYER_KEY="$$player_key" \
+	FIXTURE_MODE="$$fixture_mode" PLAYER_KEY="$$player_key" SUBMISSION_ID="$$submission_id" PARTNER_TOKEN="$$partner_token" \
+	SHUTTLEWORKS_DEMO_NOW="$$demo_now" REVIEWED_BUILD_SHA="$${REVIEWED_BUILD_SHA:-$$reviewed_build_sha}" \
+	RESET_TOKEN="$$reset_token" ENTRANT_EMAIL="$$entrant_email" ENTRANT_PASSWORD="$$entrant_password" \
 	RESULTS_SLUG="$$results_slug" WITHHELD_PLAYER_KEY="$$withheld_key" \
-	MISSING_PLAYER_KEY="$$missing_key" \
 	SLUG="$$entrant_slug" node tools/surface-capture.mjs entrant "$$entrant_url" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
 	@$(MAKE) --no-print-directory surface-books-status

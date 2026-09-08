@@ -19,6 +19,16 @@ program plans remain recoverable from Git; this file tracks only live debt.
 
 ---
 
+## Operator/public remediation (2026-09-08)
+
+Logged out of scope while normalising tournament display names (P5).
+
+| # | What | Size |
+| --- | --- | --- |
+| OPR-0908-1 | **Dropping the year from seeded titles makes two pairs of demo workspaces share a display name** — "Australian Open" (2025 and 2026) and "Korea Masters" (2025 and 2026). Ids, slugs (`2026-korea-masters-t030`), dates and season fields still separate them, and every surface that lists a workspace shows a date beside the name, so nothing is ambiguous in practice. If a list is ever built that shows the name alone, it needs the season alongside it — not a year put back into the title. | S |
+| OPR-0908-2 | **The Setup `general.name` / `general.publicName` copy of the title cannot be repaired on a checked-out tournament** (`CONFIG_LOCKED`, `require_pre_checkout_configuration_write`). `seed repair-names` reports those workspaces under `setupLocked` and repairs the workspace `name` that every reader-facing surface actually renders. On the demo stack that is Taipei (T029) and Korea (T030); their Setup sections still read "Taipei Open (2026)" until the next reseed. A general answer needs either a supported way to amend frozen preparation copy or a resolver that reads the workspace name rather than the Setup section. | S |
+| OPR-0908-3 | **`publicName` is written but dead on every read path.** Nothing in the API or either tier reads Setup `general.publicName`; only the Setup form writes it. Either wire it as the public-title override its label promises, or remove the field. | S |
+
 ## Security remediation (2026-09-07)
 
 Logged out of scope while fixing three findings in `apps/api` (SMTP STARTTLS verification, Turnstile keys in cloud, tenant-scoped solve-job idempotency). `infra/` was off-limits to that change.
@@ -286,6 +296,12 @@ These are decisions to make, then execute. Nothing here is blocked on effort.
 
 ## Open — small and unscheduled
 
+**Consolidation review (2026-09-07)**
+
+- **Meet and Bracket queues duplicate IndexedDB plumbing.** `apps/console/src/lib/commandQueue.ts` and `apps/console/src/lib/bracketCommandQueue.ts` share a 73-line open/reset/transaction block and a 27-line listing block in the jscpd scan. Extract a parameterized storage helper while preserving each database name, schema, transaction-completion semantics, ordering, and domain-specific retry/conflict behavior. Existing queue and offline-conflict tests should protect the migration. M.
+- **Console export surface needs a consumer audit.** Knip reports 73 unused exports, concentrated in `apps/console/src/components/control-plane/index.ts`, after removing the unused SourceChip component. Check direct imports, tests, and intended contracts before trimming barrel re-exports; an unused export does not prove the implementation is dead. Keep the documented `slotToTime` / `formatSlotTime` alias. S.
+- **Working records still compete with current documentation.** The September visual remediation records and active root checklists remain inputs to ongoing public fixes. After that work closes, distil outstanding findings into this log and enduring rules into architecture/contracts, then remove the working plans and evidence from HEAD. The phase-numbered runtime status/gap pages also need consolidation into their current runtime references, retaining acceptance gaps and the machine-readable architecture inventory. M.
+
 Mechanical, each independently shippable. Grouped only so the list stays scannable.
 
 **Public visual fixes (2026-09-07)**
@@ -301,7 +317,6 @@ Mechanical, each independently shippable. Grouped only so the list stays scannab
 - **No fixture ships a draw smaller than 32.** Every draw in the shared seed is a 32, so the 16-draw rendering — four columns rather than five, `R16` as the opening round — is verified only by the SSR render cases added in `apps/entrant/tests/draw.render.test.ts` ("renders every round of a %i draw, once"), never by a captured surface or a browser run. The fixture's five disciplines could carry one 16 draw at no cost to anything else. XS. Found by public-visual-fixes P8.
 
 - **`make fixture-down` leaves the fixture's servers running, and the next `fixture-up` silently uses them.** The target kills the pid in `$(FIXTURE_STATE_FILE)` — the `fixture-up.sh` wrapper — and nothing kills the uvicorn, `vite preview` and entrant SSR processes it started, which stay bound to 8600/4173/5174. The next run's readiness check then finds a healthy API on 8600 and seeds against the PREVIOUS run's database; P8 met this as a seed aborting on `429 AUTH_THROTTLED` (the stale DB had already spent its 8-signup budget), which reads as a product failure and is not one. Kill the process group, or have `fixture-up.sh` refuse to start when its ports are already answering. S. Found by public-visual-fixes P8.
-
 
 **v3 consolidated plan**
 - **Staff contact `public` field is now inert everywhere but the schema.** V3-OC12.1 / work package 05 removed the Setup "people" section's Public checkbox and its "future public projection" claim (no public serializer has ever read `contacts` — `entries_public.py`, `entries_site.py`, `display/display.py`), and `apps/api/src/workspaces/setup.py`'s people-section downstream-impact declaration no longer lists "public contact details". The `Contact.public` DB column and `public: bool` on the `SetupRowsEditor` row shape were deliberately left alone (no migration in this package's scope) — every existing row's value is simply unreachable from the UI now. Either remove the column in a real migration, or build the "future public projection" it was reserved for and re-expose the control truthfully. XS (delete column) or M (build the feature). Found by SP-V3-05.
@@ -518,7 +533,7 @@ tabs, segmented controls, and filters now share one `ActiveChoice` primitive:
 solid `action-primary` fill, contrasting `text-on-accent` ink, bare inactive
 items, preserved accessible state, and no slivers or underlines. Both themes,
 grayscale separation, banned patterns, and rule-3b negative controls are
-recorded in [`SP-ACTIVE-1`](/audits/2026-08-SP-ACTIVE-1-findings).
+recorded in the SP-ACTIVE-1 audit retained in Git history.
 
 **2026-08-31 — SP-REGRESS-1 and SP-NAV-1 corrections.** Imported/hydrated
 Bracket results now reconcile concrete successor sides, and unresolved matches
@@ -526,9 +541,8 @@ cannot enter consequential Meet or Bracket operation. Plan keeps the court ×
 time grid whenever pinned assignments exist; Displays uses only the public
 capability projection. Selected chrome now uses an asserted tint/foreground
 pair in both themes, and redundant nav module badges are deleted. The audit
-findings, rulings, mutation evidence, and suite counts live in
-[`SP-REGRESS-1`](/audits/2026-08-SP-REGRESS-1-findings) and
-[`SP-NAV-1`](/audits/2026-08-SP-NAV-1-findings).
+findings, rulings, mutation evidence, and suite counts remain in Git history
+under the SP-REGRESS-1 and SP-NAV-1 audit records.
 
 **2026-08-31 — production-parity demo and verification throughput.** The
 local-only demo clock places Taipei Open mid-event and Korea Masters before

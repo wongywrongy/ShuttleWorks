@@ -277,8 +277,24 @@ class SimClient:
             body["timeZone"] = time_zone
         return self._json("POST", "/tournaments", json=body, expect=OK_OR_CREATED)
 
+    def get_tournament(self, tid: str, *, expect: Iterable[int] = OK) -> Optional[dict]:
+        """Return the workspace summary row, or ``None`` when it is gone.
+
+        A seed manifest outlives the workspaces it names (someone may delete
+        one from the Hub), so the name repair has to tell "absent" from
+        "wrong" without raising.
+        """
+        resp = self.request("GET", f"/tournaments/{tid}", expect=frozenset(expect) | {404})
+        if resp.status_code == 404:
+            return None
+        return resp.json()
+
     def update_tournament(self, tid: str, body: dict) -> dict:
         return self._json("PATCH", f"/tournaments/{tid}", json=body)
+
+    def get_setup(self, tid: str) -> dict:
+        """``GET /tournaments/{id}/setup`` — the Setup document as served."""
+        return self._json("GET", f"/tournaments/{tid}/setup")
 
     def seed_setup_sections(self, tid: str, sections: dict[str, dict]) -> dict:
         """Write Setup sections in one optimistic-concurrency chain."""
