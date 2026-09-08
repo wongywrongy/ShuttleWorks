@@ -62,6 +62,14 @@ beforeEach(() => {
 });
 
 describe('<DisplayConfig /> — Board sources + Preview fullscreen + Board layout', () => {
+  // OPR-0908-4: the PAGE (`DisplayBoardSettings`' `ActionsBar`) owns the
+  // "Venue board" title. This component must not title itself, or the page
+  // shows the same name twice.
+  it('renders no "Venue board" heading of its own (the page owns the title)', () => {
+    render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
+    expect(screen.queryByRole('heading', { name: 'Venue board' })).toBeNull();
+  });
+
   it('shows Board layout when Meet is enabled', () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
     expect(screen.getByRole('heading', { name: 'Board layout' })).toBeInTheDocument();

@@ -29,4 +29,16 @@ describe('Display · Board', () => {
     // the public content it governs, in Setup · Public site.
     expect(screen.queryByTestId('sharing-site')).toBeNull();
   });
+
+  // OPR-0908-4: one heading owner. The page's `ActionsBar` names the board
+  // exactly once; neither `DisplayConfig` nor `SharingTab` (scope="links")
+  // repeats it.
+  it('names the board exactly once — the page owns the title', () => {
+    render(
+      <MemoryRouter initialEntries={['/tournaments/t1/display/board']}>
+        <DisplayBoardSettings tid="t1" modules={modules} />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByText('Venue board')).toHaveLength(1);
+  });
 });

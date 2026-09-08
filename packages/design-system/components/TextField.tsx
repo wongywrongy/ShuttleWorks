@@ -40,6 +40,14 @@ export interface TextFieldProps
   size?: 'sm' | 'md';
   /** Show/hide toggle. Defaults on for `type="password"`. */
   revealable?: boolean;
+  /**
+   * Hide the visible label (it stays a real <label for>, sr-only) for
+   * controls whose name is already rendered by the surface around them —
+   * a settings `Row`, or a grid whose column header names the cell. The
+   * accessible name and the input chrome still come from this component,
+   * which is the point: a bare <input aria-label> had neither.
+   */
+  labelHidden?: boolean;
   /** Extra classes for the outer <div>. */
   className?: string;
   /** Extra classes for the <input> itself. */
@@ -53,6 +61,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       hint,
       error,
       size = 'md',
+      labelHidden = false,
       revealable,
       className,
       inputClassName,
@@ -80,7 +89,9 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       <div className={cn('block', className)}>
         <label
           htmlFor={fieldId}
-          className="mb-2 block text-xs font-medium text-foreground"
+          className={cn(
+            labelHidden ? 'sr-only' : 'mb-2 block text-xs font-medium text-foreground',
+          )}
         >
           {label}
         </label>
