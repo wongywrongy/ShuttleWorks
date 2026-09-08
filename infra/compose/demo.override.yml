@@ -66,7 +66,7 @@ services:
       PUBLIC_PLAY_ORIGIN: http://${DEMO_TAILSCALE_IP}:8091
       # Private demo clock only. 2026-07-31 places Taipei Open mid-event and
       # Korea Masters before first play; cloud deployments cannot honor it.
-      SHUTTLEWORKS_DEMO_NOW: "2026-07-31T05:15:00+00:00"
+      SHUTTLEWORKS_DEMO_NOW: "${SHUTTLEWORKS_DEMO_NOW:-2026-07-31T05:15:00Z}"
     secrets:
       - demo_database_url
     depends_on:
@@ -74,6 +74,10 @@ services:
         condition: service_healthy
 
   frontend:
+    build:
+      args:
+        VITE_ENVIRONMENT: local
+        VITE_DEMO_NOW: "${SHUTTLEWORKS_DEMO_NOW:-2026-07-31T05:15:00Z}"
     ports: !override
       - "${DEMO_TAILSCALE_IP:?set by tools/demo-compose.sh}:8090:8080"
       - "${DEMO_TAILSCALE_IP:?set by tools/demo-compose.sh}:8091:8081"
@@ -82,6 +86,8 @@ services:
     environment:
       API_BASE_URL: http://backend:8000
       SESSION_COOKIE_SECURE: "false"
+      ENVIRONMENT: local
+      SHUTTLEWORKS_DEMO_NOW: "${SHUTTLEWORKS_DEMO_NOW:-2026-07-31T05:15:00Z}"
 
   # Documentation is not part of the private tech-demo surface. Clear its base
   # host publication so even an accidental unqualified Compose up cannot open

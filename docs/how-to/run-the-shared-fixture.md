@@ -11,6 +11,9 @@ against two different databases (a disposable console-only fixture and the
 live Tailscale demo), so a finding on one tier had no guaranteed counterpart
 on the other.
 
+For capture, review, Tailscale downloads, and deployment steps, use
+[Publish a demo review](publish-demo-review.md).
+
 ## Start it
 
 ```bash

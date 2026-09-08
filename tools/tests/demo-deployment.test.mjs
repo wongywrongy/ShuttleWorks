@@ -50,7 +50,9 @@ test('demo uses the production Postgres major and cannot inherit SQLite', () => 
   assert.doesNotMatch(backendBlock, /^\s+DATABASE_URL:/m)
   assert.doesNotMatch(backendBlock, /sqlite:|local\.db/i)
   assert.match(docsBlock, /ports: !reset \[\]/)
-  assert.doesNotMatch(demo, /\n    build:/)
+  const frontendBlock = demo.slice(demo.indexOf('  frontend:'), demo.indexOf('\n  entrant:'))
+  assert.match(frontendBlock, /\n    build:\n      args:\n        VITE_ENVIRONMENT: local\n        VITE_DEMO_NOW:/)
+  assert.doesNotMatch(frontendBlock, /\n      (context|dockerfile|image|target):/)
 })
 
 test('application images carry the source revision used by Compose', () => {
@@ -81,7 +83,7 @@ test('demo rebuild is a clean, pull-based release rebuild with provenance', () =
   const launcher = read('tools/demo-compose.sh')
   assert.match(launcher, /require_clean_worktree\(\)/)
   assert.match(launcher, /Refusing demo rebuild from a dirty worktree/)
-  assert.match(launcher, /SOURCE_REVISION="\$repo_revision"/)
+  assert.match(launcher, /SOURCE_REVISION="\$source_revision"/)
   assert.match(launcher, /run_compose pull postgres/)
   assert.match(launcher, /run_compose build --pull --no-cache backend entrant frontend/)
   assert.match(launcher, /worktree_dirty=\$worktree_dirty/)
@@ -93,6 +95,28 @@ test('demo rebuild is a clean, pull-based release rebuild with provenance', () =
   assert.match(launcher, /or \(index \.Config\.Labels "org\.opencontainers\.image\.revision"\) ""/)
   assert.match(launcher, /org\.opencontainers\.image\.revision/)
   assert.match(launcher, /show_image_provenance\(\)/)
+})
+
+test('demo update preserves the database while labeling current worktree source', () => {
+  const launcher = read('tools/demo-compose.sh')
+  const makefile = read('Makefile')
+  assert.match(launcher, /update\s+Back up, rebuild current worktree, and restart without reseeding/)
+  assert.match(launcher, /update\)\n    backup_if_present\n    start_demo --build/)
+  assert.match(launcher, /source_revision="\$repo_revision-dirty-\$source_hash"/)
+  assert.match(launcher, /git -C "\$repo_root" ls-files -co --exclude-standard -z/)
+  assert.match(launcher, /ip\|up\|update\|rebuild\|status\|restore\) needs_tailnet=true/)
+  assert.match(launcher, /up\|update\|rebuild\|down\|backup/)
+  assert.match(launcher, /printf 'deleted/)
+  assert.doesNotMatch(launcher, /update\).*demo-seed|update\).*seed/)
+  assert.match(makefile, /^demo-update:\n\t\$\(DEMO_COMPOSE\) update$/m)
+})
+
+test('surface book serving targets use the configured report directory', () => {
+  const makefile = read('Makefile')
+  assert.match(makefile, /^surface-books-serve:\n\t@SURFACE_REPORT_DIR=/m)
+  assert.match(makefile, /tools\/serve-surface-books\.sh up/)
+  assert.match(makefile, /^surface-books-url:\n\t@SURFACE_REPORT_DIR=/m)
+  assert.match(makefile, /tools\/serve-surface-books\.sh url/)
 })
 
 test('surface books resolve live demo identities from the seed manifest', () => {

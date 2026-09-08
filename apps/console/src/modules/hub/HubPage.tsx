@@ -46,6 +46,7 @@ import { EYEBROW_CLASS, TEXT_MUTED_XS, TEXT_TITLE } from '../../lib/utils';
 import { ActiveChoice } from '../../components/ActiveChoice';
 import { DialogFooter } from '../../components/DialogFooter';
 import { focusListPage, useListScrollRestore } from '../../hooks/useListScrollRestore';
+import { demoNow } from '../../lib/demoClock';
 
 /** The ⌘K handler accepts Ctrl too — the hint should name the key the
  *  user's OS actually has. */
@@ -178,7 +179,8 @@ export function HubPage() {
     void refresh();
   }, [refresh]);
 
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const now = demoNow();
+  const todayKey = now.toISOString().slice(0, 10);
 
   // Search reaches EVERY workspace — past and undated included. A director
   // typing a name is not asking a question about time, and the old behaviour
@@ -191,7 +193,7 @@ export function HubPage() {
       ? tournaments.filter((t) => (t.name || '').toLowerCase().includes(q))
       : tournaments;
   }, [tournaments, query]);
-  const counts = useMemo(() => viewCounts(nameFiltered), [nameFiltered]);
+  const counts = useMemo(() => viewCounts(nameFiltered, now), [nameFiltered, now]);
 
   // The visible rows: the matching set, narrowed by the view unless a search
   // is running, in the Hub's one fixed order (live → upcoming → undated →
@@ -199,9 +201,10 @@ export function HubPage() {
   const visible = useMemo(
     () =>
       sortForHub(
-        searching ? nameFiltered : nameFiltered.filter((t) => matchesView(t, view)),
+        searching ? nameFiltered : nameFiltered.filter((t) => matchesView(t, view, now)),
+        now,
       ),
-    [nameFiltered, searching, view],
+    [nameFiltered, searching, view, now],
   );
   const pageCount = Math.max(1, Math.ceil(visible.length / HUB_PAGE_SIZE));
   const pageRows = useMemo(

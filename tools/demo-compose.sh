@@ -17,6 +17,7 @@ Commands:
   state-dir             Print the durable demo state directory
   backup-dir            Print the backup directory
   up                    Build and start the demo
+  update                Back up, rebuild current worktree, and restart without reseeding
   rebuild               Back up, rebuild without cache, and restart
   status                Show containers, URLs, state, and latest backup
   down                  Back up and stop the demo
@@ -43,6 +44,25 @@ if git -C "$repo_root" diff --quiet --ignore-submodules HEAD -- 2>/dev/null &&
   worktree_dirty=false
 else
   worktree_dirty=true
+fi
+source_revision="$repo_revision"
+if [[ "$command_name" == update && "$worktree_dirty" == true ]]; then
+  # Fingerprint the actual checkout, including untracked source and deletions.
+  # Ignored build output and secrets are not part of the source identity.
+  source_hash=$(git -C "$repo_root" ls-files -co --exclude-standard -z |
+    LC_ALL=C sort -zu |
+    while IFS= read -r -d '' file; do
+      printf '%s\0' "$file"
+      if [[ -L "$repo_root/$file" ]]; then
+        printf 'symlink\0'
+        readlink "$repo_root/$file"
+      elif [[ -f "$repo_root/$file" ]]; then
+        sha256sum < "$repo_root/$file"
+      else
+        printf 'deleted\0'
+      fi
+    done | sha256sum | awk '{print $1}')
+  source_revision="$repo_revision-dirty-$source_hash"
 fi
 state_home=${XDG_STATE_HOME:-$HOME/.local/state}
 default_state_dir="$state_home/shuttleworks/demo"
@@ -130,7 +150,7 @@ prepare_state() {
 demo_ip="${DEMO_TAILSCALE_IP:-}"
 needs_tailnet=false
 case "$command_name" in
-  ip|up|rebuild|status|restore) needs_tailnet=true ;;
+  ip|up|update|rebuild|status|restore) needs_tailnet=true ;;
 esac
 if [[ -z "$demo_ip" && "$needs_tailnet" == true ]]; then
   if ! command -v tailscale >/dev/null 2>&1; then
@@ -160,7 +180,7 @@ prepare_state
 # state. Seed writes take the same lock through the Makefile, so a timer backup,
 # restore, rebuild, and import cannot race each other.
 case "$command_name" in
-  up|rebuild|down|backup|backup-verify|restore-drill|restore|reset)
+  up|update|rebuild|down|backup|backup-verify|restore-drill|restore|reset)
     exec 9>"$demo_state_dir/.lifecycle.lock"
     if ! flock -w 300 9; then
       echo "Timed out waiting for another demo lifecycle operation to finish." >&2
@@ -177,7 +197,7 @@ compose=(
 compose_env=(
   env
   COMPOSE_PROJECT_NAME=shuttleworks-demo
-  SOURCE_REVISION="$repo_revision"
+  SOURCE_REVISION="$source_revision"
   DEMO_TAILSCALE_IP="$demo_ip"
   DEMO_STATE_DIR="$demo_state_dir"
   DEMO_HOST_GID="$(id -g)"
@@ -642,6 +662,12 @@ ShuttleWorks private tech demo is ready.
 
 Use 'make demo-status' to check readiness and 'make demo-down' for a backed-up stop.
 EOF
+    ;;
+  update)
+    backup_if_present
+    start_demo --build "$@"
+    echo "Demo updated from current worktree without reseeding."
+    echo "  Source revision: $source_revision"
     ;;
   rebuild)
     backup_if_present
