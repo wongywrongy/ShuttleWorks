@@ -122,7 +122,7 @@ export function DisplayBoardSettings({
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col bg-background" data-testid="display-board-settings">
-      <ActionsBar title="Venue board" status="Configure and share the board shown in the venue." />
+      <ActionsBar title="Venue board" titleAs="h2" status="Configure and share the board shown in the venue." />
       <div className="min-h-0 flex-1 overflow-auto">
         <PageBody variant="form" className="space-y-6">
           {/* The link controls are composed INTO the board settings, under

@@ -31,18 +31,21 @@ import { EYEBROW_CLASS } from '../../lib/utils';
 
 export function ActionsBar({
   title,
+  titleAs: Title = 'span',
   status,
   children,
 }: {
   title: string;
+  /** Use a heading when this bar owns the page's only title. */
+  titleAs?: 'span' | 'h2';
   status?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border bg-card px-4 py-1.5">
-      <span className={`shrink-0 ${EYEBROW_CLASS} text-muted-foreground`}>
+      <Title className={`shrink-0 ${EYEBROW_CLASS} text-muted-foreground`}>
         {title}
-      </span>
+      </Title>
       {status != null ? (
         <div className="flex min-w-0 flex-wrap items-center gap-2">{status}</div>
       ) : null}

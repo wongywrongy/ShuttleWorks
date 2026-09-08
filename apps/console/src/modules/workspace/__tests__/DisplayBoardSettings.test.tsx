@@ -40,5 +40,6 @@ describe('Display · Board', () => {
       </MemoryRouter>,
     );
     expect(screen.getAllByText('Venue board')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Venue board', level: 2 })).toBeVisible();
   });
 });
