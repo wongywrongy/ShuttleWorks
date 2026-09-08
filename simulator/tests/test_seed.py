@@ -1274,6 +1274,9 @@ class ByeClient:
     def get_tournament(self, tid, *, expect=(200,)):
         return {"id": tid} if tid in self.workspaces else None
 
+    def list_tournaments(self):
+        return [{"id": tid, "name": name} for tid, name in self.created]
+
     def create_tournament(self, name, kind="meet", modules=None, **kw):
         tid = f"ws-synthetic-{len(self.created) + 1}"
         self.workspaces.add(tid)
@@ -1289,6 +1292,7 @@ class ByeClient:
             event for event in session.get("events") or [] if event.get("id") != event_id
         ]
         self.deleted.append((tid, event_id))
+        return True
 
     def import_bracket(self, tid, body):
         self.imports.append((tid, body))
@@ -1399,7 +1403,10 @@ def test_apply_synthetic_bye_completes_a_drawless_event_and_clears_a_stranded_on
 
     # The stranded, drawless event is removed from the seeded workspace…
     assert client.deleted == [("ws-taipei", "SYNBYE")]
-    assert "T029:ws-taipei" in output["strandedEventsRemoved"]
+    assert output["strandedEvents"] == [{
+        "id": "SYNBYE", "tournamentId": "T029",
+        "workspaceId": "ws-taipei", "status": "removed",
+    }]
     # …and the fixture workspace is reused, not recreated, with its draw
     # completed on this run.
     assert client.created == []
@@ -1448,3 +1455,38 @@ def test_person_map_publishes_the_datasets_own_player_table():
     # own reviewed id — never a name heuristic.
     assert output["people"]["Alice"] == next(p.id for p in dataset.players if p.name == "Alice")
     assert len(output["people"]) == len(dataset.players)
+
+
+@pytest.mark.parametrize("locked", [False, True])
+def test_bye_recovers_a_seeded_manifest_id(tmp_path, locked):
+    _outcome_manifest(tmp_path)
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    manifest["syntheticBye"] = {"workspaceId": "ws-taipei"}
+    _write_manifest(tmp_path / "bwf-demo.json", manifest)
+    client = ByeClient(brackets={"ws-taipei": {
+        "events": [{"id": "SYNBYE", "status": "draft"}], "play_units": [],
+    }}, workspaces={"ws-taipei"})
+    if locked:
+        client.delete_event = lambda *_: False
+    output = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+    assert output["workspaceId"] != "ws-taipei"
+    assert all(tid != "ws-taipei" for tid, _ in client.imports + client.commands)
+    assert output["strandedEvents"][0]["status"] == ("locked" if locked else "removed")
+
+
+def test_bye_adopts_existing_fixture_after_manifest_loss(tmp_path):
+    _outcome_manifest(tmp_path)
+    client = ByeClient()
+    workspace = client.create_tournament(SYNTHETIC_BYE["workspaceName"])
+    output = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+    assert output["workspaceId"] == workspace["id"]
+    assert output["workspaceCreated"] is False
+    assert len(client.created) == 1
+
+
+@pytest.mark.parametrize("workspace_id", [None, "ws-taipei"])
+def test_fixture_write_guard_rejects_missing_or_seeded_workspace(workspace_id):
+    from tournament_sim.seed import _fixture_workspace_guard
+
+    with pytest.raises(ValueError, match="refusing"):
+        _fixture_workspace_guard(workspace_id, {"ws-taipei"}, "POST /bracket/import")

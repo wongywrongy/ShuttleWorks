@@ -6679,6 +6679,10 @@ export interface components {
             seed?: number | null;
             /** Entryplayerid */
             entryPlayerId?: string | null;
+            /** Personid */
+            personId?: string | null;
+            /** Personsource */
+            personSource?: string | null;
         };
         /** ParticipantOut */
         ParticipantOut: {
@@ -6694,6 +6698,10 @@ export interface components {
             entryPlayerId?: string | null;
             /** Sourceentryid */
             sourceEntryId?: string | null;
+            /** Personid */
+            personId?: string | null;
+            /** Personsource */
+            personSource?: string | null;
         };
         /** PartnerAcceptedDTO */
         PartnerAcceptedDTO: {

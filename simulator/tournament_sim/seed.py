@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import tempfile
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
@@ -3337,18 +3338,68 @@ def _structural_bye_unit_ids(session: dict | None, event_id: str) -> list[str]:
     return found
 
 
+def _seeded_workspace_ids(manifest: dict) -> set[str]:
+    """Every workspace the seed run itself owns, by id.
+
+    The bye fixture must never write to one of these: the import route
+    replaces a whole bracket, and the seeded workspaces hold sourced draws
+    (and, once a director has checked one out, refuse configuration writes
+    outright). This set is the guard rail, checked before every write.
+    """
+    return {
+        str(entry["workspaceId"])
+        for entry in (manifest.get("tournaments") or {}).values()
+        if isinstance(entry, dict) and entry.get("workspaceId")
+    }
+
+
+def _note(writes: list[dict[str, str]], route: str, workspace_id: str) -> None:
+    """Record a write and say so on stderr BEFORE it is attempted.
+
+    The CLI prints its JSON result only on success, so a run that fails
+    mid-way used to say nothing about where it had been pointing. These lines
+    survive the exception.
+    """
+    writes.append({"route": route, "workspaceId": workspace_id})
+    print(f"seed apply-bye -> {route}", file=sys.stderr)
+
+
+def _fixture_workspace_guard(
+    workspace_id: str | None, seeded: set[str], route: str
+) -> str:
+    """Reject absent or seeded workspace ids before fixture writes.
+
+    Mutation check: replacing this guard with a pass-through fails both
+    ``test_fixture_write_guard_rejects_missing_or_seeded_workspace`` cases.
+    """
+    if not workspace_id:
+        raise ValueError(f"refusing {route}: no fixture workspace resolved")
+    if workspace_id in seeded:
+        raise ValueError(
+            f"refusing {route}: {workspace_id} is a SEEDED workspace, not the bye "
+            "fixture's own — the import path replaces a whole bracket"
+        )
+    return workspace_id
+
+
 def _drop_stranded_bye_events(
     manifest: dict, client: SimClient, event_id: str
-) -> list[str]:
-    """Delete an EMPTY ``event_id`` left on a seeded workspace by a failed run.
+) -> list[dict[str, str]]:
+    """Clear an EMPTY ``event_id`` left on a seeded workspace by a failed run.
 
     The first attempt at this fixture created the event on the live demo
     workspace and then failed to generate its draw, leaving a draft event with
-    no play units that no surface can render. ``DELETE /bracket/events/{id}``
-    refuses anything but a draft, and this only ever fires when the event has
-    zero units, so a draw that exists can never be removed by it.
+    no play units that no surface can render. The ONLY write this makes is
+    ``DELETE /bracket/events/{id}``, which the API allows for draft events
+    only, and it fires only when the event has zero play units — so it can
+    never remove a draw that exists, and it never touches the import path.
+
+    A checked-out workspace refuses the delete with 409 ``CONFIG_LOCKED``.
+    That is reported as ``status: "locked"`` and the run continues: the
+    stranded row is cosmetic, and returning authority is the director's call,
+    not this tool's.
     """
-    removed: list[str] = []
+    found: list[dict[str, str]] = []
     for tournament_id, entry in (manifest.get("tournaments") or {}).items():
         workspace_id = (entry or {}).get("workspaceId")
         if not workspace_id:
@@ -3358,11 +3409,21 @@ def _drop_stranded_bye_events(
             continue
         if event_id not in {str(event.get("id")) for event in session.get("events") or []}:
             continue
+        row = {
+            "id": event_id,
+            "tournamentId": tournament_id,
+            "workspaceId": str(workspace_id),
+        }
         if _event_unit_ids(session, event_id):
+            found.append({**row, "status": "kept"})
             continue
-        client.delete_event(workspace_id, event_id)
-        removed.append(f"{tournament_id}:{workspace_id}")
-    return removed
+        print(
+            f"seed apply-bye -> DELETE /tournaments/{workspace_id}/bracket/events/{event_id}",
+            file=sys.stderr,
+        )
+        removed = client.delete_event(workspace_id, event_id)
+        found.append({**row, "status": "removed" if removed else "locked"})
+    return found
 
 
 def apply_synthetic_bye(
@@ -3370,24 +3431,49 @@ def apply_synthetic_bye(
 ) -> dict:
     """Install :data:`SYNTHETIC_BYE`'s draw through the product's import path.
 
+    Every write goes to the fixture's OWN workspace, and nothing else: the
+    seeded workspaces' ids are collected from the manifest up front and
+    :func:`_fixture_workspace_guard` refuses each write that would land on
+    one. The single exception is the stranded-event cleanup, which is a
+    ``DELETE`` of an empty draft event and can never replace a draw.
+
     Idempotent on the DRAW, not on the event row: the step re-imports whenever
     the fixture workspace does not already hold the event's play units, so a
     half-finished run is completed on the next attempt, and it never touches a
-    draw that is already there. Everything it writes lives in the fixture's own
-    workspace, which is created on first run and recorded in the manifest.
+    draw that is already there.
     """
     path = _run_path(run_dir, seed_key)
     manifest = status(seed_key=seed_key, run_dir=run_dir)
     event_id = str(SYNTHETIC_BYE["eventId"])
     bye_unit_id = str(SYNTHETIC_BYE["byePlayUnitId"])
+    seeded = _seeded_workspace_ids(manifest)
+    writes: list[dict[str, str]] = []
     record = dict(manifest.get("syntheticBye") or {})
-    removed = _drop_stranded_bye_events(manifest, client, event_id)
+    stranded = _drop_stranded_bye_events(manifest, client, event_id)
 
+    # The recorded id is a HINT, and one earlier version of this step recorded
+    # a seeded workspace here. Trust it only when it is not one of the seed
+    # run's own workspaces and the workspace still exists.
     workspace_id = record.get("workspaceId")
+    if workspace_id in seeded:
+        workspace_id = None
     if workspace_id and client.get_tournament(workspace_id, expect=(200, 404)) is None:
         workspace_id = None
+    if not workspace_id:
+        # A manifest can be lost or reset while the fixture workspace survives;
+        # adopt it by name rather than minting a second one.
+        workspace_id = next(
+            (
+                str(row["id"])
+                for row in client.list_tournaments() or []
+                if row.get("name") == SYNTHETIC_BYE["workspaceName"]
+                and str(row.get("id")) not in seeded
+            ),
+            None,
+        )
     created_workspace = False
     if not workspace_id:
+        _note(writes, "POST /tournaments", "(new)")
         workspace = client.create_tournament(
             str(SYNTHETIC_BYE["workspaceName"]),
             kind="bracket",
@@ -3398,22 +3484,29 @@ def apply_synthetic_bye(
             tournament_date=str(SYNTHETIC_BYE["workspaceDate"]),
             time_zone=str(SYNTHETIC_BYE["timeZone"]),
         )
-        workspace_id = workspace["id"]
+        workspace_id = str(workspace["id"])
         created_workspace = True
 
     session = client.get_bracket_or_none(workspace_id)
     imported = False
     if not _event_unit_ids(session, event_id):
+        route = f"POST /tournaments/{workspace_id}/bracket/import"
+        _fixture_workspace_guard(workspace_id, seeded, route)
+        _note(writes, route, workspace_id)
         session = client.import_bracket(workspace_id, synthetic_bye_import_body())
         imported = True
 
-    # The import's ``register_draw`` walks the bye over on the way in. Assert
-    # that rather than assume it: if the result is absent, record it through
-    # the same idempotent command path the other synthetic outcomes use, whose
-    # deterministic id makes a replay the product's replay.
+    # The import's ``register_draw`` walks the bye over on the way in, and the
+    # payload declares that walkover as well. Assert it rather than assume it:
+    # if the result is absent, record it through the same idempotent command
+    # path the other synthetic outcomes use, whose deterministic id makes a
+    # replay the product's replay.
     walkover_command: str | None = None
     results = {str(row.get("play_unit_id")) for row in (session or {}).get("results") or []}
     if bye_unit_id not in results:
+        route = f"POST /tournaments/{workspace_id}/bracket/commands"
+        _fixture_workspace_guard(workspace_id, seeded, route)
+        _note(writes, route, workspace_id)
         walkover_command = command_uuid(0, "synthetic-bye", bye_unit_id, "walkover")
         client.bracket_command(
             workspace_id,
@@ -3439,6 +3532,7 @@ def apply_synthetic_bye(
         "syntheticOutcome": True,
         "note": SYNTHETIC_BYE["note"],
         "state": "created" if imported else "unchanged",
+        "strandedEvents": stranded,
     }
     _write_manifest(path, manifest)
     return {
@@ -3450,7 +3544,8 @@ def apply_synthetic_bye(
         "unchanged": not imported,
         "byePlayUnitIds": bye_unit_ids,
         "walkoverCommandId": walkover_command,
-        "strandedEventsRemoved": removed,
+        "strandedEvents": stranded,
+        "writes": writes,
     }
 
 

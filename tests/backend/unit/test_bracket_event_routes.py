@@ -763,3 +763,21 @@ def test_generate_honors_explicit_seed_order(client, tid):
         for p in eight
     ]
     assert top_slot(reseeded) == ["P3"]
+
+
+def test_upsert_echo_preserves_imported_identity(client, tid):
+    _minimal_bracket(tid, client)
+    participants = [{"id": "P1", "name": "Alpha", "personId": "P0001",
+                     "personSource": "fixture:1"}, {"id": "P2", "name": "Beta"}]
+    response = client.post(_event_url(tid, "MS"), json=_upsert_body(participants))
+    assert response.status_code == 200, response.text
+    for _ in range(2):
+        state = client.get(_bracket_url(tid)).json()
+        event = next(e for e in state["events"] if e["id"] == "MS")
+        participant = next(p for p in event["participants"] if p["id"] == "P1")
+        assert participant["personId"] == "P0001"
+        assert participant["personSource"] == "fixture:1"
+        echoed = [{k: p[k] for k in ("id", "name", "personId", "personSource")}
+                  for p in event["participants"]]
+        response = client.post(_event_url(tid, "MS"), json=_upsert_body(echoed))
+        assert response.status_code == 200, response.text

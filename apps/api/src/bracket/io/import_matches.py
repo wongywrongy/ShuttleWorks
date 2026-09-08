@@ -289,6 +289,14 @@ def _build_draw_from_import(ev, *, roster_ids: Optional[set[str]] = None) -> Dra
             metadata["seed"] = p.seed
         if p.entryPlayerId:
             metadata["entryPlayerId"] = p.entryPlayerId
+        # P6's imported-person identity travels the same way: it lands in the
+        # participant row's free-form ``meta`` (``_participant_persist_fields``
+        # lifts only ``seed``/``entryPlayerId`` into columns) and hydrates
+        # back onto the participant, so the read model can echo it.
+        if p.personId:
+            metadata["personId"] = p.personId
+        if p.personSource:
+            metadata["personSource"] = p.personSource
         if p.members:
             participants[p.id] = Participant(
                 id=p.id,

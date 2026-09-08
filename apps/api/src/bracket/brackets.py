@@ -46,7 +46,7 @@ from typing import Annotated, AsyncGenerator, Dict, List, Literal, Optional, Seq
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
-from pydantic import AfterValidator, BaseModel, Field, ValidationError
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, ValidationError
 
 from shared.sport.badminton import schedule_config_for_bracket
 from shared.sides import (
@@ -237,6 +237,14 @@ class ParticipantIn(StrictModel):
     # ``ParticipantOut`` that is missing here makes the echo a 422 - or, if
     # the client strips it, silently erases the key on every roster edit.
     entryPlayerId: Optional[str] = None
+    # P6's cross-tournament identity for an IMPORTED person, the same pair
+    # ``BracketPlayerDTO`` carries on the roster row: ``personId`` is the
+    # source dataset's own player id and ``personSource`` names where it
+    # came from. A pre-paired import states it per participant as well as
+    # per roster row, so both halves of the wire shape must accept it -
+    # StrictModel forbade the extra and turned every such import into a 422.
+    personId: Optional[Identifier] = None
+    personSource: Optional[Annotated[str, StringConstraints(max_length=200)]] = None
 
 
 class EventIn(StrictModel):
@@ -280,6 +288,11 @@ class ParticipantOut(BaseModel):
     # hand-added participant has neither.
     entryPlayerId: Optional[str] = None
     sourceEntryId: Optional[str] = None
+    # Echoed for the same reason ``entryPlayerId`` is: the console upserts a
+    # roster by sending participants straight back, so a key that leaves on
+    # the read and is absent on the write is erased on the first edit.
+    personId: Optional[str] = None
+    personSource: Optional[str] = None
 
 
 class BracketSlotOut(BaseModel):
@@ -1261,6 +1274,8 @@ def _participant_out(participant: Participant) -> ParticipantOut:
         seed=metadata.get("seed"),
         entryPlayerId=(metadata.get("entryPlayerId") if isinstance(metadata, dict) else None),
         sourceEntryId=(metadata.get("sourceEntryId") if isinstance(metadata, dict) else None),
+        personId=(metadata.get("personId") if isinstance(metadata, dict) else None),
+        personSource=(metadata.get("personSource") if isinstance(metadata, dict) else None),
     )
 
 
@@ -1873,6 +1888,8 @@ def create_bracket(
                     **(dict(p.meta) if getattr(p, "meta", None) else {}),
                     **({"seed": p.seed} if p.seed is not None else {}),
                     **({"entryPlayerId": p.entryPlayerId} if p.entryPlayerId else {}),
+                    **({"personId": p.personId} if p.personId else {}),
+                    **({"personSource": p.personSource} if p.personSource else {}),
                 },
             )
             for p in ev.participants
@@ -2440,11 +2457,20 @@ def upsert_event(
                     "type": "TEAM" if p.members else "PLAYER",
                     "member_ids": list(p.members or []),
                     # The source here is the wire ``ParticipantIn``, which
-                    # has no ``meta`` — only the two lifted columns. An
-                    # upsert therefore still clears ``meta``; what it must
-                    # NOT clear is the person key the client echoed back.
+                    # has no free-form ``meta``. Preserve the explicit person
+                    # identity fields echoed by the client alongside the
+                    # lifted seed and entry-player columns.
                     **_participant_persist_fields(
-                        {"seed": p.seed, "entryPlayerId": p.entryPlayerId}
+                        {
+                            "seed": p.seed,
+                            "entryPlayerId": p.entryPlayerId,
+                            **({"personId": p.personId} if p.personId else {}),
+                            **(
+                                {"personSource": p.personSource}
+                                if p.personSource
+                                else {}
+                            ),
+                        }
                     ),
                 }
                 for p in body.participants

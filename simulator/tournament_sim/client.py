@@ -473,17 +473,24 @@ class SimClient:
             return None
         return resp.json()
 
-    def delete_event(self, tid: str, event_id: str) -> None:
+    def delete_event(self, tid: str, event_id: str) -> bool:
         """``DELETE /tournaments/{tid}/bracket/events/{event_id}``.
 
         The API allows this for DRAFT events only, so it cannot remove a draw
         that has been generated or started. 404 is tolerated: the caller's
-        intent is absence."""
-        self.request(
+        intent is absence. Return False for a checkout lock; other conflicts
+        remain errors."""
+        response = self.request(
             "DELETE",
             f"/tournaments/{tid}/bracket/events/{event_id}",
-            expect=(204, 404),
+            expect=(204, 404, 409),
         )
+        if response.status_code == 409:
+            detail = response.json().get("detail")
+            if isinstance(detail, dict) and detail.get("code") == "CONFIG_LOCKED":
+                return False
+            raise ApiError("DELETE", str(response.url), 409, response.text)
+        return True
 
     def upsert_event(self, tid: str, event_id: str, body: dict) -> dict:
         """``POST /tournaments/{tid}/bracket/events/{event_id}`` — create or

@@ -39,6 +39,12 @@ export interface Participant {
    *  backend `ParticipantOut.entryPlayerId` so an echo through the upsert
    *  preserves the person key. */
   entryPlayerId?: string | null;
+  /** P6 — an IMPORTED person's cross-tournament identity (the source
+   *  dataset's own player id) and where it came from. Mirrors backend
+   *  `ParticipantOut.personId`/`personSource` for the same echo reason as
+   *  `entryPlayerId`; the console neither mints nor edits either. */
+  personId?: string | null;
+  personSource?: string | null;
 }
 
 interface ParticipantInput {
@@ -49,6 +55,9 @@ interface ParticipantInput {
   /** Accepted by `ParticipantIn` — echoing it back is what keeps a roster
    *  edit from erasing the person key. */
   entryPlayerId?: string;
+  /** Same contract as `entryPlayerId`, for the imported-person identity. */
+  personId?: string;
+  personSource?: string;
 }
 
 export interface EventIn {

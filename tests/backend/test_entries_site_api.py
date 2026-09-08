@@ -751,6 +751,70 @@ def test_an_imported_person_is_one_person_across_workspaces(client):
     assert [row["slug"] for row in kim["history"]] == ["alpha-open"]
 
 
+def test_an_import_keeps_the_imported_person_id_on_its_participants(client):
+    """OPR-0908: ``personId``/``personSource`` on an import PARTICIPANT.
+
+    P6 taught the seed to state an imported person's dataset identity on the
+    roster row AND on each participant, but ``ParticipantIn`` is a
+    StrictModel that declared neither - so every pre-paired import answered
+    422 and the fixture seed could not run at all. The pair now rides the
+    participant's free-form meta, exits again on ``ParticipantOut`` (so the
+    console's echo-back upsert cannot erase it), and the public directory
+    keeps resolving the person off the roster row it has always read.
+    """
+    tid = _make_workspace(client, slug="import-person-open", draws_published=True)
+    payload = {
+        "courts": 1,
+        "total_slots": 4,
+        "roster": [
+            {"id": "R-1", "name": "Rin Sato", "personId": "P0001", "personSource": "fixture:1"},
+            {"id": "R-2", "name": "Kim Park", "personId": "P0002", "personSource": "fixture:1"},
+        ],
+        "events": [
+            {
+                "id": "MS",
+                "discipline": "Men's Singles",
+                "format": "se",
+                "participants": [
+                    {
+                        "id": "R-1",
+                        "name": "Rin Sato",
+                        "personId": "P0001",
+                        "personSource": "fixture:1",
+                    },
+                    {"id": "R-2", "name": "Kim Park", "personId": "P0002"},
+                ],
+                "rounds": [[{"id": "MS-F", "side_a": ["R-1"], "side_b": ["R-2"]}]],
+            }
+        ],
+    }
+    imported = client.post(f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF)
+    assert imported.status_code == 200, imported.text
+
+    state = client.get(f"/tournaments/{tid}/bracket").json()
+    participants = {p["id"]: p for p in state["events"][0]["participants"]}
+    assert (participants["R-1"]["personId"], participants["R-1"]["personSource"]) == (
+        "P0001",
+        "fixture:1",
+    )
+    assert (participants["R-2"]["personId"], participants["R-2"]["personSource"]) == (
+        "P0002",
+        None,
+    )
+    # A re-read hydrates from the stored row, not from the request body.
+    assert client.get(f"/tournaments/{tid}/bracket").json() == state
+
+    players = client.get("/e/api/page/import-person-open/players").json()
+    # The list is name-ordered; identity carries the roster key either way.
+    assert [player["person"]["identity"] for player in players["players"]] == [
+        {"id": "R-2", "name": "Kim Park"},
+        {"id": "R-1", "name": "Rin Sato"},
+    ]
+    profile = client.get("/e/api/page/import-person-open/players/R-1")
+    assert profile.status_code == 200, profile.text
+    assert profile.json()["person"]["identity"] == {"id": "R-1", "name": "Rin Sato"}
+
+
 def test_a_career_expands_every_published_workspace_and_no_unpublished_one(client):
     """OPR-0908-7: the whole career, not the first five of it.
 

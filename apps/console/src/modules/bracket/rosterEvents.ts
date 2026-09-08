@@ -166,6 +166,8 @@ export function toUpsertParticipant(p: Participant): {
   members?: string[];
   seed?: number;
   entryPlayerId?: string;
+  personId?: string;
+  personSource?: string;
 } {
   return {
     id: p.id,
@@ -173,6 +175,8 @@ export function toUpsertParticipant(p: Participant): {
     ...(p.members && p.members.length > 0 ? { members: [...p.members] } : {}),
     ...(p.seed != null ? { seed: p.seed } : {}),
     ...(p.entryPlayerId != null ? { entryPlayerId: p.entryPlayerId } : {}),
+    ...(p.personId != null ? { personId: p.personId } : {}),
+    ...(p.personSource != null ? { personSource: p.personSource } : {}),
   };
 }
 
