@@ -31,6 +31,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional, Sequence
 
+from core.demo_clock import utcnow as event_utcnow
+
 # The entry states this module reasons about. Spelled here rather than
 # imported from ``entries.lifecycle`` because importing it would be the
 # ``workspaces -> entries`` edge the module docstring exists to avoid — and
@@ -54,7 +56,7 @@ _HOLDING = frozenset({_UNVERIFIED, _PENDING, _CONFIRMED})
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return event_utcnow()
 
 
 def _aware(value: Optional[datetime]) -> Optional[datetime]:

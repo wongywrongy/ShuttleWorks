@@ -11,12 +11,13 @@ endpoint free of per-row queries (see the SP-A spec's N+1 guardrail).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 import re
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from core.demo_clock import utcnow as event_utcnow
 from db.models import display_dependency_satisfied
 from shared.court_occupancy import (
     courts_free as _courts_free,
@@ -673,7 +674,7 @@ def _entries_attention(
     if entries is None:
         return []
 
-    moment = now or datetime.now(timezone.utc)
+    moment = now or event_utcnow()
     out: List[AttentionReasonDTO] = []
 
     if entries.any_event_open and entries.next_close_at is not None:
