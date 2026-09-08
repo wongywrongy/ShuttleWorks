@@ -34,6 +34,7 @@ vi.mock('../../../store/tournamentStore', () => ({
 }));
 
 import { PlanCourtQueues, targetSlotFor } from '../plan/PlanCourtQueues';
+import { STATE_WORD } from '../../../lib/stateWords';
 import type { OpsBlock } from '../opsBlock';
 
 const blk = (o: Partial<OpsBlock> & { id: string }): OpsBlock =>
@@ -143,6 +144,87 @@ describe('PlanCourtQueues', () => {
     renderQueues([blk({ id: 'done', court: 1, slot: 0, status: 'finished', done: true })]);
     expect(screen.queryByTestId('plan-queue-later-meet:done')).toBeNull();
     expect(screen.queryByTestId('plan-queue-next-court-meet:done')).toBeNull();
+  });
+
+  // ── P4 ──────────────────────────────────────────────────────────────────
+  it('prints a long doubles pairing in full, one participant group per side', () => {
+    renderQueues([
+      blk({
+        id: 'md',
+        court: 1,
+        slot: 0,
+        sideA: 'CHIA Aaron / SOH Wooi Yik',
+        sideB: 'HOKI Takuro / KOBAYASHI Yugo',
+      }),
+    ]);
+
+    // Nothing is dropped and nothing is ellipsised: both full pairings are in
+    // the document, each in its OWN element, so a reader never has to find
+    // where one side ends inside a single wrapped line.
+    const a = screen.getByTestId('plan-queue-side-a-meet:md');
+    const b = screen.getByTestId('plan-queue-side-b-meet:md');
+    expect(a).toHaveTextContent('CHIA Aaron / SOH Wooi Yik');
+    expect(b).toHaveTextContent('HOKI Takuro / KOBAYASHI Yugo');
+    expect(a).not.toBe(b);
+    // The cell may GROW for the content; it may not clip it.
+    const chip = screen.getByTestId('plan-queue-chip-meet:md');
+    expect(chip.className).not.toMatch(/(^|\s)h-12(\s|$)/);
+    expect(chip.className).not.toContain('overflow-hidden');
+    expect(chip.className).not.toContain('truncate');
+  });
+
+  it('collapses completed matches behind a disclosure and keeps upcoming work in a bounded region', () => {
+    renderQueues([
+      blk({ id: 'old', court: 1, slot: 0, status: 'finished', done: true }),
+      blk({ id: 'next', court: 1, slot: 1 }),
+    ]);
+
+    // History is off the working list but still reachable, in lane order,
+    // with the count stated on the reveal.
+    const disclosure = screen.getByTestId('plan-queue-completed-1');
+    expect(disclosure).not.toHaveAttribute('open');
+    expect(disclosure).toHaveTextContent('1 completed on Court 1');
+    expect(disclosure).toContainElement(screen.getByTestId('plan-queue-cell-meet:old'));
+
+    // The upcoming list is its own bounded, keyboard-focusable scroll region,
+    // so a long court cannot push later courts off the page.
+    const list = screen.getByTestId('plan-queue-list-1');
+    expect(list).toContainElement(screen.getByTestId('plan-queue-cell-meet:next'));
+    expect(list).not.toContainElement(screen.getByTestId('plan-queue-cell-meet:old'));
+    expect(list.getAttribute('tabindex')).toBe('0');
+    expect(list.className).toContain('overflow-y-auto');
+    expect(list.className).toMatch(/max-h-/);
+  });
+
+  it('a move from the upcoming list still targets the position it holds in the FULL lane', async () => {
+    mockValidateMove.mockResolvedValue({ feasible: true, conflicts: [] });
+    renderQueues([
+      blk({ id: 'old', court: 1, slot: 0, status: 'finished', done: true }),
+      blk({ id: 'a', court: 1, slot: 1 }),
+      blk({ id: 'b', court: 1, slot: 2 }),
+    ]);
+
+    // 'a' is index 1 of the lane even though it is the first row rendered in
+    // the upcoming region — moving it earlier targets index 0, the completed
+    // match's slot, not a position derived from the filtered view.
+    fireEvent.click(screen.getByTestId('plan-queue-earlier-meet:a'));
+    await waitFor(() => expect(mockValidateMove).toHaveBeenCalled());
+    expect(mockValidateMove).toHaveBeenCalledWith(
+      expect.objectContaining({ proposedMove: { matchId: 'a', slotId: 0, courtId: 1 } }),
+    );
+  });
+
+  it('does not repeat "Done" on every completed cell — the section already says it', () => {
+    renderQueues([blk({ id: 'old', court: 1, slot: 0, status: 'finished', done: true })]);
+    const cell = screen.getByTestId('plan-queue-cell-meet:old');
+    expect(cell.textContent).not.toMatch(/\bDone\b/);
+  });
+
+  it('keeps a live state explicit on the cell', () => {
+    renderQueues([blk({ id: 'live', court: 1, slot: 0, status: 'started', started: true })]);
+    expect(screen.getByTestId('plan-queue-cell-meet:live').textContent).toContain(
+      STATE_WORD.onCourt,
+    );
   });
 });
 

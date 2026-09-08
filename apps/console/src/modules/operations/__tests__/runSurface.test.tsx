@@ -927,3 +927,67 @@ describe('RunSurface — court disputes are actionable assignments', () => {
     for (const button of buttons) expect(button).not.toBeDisabled();
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Section 3: P4 — readable court cards, collapsed history
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('RunSurface — P4 density and history', () => {
+  it('prints a long doubles pairing on the court card one participant per line', () => {
+    render(
+      <RunSurface
+        blocks={[
+          mkBlock({
+            id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MD1'),
+            court: 1, slot: 0, status: 'started',
+            sideA: 'CHIA Aaron / SOH Wooi Yik',
+            sideB: 'HOKI Takuro / KOBAYASHI Yugo',
+          }),
+        ]}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    const card = screen.getByTestId('run-card-meet:m1');
+    // Every partner survives: the card grows for the names rather than
+    // clipping the second half of a pairing.
+    for (const name of ['CHIA Aaron', 'SOH Wooi Yik', 'HOKI Takuro', 'KOBAYASHI Yugo']) {
+      expect(card).toHaveTextContent(name);
+    }
+    expect(card.className).not.toContain('truncate');
+  });
+
+  it('collapses the Finished history by default, with an obvious reveal that keeps the rows', () => {
+    render(
+      <RunSurface
+        blocks={[
+          mkBlock({
+            id: 'm1', source: 'meet', key: 'meet:m1', identity: identityFixture('MS1'),
+            court: 1, slot: 0, status: 'finished', sideA: 'Alice', sideB: 'Bob',
+          }),
+          mkBlock({
+            id: 'm2', source: 'meet', key: 'meet:m2', identity: identityFixture('MS2'),
+            status: 'scheduled', sideA: 'Carol', sideB: 'Dave',
+          }),
+        ]}
+        bracketData={null}
+        onBracketData={vi.fn()}
+        courtCount={1}
+        currentSlot={0}
+      />,
+    );
+
+    const history = screen.getByTestId('run-finished');
+    expect(history.tagName).toBe('DETAILS');
+    expect(history).not.toHaveAttribute('open');
+    // The reveal states how much history there is, and the finished row is
+    // still present underneath it — collapsed, not removed.
+    expect(screen.getByTestId('run-finished-toggle')).toHaveTextContent('Finished (1)');
+    expect(history).toHaveTextContent('Alice');
+    // The upcoming queue is NOT inside the history.
+    expect(history).not.toHaveTextContent('Carol');
+  });
+});

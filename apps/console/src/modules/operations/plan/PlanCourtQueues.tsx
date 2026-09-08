@@ -42,6 +42,8 @@ import { useTournamentStore } from '../../../store/tournamentStore';
 import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
 import { SELECTABLE_ROW_FOCUS } from '../../../lib/selectableRow';
+import { NavCaret, NAV_LINK_ROW } from '../../../components/NavCaret';
+import { TEXT_HELPER, TEXT_SECONDARY } from '../../../lib/textRoles';
 import { EYEBROW_CLASS } from '../../../lib/utils';
 import { STATE_WORD } from '../../../lib/stateWords';
 import type { MatchDTO, ScheduleDTO, TournamentConfig } from '../../../api/dto';
@@ -70,9 +72,12 @@ interface Lane {
 }
 
 /** Only a state worth acting on is named. "Scheduled" is what every cell in
- *  a plan lane is, so printing it on every cell says nothing. */
+ *  a plan lane is, so printing it on every cell says nothing — and since P4
+ *  finished matches live under their own "Completed" disclosure, "Done" on
+ *  every cell inside it says nothing either. Live and exceptional states
+ *  stay explicit. */
 function laneStateWord(block: OpsBlock): string | null {
-  if (block.done) return STATE_WORD.done;
+  if (block.done) return null;
   if (block.status === 'started') return STATE_WORD.onCourt;
   if (block.status === 'called') return STATE_WORD.called;
   return null;
@@ -247,45 +252,97 @@ export function PlanCourtQueues({
     <div data-testid="plan-court-queues" className="shrink-0">
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {lanes.map((lane) => (
-            <section
-              key={lane.court}
-              data-testid={`plan-queue-lane-${lane.court}`}
-              aria-label={`Court ${lane.court} queue`}
-              className="flex flex-col overflow-hidden rounded border border-border bg-card"
-            >
-              <div className="flex items-baseline justify-between gap-2 border-b border-rule-soft bg-surface-band px-2.5 py-1.5">
-                <span className={`${EYEBROW_CLASS} text-foreground`}>Court {lane.court}</span>
-                <span className="text-xs text-muted-foreground">
-                  {lane.cells.length} match{lane.cells.length === 1 ? '' : 'es'}
-                </span>
-              </div>
-              <ol className="flex flex-col gap-1.5 p-2">
-                {lane.cells.map((cell, i) => (
-                  <Fragment key={cell.key}>
-                    {/* The gap ABOVE cell i is the drop target for position i. */}
-                    <DropSlot court={lane.court} index={i} />
-                    <QueueCell
-                      block={cell}
-                      court={lane.court}
-                      index={i}
-                      laneCount={lane.cells.length}
-                      courtCount={lanes.length}
-                      selected={selectedKey === cell.key}
-                      pending={pendingKey === cell.key}
-                      canEdit={canEdit}
-                      onSelect={onSelect}
-                      onMove={moveTo}
-                      formatSlot={formatSlot}
-                    />
-                  </Fragment>
-                ))}
-                {/* The tail target: dropping here appends to the lane. Also
-                    the ONLY drop target an empty lane has. */}
-                <DropSlot court={lane.court} index={lane.cells.length} empty={lane.cells.length === 0} />
-              </ol>
-            </section>
-          ))}
+          {lanes.map((lane) => {
+            // Position in the lane is the move coordinate, so it is read off
+            // the FULL lane once and carried through the split below: what a
+            // cell is worth moving to must not depend on which disclosure it
+            // happens to be rendered in.
+            const entries = lane.cells.map((cell, index) => ({ cell, index }));
+            const completed = entries.filter((e) => e.cell.done);
+            const upcoming = entries.filter((e) => !e.cell.done);
+            const cellProps = (index: number) => ({
+              court: lane.court,
+              index,
+              laneCount: lane.cells.length,
+              courtCount: lanes.length,
+              canEdit,
+              onSelect,
+              onMove: moveTo,
+              formatSlot,
+            });
+            return (
+              <section
+                key={lane.court}
+                data-testid={`plan-queue-lane-${lane.court}`}
+                aria-label={`Court ${lane.court} queue`}
+                className="flex flex-col overflow-hidden rounded border border-border bg-card"
+              >
+                <div className="flex items-baseline justify-between gap-2 border-b border-rule-soft bg-surface-band px-2.5 py-1.5">
+                  <span className={`${EYEBROW_CLASS} text-foreground`}>Court {lane.court}</span>
+                  <span className={`text-xs ${TEXT_HELPER}`}>
+                    {upcoming.length} to play
+                    {completed.length > 0 ? ` · ${completed.length} done` : ''}
+                  </span>
+                </div>
+                {/* Completed work is history: it keeps its lane order and its
+                    cells, but it is collapsed so court 6's first match is not
+                    behind court 1's whole afternoon. */}
+                {completed.length > 0 ? (
+                  <details
+                    data-testid={`plan-queue-completed-${lane.court}`}
+                    className="border-b border-rule-soft"
+                  >
+                    <summary
+                      data-testid={`plan-queue-completed-toggle-${lane.court}`}
+                      className={`${NAV_LINK_ROW} w-full cursor-pointer list-none px-2.5 py-1.5 text-xs ${TEXT_SECONDARY} hover:text-foreground`}
+                    >
+                      <span className="inline-flex transition-transform duration-fast [details[open]_&]:rotate-90">
+                        <NavCaret />
+                      </span>
+                      {completed.length} completed on Court {lane.court}
+                    </summary>
+                    <ol className="flex flex-col gap-1.5 p-2 pt-0">
+                      {completed.map(({ cell, index }) => (
+                        <QueueCell
+                          key={cell.key}
+                          block={cell}
+                          selected={selectedKey === cell.key}
+                          pending={pendingKey === cell.key}
+                          {...cellProps(index)}
+                        />
+                      ))}
+                    </ol>
+                  </details>
+                ) : null}
+                {/* Bounded, focusable scroll region (WCAG 2.1.1 + 2.4.3): a
+                    long court reaches its own cap instead of pushing every
+                    later court off the page, and the region takes keyboard
+                    focus so arrow keys can scroll it. */}
+                <ol
+                  data-testid={`plan-queue-list-${lane.court}`}
+                  tabIndex={0}
+                  aria-label={`Court ${lane.court} upcoming matches`}
+                  className={`flex max-h-[26rem] flex-col gap-1.5 overflow-y-auto p-2 ${SELECTABLE_ROW_FOCUS}`}
+                >
+                  {upcoming.map(({ cell, index }) => (
+                    <Fragment key={cell.key}>
+                      {/* The gap ABOVE the cell is the drop target for its position. */}
+                      <DropSlot court={lane.court} index={index} />
+                      <QueueCell
+                        block={cell}
+                        selected={selectedKey === cell.key}
+                        pending={pendingKey === cell.key}
+                        {...cellProps(index)}
+                      />
+                    </Fragment>
+                  ))}
+                  {/* The tail target: dropping here appends to the lane. Also
+                      the ONLY drop target an empty lane has. */}
+                  <DropSlot court={lane.court} index={lane.cells.length} empty={lane.cells.length === 0} />
+                </ol>
+              </section>
+            );
+          })}
         </div>
       </DndContext>
       {/* Outcome only. The idle state carries NO standing drag instruction
@@ -386,17 +443,16 @@ function QueueCell({
             onSelect(block.key);
           }
         }}
-        // match-card §3.2 / §4.5: this is the DEGENERATE renderer — a
-        // uniform h-12 cell too small for stacked sides — so the sides read
-        // inline and the accessible summary carries the contract's own
-        // "versus" phrasing.
         title={`${identity}: ${block.sideA} versus ${block.sideB}`}
         aria-label={`${identity}: ${block.sideA} versus ${block.sideB}`}
-        // Uniform cell: every match is the same size whatever its duration.
         className={[
-          // Uniform h-12 cell, overflow hidden rather than ellipsised: the
-          // console renders no CSS-side ellipsis (truncation contract).
-          'flex h-12 w-full items-center gap-2 overflow-hidden rounded border px-2 text-left',
+          // P4: `min-h-12`, not `h-12`, and no `overflow-hidden`. The old
+          // fixed cell clipped the second half of a doubles pairing with no
+          // marker at all — silent clipping, which the truncation contract
+          // forbids as squarely as it forbids an inaccessible ellipsis. The
+          // cell now grows to fit the names it was given. Duration is still
+          // not encoded as height: what varies is CONTENT, not span.
+          'flex min-h-12 w-full items-start gap-2 rounded border px-2 py-1.5 text-left',
           SELECTABLE_ROW_FOCUS,
           selected ? 'border-accent ring-1 ring-accent' : 'border-border',
           block.done ? 'bg-muted/30' : canEdit ? 'cursor-grab active:cursor-grabbing' : '',
@@ -404,23 +460,40 @@ function QueueCell({
           pending ? 'animate-pulse' : '',
         ].join(' ')}
       >
+        {/* Fixed positions, one per fact: position, then the reference above
+            the two participant groups, then the state. Comparable rows in a
+            lane therefore line up whatever length the names are. */}
         <span className="w-5 shrink-0 text-right text-2xs sw-num text-ink-faint">{index + 1}</span>
         <span className="min-w-0 flex-1">
-          <span className="block break-words text-xs font-semibold sw-num text-ink-3">{identity}</span>
-          <span className="block break-words text-[13px] leading-tight text-foreground">
+          <span className={`block break-words text-xs font-semibold sw-num ${TEXT_SECONDARY}`}>
+            {identity}
+          </span>
+          {/* One participant GROUP per line. Inline "A v B" wrapped through
+              the middle of a doubles pairing, so the reader had to work out
+              where one side ended — exactly the thing the queue exists to
+              make obvious. */}
+          <span
+            data-testid={`plan-queue-side-a-${block.key}`}
+            className="mt-0.5 block break-words text-[13px] font-medium leading-tight text-foreground"
+          >
             {block.sideA}
-            <span className="px-1 text-xs uppercase tracking-[0.06em] text-muted-foreground">v</span>
+          </span>
+          <span
+            data-testid={`plan-queue-side-b-${block.key}`}
+            className="block break-words text-[13px] font-medium leading-tight text-foreground"
+          >
+            <span className="pr-1 text-2xs uppercase tracking-[0.06em] text-muted-foreground">v</span>
             {block.sideB}
           </span>
         </span>
         {stateWord ? (
-          <span className="shrink-0 text-xs text-muted-foreground">{stateWord}</span>
+          <span className={`shrink-0 text-xs ${TEXT_SECONDARY}`}>{stateWord}</span>
         ) : null}
       </div>
       <div className="mt-0.5 flex items-center justify-between gap-2 px-2">
         {/* The estimate, beneath the cell, muted — the lane carries the
             order, the clock time is the solve's estimate of when. */}
-        <span className="text-2xs sw-num text-muted-foreground">{when ? `~${when}` : ''}</span>
+        <span className={`text-2xs sw-num ${TEXT_SECONDARY}`}>{when ? `~${when}` : ''}</span>
         {block.done ? null : (
           <span className="flex items-center gap-0.5">
             <button

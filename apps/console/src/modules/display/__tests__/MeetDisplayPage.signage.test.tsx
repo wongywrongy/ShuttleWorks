@@ -100,6 +100,13 @@ function seed(states: Record<string, MatchStateDTO> = {}) {
   useMatchStateStore.getState().setMatchStates(states);
 }
 
+/** Seed the schedule/config/state without touching the player roster the
+ *  caller has already set (used by the long-name fixture). */
+function seedNames(states: Record<string, MatchStateDTO> = {}) {
+  useTournamentStore.setState({ config: CONFIG, schedule: SCHEDULE, matches: DOUBLES_MATCHES });
+  useMatchStateStore.getState().setMatchStates(states);
+}
+
 afterEach(() => {
   useTournamentStore.getState().reset();
   useMatchStateStore.getState().reset();
@@ -268,6 +275,96 @@ describe('MeetDisplayPage — venue signage', () => {
 
     renderBoard({ preview: true });
     expect(screen.getByTestId('tv-live-status')).toBeInTheDocument();
+  });
+
+  // ── P4 ────────────────────────────────────────────────────────────────
+  it('groups a long doubles pairing into two sides, each score beside its own side', () => {
+    // A real three-game BWF doubles result (handoff-P0, MD R32·1) with names
+    // long enough to wrap on a board card.
+    useTournamentStore.setState({
+      players: [
+        { id: 'a1', name: 'CHIA Aaron', groupId: 'g1', availability: [] },
+        { id: 'a2', name: 'SOH Wooi Yik', groupId: 'g1', availability: [] },
+        { id: 'b1', name: 'HOKI Takuro', groupId: 'g2', availability: [] },
+        { id: 'b2', name: 'KOBAYASHI Yugo', groupId: 'g2', availability: [] },
+      ] as PlayerDTO[],
+    });
+    seedNames({
+      m1: {
+        matchId: 'm1',
+        status: 'started',
+        actualStartTime: new Date().toISOString(),
+        sets: [
+          { sideA: 18, sideB: 21 },
+          { sideA: 21, sideB: 15 },
+          { sideA: 21, sideB: 13 },
+        ],
+      } as MatchStateDTO,
+    });
+
+    renderBoard();
+
+    // Every partner is on its own line and none is dropped.
+    for (const name of ['CHIA Aaron', 'SOH Wooi Yik', 'HOKI Takuro', 'KOBAYASHI Yugo']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    // Side A owns 18/21/21; side B owns 21/15/13. Score ownership is what the
+    // grouping exists to make unambiguous at hall distance.
+    expect(screen.getByTestId('court-score-1-a').textContent).toBe('182121');
+    expect(screen.getByTestId('court-score-1-b').textContent).toBe('211513');
+  });
+
+  it('list mode groups the two sides the same way and drops the shared centred lane', () => {
+    useTournamentStore.setState({ config: { ...CONFIG, tvDisplayMode: 'list' } });
+    seed({
+      m1: {
+        matchId: 'm1',
+        status: 'started',
+        actualStartTime: new Date().toISOString(),
+        sets: [{ sideA: 21, sideB: 18 }],
+      } as MatchStateDTO,
+    });
+    useTournamentStore.setState({ config: { ...CONFIG, tvDisplayMode: 'list' } });
+
+    renderBoard();
+
+    // Non-vacuity: this really is LIST mode, not the card grid.
+    expect(screen.queryByTestId('court-card-1')).toBeNull();
+    expect(screen.getByTestId('court-match-1')).toBeInTheDocument();
+    expect(screen.getByTestId('court-score-1-a').textContent).toBe('21');
+    expect(screen.getByTestId('court-score-1-b').textContent).toBe('18');
+    // Both doubles partners render as their own lines inside their side.
+    for (const name of ['Alice Anderson', 'Amy Baker', 'Bea Carter', 'Bella Diaz']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+  });
+
+  it('honours the board Show scores setting on a known scored match in BOTH modes', () => {
+    const state = {
+      m1: {
+        matchId: 'm1',
+        status: 'started',
+        actualStartTime: new Date().toISOString(),
+        sets: [{ sideA: 21, sideB: 18 }],
+      } as MatchStateDTO,
+    };
+    for (const mode of ['auto', 'list'] as const) {
+      seed(state);
+      useTournamentStore.setState({ config: { ...CONFIG, tvDisplayMode: mode } });
+      const on = renderBoard();
+      expect(screen.getByTestId('court-score-1-a').textContent).toBe('21');
+      expect(screen.getByTestId('court-score-1-b').textContent).toBe('18');
+      on.unmount();
+
+      seed(state);
+      useTournamentStore.setState({ config: { ...CONFIG, tvDisplayMode: mode } });
+      const off = renderBoard({ board: { ...BOARD, showScores: false } });
+      expect(off.container.querySelector('[data-testid="court-score-1-a"]')).toBeNull();
+      expect(off.container.querySelector('[data-testid="court-score-1-b"]')).toBeNull();
+      // The names are still there — only the ledger is withheld.
+      expect(screen.getByText('Alice Anderson')).toBeInTheDocument();
+      off.unmount();
+    }
   });
 
   it('shows the operator board branding', () => {
