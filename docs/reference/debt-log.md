@@ -215,7 +215,7 @@ Debt found delivering work package 24 (`docs/audits/v3-consolidated/plan.md` §3
 
 | ID | Finding | Size |
 |---|---|---|
-| V3-29-1 | **`tests/backend/unit/test_architecture_boundary_inventory.py` counts the literal `tournaments.data` with `str.count` over each whole file, so a docstring that names the blob reads as new persistence debt.** Package 29 reworded two docstrings around it; the metric should count code, not prose (strip comments/docstrings before counting). | S |
+| V3-29-1 | **Closed 2026-09-08.** The architecture inventory now counts executable blob references and SQL string literals through the AST, excluding comments and docstrings. A regression test proves prose contributes zero while an attribute access and SQL query still contribute two. The existing manifest-scoped `ops/seed_repair.py` maintenance adapter is explicitly inventoried under `platform-oncall`; future increases remain gated. | S |
 | V3-29-2 | **`apps/console/src/api/bracketDto.ts` still carries the `@deprecated side_a`/`side_b` pre-joined fields.** Every console consumer now prefers `sides` (package 29 removed the last `' / '` name-split in `DrawView.tsx`), so the deprecated fields and their backend emitters are a separate, mechanical cut once no test fixture depends on them. | S |
 
 ### Work package 30 — short entry reference
