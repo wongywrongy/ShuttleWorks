@@ -13,13 +13,20 @@
  *
  * Same harness as the rest of this directory: the real `@react-router/dev`
  * pipeline through `createRequestHandler`, request in, bytes out, and
- * regex over the HTML string (this tier has no jsdom in its tree).
+ * structural assertions over the rendered HTML.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
+import { parse, type DefaultTreeAdapterTypes } from 'parse5';
 
 import entryPageFixture from './helpers/entryPage.fixture.json';
+
+function documentText(node: DefaultTreeAdapterTypes.Node): string {
+  if ('tagName' in node && (node.tagName === 'script' || node.tagName === 'style')) return '';
+  if ('value' in node) return node.value;
+  return 'childNodes' in node ? node.childNodes.map(documentText).join(' ') : '';
+}
 
 const PAGE = {
   ...entryPageFixture,
@@ -309,7 +316,7 @@ describe.each(CASES)('the tournament frame on $name', ({ path, routes, activeTab
     // every instant on the page is CONVERTED into that zone and none of
     // them spells it. The fixture's zone is Asia/Seoul on the schedule
     // projection, so all three spellings have something to catch.
-    const body = html.replace(/<script[\s\S]*?<\/script>/g, '');
+    const body = documentText(parse(html));
     expect(body).not.toMatch(/\bAsia\/Seoul\b/);
     expect(body).not.toMatch(/\bUTC\b/);
     expect(body).not.toMatch(/GMT[+-]?\d*/);
