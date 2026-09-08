@@ -62,6 +62,51 @@ below and marked *(public P0)*:
    a day-grouped list does not repeat its date on every card.
 :::
 
+::: danger Amended 2026-09-08 — operator/public remediation, package P0
+`operator-public-remediation-plan.md` is approved product direction and **supersedes both
+amendments above wherever they disagree**. Its correction is single and load-bearing:
+
+> **A centred paired score lane is NOT the universal match presentation.**
+
+The two 2026-09-07 amendments generalised one lane to every surface. That is withdrawn. Match
+*interpretation* stays shared — one score authority, one canonical side order, one outcome
+vocabulary — but **layout is a per-context variant**, chosen from this table and from nowhere else:
+
+| Context | Required layout |
+| --- | --- |
+| Bracket node | Two stacked opponent sides, with aligned game-score columns **beside each side** |
+| Compact public result/history card | The same two-side score grid (the white BWF reference) |
+| Doubles node/card | Two names form **one** side group; one score row belongs to that whole side |
+| Operator row sheet | Paired game scores may remain in a dedicated, consistently aligned column |
+| Horizontal schedule/list row | Compact dark-BWF form: time, opponents, paired game scores at right, supporting match metadata |
+| Venue board | Clearly separated sides and legible scores; scale adapts to viewing distance while score ownership stays correct |
+
+Rules that hold across every row of that table:
+
+1. **Canonical side A/B ordering.** Scores are never reordered independently of participants, and
+   ordering is never inferred from winner styling. Where a side order is positional on the wire, a
+   renderer that reverses sides reverses the score pair with it.
+2. **Stacked layouts align each game's two scores vertically in the same column**, at consistent
+   widths, with tabular numerals, a semantic reading order and accessible score labels.
+3. **Doubles partners group inside a side** with less spacing than separates the opponents; the
+   side boundary is unambiguous without relying on colour.
+4. **The centred extra score row is removed** from bracket nodes and stacked result cards.
+   Input-like name boxes are replaced by match-row presentation unless the control is actually
+   editable in the current mode.
+5. **Winner emphasis stays a readable weight plus a restrained marker**, and loser-name contrast is
+   preserved. The per-game "no emphasis" rule of the 2026-09-07 amendments still holds: no
+   individual game score is bolded or coloured.
+6. **Walkover, retirement, bye and every other supported outcome appear once**, in the outcome
+   area. Numeric games are never fabricated for a non-played result.
+7. **Zero, missing and not-yet-started are three distinct states.** Two- and three-game matches and
+   every scoring configuration the product already supports must render correctly.
+
+Where a section below still says "one centred lane between the opponents" or "the match list
+renders one centred score lane", read it as: *the shared score authority still produces one ordered
+pair sequence; how that sequence is laid out is decided by the table above.* Each such line is
+marked *(superseded 2026-09-08)* in place.
+:::
+
 [[toc]]
 
 ---
@@ -314,8 +359,9 @@ Four rules, all from state-and-formatting §5.1, all of which the mockup violate
    by "which number is larger".
 3. **No per-game emphasis at all** *(P0, 2026-09-07)*. The mockup keyed the per-game cell off the
    *match* winner; the earlier correction here keyed it off `game.winner` instead. Both are now
-   deleted. Every game score in the ledger renders in one weight, in one centred lane between the
-   opponents, read as a comma-separated pair sequence — `18–21, 21–15, 21–13` — where the **first
+   deleted. Every game score in the ledger renders in one weight, in the layout its context's row of the
+   2026-09-08 table prescribes *(superseded 2026-09-08: the lane is no longer universal)*, read as a
+   comma-separated pair sequence — `18–21, 21–15, 21–13` — where the **first
    number of every pair belongs to the first-listed side**. A losing side can win games (fixture
    MC-08) and that stays legible from the numbers, not from ink.
 4. **The match winner comes from `outcome`, never from the ledger.** Retirement and walkover
@@ -414,7 +460,7 @@ The per-game scores for both sides, aligned in columns.
 | --- | --- |
 | **collapse** | when `games` is empty **and** no outcome word is needed, the ledger renders **nothing at all**: no cell, no reserved width, no padding, no separating rule, no invisible winner mark. Plan §3, "Collapse empty score cells" — *adopt fully*. The current entrant card emits an `aria-hidden` empty `span` per game column; that is deleted. |
 | padding | never padded to the configured game count. Three columns are rendered when three games exist, one when one does. |
-| alignment | *(P0, 2026-09-07)* one **centred lane between the opponents**, reading `18–21, 21–15, 21–13`; the first number of each pair is the first-listed side. Tabular figures; the lane is wide enough for a two-digit pair without changing width between cards on the same screen. A renderer that instead columns both sides' game *n* vertically (the earlier V3-OC17.1 treatment) stays valid only where the surface has no single lane to give — never on a match list. |
+| alignment | *(superseded 2026-09-08 — see the remediation amendment; the centred lane survives only where its context's row of that table asks for one, and a bracket node or stacked result card now uses aligned per-side score columns instead)* one **centred lane between the opponents**, reading `18–21, 21–15, 21–13`; the first number of each pair is the first-listed side. Tabular figures; the lane is wide enough for a two-digit pair without changing width between cards on the same screen. A renderer that instead columns both sides' game *n* vertically (the earlier V3-OC17.1 treatment) stays valid only where the surface has no single lane to give — never on a match list. |
 | emphasis | **none** *(P0, 2026-09-07)*. No game score is ever bolded, coloured or otherwise emphasised, for a `complete` game or an `in_progress` one. `game.winner` no longer drives any ink. |
 | live game | the current game's running score sits in the **same lane** as the completed games, in the same weight. Missing scores are never fabricated to fill it. |
 | special outcomes | a partial ledger from a retirement or walkover renders **with** the outcome word; the outcome, not the ledger, decides the winner mark. |
@@ -546,8 +592,10 @@ above; the public bracket node additionally obeys:
   participant key, no slot index. The relationship travels in the connector geometry and in the one
   muted line; the participant slots stay at their normal height so nothing jumps as results land.
   A partly-known doubles side keeps its known player and leaves the other slot empty.
-- **Seeds and paired scores render, right-aligned** against the node's trailing edge —
-  `21–16, 22–20`, first-listed-side order, no per-game emphasis.
+- **Seeds and paired scores render against the node's trailing edge** — `21–16, 22–20`,
+  first-listed-side order, no per-game emphasis. *(Amended 2026-09-08: in a bracket node the games
+  are aligned score **columns beside each stacked side**, not one shared lane; the pair order and
+  the no-emphasis rule are unchanged.)*
 - **The canvas scrolls natively, in its own region.** `overflow: auto`, height bounded to the
   available viewport, an accessible name, reachable and scrollable by keyboard, and it never traps
   the page. The **page** never scrolls horizontally. Round headers stay sticky at the top of that
@@ -724,7 +772,7 @@ New: `apps/entrant/tests/matchCard.contract.render.test.ts`, driving every MC fi
 | the winner mark is absent | MC-01, MC-05, MC-06, MC-07, MC-12 |
 | the winner mark carries the accessible word "Winner" | MC-08, MC-09, MC-10 |
 | **no game score is emphasised** on any fixture — assert the absence of a winner-weighted game cell, not which side carries it *(P0, 2026-09-07; replaces "game 2 of MC-08 emphasises the losing side")* | MC-07, MC-08 |
-| the recorded games render as one centred pair sequence whose first number is the first-listed side | MC-02, MC-03, MC-08 |
+| the recorded games render as an ordered pair sequence whose first number is the first-listed side, laid out per the 2026-09-08 context table *(superseded 2026-09-08: no longer asserts a centred lane)* | MC-02, MC-03, MC-08 |
 | the state word is "On court", never "Live" | MC-07 |
 | the public schedule word is "Scheduled" or "Time to be confirmed" and nothing else | MC-01, MC-05, MC-06 |
 | no placeholder footer text: `/Date to be confirmed/`, `/Time not assigned/`, `/Court information unavailable/` never appear on a card | MC-06 |
@@ -743,7 +791,7 @@ per-module cases in the Bracket and Meet match tests.
 | --- | --- |
 | **game completion is computed by the score authority**, with a table-driven case set: 21–19 complete, 20–19 not complete under `deuceEnabled`, 21–20 not complete, 30–29 complete where a cap exists, 15–3 complete under a 15-point format | this is the replacement for "which score is larger" |
 | `setsWinner()`-style inference is not called on any render path | assert `outcome.winner` drives the mark; MC-09/MC-10 fail loudly under a counting implementation |
-| the match list renders one centred score lane between the opponents, first number = first-listed side, with **no per-game emphasis** *(P0; replaces the two-sides-share-a-column-index assertion)* | MC-02, MC-03, MC-08 |
+| the match list (operator row sheet) renders paired game scores in a dedicated, consistently aligned column, first number = first-listed side, with **no per-game emphasis**; a bracket node instead renders aligned per-side score columns beside each stacked side *(superseded 2026-09-08 — the 2026-09-07 "one centred lane everywhere" assertion is withdrawn)* | MC-02, MC-03, MC-08 |
 | the match list has no standalone **Issues** or **Status** text column; an exceptional LIVE/PENDING state renders as a leading mark and issue detail lives in the inspector *(P0)* | MC-06, MC-07 |
 | a doubles side stacks one partner per line, two lines per side, at a consistent standard row height with the full name reachable and no clipping at 200% text zoom; a singles side is one line *(P0)* | MC-02, MC-03 |
 | the row exposes a *minimum* height and no maximum: assert the computed `min-height` intent via the component's declared density prop, **never a measured `offsetHeight` equality** | plan §6 |
