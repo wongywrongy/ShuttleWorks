@@ -176,6 +176,67 @@ describe('the match groups', () => {
   });
 });
 
+describe('the draw path (P6 structured round steps)', () => {
+  const WITH_PATH = {
+    ...PLAYER,
+    events: [
+      {
+        code: 'MD',
+        discipline: "Men's Doubles",
+        partner: ref('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'Kim Park'),
+        seed: 3,
+        drawPath: [
+          {
+            roundLabel: 'Round of 32',
+            opponents: [ref('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'Rin Sato')],
+            outcome: 'won',
+            score: [
+              [21, 15],
+              [21, 12],
+            ],
+            reference: 'MD R32\u00b79',
+          },
+          {
+            roundLabel: 'Round of 16',
+            opponents: [ref('ffffffff-ffff-4fff-8fff-ffffffffffff', 'Lee Chen')],
+            outcome: null,
+            score: null,
+            reference: 'MD R16\u00b75',
+          },
+        ],
+      },
+    ],
+  };
+
+  it('renders each round as its own step, never an arrow-joined sentence', async () => {
+    stubApi(WITH_PATH);
+    const html = await (await render(URL_PATH)).text();
+
+    expect(html).toContain('Round of 32');
+    expect(html).toContain('Round of 16');
+    // The arrow separator the old progression used is gone from the path.
+    expect(html).not.toContain('\u2192');
+    // Opponent, outcome and score all read on the step itself.
+    expect(html).toContain('Rin Sato');
+    expect(html).toContain('Won');
+    expect(html).toContain('21\u201315, 21\u201312');
+    // An undecided step claims no outcome.
+    expect(html).not.toContain('Lost');
+  });
+
+  it('names the partner and links the event draw pinned on this person', async () => {
+    stubApi(WITH_PATH);
+    const html = await (await render(URL_PATH)).text();
+
+    expect(html).toContain('Kim Park');
+    expect(html).toContain(
+      'href="/e/spring-open/draws/MD?view=path&amp;player=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"',
+    );
+    // The visible label is a name, never the identity value in the URL.
+    expect(html).toContain('View MD draw');
+  });
+});
+
 describe('tournament history (profile v1)', () => {
   it('links each past tournament to THAT tournament page for the same person', async () => {
     stubApi(PLAYER);

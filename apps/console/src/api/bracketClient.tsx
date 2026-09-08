@@ -36,6 +36,12 @@ import type {
 } from './dto';
 
 export interface BracketApi {
+  /** The workspace this client is bound to. Exposed so a Bracket surface can
+   *  build an in-app LINK to another Bracket surface of the same workspace
+   *  without reaching for router params it may not have (the roster tab
+   *  renders provider-less in tests). Never used to build a request — every
+   *  call below already closes over it. */
+  tournamentId: string;
   /** Resolves to ``null`` when no bracket is configured (404). */
   get: () => Promise<BracketTournamentDTO | null>;
   create: (body: BracketCreateIn) => Promise<BracketTournamentDTO>;
@@ -126,6 +132,7 @@ export function BracketApiProvider({
   // able to see and export the draw. `validateMove` is a preview, not a write.
   const value = useMemo<BracketApi>(
     () => ({
+      tournamentId,
       get: () => apiClient.getBracket(tournamentId),
       create: guardMutation((body) => apiClient.createBracket(tournamentId, body)),
       remove: guardMutation(() => apiClient.deleteBracket(tournamentId)),

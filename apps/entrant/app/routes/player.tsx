@@ -12,16 +12,22 @@
  * do not flip it** (§3.3, binding). Match-card scores and winner marks arrive
  * pre-gated by the published tournament projection.
  *
- * Profile v1 (public-visual-fixes P2) = **identity + tournament history**.
- * The history section is a list of the SAME human's other public
- * tournaments, joined server-side on the verified entrant account that owns
- * the row (`_person_history`) — this file never matches people by name and
- * never mints a person key. Each row's link is built by `personHref`, the
- * one shared link-target resolver the whole tier routes people through, so
- * a cross-tournament profile URL and an in-page name link are the same
- * decision made once. The current tournament stays in the list, marked
- * `aria-current`, so a person with no linked history still reads as a
- * history of one rather than an empty section.
+ * Profile v2 (P6, 2026-09-08) = **this tournament, then everywhere else**.
+ * The page is two clearly separated halves: the current event's own events,
+ * round steps and match cards, then an "Other tournaments" section of the
+ * SAME human's other public tournaments, joined server-side
+ * (`_person_history`) on either the verified entrant account that owns the
+ * row or, for an imported draw-roster person, the import's declared
+ * identity — this file never matches people by name and never mints a
+ * person key. Each row's link is built by `personHref`, the one shared
+ * link-target resolver the whole tier routes people through, so a
+ * cross-tournament profile URL and an in-page name link are the same
+ * decision made once. The current tournament is not repeated as a history
+ * row: the reader is standing on it, and the matches above ARE it.
+ *
+ * A path through a draw renders as ROUND STEPS (`PlayerEventBlock`), never
+ * as an arrow-joined "R32 → R16 → QF" sentence, and every event links into
+ * its own draw pinned on this person.
  */
 import { isRouteErrorResponse, useRouteError } from 'react-router';
 
@@ -31,11 +37,13 @@ import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { TournamentFrame } from '../components/TournamentFrame';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
+import { demoNowMs } from '../lib/demoClock.server';
 import type { EntryPageDTO } from '../lib/entryPage.types';
 import { eventCodeLabel } from '../lib/draws.types';
 import { formatCalendarDay, formatDateLong } from '../lib/format';
-import type { PlayerMatchDTO, PlayerPageDTO } from '../lib/player.types';
-import { SECTION_TITLE } from '../lib/ui';
+import type { PlayerEventDTO, PlayerMatchDTO, PlayerPageDTO } from '../lib/player.types';
+import { pairedScoreLine } from '../lib/score';
+import { ACTION_LINK, SECTION_TITLE, TEXT_HELPER } from '../lib/ui';
 import { sectionHref, sectionLabel } from '../lib/tournamentFrame';
 import { personHref, personRefModel } from '../../public/assets/person-ref.js';
 import type { Route } from './+types/player';
@@ -74,7 +82,7 @@ export async function loader({ params }: { params: { slug?: string; personKey?: 
       tournamentDate: page.tournament.date,
       page,
       player,
-      nowMs: Date.now(),
+      nowMs: demoNowMs(),
     };
     return payload;
   } catch (err) {
@@ -113,6 +121,99 @@ function playerMatchCard(match: PlayerMatchDTO) {
     : match;
 }
 
+/** The draw this event's path belongs to, opened ON this person.
+ *
+ * `?player={id}` is resolved by STABLE IDENTITY in `draw.tsx` (never by a
+ * name substring), and `view=path` is that route's no-JavaScript pinned-path
+ * state. One href, so a profile and a draw agree on who is being followed.
+ */
+function eventDrawHref(slug: string, code: string, personId: string | null): string {
+  const base = `/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(code)}`;
+  if (!personId) return base;
+  const params = new URLSearchParams({ view: 'path', player: personId });
+  return `${base}?${params}`;
+}
+
+/** One event a person played, with their path through it as ROUND STEPS.
+ *
+ * Replaces the arrow-joined "R32 → R16 → QF" run-on (P2 left it here
+ * deliberately): each round is its own row naming the round, the opponents
+ * and — where the tournament publishes results — the outcome and the score
+ * from this person's side. `outcome` is server-gated; this file never infers
+ * a winner from the numbers. */
+function PlayerEventBlock({
+  slug,
+  event,
+  personId,
+}: {
+  slug: string;
+  event: PlayerEventDTO;
+  personId: string | null;
+}) {
+  return (
+    <li className="py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <span className="min-w-0">
+          <span className="font-medium">{eventCodeLabel(event.code)}</span>
+          <span className={TEXT_HELPER}>{` · ${event.discipline}`}</span>
+          {event.seed !== null && event.seed !== undefined ? (
+            <span className={TEXT_HELPER}> {`[${event.seed}]`}</span>
+          ) : null}
+          {event.partner ? (
+            <>
+              <span className={TEXT_HELPER}>{' with '}</span>
+              <PersonRef
+                slug={slug}
+                identity={event.partner.identity}
+                state={event.partner.resolution === 'dead' ? 'dead' : 'resolved'}
+                label={event.partner.label}
+              />
+            </>
+          ) : null}
+        </span>
+        <a href={eventDrawHref(slug, event.code, personId)} className={ACTION_LINK}>
+          {`View ${eventCodeLabel(event.code)} draw`}
+        </a>
+      </div>
+      {event.drawPath.length > 0 ? (
+        <ol className="mt-2 space-y-1 text-xs">
+          {event.drawPath.map((step, index) => {
+            const score = pairedScoreLine(step.score);
+            return (
+              <li
+                key={`${step.roundLabel}-${index}`}
+                className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+              >
+                <span className="min-w-[5.5em] font-medium text-foreground">{step.roundLabel}</span>
+                <span className="min-w-0 text-foreground">
+                  <span className={TEXT_HELPER}>{'v '}</span>
+                  {step.opponents.map((opponent, opponentIndex) => (
+                    <span key={`${opponent.identity?.id ?? opponent.label ?? opponentIndex}`}>
+                      {opponentIndex > 0 ? <span className={TEXT_HELPER}>{' / '}</span> : null}
+                      <PersonRef
+                        slug={slug}
+                        identity={opponent.identity}
+                        state={opponent.resolution}
+                        label={opponent.label}
+                      />
+                    </span>
+                  ))}
+                </span>
+                {step.outcome ? (
+                  <span className="font-semibold text-foreground">
+                    {step.outcome === 'won' ? 'Won' : 'Lost'}
+                  </span>
+                ) : null}
+                {score ? <span className={TEXT_HELPER}>{score}</span> : null}
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
+    </li>
+  );
+}
+
 export default function Player({ loaderData }: Route.ComponentProps) {
   const { slug, tournamentDate, page, player, nowMs } = loaderData;
   const coming = player.matches.filter((match) => !match.decided);
@@ -134,6 +235,11 @@ export default function Player({ loaderData }: Route.ComponentProps) {
   // Absent on a payload minted before profile v1 — an older API answers a
   // page with no history section rather than an empty one.
   const history = player.history ?? [];
+  const current = history.find((row) => row.current) ?? null;
+  // The one identity value this page passes into a draw URL. Never the
+  // visible name and never the raw key as display text — a query value and a
+  // label are two different things (P6).
+  const personId = player.person.identity?.id ?? null;
 
   return (
     <PlayShell>
@@ -173,30 +279,12 @@ export default function Player({ loaderData }: Route.ComponentProps) {
           {player.events.length > 0 ? (
             <ul className="mt-4 divide-y divide-rule-soft border-t border-rule-soft text-sm text-foreground">
               {player.events.map((event) => (
-                <li key={`${event.code}-${event.discipline}`} className="flex flex-wrap items-baseline justify-between gap-4 py-2.5">
-                  <span className="min-w-0">
-                    <span className="font-medium">{eventCodeLabel(event.code)}</span>
-                    <span className="text-muted-foreground">{` · ${event.discipline}`}</span>
-                    {event.seed !== null && event.seed !== undefined ? <span className="text-muted-foreground"> {`[${event.seed}]`}</span> : null}
-                    {event.partner ? <><span className="text-muted-foreground">{' with '}</span><PersonRef slug={slug} identity={event.partner.identity} state={event.partner.resolution === 'dead' ? 'dead' : 'resolved'} label={event.partner.label} /></> : null}
-                  </span>
-                  {event.drawPath.length ? (
-                    <span className="basis-full text-xs text-muted-foreground">
-                      {event.drawPath.map((step, stepIndex) => (
-                        <span key={`${step.roundLabel}-${stepIndex}`}>
-                          {stepIndex > 0 ? <span className="mx-1" aria-hidden>→</span> : null}
-                          <span className="me-1">{step.roundLabel}</span>
-                          {step.opponents.map((opponent, opponentIndex) => (
-                            <span key={`${opponent.identity?.id ?? opponent.label ?? opponentIndex}`}>
-                              {opponentIndex > 0 ? <span className="mx-1" aria-hidden>/</span> : null}
-                              <PersonRef slug={slug} identity={opponent.identity} state={opponent.resolution} label={opponent.label} />
-                            </span>
-                          ))}
-                        </span>
-                      ))}
-                    </span>
-                  ) : null}
-                </li>
+                <PlayerEventBlock
+                  key={`${event.code}-${event.discipline}`}
+                  slug={slug}
+                  event={event}
+                  personId={personId}
+                />
               ))}
             </ul>
           ) : null}
@@ -240,34 +328,73 @@ export default function Player({ loaderData }: Route.ComponentProps) {
             <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
               Tournament history
             </h2>
+            <p className={`mt-1 text-xs ${TEXT_HELPER}`}>
+              {current?.tournamentName
+                ? `The matches above are ${current.tournamentName}. This is the same player across every published tournament.`
+                : 'The same player across every published tournament.'}
+            </p>
             <ul className="mt-3 divide-y divide-rule-soft border-t border-rule-soft text-sm">
               {history.map((row) => {
-                const href = personHref(row.slug, { id: row.playerKey, name: playerName });
+                const href = row.current
+                  ? null
+                  : personHref(row.slug, { id: row.playerKey, name: playerName });
+                const events = row.events ?? [];
                 return (
-                  <li key={`${row.slug}-${row.playerKey}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5">
-                    <span className="min-w-0">
-                      {/* The current tournament is the page the reader is
-                          already on: it is named, marked, and deliberately
-                          not a link back to itself (the same rule the
-                          breadcrumb trail's last segment follows). */}
-                      {row.current || href === null ? (
-                        <span className="font-medium text-foreground" aria-current={row.current ? 'page' : undefined}>
-                          {row.tournamentName ?? row.slug}
-                        </span>
-                      ) : (
-                        <a href={href} className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                          {row.tournamentName ?? row.slug}
-                        </a>
-                      )}
-                      {row.date ? (
-                        <span className="block text-xs text-muted-foreground">{formatDateLong(row.date)}</span>
-                      ) : null}
-                    </span>
-                    {row.eventCodes.length > 0 ? (
-                      <span className="text-xs text-muted-foreground" aria-label={row.eventCodes.map(eventCodeLabel).join(' · ')}>
-                        {row.eventCodes.map(eventCodeLabel).join(' · ')}
+                  <li key={`${row.slug}-${row.playerKey}`} className="py-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                      <span className="min-w-0">
+                        {/* The current tournament is the page the reader is
+                            already on: named, marked, and deliberately not a
+                            link back to itself — the same rule the breadcrumb
+                            trail's last segment follows. */}
+                        {href === null ? (
+                          <span
+                            className="font-medium text-foreground"
+                            aria-current={row.current ? 'page' : undefined}
+                          >
+                            {row.tournamentName ?? row.slug}
+                          </span>
+                        ) : (
+                          <a href={href} className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                            {row.tournamentName ?? row.slug}
+                          </a>
+                        )}
+                        {row.date ? (
+                          <span className={`block text-xs ${TEXT_HELPER}`}>{formatDateLong(row.date)}</span>
+                        ) : null}
                       </span>
-                    ) : null}
+                      {row.eventCodes.length > 0 ? (
+                        <span className={`text-xs ${TEXT_HELPER}`}>
+                          {row.eventCodes.map(eventCodeLabel).join(' · ')}
+                        </span>
+                      ) : null}
+                    </div>
+                    {row.current ? (
+                      <p className={`mt-1 text-xs ${TEXT_HELPER}`}>
+                        Shown above.
+                      </p>
+                    ) : events.length > 0 ? (
+                      <ul className="mt-1 divide-y divide-rule-soft border-t border-rule-soft">
+                        {events.map((event) => (
+                          <PlayerEventBlock
+                            key={`${row.slug}-${event.code}-${event.discipline}`}
+                            slug={row.slug}
+                            event={event}
+                            personId={row.playerKey}
+                          />
+                        ))}
+                      </ul>
+                    ) : (
+                      // `expanded === false` means this row was not opened
+                      // server-side, NOT that the player has no record there.
+                      // Saying "no matches" here would be a claim the payload
+                      // does not support.
+                      <p className={`mt-1 text-xs ${TEXT_HELPER}`}>
+                        {row.expanded
+                          ? 'No published matches at this tournament yet.'
+                          : 'Open this tournament to see the matches.'}
+                      </p>
+                    )}
                   </li>
                 );
               })}

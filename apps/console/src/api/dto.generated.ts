@@ -2784,9 +2784,15 @@ export interface paths {
          *
          *     Discoverability rides ``entrants_published`` (§4) — with the list
          *     unpublished, a person page answers the uniform 404 like everything
-         *     else unpublished. The person must hold a CONFIRMED entry: pending
-         *     submissions never appear publicly (§3.2), on their page-of-one no less
-         *     than on the list.
+         *     else unpublished. An ENTRY-BACKED person must additionally hold a
+         *     CONFIRMED entry: pending submissions never appear publicly (§3.2), on
+         *     their page-of-one no less than on the list.
+         *
+         *     Two key spellings reach here and both are the SAME key space (P6):
+         *     ``entry_players.id`` — the bare UUID the entrant tier has always used —
+         *     and a draw-roster id, which is what the players list emits for an
+         *     imported tournament. Whichever arrives, it resolves to one roster key
+         *     and every projection below joins on that.
          */
         get: operations["player_page_e_api_page__slug__players__person_key__get"];
         put?: never;
@@ -4085,6 +4091,10 @@ export interface components {
             sourceEntryId?: string | null;
             /** Entryplayerid */
             entryPlayerId?: string | null;
+            /** Personid */
+            personId?: string | null;
+            /** Personsource */
+            personSource?: string | null;
             /** Remarks */
             remarks?: string | null;
         };
@@ -6749,13 +6759,29 @@ export interface components {
         };
         /**
          * PlayerDrawPathDTO
-         * @description One round in a person's public draw path.
+         * @description One ROUND STEP in a person's public draw path.
+         *
+         *     A step, not a sentence: the entrant tier used to join these into
+         *     "R32 → R16 → QF" prose with an arrow separator, which said nothing about
+         *     who was played or how it went and read as a single unlabelled run-on to a
+         *     screen reader. Each step now carries its own result, so the renderer can
+         *     lay them out as structured rows (P6, 2026-09-08).
+         *
+         *     ``outcome`` is ``None`` while the step is undecided OR while results are
+         *     unpublished — the same gate ``score`` answers to, never inferred from the
+         *     presence of a later round.
          */
         PlayerDrawPathDTO: {
             /** Roundlabel */
             roundLabel: string;
             /** Opponents */
             opponents?: components["schemas"]["PersonReferenceDTO"][];
+            /** Outcome */
+            outcome?: ("won" | "lost") | null;
+            /** Score */
+            score?: number[][] | null;
+            /** Reference */
+            reference?: string | null;
         };
         /** PlayerEventDTO */
         PlayerEventDTO: {
@@ -6807,6 +6833,13 @@ export interface components {
              * @default false
              */
             resultsPublished: boolean;
+            /** Events */
+            events?: components["schemas"]["PlayerEventDTO"][];
+            /**
+             * Expanded
+             * @default false
+             */
+            expanded: boolean;
         };
         /**
          * PlayerImpact
@@ -7566,6 +7599,8 @@ export interface components {
             venueName?: string | null;
             /** Date */
             date?: string | null;
+            /** Enddate */
+            endDate?: string | null;
             /** Eventcount */
             eventCount: number;
             /** Status */

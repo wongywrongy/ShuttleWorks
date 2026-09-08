@@ -6,7 +6,9 @@
  * never decides what may be shown, only how. Since public-visual-fixes P2 the
  * projection ALSO carries `history` — the same person's other public
  * tournaments, joined server-side on verified canonical identity (the entrant
- * account that owns the row), never on a name match. The renderer composes
+ * account that owns the row) or, for an IMPORTED draw-roster person who has
+ * no account at all, on the import's own declared identity — never on a
+ * similarity guess made in the browser. The renderer composes
  * URLs from `slug` + `playerKey` through the one shared link-target resolver
  * (`personHref`); it never assembles a person key of its own.
  */
@@ -60,14 +62,35 @@ export interface PlayerMatchDTO {
   scoresPublished?: boolean;
 }
 
+/** One ROUND STEP of a person's path through one draw.
+ *
+ *  A step, not a sentence: the profile used to join these with an arrow into
+ *  "R32 → R16 → QF", which named no opponent, carried no result and read as
+ *  one unlabelled run-on. Each step now carries its own outcome, so the
+ *  renderer lays them out as rows. `outcome` is null while the step is
+ *  undecided OR while the tournament withholds results — never inferred
+ *  from the existence of a later round. */
+export interface PlayerDrawStepDTO {
+  roundLabel: string;
+  opponents: PersonReferenceDTO[];
+  outcome?: 'won' | 'lost' | null;
+  /** Sets as `[mine, theirs]` pairs — this person's side order, not the
+   *  draw's A/B order. */
+  score?: number[][] | null;
+  /** The shared human match reference, e.g. `MS R32·11`. */
+  reference?: string | null;
+}
+
 export interface PlayerEventDTO {
   code: string;
   discipline: string;
   /** §3.3 "with <partner>" — the accepted, publicly-visible doubles partner,
-   *  or null (singles, no acceptance yet, or the partner is not public). */
+   *  or null (singles, no acceptance yet, or the partner is not public).
+   *  For a draw-roster person this is the OTHER member of their pair in the
+   *  published draw, which is the only pair record such a person has. */
   partner?: PersonReferenceDTO | null;
   seed?: number | null;
-  drawPath: Array<{ roundLabel: string; opponents: PersonReferenceDTO[] }>;
+  drawPath: PlayerDrawStepDTO[];
 }
 
 /** One workspace in a person's public tournament history (profile v1).
@@ -89,6 +112,12 @@ export interface PlayerHistoryEntryDTO {
   eventCodes: string[];
   drawsPublished: boolean;
   resultsPublished: boolean;
+  /** Per-event participation in THAT workspace, through that workspace's own
+   *  publication gates. Populated only for expanded rows. */
+  events?: PlayerEventDTO[];
+  /** True when `events` is complete for this row. False means "open the
+   *  link to see it", never "this person played nothing there". */
+  expanded?: boolean;
 }
 
 export interface PlayerPageDTO {

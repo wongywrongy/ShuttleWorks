@@ -344,6 +344,12 @@ export interface BracketPlayerDTO {
    *  `bracket_participants.entry_player_id`; this blob copy is what the
    *  roster/availability surfaces read. */
   entryPlayerId?: string;
+  /** P6 — cross-tournament identity for an IMPORTED person: the source
+   *  dataset's own player id, plus `personSource` naming where it came from.
+   *  The public profile joins its cross-tournament history on this; the
+   *  console neither mints nor edits it. */
+  personId?: string;
+  personSource?: string;
   remarks?: string;
 }
 

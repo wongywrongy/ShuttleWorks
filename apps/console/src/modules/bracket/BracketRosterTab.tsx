@@ -14,6 +14,7 @@
  * NOTES sections); the panel header already owns player identity.
  */
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Download } from '@phosphor-icons/react';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { INTERACTIVE_BASE, ACCENT_PRESS, UTILITY_BUTTON } from '../../lib/utils';
@@ -90,7 +91,13 @@ function BracketRosterTabInner() {
     },
     [api, setData],
   );
-  return <BracketRosterTabCore bracketData={bracket} onCommitEvent={commitEvent} />;
+  return (
+    <BracketRosterTabCore
+      bracketData={bracket}
+      onCommitEvent={commitEvent}
+      tid={api.tournamentId}
+    />
+  );
 }
 
 /** Core roster table + detail panel. Accepts nullable bracket data so it
@@ -98,9 +105,13 @@ function BracketRosterTabInner() {
 function BracketRosterTabCore({
   bracketData,
   onCommitEvent,
+  tid = null,
 }: {
   bracketData: BracketTournamentDTO | null;
   onCommitEvent: CommitEventFn | null;
+  /** The workspace, when one is known. ``null`` provider-less (tests), which
+   *  is the only state in which the record link is omitted. */
+  tid?: string | null;
 }) {
   const players = useTournamentStore((s) => s.bracketPlayers);
   const hydrated = useTournamentStore((s) => s.hydrated);
@@ -403,6 +414,21 @@ function BracketRosterTabCore({
               onClose={() => selectPlayer(null)}
               testId="bracket-player-detail"
             >
+              {/* P6: the roster row's NAME opens roster editing — that is the
+                  operator's primary workflow here and it is untouched. This
+                  is the explicit, secondary way to reach the same person's
+                  record: their matches in this workspace, named by them.
+                  Omitted provider-less, where there is no workspace to
+                  address. */}
+              {tid ? (
+                <Link
+                  to={`/tournaments/${tid}/bracket/matches?q=${encodeURIComponent(selected.name || '')}`}
+                  className="mb-3 inline-flex text-xs text-accent underline-offset-4 hover:underline"
+                  data-testid="bracket-player-matches-link"
+                >
+                  View this player&rsquo;s matches
+                </Link>
+              ) : null}
               <BracketPlayerDetailFields
                 key={selected.id}
                 player={selected}

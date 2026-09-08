@@ -810,6 +810,42 @@ def test_historical_ids_remove_source_member_ids_and_case_formatting():
     assert registry.player_id("Arisa IGARASHI") == registry.player_id("Arisa Igarashi")
 
 
+def test_roster_rows_carry_the_dataset_person_id_with_its_provenance():
+    """P6: the cross-tournament identity is the DATASET's own player id.
+
+    Two workspaces, one human: the tournament-scoped roster id differs (a
+    re-key of a live bracket is not something a fixture may do), and the
+    ``personId`` is identical. That equality is what a public profile joins
+    on, so it is asserted here rather than inferred from a name.
+    """
+    people = {"Aaron Chia": "P0001", "Soh Wooi Yik": "P0002"}
+    source = "bwf-recent:abcdef123456"
+
+    def registry_for(tid):
+        registry = _HistoricalIdentityRegistry(tid)
+        registry.person_ids = people
+        registry.person_source = source
+        return registry
+
+    first, second = registry_for("T029"), registry_for("T030")
+    a29, a30 = first.player_id("Aaron CHIA"), second.player_id("Aaron Chia")
+    assert a29 != a30
+    row29 = first.players[a29]
+    row30 = second.players[a30]
+    assert row29["personId"] == row30["personId"] == "P0001"
+    assert row29["personSource"] == source
+
+    # Re-running the same registry is a no-op: the record is set once and
+    # keeps its identity, so a second seed pass duplicates nobody.
+    assert first.player_id("Aaron Chia") == a29
+    assert first.players[a29] == row29
+
+    # A name the dataset does not issue an id for carries NO personId. No
+    # identifier is invented to make coverage look complete.
+    unknown = first.player_id("Nobody In The Table")
+    assert "personId" not in first.players[unknown]
+
+
 def test_historical_identity_hash_collision_fails_closed(monkeypatch):
     class ConstantHash:
         def hexdigest(self):

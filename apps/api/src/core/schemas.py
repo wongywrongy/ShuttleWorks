@@ -337,6 +337,19 @@ class BracketPlayerDTO(StrictModel):
     #
     # ADDITIVE ONLY - no ``tournaments.data`` version bump; see PlayerDTO.
     entryPlayerId: Optional[Identifier] = None
+    # P6 (2026-09-08) — cross-tournament identity for an IMPORTED person.
+    # A roster id is tournament-scoped by design and is never re-keyed
+    # (R-DM-7(a)), so an importer that knows the same human appears in
+    # several workspaces declares it here instead: ``personId`` is the source
+    # dataset's own player id and ``personSource`` names where that id came
+    # from, so the claim is auditable rather than asserted. The public
+    # profile joins its cross-tournament history on this pair; it is never
+    # minted from a name, and an entries-backed row does not use it —
+    # ``entryPlayerId`` plus the verified account is that row's identity.
+    #
+    # ADDITIVE ONLY, same rule as the two fields above.
+    personId: Optional[Identifier] = None
+    personSource: Optional[Annotated[str, StringConstraints(max_length=200)]] = None
     remarks: Optional[Notes] = None
 
 

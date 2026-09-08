@@ -37,6 +37,7 @@ import { PlayShell } from "../components/PlayShell";
 import { SegmentedNav } from "../components/SegmentedNav";
 import { TournamentFrame } from "../components/TournamentFrame";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
+import { demoNowMs } from "../lib/demoClock.server";
 import type {
   DrawDetailDTO,
   MatchNodeDTO,
@@ -146,7 +147,7 @@ export async function loader({
       roundIndex,
       roundRequested: query.has("round") || requestedView === "round",
       playerQuery: query.get("player")?.trim() ?? "",
-      nowMs: Date.now(),
+      nowMs: demoNowMs(),
     };
     return payload;
   } catch (err) {
@@ -787,7 +788,12 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                 name="player"
                 label="Find a player or pair"
                 placeholder="Find a player or pair"
-                defaultValue={playerQuery}
+                // P6: an identity query is NOT display text. When
+                // `?player=` resolved to a person, the box shows their NAME
+                // (which is also what a re-submit searches for), never the
+                // raw key the URL carries — a 71-character `player-<sha>` in
+                // a search box is the raw-identifier leak the plan forbids.
+                defaultValue={selectedPersonLabel ?? playerQuery}
                 submitLabel="Find in this draw"
                 className="min-w-0 flex-1 basis-56"
               />

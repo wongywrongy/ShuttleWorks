@@ -1603,6 +1603,17 @@ class _HistoricalIdentityRegistry:
     #: here, its roster id becomes ``entry-{uuid}`` — the one key the public
     #: person directory resolves — instead of a source-local content hash.
     entry_player_ids: dict[str, str] = field(default_factory=dict)
+    #: canonical person name -> the DATASET-WIDE player id the source file
+    #: issues (``P|P0001|Aaron Chia``). The same human carries the same value
+    #: in every seeded workspace, which is what lets a public profile show a
+    #: cross-tournament history without merging anybody by display name. It
+    #: is written onto the roster row as ``personId`` (with
+    #: ``personSource`` naming where it came from) and never becomes the
+    #: roster ID itself — re-keying an imported bracket is not a thing a
+    #: fixture may do to a live workspace.
+    person_ids: dict[str, str] = field(default_factory=dict)
+    #: Provenance for every ``personId`` above: the source file and its hash.
+    person_source: str | None = None
     #: canonical team key (sorted member names) -> seed number, 1 = top seed.
     seeds: dict[tuple[str, ...], int] = field(default_factory=dict)
 
@@ -1635,6 +1646,11 @@ class _HistoricalIdentityRegistry:
         else:
             identifier = self._id("player", [canonical])
             record = {"id": identifier, "name": canonical}
+        person_id = self.person_ids.get(canonical)
+        if person_id is not None:
+            record["personId"] = person_id
+            if self.person_source:
+                record["personSource"] = self.person_source
         existing = self.players.setdefault(identifier, record)
         if existing["name"] != canonical:
             raise DatasetError(
@@ -2580,6 +2596,17 @@ def apply(
         "tournaments": {},
     }
     manifest["seedFormatVersion"] = _SEED_FORMAT_VERSION
+    # The reviewed cross-tournament person identity map, by provenance. The
+    # public projector reads ``personId`` off each roster row; this records
+    # WHERE that value came from so the claim is auditable rather than
+    # asserted (P6, 2026-09-08).
+    person_source = f"{seed_key}:{dataset.source_sha256[:12]}"
+    manifest["personIdentity"] = {
+        "source": person_source,
+        "sourceSha256": dataset.source_sha256,
+        "scope": "dataset_player_table",
+        "people": len(dataset.players),
+    }
     manifest["sourceSha256"] = dataset.source_sha256
     manifest["notesSha256"] = dataset.notes_sha256
     manifest["inputSha256"] = input_hash
@@ -2824,6 +2851,17 @@ def apply(
             if historical_rows:
                 coverage = dataset.historical_coverage[tournament.id]
                 identities = _HistoricalIdentityRegistry(tournament.id)
+                # The dataset's own player table is a REAL, reviewed
+                # identifier with provenance (its aliases table already
+                # collapsed "Aaron CHIA"/"Aaron Chia" before anything was
+                # stored), so it is preferred over any name heuristic
+                # downstream. Names absent from it simply carry no
+                # ``personId`` — no id is invented for them.
+                identities.person_ids = {
+                    source_name_key(player.name): player.id
+                    for player in dataset.players
+                }
+                identities.person_source = person_source
                 if demo_seed:
                     identities.entry_player_ids = {
                         name: player_id
@@ -2864,7 +2902,14 @@ def apply(
                     name for row in rows for name in (*row.winner_players, *row.runner_up_players)
                 }
                 roster = [
-                    {"id": player.id, "name": player.name}
+                    {
+                        "id": player.id,
+                        "name": player.name,
+                        # Already the dataset id; stated explicitly so both
+                        # import paths publish identity the same way.
+                        "personId": player.id,
+                        "personSource": person_source,
+                    }
                     for player in players.values()
                     if player.name in used_names
                 ]

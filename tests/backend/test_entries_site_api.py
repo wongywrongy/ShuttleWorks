@@ -468,7 +468,7 @@ def test_historical_draw_uses_advertised_size_and_source_round_labels(client):
     }
 
 
-def test_draw_players_are_published_draw_roster_people_not_profiles(client):
+def test_draw_players_are_published_draw_roster_people_with_profiles(client):
     tid = _make_workspace(client, slug="roster-open", draws_published=True)
     _set_bracket_players(
         tid,
@@ -508,24 +508,30 @@ def test_draw_players_are_published_draw_roster_people_not_profiles(client):
     assert imported.status_code == 200, imported.text
 
     players = client.get("/e/api/page/roster-open/players").json()
+    # P6 (2026-09-08), a DELIBERATE behaviour change: a published draw's own
+    # roster people are addressable. Their names, clubs and results were
+    # already public on the draw; what was missing was a key that resolved,
+    # so every imported name was a dead reference and
+    # ``/players/{roster id}`` was a 422. The list and the detail route now
+    # share ONE key space — the roster id — and ``identity.id`` carries it.
     assert players == {
         "published": True,
         "players": [
             {
                 "playerKey": "P-A",
-                "person": {"identity": {"id": None, "name": "Áda Chen"}, "resolution": "dead", "label": None},
+                "person": {"identity": {"id": "P-A", "name": "Áda Chen"}, "resolution": "resolved", "label": None},
                 "club": None,
                 "eventCodes": ["MD", "WS"],
             },
             {
                 "playerKey": "P-B",
-                "person": {"identity": {"id": None, "name": "Bo Lee"}, "resolution": "dead", "label": None},
+                "person": {"identity": {"id": "P-B", "name": "Bo Lee"}, "resolution": "resolved", "label": None},
                 "club": None,
                 "eventCodes": ["MD", "WS"],
             },
             {
                 "playerKey": "P-C",
-                "person": {"identity": {"id": None, "name": "Cass Doe"}, "resolution": "dead", "label": None},
+                "person": {"identity": {"id": "P-C", "name": "Cass Doe"}, "resolution": "resolved", "label": None},
                 "club": None,
                 "eventCodes": ["MD"],
             },
@@ -537,7 +543,24 @@ def test_draw_players_are_published_draw_roster_people_not_profiles(client):
     for player in players["players"]:
         assert set(player["person"]) == {"identity", "resolution", "label"}
         assert set(player["person"]["identity"]) == {"id", "name"}
-        assert player["person"]["identity"]["id"] is None
+        assert player["person"]["identity"]["id"] == player["playerKey"]
+
+    # The key the list emits is the key the detail route parses. This is the
+    # whole defect: it used to be two identifier spaces.
+    profile = client.get("/e/api/page/roster-open/players/P-A")
+    assert profile.status_code == 200, profile.text
+    body = profile.json()
+    assert body["person"]["identity"] == {"id": "P-A", "name": "Áda Chen"}
+    assert sorted(event["code"] for event in body["events"]) == ["MD", "WS"]
+    # Both members of a doubles pair resolve, and each one names the other.
+    md = next(event for event in body["events"] if event["code"] == "MD")
+    assert md["partner"]["identity"] == {"id": "P-B", "name": "Bo Lee"}
+    # An imported person with no entries still gets a history of one.
+    assert [row["current"] for row in body["history"]] == [True]
+    assert body["history"][0]["playerKey"] == "P-A"
+    # A roster id that is not on this workspace's published roster answers
+    # the same uniform 404 an unknown entrant gets.
+    assert client.get("/e/api/page/roster-open/players/P-MISSING").status_code == 404
 
     detail = client.get("/e/api/page/roster-open/draws/MD").json()
     teams = {team["participantKey"]: team for team in detail["teams"]}
@@ -545,6 +568,111 @@ def test_draw_players_are_published_draw_roster_people_not_profiles(client):
     # Partial member resolution falls back to the whole source label; it is
     # never split on punctuation into invented people.
     assert [p["identity"]["name"] for p in teams["PAIR-2"]["persons"]] == ["Missing / Cass"]
+
+
+def _import_singles_draw(client, tid, event_id, participants, rounds):
+    body = {
+        "courts": 1,
+        "total_slots": 4,
+        "events": [
+            {
+                "id": event_id,
+                "discipline": "Men's Singles",
+                "format": "se",
+                "participants": participants,
+                "rounds": rounds,
+            }
+        ],
+    }
+    r = client.post(f"/tournaments/{tid}/bracket/import", json=body, headers=CSRF)
+    assert r.status_code == 200, r.text
+
+
+def test_an_imported_person_is_one_person_across_workspaces(client):
+    """P6: the SAME dataset person id in two published draws is one profile.
+
+    The roster ID is tournament-scoped and deliberately NOT re-keyed, so the
+    join is the import's own declared identity (``personId``) — never the
+    display name on its own, and never anything reaching into the entries
+    spine.
+    """
+    first = _make_workspace(client, name="Alpha Open", slug="alpha-open", draws_published=True)
+    second = _make_workspace(client, name="Beta Open", slug="beta-open", draws_published=True)
+    _set_bracket_players(
+        first,
+        [
+            {"id": "A-1", "name": "Rin Sato", "personId": "P0001", "personSource": "fixture:1"},
+            {"id": "A-2", "name": "Kim Park", "personId": "P0002", "personSource": "fixture:1"},
+        ],
+    )
+    _set_bracket_players(
+        second,
+        [
+            {"id": "B-9", "name": "Rin Sato", "personId": "P0001", "personSource": "fixture:1"},
+            {"id": "B-8", "name": "Lee Chen", "personId": "P0003", "personSource": "fixture:1"},
+        ],
+    )
+    _import_singles_draw(
+        client,
+        first,
+        "MS",
+        [{"id": "A-1", "name": "Rin Sato"}, {"id": "A-2", "name": "Kim Park"}],
+        [[{"id": "A-F", "side_a": ["A-1"], "side_b": ["A-2"]}]],
+    )
+    _import_singles_draw(
+        client,
+        second,
+        "MS",
+        [{"id": "B-9", "name": "Rin Sato"}, {"id": "B-8", "name": "Lee Chen"}],
+        [[{"id": "B-F", "side_a": ["B-9"], "side_b": ["B-8"]}]],
+    )
+
+    body = client.get("/e/api/page/alpha-open/players/A-1").json()
+    history = {row["slug"]: row for row in body["history"]}
+    assert set(history) == {"alpha-open", "beta-open"}
+    assert history["alpha-open"]["current"] is True
+    other = history["beta-open"]
+    # The other workspace's OWN key for the same human — the link target.
+    assert other["playerKey"] == "B-9"
+    assert other["current"] is False
+    assert other["expanded"] is True
+    assert other["eventCodes"] == ["MS"]
+    (event,) = other["events"]
+    assert event["code"] == "MS"
+    assert [step["roundLabel"] for step in event["drawPath"]] == ["Final"]
+    assert [
+        person["identity"]["name"] for person in event["drawPath"][0]["opponents"]
+    ] == ["Lee Chen"]
+    # Results are unpublished in that workspace, so no outcome is claimed.
+    assert event["drawPath"][0]["outcome"] is None
+
+    # The other person is a DIFFERENT dataset id, so no history is shared.
+    kim = client.get("/e/api/page/alpha-open/players/A-2").json()
+    assert [row["slug"] for row in kim["history"]] == ["alpha-open"]
+
+
+def test_an_unpublished_draw_keeps_a_person_out_of_the_history(client):
+    """A workspace that has not published its draws is absent, not summarised."""
+    first = _make_workspace(client, name="Alpha Open", slug="alpha-2", draws_published=True)
+    quiet = _make_workspace(client, name="Quiet Open", slug="quiet-2")
+    for tid, keys in ((first, ("A-1", "A-2")), (quiet, ("Q-1", "Q-2"))):
+        _set_bracket_players(
+            tid,
+            [
+                {"id": keys[0], "name": "Rin Sato", "personId": "P0001"},
+                {"id": keys[1], "name": "Kim Park", "personId": "P0002"},
+            ],
+        )
+        _import_singles_draw(
+            client,
+            tid,
+            "MS",
+            [{"id": keys[0], "name": "Rin Sato"}, {"id": keys[1], "name": "Kim Park"}],
+            [[{"id": f"{keys[0]}-F", "side_a": [keys[0]], "side_b": [keys[1]]}]],
+        )
+
+    body = client.get("/e/api/page/alpha-2/players/A-1").json()
+    assert [row["slug"] for row in body["history"]] == ["alpha-2"]
 
 
 def test_draw_players_are_hidden_until_draws_are_published(client):
@@ -1003,7 +1131,16 @@ def test_the_player_page_header_events_and_upcoming_matches(client, bracket_page
     assert body["events"][0]["partner"] is None
     assert body["events"][0]["seed"] == 1
     assert set(body["events"][0]) == {"code", "discipline", "partner", "seed", "drawPath"}
-    assert all(set(path) == {"roundLabel", "opponents"} for path in body["events"][0]["drawPath"])
+    # P6: a draw-path step is a STRUCTURED ROW, not a token in an
+    # arrow-joined sentence — it carries its own result and reference so the
+    # profile can lay the path out as rounds. Undecided/unpublished steps
+    # keep a null outcome and a null score; nothing is inferred from the
+    # existence of a later round.
+    assert all(
+        set(path) == {"roundLabel", "opponents", "outcome", "score", "reference"}
+        for path in body["events"][0]["drawPath"]
+    )
+    assert all(path["outcome"] is None for path in body["events"][0]["drawPath"])
     # Results unpublished: the SF shows as undecided.
     (match,) = body["matches"]
     assert match["decided"] is False and match["score"] is None
