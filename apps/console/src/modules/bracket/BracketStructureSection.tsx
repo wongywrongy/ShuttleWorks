@@ -28,6 +28,7 @@ import { useBracket } from '../../hooks/useBracket';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import { Row, Section } from '../../platform/engine-config/SettingsControls';
 import { INTERACTIVE_BASE } from '../../lib/utils';
+import { NAV_LINK_ROW, NavCaret } from '../../components/NavCaret';
 import { disciplineLabel, formatLabel } from './bracketLabels';
 
 const NAV_LINK_CLASSES =
@@ -79,9 +80,10 @@ export function BracketStructureSection() {
           <Link
             to={`/tournaments/${tid}/bracket/draws`}
             data-testid="bracket-open-draws"
-            className={`${INTERACTIVE_BASE} ${NAV_LINK_CLASSES}`}
+            className={`${INTERACTIVE_BASE} ${NAV_LINK_CLASSES} ${NAV_LINK_ROW}`}
           >
-            Open draws →
+            <span>Open draws</span>
+            <NavCaret />
           </Link>
         }
       />
@@ -91,9 +93,10 @@ export function BracketStructureSection() {
           <Link
             to={`/tournaments/${tid}/participants/people`}
             data-testid="bracket-open-roster"
-            className={`${INTERACTIVE_BASE} ${NAV_LINK_CLASSES}`}
+            className={`${INTERACTIVE_BASE} ${NAV_LINK_CLASSES} ${NAV_LINK_ROW}`}
           >
-            Open roster →
+            <span>Open roster</span>
+            <NavCaret />
           </Link>
         }
         last

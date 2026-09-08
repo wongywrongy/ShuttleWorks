@@ -259,3 +259,40 @@ export function capChipCountdown(
   const exact = formatDateInZone(closesAt, timeZone);
   return exact === null ? state : { ...state, closesAtAbsolute: exact };
 }
+
+/**
+ * Which CLOCK a wall-clock string is (operator/public remediation P2).
+ *
+ * A bare `10:30` on a finished match's card is ambiguous: a reader takes it
+ * for when the match actually started, when it is in fact the approved slot
+ * it was scheduled into. The public wire publishes exactly ONE of the three
+ * — the venue-local approved time — so the honest fix is to say which one it
+ * is rather than to invent the other two. `estimated` and `actual` exist so
+ * a surface that later gains those fields spells them the same way, and so
+ * no call site reaches for its own word.
+ */
+export type ClockKind = 'scheduled' | 'estimated' | 'actual';
+
+/** A `switch`, not a module-scope lookup object: `tests/enter.loader.test.ts`
+ *  holds this file to zero shared mutable module-scope containers, and a
+ *  `const {...}` map is exactly that. */
+function clockKindLabel(kind: ClockKind): string {
+  switch (kind) {
+    case 'estimated':
+      return 'Estimated';
+    case 'actual':
+      return 'Started';
+    default:
+      return 'Scheduled';
+  }
+}
+
+/**
+ * `('scheduled', '10:30')` → `'Scheduled 10:30'`; a null clock returns null
+ * so the caller OMITS the fact rather than rendering a labelled blank
+ * (contract §3.2 — a missing value is never placeheld).
+ */
+export function labelledClock(kind: ClockKind, clock: string | null | undefined): string | null {
+  if (!clock) return null;
+  return `${clockKindLabel(kind)} ${clock}`;
+}

@@ -168,7 +168,7 @@ describe("Schedule / Live", () => {
     // stays — the same string the operator's match list shows. The old bare
     // "Match n" is gone from the tier entirely.
     return render().then((html) => {
-      expect(html).toContain("MS SF1 · 10:30 · Court 1");
+      expect(html).toContain("MS SF1 · Scheduled 10:30 · Court 1");
       expect(html).not.toMatch(/>Match \d/);
     });
   });

@@ -24,6 +24,7 @@
  * keeps the score JSON shared), so this file needs no per-engine adapter.
  */
 import type { ReactNode } from 'react';
+import { TEXT_SECONDARY } from '../../lib/textRoles';
 
 export interface SetPair {
   sideA: number;
@@ -399,7 +400,7 @@ export function ResultSides({
         />
       </div>
       {meta ? (
-        <div className="mt-0.5 border-t border-border pt-1 text-xs text-muted-foreground">
+        <div className={`mt-0.5 border-t border-border pt-1 text-xs ${TEXT_SECONDARY}`}>
           {meta}
         </div>
       ) : null}
@@ -480,7 +481,7 @@ export function MatchCard({
         sideLabel={sideBLabel}
       />
       {meta ? (
-        <div className="mt-1 border-t border-border pt-1 text-xs text-muted-foreground">
+        <div className={`mt-1 border-t border-border pt-1 text-xs ${TEXT_SECONDARY}`}>
           {meta}
         </div>
       ) : null}

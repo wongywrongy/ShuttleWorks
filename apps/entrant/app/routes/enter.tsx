@@ -43,6 +43,7 @@ import { narrowEvents, parseEcho, type FormEcho, type PlayerEcho } from '../lib/
 import type { EntryEventDTO, EntryPageDTO } from '../lib/entryPage.types';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
+import { demoNowMs } from '../lib/demoClock.server';
 import { hasEntrantSession } from '../lib/session.server';
 import { VENUE_TIME_NOTE } from '../lib/tournamentFrame';
 import { formatCents } from '../lib/money';
@@ -56,6 +57,7 @@ import {
 } from '../lib/phase';
 import type { Route } from './+types/enter';
 import { BUTTON_SECONDARY, CARD, INPUT_SKIN, PAGE_TITLE, SECTION_TITLE } from '../lib/ui';
+import { Chevron } from '../components/Chevron';
 
 export interface EnterLoaderData {
   page: EntryPageDTO;
@@ -128,7 +130,7 @@ export async function loader({
     justSignedIn: url.pathname.endsWith(SIGNED_IN_SUFFIX),
     justSignedUp: url.pathname.endsWith(SIGNED_UP_SUFFIX),
     signedIn: hasEntrantSession(request),
-    nowMs: Date.now(),
+    nowMs: demoNowMs(),
   };
   return data(payload, csrf.responseInit);
 }
@@ -486,7 +488,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                     <span>{label}</span>
                   </a>
                 )}
-                {index < steps.length - 1 ? <span aria-hidden="true">→</span> : null}
+                {index < steps.length - 1 ? <Chevron className="text-muted-foreground" /> : null}
               </li>
             ))}
           </ol>

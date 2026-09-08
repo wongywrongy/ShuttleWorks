@@ -3,7 +3,7 @@
  * keystone of the shared banded-list grammar (Bracket Matches mirrors
  * it). Rich fixture: 10 matches across 3 disciplines including doubles
  * (comma-separated pair, names only) and an empty side (the
- * muted-italic "＋ add player" placeholder).
+ * secondary-italic "＋ add player" placeholder).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
@@ -194,7 +194,7 @@ describe('<MatchesSpreadsheet />', () => {
     expect(within(panel).getAllByTitle('Beta Prep').length).toBeGreaterThanOrEqual(2);
   });
 
-  it('renders an empty side as a muted-italic reading, not an add control', () => {
+  it('renders an empty side as a secondary-italic reading, not an add control', () => {
     // v3-10c / match-card contract §2.1/§2.4: an unresolved side reads "To
     // be decided", never "No players".
     renderSheet();
@@ -202,7 +202,9 @@ describe('<MatchesSpreadsheet />', () => {
     const placeholder = within(row).getByText('To be decided');
     expect(placeholder.tagName).toBe('SPAN');
     expect(placeholder.className).toContain('italic');
-    expect(placeholder.className).toContain('text-muted-foreground');
+    // P2: secondary ink — an unresolved side is a fact, not a dead control.
+    expect(placeholder.className).toContain('text-text-secondary');
+    expect(placeholder.className).not.toContain('text-muted-foreground');
     expect(placeholder.className).toContain('text-xs');
   });
 

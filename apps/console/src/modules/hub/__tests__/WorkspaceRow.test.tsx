@@ -207,7 +207,7 @@ describe('WorkspaceRow', () => {
         group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
       />,
     );
-    expect(screen.getByTestId('row-date')).toHaveTextContent('2026-07-28 → 08-03');
+    expect(screen.getByTestId('row-date')).toHaveTextContent('2026-07-28 – 08-03');
   });
 
   // P5 (2026-09-08): the Hub renders the STORED name, unedited. It used to

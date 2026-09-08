@@ -133,3 +133,32 @@ export const SEARCH_SHELL =
   'flex h-10 min-w-0 items-stretch rounded-sm border border-rule-control bg-surface-raised focus-within:outline focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-accent';
 export const SEARCH_INPUT =
   'h-full w-full min-w-0 border-0 bg-transparent px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground';
+
+/**
+ * The four TEXT ROLES (operator/public remediation P2).
+ *
+ * The design system already owns the ink (`--text-primary` /
+ * `--text-secondary` / `--text-muted`); what did not exist was a rule for
+ * WHICH ink a given string gets. "It sits in a card footer" and "it is
+ * furniture" had collapsed into one muted register, so the match reference,
+ * the court and the start time — the three facts a spectator reads a card
+ * FOR — rendered at the same weight as a caption.
+ *
+ *   TEXT_PRIMARY    the thing itself: names, headings, scores.
+ *   TEXT_SECONDARY  information a reader ACTS ON that is not the thing
+ *                   itself: match reference, court, time, round, event.
+ *                   Subordinate in size and position, NOT in ink.
+ *   TEXT_HELPER     furniture: captions, hints, counts, units, seeds.
+ *   TEXT_DISABLED   an INOPERABLE CONTROL, and nothing else. A losing side,
+ *                   a bye and an unresolved slot are settled facts, not dead
+ *                   buttons — styling them this way is the defect P2 fixes.
+ *
+ * Every ink clears 4.5:1 on every public surface in both themes (measured
+ * from `tokens.css`; muted is 5.28:1 at worst in light, 4.79:1 in dark), so
+ * the defect is hierarchy rather than contrast and the fix is choosing the
+ * right role, not darkening everything.
+ */
+export const TEXT_PRIMARY = 'text-foreground';
+export const TEXT_SECONDARY = 'text-text-secondary';
+export const TEXT_HELPER = 'text-muted-foreground';
+export const TEXT_DISABLED = 'text-muted-foreground opacity-60';

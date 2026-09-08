@@ -45,6 +45,7 @@ import { BracketViewHeader } from "./BracketViewHeader";
 import { DrawView, type BracketLayoutMode } from "./DrawView";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { BracketInlineNotice } from "./BracketInlineNotice";
+import { NAV_LINK_ROW, NavCaret } from "../../components/NavCaret";
 
 export function BracketTab() {
   const params = useParams<{ id: string }>();
@@ -269,9 +270,10 @@ function BracketTabBody() {
                   action={
                     <Link
                       to={`/tournaments/${params.id}/bracket/draws`}
-                      className="ml-1 font-medium text-accent hover:underline"
+                      className={`ml-1 font-medium text-accent hover:underline ${NAV_LINK_ROW}`}
                     >
-                      View draws →
+                      <span>View draws</span>
+                      <NavCaret />
                     </Link>
                   }
                 />

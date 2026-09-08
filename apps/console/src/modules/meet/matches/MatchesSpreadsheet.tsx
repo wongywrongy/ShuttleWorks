@@ -58,6 +58,7 @@ import { useMatchStateSnapshot } from '../../../hooks/useMatchStateSnapshot';
 import { useInventoryPage } from '../../../hooks/useInventoryPage';
 import { useListScrollRestore } from '../../../hooks/useListScrollRestore';
 import { DenseDataPagination } from '../../../components/control-plane/DenseDataTable';
+import { TEXT_SECONDARY } from '../../../lib/textRoles';
 
 /** Stable empty-array reference so MatchRow's useMemo deps don't churn
  *  when a match has no disruptions. */
@@ -659,7 +660,7 @@ function PlayerCellSummary({
         // match-card contract §2.1/§2.4: an unresolved side never renders
         // "No players" — the fixed label for a slot with no claim at all is
         // "To be decided" (same word `sides.ts`'s `undetermined` kind uses).
-        <span className="text-xs italic text-muted-foreground">To be decided</span>
+        <span className={`text-xs italic ${TEXT_SECONDARY}`}>To be decided</span>
       ) : (
         // ONE PARTNER PER LINE (match-card §3.1, P3). The ` / ` join is gone:
         // a slash-joined pair reads as one name at scan speed, and it was the

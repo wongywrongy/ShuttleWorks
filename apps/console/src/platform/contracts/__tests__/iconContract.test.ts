@@ -81,6 +81,7 @@ const CONCEPT_ICON_MAP: Readonly<Record<string, string>> = Object.freeze({
   'forward / next': 'ArrowRight',
   'open in new tab': 'ArrowSquareOut',
   refresh: 'ArrowsClockwise',
+  'swap two draw slots': 'ArrowsLeftRight',
   'collapse / shrink': 'ArrowsIn',
   'expand / fullscreen': 'ArrowsOut',
   'disclosure, closed / sort descending': 'CaretDown',

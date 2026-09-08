@@ -39,9 +39,10 @@ import type { PersonReferenceDTO } from '../lib/person.types';
 import type { PlayerMatchDTO, PlayerMatchSideDTO } from '../lib/player.types';
 import { eventCodeLabel, roundLabel } from '../lib/draws.types';
 import { schedulePublicState, schedulePublicStateLabel, scheduleStateLabel } from '../lib/schedule.types';
+import { labelledClock } from '../lib/format';
 import { gameScore, pairedScoreLine } from '../lib/score';
 import { sideSummaryPhrase } from '../lib/side';
-import { LIST_CARD } from '../lib/ui';
+import { LIST_CARD, TEXT_HELPER, TEXT_SECONDARY } from '../lib/ui';
 import { PersonGroup } from './PersonGroup';
 import { personRefModel } from '../../public/assets/person-ref.js';
 
@@ -115,7 +116,7 @@ function Side({ side, score, index, slug, compact = false, live = false, first =
         <SidePeople side={side} slug={slug} compact={compact} highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
       </div>
       {seed !== null ? (
-        <span className={`flex items-center justify-end tabular-nums text-muted-foreground ${compact ? 'pe-2 text-xs' : 'pe-2 text-xs'}`}>
+        <span className={`flex items-center justify-end tabular-nums ${TEXT_HELPER} ${compact ? 'pe-2 text-xs' : 'pe-2 text-xs'}`}>
           [{seed}]
         </span>
       ) : null}
@@ -153,8 +154,12 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
   const footer = [
     match.reference ?? null,
     match.playedOn ?? null,
-    match.localTime ??
-      match.scheduledTime ??
+    // P2: a bare `10:30` on a finished card reads as when the match
+    // STARTED. The public wire carries only the approved venue-local slot,
+    // so the card says which clock it is — `Scheduled 10:30` — through the
+    // tier's one formatter, and falls back to the honest schedule-state
+    // word when there is no approved time at all.
+    labelledClock('scheduled', match.localTime ?? match.scheduledTime) ??
       schedulePublicStateLabel(schedulePublicState(match)),
     court,
     match.durationMinutes ? `${match.durationMinutes} min` : null,
@@ -217,7 +222,7 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
     return (
       <article data-testid="public-bracket-node" data-match-variant="bracket-node" className={`grid w-full min-w-0 grid-rows-[auto_auto_auto] rounded-sm border border-rule-soft bg-surface-raised ${live ? 'border-s-2 border-s-status-live' : ''}`} aria-label={[title, competitors, scoreLabel, stateWord].filter(Boolean).join(' · ')}>
         {header ? (
-          <p className="flex items-baseline justify-between gap-2 border-b border-rule-soft px-2 py-0.5 text-xs text-muted-foreground">
+          <p className={`flex items-baseline justify-between gap-2 border-b border-rule-soft px-2 py-0.5 text-xs ${TEXT_SECONDARY}`}>
             <span className="font-semibold uppercase tracking-[0.04em]">{header}</span>
           </p>
         ) : (
@@ -246,14 +251,14 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
     <article data-match-variant={variant} className={`min-w-0 ${card ? LIST_CARD : 'border border-rule-soft bg-surface-raised'}`}>
       {compactList ? (
         cue || reference || stateWord ? (
-          <div className="flex items-center justify-between gap-2 border-b border-rule-soft px-3 py-1 text-xs font-semibold text-muted-foreground">
+          <div className={`flex items-center justify-between gap-2 border-b border-rule-soft px-3 py-1 text-xs font-semibold ${TEXT_SECONDARY}`}>
             <span>{[cue, reference].filter(Boolean).join(' ')}</span>
             <span className={live ? 'text-status-live' : ''}>{cue ? null : stateWord}</span>
           </div>
         ) : null
       ) : (
         <header
-          className={`flex items-center justify-between gap-3 border-b border-rule-soft px-4 py-2 text-muted-foreground ${card ? 'rounded-t-lg' : ''}`}
+          className={`flex items-center justify-between gap-3 border-b border-rule-soft px-4 py-2 ${TEXT_SECONDARY} ${card ? 'rounded-t-lg' : ''}`}
         >
           <p className="flex min-w-0 items-baseline gap-2 text-xs font-bold uppercase tracking-[0.06em]">
             {cue ? <span className="font-semibold normal-case tracking-normal text-foreground">{cue}</span> : null}
@@ -265,7 +270,7 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
       <Side side={match.sides[0]} score={match.score} index={0} slug={slug} live={live} first highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
       <Side side={match.sides[1]} score={match.score} index={1} slug={slug} live={live} highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
       {footer.length || showSourceLink ? (
-        <footer className="border-t border-rule-soft px-4 py-1.5 text-xs text-muted-foreground">
+        <footer className={`border-t border-rule-soft px-4 py-1.5 text-xs ${TEXT_SECONDARY}`}>
           {footer.join(' · ')}
           {showSourceLink ? <>{footer.length ? <span aria-hidden> · </span> : null}<a href={match.sourceUrl!} className="font-medium text-accent underline-offset-4 hover:underline">Match source</a></> : null}
         </footer>

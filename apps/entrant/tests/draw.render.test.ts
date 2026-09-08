@@ -617,7 +617,7 @@ describe("the elimination draw page", () => {
     // `MS SF1`, minus the code the page already states in its own subtitle.
     stubApi({ "/draws/MS": SE_DRAW });
     const list = await render("/e/spring-open/draws/MS?view=list");
-    expect(list).toContain("SF1 · Saturday, August 1 · 10:30 · Court 1");
+    expect(list).toContain("SF1 · Saturday, August 1 · Scheduled 10:30 · Court 1");
     expect(list).not.toContain("MS SF1");
     // ...and the node carries the same string.
     const bracket = await render("/e/spring-open/draws/MS?view=bracket");

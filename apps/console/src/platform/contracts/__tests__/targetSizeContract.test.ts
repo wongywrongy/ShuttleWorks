@@ -267,7 +267,7 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/modules/hub/WorkspaceInspector.tsx',
-    line: 318,
+    line: 327,
     why: 'View-all link is an intentional inline text affordance with no literal size class.',
   },
   {

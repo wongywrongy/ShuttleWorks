@@ -143,3 +143,29 @@ export function fmtTimestamp(iso: string, timeZone: string, withSeconds: boolean
     timeZoneName: 'short',
   }).format(d);
 }
+
+/**
+ * Which CLOCK a wall-clock string is (operator/public remediation P2).
+ *
+ * The console mixes all three on one row — the slot a match was scheduled
+ * into, the projected start a queue implies, and the moment the operator
+ * actually started it — and a bare `09:00` beside a court says nothing about
+ * which. `labelledClock` is the ONE spelling of that qualifier, so a surface
+ * cannot invent "Est." on one card and "~" on the next.
+ */
+export type ClockKind = 'scheduled' | 'estimated' | 'actual';
+
+const CLOCK_KIND_LABEL: Record<ClockKind, string> = {
+  scheduled: 'Scheduled',
+  estimated: 'Estimated',
+  actual: 'Started',
+};
+
+/**
+ * `('scheduled', '09:00')` → `'Scheduled 09:00'`. A null/empty clock returns
+ * null so the caller OMITS the fact rather than rendering a labelled blank.
+ */
+export function labelledClock(kind: ClockKind, clock: string | null | undefined): string | null {
+  if (!clock) return null;
+  return `${CLOCK_KIND_LABEL[kind]} ${clock}`;
+}

@@ -62,6 +62,7 @@ import {
 } from './BracketMatchControls';
 import { type CommitEventFn } from './BracketPlayerFields';
 import { formatBracketSlot } from './formatBracketSlot';
+import { TEXT_SECONDARY } from '../../lib/textRoles';
 import {
   exportBracketMatchesXlsx,
   type BracketMatchExportRow,
@@ -234,7 +235,11 @@ export function BracketMatchesTab({
       ));
     }
     return (
-      <span className="text-xs italic text-muted-foreground">
+      // P2: an unresolved side is a FACT about the draw ("Winner of R32·11",
+      // "To be decided"), not a dead control. Italic keeps it distinguishable
+      // from a resolved name without colour; the ink stays in the secondary
+      // register rather than the muted one a disabled button wears.
+      <span className={`text-xs italic ${TEXT_SECONDARY}`}>
         {formatSideLines(sideModel)[0]}
       </span>
     );

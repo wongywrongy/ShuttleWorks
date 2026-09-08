@@ -35,6 +35,9 @@ import { formatBracketSlot, type BracketSlotContext } from "./formatBracketSlot"
 import { buildPlayUnitLabels } from "./bracketLabels";
 import { formatSideCondensed, formatSideLines, sideFromWire } from "../../platform/domain/sides";
 import { ACCENT_PRESS } from '../../lib/utils';
+import { TEXT_SECONDARY } from '../../lib/textRoles';
+import { ArrowsLeftRight } from '@phosphor-icons/react';
+import { BackCaret, NAV_LINK_ROW, NavCaret } from '../../components/NavCaret';
 
 /** How the SE canvas lays out its rounds. One-sided is the classic
  *  printed-bracket cascade (R1 left, Final right) and the default;
@@ -473,9 +476,10 @@ function MobileRoundFocus({
             aria-label="Previous round"
             disabled={roundIndex === 0}
             onClick={() => setRoundIndex((value) => Math.max(0, value - 1))}
-            className="rounded-sm border border-border px-2.5 py-1.5 text-xs text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className={`${NAV_LINK_ROW} rounded-sm border border-border px-2.5 py-1.5 text-xs text-foreground disabled:cursor-not-allowed disabled:opacity-40`}
           >
-            ← Previous
+            <BackCaret />
+            <span>Previous</span>
           </button>
           <label className="flex min-w-0 items-center gap-2 text-xs font-medium text-foreground">
             <span className="sr-only">Round</span>
@@ -501,9 +505,10 @@ function MobileRoundFocus({
                 Math.min(roundLabels.length - 1, value + 1),
               )
             }
-            className="rounded-sm border border-border px-2.5 py-1.5 text-xs text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className={`${NAV_LINK_ROW} rounded-sm border border-border px-2.5 py-1.5 text-xs text-foreground disabled:cursor-not-allowed disabled:opacity-40`}
           >
-            Next →
+            <span>Next</span>
+            <NavCaret />
           </button>
         </div>
         <label className="block">
@@ -1701,6 +1706,10 @@ function Side({
    *  (the line break already separates the pair). Null for feeder/bye
    *  placeholders, which render `label` as one string. */
   members?: string[] | null;
+  /** Test id for THIS side's score column (P1's `SideScores`). Declared
+   *  here because the destructure already reads it — the prop type had
+   *  omitted it, and `tsc -b`'s incremental cache hid the error. */
+  scoreTestId?: string;
   winning?: boolean;
   bye?: boolean;
   walkover?: boolean;
@@ -1753,12 +1762,15 @@ function Side({
           (selected
             ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
             : bye
-              ? "bg-muted border-border text-muted-foreground italic"
+              ? `bg-muted border-border italic ${TEXT_SECONDARY}`
               : "bg-bg-elev border-border cursor-pointer hover:border-accent")
         }
       >
         {names}
-        <span className="text-xs text-muted-foreground">⇄</span>
+        {/* P2: the swap affordance is an ICON, not a `⇄` in the label —
+            a text glyph joined the button's accessible name, so the slot
+            read as "Lin Dan swap glyph". */}
+        <ArrowsLeftRight size={14} aria-hidden="true" className="shrink-0 text-muted-foreground" />
       </button>
     );
   }
@@ -1769,7 +1781,7 @@ function Side({
       className={
         "w-full flex items-center justify-between gap-1.5 rounded-sm border border-border px-2 py-1 text-2sm " +
         (bye
-          ? "bg-muted text-muted-foreground italic"
+          ? `bg-muted italic ${TEXT_SECONDARY}`
           : winning
             ? "bg-bg-elev text-foreground font-semibold"
             : "bg-bg-elev text-foreground")

@@ -22,6 +22,7 @@ import { EYEBROW_CLASS } from '../../lib/utils';
 import { sideLabel } from './bracketLabels';
 import { badgeForEvent, badgesByPlayerId, type BadgeEntry } from './rosterEvents';
 import { formatBracketSlot } from './formatBracketSlot';
+import { labelledClock } from '../../lib/formatDateTime';
 import {
   BracketAvailabilityEventsFields,
   type CommitEventFn,
@@ -92,7 +93,12 @@ export function BracketMatchPlayerControls({
     : null;
   const reason: MatchReason | null = result.reason ?? (result.walkover ? 'walkover' : null);
   const assignment = data.assignments.find((candidate) => candidate.play_unit_id === pu.id);
-  const assignedTime = assignment ? formatBracketSlot(assignment.slot_id, data) : null;
+  // P2: the slot is the SCHEDULED clock, not when the match started — the
+  // qualifier comes from the one console formatter so no surface invents its
+  // own spelling.
+  const assignedTime = assignment
+    ? labelledClock('scheduled', formatBracketSlot(assignment.slot_id, data))
+    : null;
   const meta = assignment
     ? assignedTime
       ? `Court ${assignment.court_id} · ${assignedTime}`

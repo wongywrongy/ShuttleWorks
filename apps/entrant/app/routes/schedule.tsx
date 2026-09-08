@@ -9,6 +9,7 @@ import { SearchField } from "../components/SearchField";
 import { SegmentedNav } from "../components/SegmentedNav";
 import { TournamentFrame } from "../components/TournamentFrame";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
+import { demoNowMs } from "../lib/demoClock.server";
 import type { EntryPageDTO } from "../lib/entryPage.types";
 import { eventDisciplineLabel } from "../lib/draws.types";
 import { formatInstantInZone } from "../lib/format";
@@ -24,6 +25,7 @@ import {
   type ScheduleState,
 } from "../lib/schedule.types";
 import { ACTION_LINK, ACTION_LINK_MUTED, EYEBROW, SELECT_CONTROL } from "../lib/ui";
+import { Chevron } from "../components/Chevron";
 import type { Route } from "./+types/schedule";
 
 export type ScheduleOrganization = "time" | "court";
@@ -125,7 +127,7 @@ export async function loader({
       page,
       matches,
       filters,
-      nowMs: Date.now(),
+      nowMs: demoNowMs(),
     } satisfies ScheduleLoaderData;
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) throw notFound();
@@ -445,7 +447,7 @@ function ScheduleControls({
           <details className="group min-w-0" open={moreOpen || undefined}>
             <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-foreground marker:hidden">
               More filters
-              <span aria-hidden className="text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
+              <Chevron direction="down" className="text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
               <div>

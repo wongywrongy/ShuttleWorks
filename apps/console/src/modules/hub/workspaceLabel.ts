@@ -21,7 +21,9 @@ function dayOf(iso: string): string {
 }
 
 /**
- * The numeric event date: `2026-07-28`, or a range `2026-07-28 → 08-03`
+ * The numeric event date: `2026-07-28`, or a range `2026-07-28 – 08-03`
+ * (P2: an EN DASH, the range glyph — the old `→` read as navigation and
+ * joined the row's accessible name as "right arrow").
  * (the end collapses to `MM-DD` in the same year, `YYYY-MM-DD` otherwise).
  * Null when the workspace has no date.
  */
@@ -31,5 +33,5 @@ export function formatEventRange(t: TournamentSummaryDTO): string | null {
   const start = dayOf(range.start);
   const end = dayOf(range.end);
   if (end === start) return start;
-  return `${start} → ${end.slice(0, 4) === start.slice(0, 4) ? end.slice(5) : end}`;
+  return `${start} – ${end.slice(0, 4) === start.slice(0, 4) ? end.slice(5) : end}`;
 }

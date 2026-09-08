@@ -16,6 +16,7 @@
  * screen reader hears the list, not a run of chevrons.
  */
 import type { Crumb } from '../lib/tournamentFrame';
+import { Chevron } from './Chevron';
 
 export function Breadcrumbs({ crumbs }: { crumbs: readonly Crumb[] }) {
   if (crumbs.length < 2) return null;
@@ -25,9 +26,7 @@ export function Breadcrumbs({ crumbs }: { crumbs: readonly Crumb[] }) {
         {crumbs.map((crumb, index) => (
           <li key={`${crumb.label}-${index}`} className="flex min-w-0 items-center gap-1.5">
             {index > 0 ? (
-              <span aria-hidden className="text-muted-foreground">
-                ›
-              </span>
+              <Chevron className="text-muted-foreground" />
             ) : null}
             {crumb.href === null ? (
               <span aria-current="page" className="break-words font-medium text-foreground">
