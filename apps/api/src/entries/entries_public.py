@@ -168,6 +168,7 @@ def _parse_page_date(raw: Optional[str]) -> Optional[date]:
 def page_status(
     *,
     tournament_date: Optional[str],
+    tournament_end_date: Optional[str] = None,
     events: Sequence,
     draws_published: bool,
     results_published: bool,
@@ -186,10 +187,11 @@ def page_status(
     derivation server-side is not a behavior change.
     """
     day = _parse_page_date(tournament_date)
+    end_day = _parse_page_date(tournament_end_date) or day
     today = now.date()
-    if day is not None and today == day:
+    if day is not None and end_day is not None and day <= today <= end_day:
         return ("in_progress_live" if draws_published else "in_progress", None)
-    if day is not None and today > day:
+    if end_day is not None and today > end_day:
         return ("completed_winners" if results_published else "completed", None)
     open_events = [ev for ev in events if _event_is_open(ev, now)]
     if not open_events:

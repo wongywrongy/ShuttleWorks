@@ -223,6 +223,28 @@ def _resolved_unresulted_ids(matches: list[BracketMatch], resulted: set[str]) ->
     )
 
 
+def _live_play_unit_ids(tournament: Tournament) -> set[str]:
+    """Play units that are physically ON COURT right now.
+
+    Excluded from every candidate pool below. All four reconstructions are
+    about *planned* units — an approved slot with no court, a court with no
+    time, an unresolved predecessor — and a unit that is already playing is
+    the one thing none of them can truthfully be. Picking one also makes the
+    public schedule suppress its court (a second current claim on a court
+    that already has one is a dispute), which read as case (c) failing when
+    the real fault was the choice of unit.
+    """
+    blob = (tournament.data or {}).get("bracket_session") or {}
+    return {
+        assignment["play_unit_id"]
+        for assignment in (blob.get("assignments") or [])
+        if isinstance(assignment, dict)
+        and assignment.get("play_unit_id")
+        and assignment.get("actual_start_slot") is not None
+        and assignment.get("actual_end_slot") is None
+    }
+
+
 def _pick(candidates: list[str], used: set[str]) -> str:
     for candidate_id in candidates:
         if candidate_id not in used:
@@ -504,7 +526,7 @@ def apply_defects_db(database_path: Path, fixture_path: Path) -> dict:
                 select(BracketResult).where(BracketResult.tournament_id == tournament_id)
             )
         }
-        used: set[str] = set()
+        used: set[str] = _live_play_unit_ids(tournament)
 
         unresolved_predecessor = _ensure_unresolved_predecessor_scheduled(
             tournament, matches, resulted, used, prior.get("unresolvedPredecessorScheduled")

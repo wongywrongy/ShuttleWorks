@@ -39,7 +39,12 @@ function pngSize(base64) {
 test('surface capture preserves paginated query state and covers a long document', {
   skip: !RUN_INTEGRATION,
 }, async () => {
-  const server = createServer((_request, response) => {
+  const server = createServer((request, response) => {
+    if (request.url?.endsWith('/modules')) {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify([{ moduleId: 'bracket', status: 'enabled' }]));
+      return;
+    }
     response.writeHead(200, { 'content-type': 'text/html' });
     response.end(`<!doctype html><html><head><title>Fixture</title><style>html,body{margin:0}body{height:2400px;background:linear-gradient(#174dbc 0 1200px,#f2a900 1200px 2400px)}h1{position:absolute;top:0}</style></head><body><h1>Completed page 2</h1></body></html>`);
   });
@@ -51,7 +56,7 @@ test('surface capture preserves paginated query state and covers a long document
   const output = join(outputDir, 'fixture.pdf');
   try {
     await runCapture(['entrant', base, output], {
-      CAPTURE_LABEL: 'Discovery · Completed tournaments',
+      CAPTURE_LABEL: 'Discovery · Season calendar',
       CAPTURE_LIMIT: '1',
       CAPTURE_SETTLE_MS: '0',
     });
@@ -59,7 +64,7 @@ test('surface capture preserves paginated query state and covers a long document
     assert.equal(manifest.status, 'complete');
     assert.equal(manifest.surfaceCount, 1);
     assert.equal(manifest.failedViewports.length, 0);
-    assert.equal(manifest.surfaces[0].path, '/e/?view=completed#calendar');
+    assert.equal(manifest.surfaces[0].path, '/e/');
     assert.equal(manifest.surfaces[0].viewports.desktop.documentHeight, 2400);
     assert.equal(manifest.surfaces[0].viewports.mobile.documentHeight, 2400);
     assert.equal(manifest.surfaces[0].viewports.desktop.segments, 3);
@@ -85,7 +90,12 @@ test('surface capture preserves paginated query state and covers a long document
 test('inventory capture adds an internal list-end sheet and valid PDF', {
   skip: !RUN_INTEGRATION,
 }, async () => {
-  const server = createServer((_request, response) => {
+  const server = createServer((request, response) => {
+    if (request.url?.endsWith('/modules')) {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify([{ moduleId: 'bracket', status: 'enabled' }]));
+      return;
+    }
     response.writeHead(200, { 'content-type': 'text/html' });
     response.end(`<!doctype html><html><head><style>html,body{margin:0}body{height:900px}.list-shell{height:auto}[data-list-scroll]{height:500px;overflow-y:auto;background:linear-gradient(#174dbc 0 600px,#f2a900 600px 1200px)}.list-content{height:1200px}.pager{margin-top:8px}</style></head><body><main><h1>Roster</h1><div class="list-shell"><div data-list-scroll><div class="list-content">${'<p>Player row</p>'.repeat(100)}</div><p class="pager">Showing 101–200 of 253 · Next</p></div></div></main></body></html>`);
   });
@@ -115,6 +125,16 @@ test('inventory capture adds an internal list-end sheet and valid PDF', {
       + manifest.surfaces[0].viewports.mobile.segments + 2;
     assert.equal([...html.matchAll(/src="data:image\/png;base64,/g)].length, expectedImages);
     assert.ok((await readFile(output)).byteLength > 0, 'inventory PDF artifact should be generated');
+    await runCapture(['console', base, join(outputDir, 'omitted.html')], {
+      CAPTURE_LABEL: 'Participants · Entries',
+      CAPTURE_LIMIT: '0',
+      CAPTURE_SETTLE_MS: '0',
+    });
+    const omitted = JSON.parse(await readFile(join(outputDir, 'omitted.manifest.json'), 'utf8'));
+    assert.equal(omitted.surfaceCount, 0, 'disabled routes must not remain in the planned count');
+    assert.equal(omitted.surfaces.length, 0);
+    assert.equal(omitted.captureContext.routeCoverage.stateSheets, 0);
+    assert.ok(omitted.captureContext.omittedStates.some((state) => state.label === 'Participants · Entries'));
   } finally {
     await new Promise((resolvePromise) => server.close(resolvePromise));
     await rm(outputDir, { recursive: true, force: true });
@@ -144,6 +164,14 @@ test('capture inventory covers every canonical workflow route and excludes alias
   );
   assert.equal(capture.includes('const CONSOLE_ALIAS_PATHS = ['), false);
   assert.equal(capture.includes('const CONSOLE_ALIASES ='), false);
+  assert.equal(capture.includes('ENTRANT_COMPATIBILITY_SURFACES'), false);
+  assert.doesNotMatch(capture, /\[\"[^\"]*Compatibility[^\"]*\",/);
+  assert.doesNotMatch(capture, /\[\"Display · Missing capability\",/);
+  assert.doesNotMatch(capture, /\[\"Invite · Missing fixture token\",/);
+  assert.doesNotMatch(capture, /\[\"Module guard · Meet (?:matches|team structure) unavailable\",/);
+  assert.match(capture, /reviewedBuildSha: REVIEWED_BUILD_SHA/);
+  assert.match(capture, /workingTreeFingerprint: WORKING_TREE_FINGERPRINT/);
+  assert.match(capture, /effectiveDemoInstant: EFFECTIVE_DEMO_INSTANT/);
   for (const routePath of routePaths) {
     assert.ok(
       surfacesBlock.includes(`/${routePath}\``) || surfacesBlock.includes(`/${routePath}?`),

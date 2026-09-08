@@ -377,3 +377,19 @@ def test_the_conflict_code_matches_the_partners_module():
     from workspaces import entries_facts
 
     assert entries_facts._PAIR_CONFLICT == partners.PAIR_CONFLICT
+
+
+def test_entry_phase_and_closing_warning_use_the_demo_clock(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "local")
+    monkeypatch.setenv("SHUTTLEWORKS_DEMO_NOW", "2026-07-31T05:15:00Z")
+    out = build_entries_facts(
+        page=page(),
+        events=[event(
+            opens_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
+            closes_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )],
+        entries=[entry(state="confirmed")],
+    )
+    assert _entries_phase(out) == "entries_open"
+    assert out.entries_closed is False
+    assert [reason.code for reason in _entries_attention(out)] == ["ENTRIES_CLOSING_SOON"]

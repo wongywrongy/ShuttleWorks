@@ -7,6 +7,7 @@ import {
   createPersonRef,
   formatPersonIdentity,
   personHref,
+  personRefModel,
 } from '../public/assets/person-ref.js';
 
 const IDENTITY = {
@@ -51,6 +52,27 @@ describe('PersonRef', () => {
 
   it('keeps the formatter a pass-through seam', () => {
     expect(formatPersonIdentity(IDENTITY)).toBe('An Se-young');
+  });
+});
+
+describe('one shared link-target resolver (public-visual-fixes P2)', () => {
+  it('addresses the same person in ANOTHER tournament by that tournament\'s own key', () => {
+    // A profile history row is a slug + the person key that workspace
+    // issued. It routes through the SAME resolver an in-page name uses, so
+    // there is one URL shape on the tier and no second anchor renderer.
+    expect(personHref('taipei-open', { id: 'other-key', name: 'An Se-young' })).toBe(
+      '/e/taipei-open/players/other-key',
+    );
+    expect(personRefModel({ slug: 'taipei-open', identity: { id: 'other-key', name: 'An Se-young' } }).href).toBe(
+      personHref('taipei-open', { id: 'other-key', name: 'An Se-young' }),
+    );
+  });
+
+  it('never derives a target from a name', () => {
+    // No id, no link — whatever the name is. This is the rule that keeps a
+    // cross-tournament match from ever being a string comparison.
+    expect(personHref('taipei-open', { id: null, name: 'An Se-young' })).toBeNull();
+    expect(personHref('', IDENTITY)).toBeNull();
   });
 });
 

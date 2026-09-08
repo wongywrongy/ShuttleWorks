@@ -289,9 +289,12 @@ export function AppShell() {
       >
         <ReadOnlyBannerSlot />
         <UnsavedBannerSlot />
-        <div id="main" className="min-h-0 flex-1 overflow-hidden">
+        <div id="main" className="min-h-0 flex-1 overflow-auto">
           {SHELL_SEGMENTS.has(activeTab) ? (
-            <div className="h-full overflow-auto">
+            // The shell surface now owns the same pinned-bar / one-scroll-
+            // region root as every module surface, so this wrapper must NOT
+            // add a second scroller above it.
+            <div className="h-full">
               <WorkspaceShellSurface segment={activeTab} modules={modules} />
             </div>
           ) : pane.kind === 'outlet' ? (

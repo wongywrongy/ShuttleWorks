@@ -337,6 +337,19 @@ class BracketPlayerDTO(StrictModel):
     #
     # ADDITIVE ONLY - no ``tournaments.data`` version bump; see PlayerDTO.
     entryPlayerId: Optional[Identifier] = None
+    # P6 (2026-09-08) — cross-tournament identity for an IMPORTED person.
+    # A roster id is tournament-scoped by design and is never re-keyed
+    # (R-DM-7(a)), so an importer that knows the same human appears in
+    # several workspaces declares it here instead: ``personId`` is the source
+    # dataset's own player id and ``personSource`` names where that id came
+    # from, so the claim is auditable rather than asserted. The public
+    # profile joins its cross-tournament history on this pair; it is never
+    # minted from a name, and an entries-backed row does not use it —
+    # ``entryPlayerId`` plus the verified account is that row's identity.
+    #
+    # ADDITIVE ONLY, same rule as the two fields above.
+    personId: Optional[Identifier] = None
+    personSource: Optional[Annotated[str, StringConstraints(max_length=200)]] = None
     remarks: Optional[Notes] = None
 
 
@@ -957,6 +970,29 @@ class EntryPageDTO(BaseModel):
             venueName=row.venue_name,
             venueAddress=row.venue_address,
         )
+
+
+class EntryPagePublicSiteDTO(BaseModel):
+    """Where this workspace's public entry site lives, as an operator link.
+
+    The console runs on ``app.<domain>`` and the entrant tier on
+    ``play.<domain>`` (SP-HOST-1), so the console cannot compose a public URL
+    on its own — inventing a hostname is exactly what the two-origin split
+    forbids. This is the entry page's twin of ``GET
+    /tournaments/{id}/display-token``: the server, which is the only party
+    that knows the deployment's origins, hands back the address.
+
+    ``origin`` is ``settings.play_origin`` — blank in local mode, where one
+    host serves both tiers and a relative ``url`` is the correct link.
+    """
+
+    origin: str
+    slug: str
+    #: Absolute when an origin is configured, relative otherwise.
+    url: str
+    audience: Literal["private", "unlisted", "public"] = "private"
+    entrantsPublished: bool = False
+    drawsPublished: bool = False
 
 
 class EntryEventCreateDTO(StrictModel):

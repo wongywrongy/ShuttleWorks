@@ -41,6 +41,7 @@ export function useTournamentKind(tournamentId: string | null): boolean {
     (s) => s.setActiveTournamentPhase,
   );
   const setActiveTournamentRole = useUiStore((s) => s.setActiveTournamentRole);
+  const setActiveTournamentName = useUiStore((s) => s.setActiveTournamentName);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export function useTournamentKind(tournamentId: string | null): boolean {
     setNotFound(false);
     if (!tournamentId) {
       setActiveTournamentKind(null);
+      setActiveTournamentName(null);
       setActiveTournamentStatus(null);
       setActiveTournamentPhase(null);
       setActiveTournamentRole(null);
@@ -62,6 +64,10 @@ export function useTournamentKind(tournamentId: string | null): boolean {
           if (cancelled) return;
           setNotFound(false);
           setActiveTournamentKind(row.kind);
+          // The workspace ROW's name is the product's title of record; the
+          // shell used to read the scheduling config's denormalised copy,
+          // which a checked-out workspace can no longer amend.
+          setActiveTournamentName(row.name ?? null);
           setActiveTournamentStatus(row.status ?? null);
           setActiveTournamentPhase(row.signals?.phase ?? null);
           // The caller's role rides along on the same summary row — no extra
@@ -104,6 +110,7 @@ export function useTournamentKind(tournamentId: string | null): boolean {
     setActiveTournamentStatus,
     setActiveTournamentPhase,
     setActiveTournamentRole,
+    setActiveTournamentName,
   ]);
 
   return notFound;

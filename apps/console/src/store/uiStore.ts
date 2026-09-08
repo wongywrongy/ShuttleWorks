@@ -162,6 +162,15 @@ interface UiState {
     status: 'draft' | 'active' | 'archived' | null,
   ) => void;
 
+  // The active workspace's own name, from the same summary row as ``kind``
+  // and ``status``. The workspace ROW is the product's title of record; the
+  // scheduling config carries a denormalised copy that a checked-out
+  // workspace can no longer amend (debt OPR-0908-2), so the shell prefers
+  // this. ``null`` while loading or on failure, where the config copy is
+  // still a better answer than no title at all.
+  activeTournamentName: string | null;
+  setActiveTournamentName: (name: string | null) => void;
+
   // The caller's role on the active workspace, from the same summary row as
   // ``kind``/``status``. Read through ``platform/domain/permissions.canEdit``
   // — never compared inline — so the write gate has exactly one definition.
@@ -258,6 +267,7 @@ const INITIAL: Pick<
   | 'activeTab'
   | 'activeTournamentId'
   | 'activeTournamentKind'
+  | 'activeTournamentName'
   | 'activeTournamentStatus'
   | 'activeTournamentRole'
   | 'activeTournamentPhase'
@@ -283,6 +293,7 @@ const INITIAL: Pick<
   activeTab: 'setup',
   activeTournamentId: null,
   activeTournamentKind: null,
+  activeTournamentName: null,
   activeTournamentStatus: null,
   activeTournamentRole: null,
   activeTournamentPhase: null,
@@ -312,6 +323,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveTournamentId: (activeTournamentId) => set({ activeTournamentId }),
   setActiveTournamentKind: (activeTournamentKind) => set({ activeTournamentKind }),
+  setActiveTournamentName: (activeTournamentName) => set({ activeTournamentName }),
   setActiveTournamentStatus: (activeTournamentStatus) => set({ activeTournamentStatus }),
   setActiveTournamentRole: (activeTournamentRole) => set({ activeTournamentRole }),
   setActiveTournamentPhase: (activeTournamentPhase) => set({ activeTournamentPhase }),

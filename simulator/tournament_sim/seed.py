@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import tempfile
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
@@ -22,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 from .historical_matches import (
     ROUND_LABELS,
+    ROUND_ORDER,
     HistoricalMatch,
     SourceCoverage,
     load_source_map,
@@ -48,6 +50,7 @@ _DEMO_GENERATOR_VERSION = 5
 _DEMO_DEFAULT_COURT_COUNT = 8
 _DEMO_LIVE_COURT_COUNT = 6
 _DEMO_INTERVAL_MINUTES = 30
+_DEMO_ENTRY_FEE_CENTS = 5000
 # Branding assets for the demo/visual-review dataset. These used to be
 # `https://example.test/<slug>/logo.svg` links, which resolve to nothing and —
 # because the app's CSP is `img-src 'self' data: blob:` — were blocked before
@@ -70,6 +73,17 @@ _DEMO_BANNER_DATA_URI = (
     "N4PSIxMDIwIiBjeT0iODYiIHI9IjEyMCIvPjxjaXJjbGUgY3g9IjE4MCIgY3k9IjI0NCIgcj0iOTIiLz48L2c+PC"
     "9zdmc+"
 )
+_EVENT_NAMES = {
+    "MS": "Men's singles",
+    "WS": "Women's singles",
+    "MD": "Men's doubles",
+    "WD": "Women's doubles",
+    "XD": "Mixed doubles",
+}
+# The bracket engine's bye sentinel (``apps/api/src/bracket/draw.py`` ``BYE``).
+# Mirrored rather than imported: the simulator is an HTTP client and must not
+# depend on the API package.
+_BYE_SENTINEL = "__BYE__"
 _DEMO_LIVE_TOURNAMENT = "T029"
 _DEMO_UPCOMING_TOURNAMENT = "T030"
 # Clean, deterministic surnames used only when a custom/demo historical
@@ -108,6 +122,94 @@ _KNOCKOUT_PREDECESSOR = {
     "QF": "R16",
     "SF": "QF",
     "Final": "SF",
+}
+
+# --- The published-entrant layer (public-visual-fixes.md, package P0) -------
+#
+# A bracket import alone produces people who are *display-only*: the public
+# person directory is built from confirmed ENTRIES
+# (``entries_site.py::_public_identities``), so a draw whose roster never went
+# through the entries desk has no resolvable identity, no linkable name and no
+# profile URL at all — every ``/e/{slug}/players/{key}`` request 404s at the
+# ``entrants_published`` gate. That is the S46 missing-player finding, and it
+# is a FIXTURE gap rather than a product one.
+#
+# So the demo seed registers its whole draw through the operator entries
+# import seam before the bracket is imported, and then uses the resulting
+# ``entry_players.id`` as the person's bracket roster id
+# (``entry-{uuid}``, the same key ``entries/entries.py::roster_id`` mints).
+# One id, one person, one profile URL, on both tiers.
+#
+# Accounts are the one scarce resource here: ``POST /e/account/signup`` is
+# throttled to ``settings.entrant_signup_max_per_ip`` (8) per hour per IP and
+# that limit is a real product protection, not a test artefact. The seed
+# therefore uses SIX accounts and models them the way a circuit event really
+# receives entries:
+#
+#   * four club/association managers, each entering the players their club
+#     sends (the ``entry_players`` docstring's own example: "a club
+#     representative entering eight players"), and
+#   * two personal accounts for the two featured players below, so that a
+#     single human is verifiably the SAME account across Taipei and Korea and
+#     cross-tournament profile history has something true to be built on.
+#
+# ``(account_id, full_name)`` is therefore the fixture's canonical person
+# link. A club account deliberately owns many differently-named players, so a
+# consumer that treats ``account_id`` alone as a person key is demonstrably
+# wrong against this fixture rather than accidentally right.
+_ENTRANT_PASSWORD = "FixtureOnly!2026-aZ"
+_TURNSTILE_TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
+_DEMO_CLUBS = (
+    ("Northgate Badminton Club", "entries@northgate-badminton.example.test"),
+    ("Harbourline Shuttlers", "entries@harbourline-shuttlers.example.test"),
+    ("Riverside Racquet Academy", "entries@riverside-academy.example.test"),
+    ("Summit Badminton Centre", "entries@summit-badminton.example.test"),
+)
+# Two people who enter in their own name. Chosen by DISCIPLINE and position
+# rather than by a hardcoded name so the pair stays valid if the source
+# archive changes: the first is a men's-singles entrant present in both demo
+# tournaments, the second a women's-doubles entrant present in both.
+_FEATURED_PERSONAL_ACCOUNTS = (
+    ("MS", "featured.singles@players.example.test"),
+    ("WD", "featured.doubles@players.example.test"),
+)
+# Concise organizer prose, replacing the generated "Fictional,
+# badminton-plausible demo of the Super 300 …" sentence and the
+# semicolon-separated draw inventory ("32-entry men's singles draw;
+# 32-entry women's singles draw; …") that the source NOTES file supplies for
+# provenance. The notes text is still imported and still reconciled — it is
+# simply no longer used as public reader-facing copy. This is fixture data,
+# written for the fixture; no real organizer's words are rewritten anywhere.
+_DEMO_ORGANIZER_PROSE = {
+    _DEMO_LIVE_TOURNAMENT: (
+        "Six days of international badminton at the Taipei Arena, with all five "
+        "disciplines played across six show courts. Entry is by association "
+        "nomination and the main draw is seeded from the current world ranking."
+    ),
+    _DEMO_UPCOMING_TOURNAMENT: (
+        "The Korea Masters returns to Asan for six days of main-draw play across "
+        "all five disciplines. Qualifying is played on the opening day and the "
+        "finals are scheduled for the Sunday afternoon session."
+    ),
+}
+_DEMO_REGULATIONS_PROSE = {
+    _DEMO_LIVE_TOURNAMENT: (
+        "Matches are played to the best of three games to 21, with a two-point "
+        "advantage required from 20-all and a cap at 30. Report to the control "
+        "desk thirty minutes before your scheduled time; a court call is followed "
+        "by a ten-minute grace period before a walkover is recorded. Players are "
+        "responsible for their own shuttles in qualifying rounds; feather "
+        "shuttles are supplied for all main-draw matches. Withdrawals after the "
+        "published deadline are referred to the referee."
+    ),
+    _DEMO_UPCOMING_TOURNAMENT: (
+        "Matches are played to the best of three games to 21, with a two-point "
+        "advantage required from 20-all and a cap at 30. Entries close at the "
+        "published deadline for each event; mixed doubles pairs may be confirmed "
+        "up to the later mixed-doubles deadline. Seeding follows the current "
+        "world ranking on the day the draw is made. Report to the control desk "
+        "thirty minutes before your scheduled time."
+    ),
 }
 
 
@@ -1179,6 +1281,269 @@ def complete_demo_historical_draws(dataset: Dataset) -> Dataset:
     return dataset
 
 
+def _demo_event_seeds(matches: list[HistoricalMatch]) -> dict[tuple[str, ...], int]:
+    """Seeds 1..8 for one event, derived from how far each entry actually goes.
+
+    A real draw is seeded before it is played, so a seed cannot be *computed*
+    from a completed archive without inverting cause and effect. What this
+    does instead is choose a seeding that the recorded results are consistent
+    with — the eight entries that reach the quarter-finals, ordered by depth
+    reached and then by first appearance — which is what a plausible fixture
+    needs and is deterministic for a given source file. It is fixture data,
+    not a ranking claim.
+    """
+    depth: dict[tuple[str, ...], int] = {}
+    first_seen: dict[tuple[str, ...], tuple[str, ...]] = {}
+    for match in sorted(matches, key=_historical_sort_key):
+        order = ROUND_ORDER.get(match.round_code, 0)
+        for side in (match.side_a, match.side_b):
+            key = source_team_key(side)
+            reached = order + (1 if _winning_team_key(match) == key else 0)
+            depth[key] = max(depth.get(key, 0), reached)
+            first_seen.setdefault(key, (match.played_on, match.source_ref))
+    ranked = sorted(depth, key=lambda key: (-depth[key], first_seen[key], key))
+    return {key: index + 1 for index, key in enumerate(ranked[:8])}
+
+
+def _demo_person_index(
+    rows: list[HistoricalMatch],
+) -> dict[str, dict]:
+    """Canonical person name -> the disciplines they play and a gender code.
+
+    The entries desk needs both for every person before a draw can be
+    registered: ``eventIds`` is what an entry *is*, and ``gender`` is a
+    required, collected field (``entry_players.gender``). Both are read off
+    the draw the person actually appears in rather than guessed from a name.
+    """
+    people: dict[str, dict] = {}
+    for match in sorted(rows, key=_historical_sort_key):
+        for side in (match.side_a, match.side_b):
+            for position, raw in enumerate(side):
+                name = source_name_key(raw)
+                record = people.setdefault(name, {"events": set(), "gender": None})
+                record["events"].add(match.event)
+                if record["gender"] is None:
+                    record["gender"] = _demo_gender(match.event, position)
+    return people
+
+
+def _demo_gender(event: str, position: int) -> str:
+    if event in {"MS", "MD"}:
+        return "M"
+    if event in {"WS", "WD"}:
+        return "F"
+    # Mixed doubles: the source archive lists the man first, which is the
+    # BWF convention the fixture inherits.
+    return "M" if position == 0 else "F"
+
+
+def _demo_club_for(name: str) -> tuple[str, str]:
+    """A stable club (name, manager email) for one person, in every workspace.
+
+    Keyed on the canonical name so a player who enters both demo tournaments
+    is entered by the same club both times — otherwise a reader comparing two
+    tournaments would see one human change association between them.
+    """
+    digest = hashlib.sha256(f"club:{name}".encode("utf-8")).digest()
+    return _DEMO_CLUBS[digest[0] % len(_DEMO_CLUBS)]
+
+
+def _demo_featured_people(
+    rows_by_tournament: dict[str, list[HistoricalMatch]],
+) -> dict[str, str]:
+    """``discipline -> canonical name`` for the two personal-account players.
+
+    Chosen as a person who genuinely appears in BOTH demo tournaments, so the
+    fixture actually contains a linked identity to exercise rather than two
+    people who happen to share a name.
+    """
+    featured: dict[str, str] = {}
+    taken: set[str] = set()
+    for discipline, _email in _FEATURED_PERSONAL_ACCOUNTS:
+        pools = [
+            {
+                source_name_key(raw)
+                for match in rows
+                if match.event == discipline
+                for side in (match.side_a, match.side_b)
+                for raw in side
+            }
+            for rows in rows_by_tournament.values()
+        ]
+        shared = sorted(set.intersection(*pools) - taken) if pools else []
+        if not shared:
+            raise DatasetError(
+                [
+                    f"demo seed: no {discipline} person appears in every demo "
+                    "tournament, so no linked identity can be seeded"
+                ]
+            )
+        featured[discipline] = shared[0]
+        taken.add(shared[0])
+    return featured
+
+
+def _demo_withheld_person(
+    rows: list[HistoricalMatch],
+    featured: dict[str, str],
+) -> str | None:
+    """One women's-singles first-round loser to leave unpublished.
+
+    Singles on purpose: withdrawing one member of a doubles pair would make
+    the whole pair fall back to its imported source label, which is a
+    different (and legitimate) privacy behaviour and would obscure the case
+    this person exists to demonstrate — a single named slot that reads
+    "Player not published" and whose profile URL is a real 404.
+    """
+    appearances: dict[str, int] = {}
+    for match in rows:
+        if match.event != "WS":
+            continue
+        for side in (match.side_a, match.side_b):
+            for raw in side:
+                name = source_name_key(raw)
+                appearances[name] = appearances.get(name, 0) + 1
+    once = sorted(
+        name
+        for name, count in appearances.items()
+        if count == 1 and name not in featured.values()
+    )
+    return once[-1] if once else None
+
+
+def _demo_entry_accounts(
+    client: SimClient, featured: dict[str, str] | None = None
+) -> dict[str, str]:
+    """Create (or reuse) the six entrant accounts and return ``email -> id``.
+
+    Signup is throttled per IP, and deliberately answers with a
+    non-enumerating envelope carrying no id, so each account is created and
+    then signed in once to read its own ``/e/account/me``. A 409 means the
+    account already exists, which is the ordinary re-run case.
+    """
+    display_names = {email: f"{club} entries" for club, email in _DEMO_CLUBS}
+    display_names.update(
+        {
+            email: (featured or {}).get(code, f"{code} entrant")
+            for code, email in _FEATURED_PERSONAL_ACCOUNTS
+        }
+    )
+    accounts: dict[str, str] = {}
+    for email in display_names:
+        entrant = type(client)(client.base_url)
+        try:
+            entrant.entrant_signup(
+                {
+                    "email": email,
+                    "password": _ENTRANT_PASSWORD,
+                    "displayName": display_names[email],
+                    "turnstileToken": _TURNSTILE_TEST_TOKEN,
+                },
+                expect=(202, 409),
+            )
+            entrant.entrant_login(email, _ENTRANT_PASSWORD)
+            accounts[email] = str(entrant.entrant_me()["id"])
+        finally:
+            entrant.close()
+    return accounts
+
+
+def _register_demo_entrants(
+    client: SimClient,
+    tid: str,
+    *,
+    rows: list[HistoricalMatch],
+    entry_event_ids: dict[str, str],
+    accounts: dict[str, str],
+    featured: dict[str, str],
+    seed_key: str,
+) -> dict[str, str]:
+    """Register this workspace's whole draw through the entries desk.
+
+    Returns ``canonical name -> entry_players.id``. Every person in the draw
+    becomes a confirmed entrant, which is what makes their public identity
+    resolvable, their name a link, and their profile URL a real page.
+    """
+    people = _demo_person_index(rows)
+    by_account: dict[str, list[dict]] = {}
+    for name in sorted(people):
+        record = people[name]
+        club_name, club_email = _demo_club_for(name)
+        email = next(
+            (
+                account_email
+                for discipline, account_email in _FEATURED_PERSONAL_ACCOUNTS
+                if featured.get(discipline) == name
+            ),
+            club_email,
+        )
+        event_ids = [
+            entry_event_ids[code] for code in _EVENTS if code in record["events"]
+        ]
+        if not event_ids:
+            continue
+        by_account.setdefault(email, []).append(
+            {
+                "sourceKey": f"p-{hashlib.sha256(name.encode('utf-8')).hexdigest()[:24]}",
+                "fullName": name,
+                "gender": record["gender"] or "M",
+                "club": club_name,
+                "eventIds": event_ids,
+            }
+        )
+
+    for email, players in sorted(by_account.items()):
+        client.import_entries(
+            tid,
+            {
+                "sourceKey": f"demo-seed-{seed_key}",
+                "submissions": [
+                    {
+                        "sourceKey": f"s-{email.split('@', 1)[0]}",
+                        "idempotencyKey": f"{seed_key}:{tid}:{email}"[:64],
+                        "accountId": accounts[email],
+                        "emailVerified": True,
+                        "players": players,
+                    }
+                ],
+            },
+        )
+
+    for row in client.list_entries(tid):
+        if row.get("state") == "pending":
+            client.confirm_entry(tid, row["id"])
+
+    return {
+        row["playerName"]: row["entryPlayerId"]
+        for row in client.list_entries(tid)
+        if row.get("entryPlayerId")
+    }
+
+
+# One canonical tournament display name (P5, 2026-09-08).
+#
+# The title a reader sees is the tournament's NAME and nothing else. The
+# year is already carried as structured data everywhere it matters: Setup
+# ``general.season``, the Setup ``dates`` block, the workspace row's
+# ``tournamentDate``/``tournamentEndDate``, the public slug, and the
+# manifest's ``source.year``. A title that repeats it is redundant, and the
+# operator console, the public entrant tier and the venue display all read
+# the same ``tournaments.name`` string, so fixing it once fixes all three.
+_YEAR_SUFFIX_RE = re.compile(r"\s*\((?:19|20)\d{2}\)\s*$")
+
+
+def canonical_tournament_name(name: str) -> str:
+    """Strip a trailing parenthesised fixture year from a tournament name.
+
+    Deliberately narrow: only a four-digit year **in parentheses at the very
+    end** is removed, so a name whose number carries meaning ("Super 300",
+    "Thomas Cup 2026 Qualification") survives untouched. The generator no
+    longer writes the suffix at all; :func:`repair_names` removes it from
+    rows seeded before this rule existed.
+    """
+    return _YEAR_SUFFIX_RE.sub("", name).strip()
+
+
 def _slug(tournament: Tournament) -> str:
     value = re.sub(r"[^a-z0-9]+", "-", tournament.name.lower()).strip("-")
     return f"{tournament.year}-{value}-{tournament.id.lower()}"[:60]
@@ -1237,6 +1602,25 @@ class _HistoricalIdentityRegistry:
     tournament_id: str
     players: dict[str, dict] = field(default_factory=dict)
     _owners: dict[str, str] = field(default_factory=dict)
+    #: canonical person name -> the ``entry_players.id`` UUID that person was
+    #: registered under in THIS workspace. Present only for the demo seed,
+    #: which registers its draw through the entries desk first. When a name is
+    #: here, its roster id becomes ``entry-{uuid}`` — the one key the public
+    #: person directory resolves — instead of a source-local content hash.
+    entry_player_ids: dict[str, str] = field(default_factory=dict)
+    #: canonical person name -> the DATASET-WIDE player id the source file
+    #: issues (``P|P0001|Aaron Chia``). The same human carries the same value
+    #: in every seeded workspace, which is what lets a public profile show a
+    #: cross-tournament history without merging anybody by display name. It
+    #: is written onto the roster row as ``personId`` (with
+    #: ``personSource`` naming where it came from) and never becomes the
+    #: roster ID itself — re-keying an imported bracket is not a thing a
+    #: fixture may do to a live workspace.
+    person_ids: dict[str, str] = field(default_factory=dict)
+    #: Provenance for every ``personId`` above: the source file and its hash.
+    person_source: str | None = None
+    #: canonical team key (sorted member names) -> seed number, 1 = top seed.
+    seeds: dict[tuple[str, ...], int] = field(default_factory=dict)
 
     def _id(self, prefix: str, payload: list[Any]) -> str:
         owner = json.dumps(
@@ -1257,11 +1641,22 @@ class _HistoricalIdentityRegistry:
 
     def player_id(self, name: str) -> str:
         canonical = source_name_key(name)
-        identifier = self._id("player", [canonical])
-        existing = self.players.setdefault(
-            identifier,
-            {"id": identifier, "name": canonical},
-        )
+        entry_player_id = self.entry_player_ids.get(canonical)
+        if entry_player_id is not None:
+            # ``entries/entries.py::roster_id``'s shape, reproduced rather than
+            # imported: the simulator has no product imports by design.
+            identifier = f"entry-{entry_player_id}"
+            self._owners.setdefault(identifier, canonical)
+            record = {"id": identifier, "name": canonical, "entryPlayerId": entry_player_id}
+        else:
+            identifier = self._id("player", [canonical])
+            record = {"id": identifier, "name": canonical}
+        person_id = self.person_ids.get(canonical)
+        if person_id is not None:
+            record["personId"] = person_id
+            if self.person_source:
+                record["personSource"] = self.person_source
+        existing = self.players.setdefault(identifier, record)
         if existing["name"] != canonical:
             raise DatasetError(
                 [
@@ -1274,14 +1669,18 @@ class _HistoricalIdentityRegistry:
     def participant(self, names: tuple[str, ...]) -> dict:
         canonical_names = tuple(sorted(source_name_key(name) for name in names))
         member_ids = sorted(self.player_id(name) for name in canonical_names)
+        seed = self.seeds.get(canonical_names)
         if len(member_ids) == 1:
-            return dict(self.players[member_ids[0]])
-        identifier = self._id("pair", member_ids)
-        return {
-            "id": identifier,
-            "name": " / ".join(canonical_names),
-            "members": member_ids,
-        }
+            participant = dict(self.players[member_ids[0]])
+        else:
+            participant = {
+                "id": self._id("pair", member_ids),
+                "name": " / ".join(canonical_names),
+                "members": member_ids,
+            }
+        if seed is not None:
+            participant["seed"] = seed
+        return participant
 
     @property
     def roster(self) -> list[dict]:
@@ -1667,6 +2066,39 @@ def _demo_dates(tournament: Tournament, rows: list[HistoricalMatch]) -> tuple[da
     return (min(starts) if starts else end), end
 
 
+def _demo_entry_window(
+    tournament: Tournament,
+    event_code: str,
+    start: date,
+    *,
+    demo_seed: bool,
+) -> tuple[str, str]:
+    """Opening and deadline instants for one entry event, in venue-local time.
+
+    Both are written with the venue's real UTC offset rather than a bare
+    ``+00:00``, because a deadline is a wall-clock promise made at the venue:
+    "23:59 on 14 July" in Taipei and in Asan are two different instants, and a
+    fixture that stores both as midnight UTC cannot be used to check that the
+    public tier converts before it prints.
+
+    Korea's mixed doubles closes later than its other four events. That is an
+    ordinary circuit practice — mixed pairs are confirmed last — and it is
+    what gives the fixture one genuinely OPEN entry window at the frozen demo
+    clock, next to four closed ones.
+    """
+    if not demo_seed:
+        opens = f"{tournament.year - 1:04d}-01-01T00:00:00+00:00"
+        return opens, f"{tournament.end_date}T23:59:59+00:00"
+    zone = ZoneInfo(_demo_timezone(tournament))
+    opening = datetime.combine(start - timedelta(days=120), time(9, 0), tzinfo=zone)
+    if tournament.id == _DEMO_UPCOMING_TOURNAMENT and event_code == "XD":
+        deadline_day = start - timedelta(days=3)
+    else:
+        deadline_day = start - timedelta(days=14)
+    deadline = datetime.combine(deadline_day, time(23, 59), tzinfo=zone)
+    return opening.isoformat(), deadline.isoformat()
+
+
 def _demo_setup_sections(
     tournament: Tournament,
     rows: list[HistoricalMatch],
@@ -1675,6 +2107,7 @@ def _demo_setup_sections(
 ) -> dict[str, dict]:
     start, end = _demo_dates(tournament, rows)
     timezone_name = _demo_timezone(tournament)
+    venue_zone = ZoneInfo(timezone_name)
     courts = [
         {
             "id": f"court-{number}",
@@ -1698,13 +2131,7 @@ def _demo_setup_sections(
         for index in range((end - start).days + 1)
         for day in [start + timedelta(days=index)]
     ]
-    event_names = {
-        "MS": "Men's singles",
-        "WS": "Women's singles",
-        "MD": "Men's doubles",
-        "WD": "Women's doubles",
-        "XD": "Mixed doubles",
-    }
+    event_names = _EVENT_NAMES
     events = [
         {
             "id": code,
@@ -1714,21 +2141,31 @@ def _demo_setup_sections(
             "category": "Open",
             "eligibility": "BWF member in good standing; one entry per discipline.",
             "capacity": 32,
-            "entryFeeMinor": 7500 if code in {"MD", "WD", "XD"} else 5000,
+            "entryFeeMinor": _DEMO_ENTRY_FEE_CENTS,
             "status": "published" if tournament.id == _DEMO_UPCOMING_TOURNAMENT else "complete" if end < date(2026, 7, 31) else "open",
         }
         for code in _EVENTS
     ]
-    opening = start - timedelta(days=90)
-    deadline = start - timedelta(days=14)
-    withdrawal = start - timedelta(days=10)
-    draw_publication = start - timedelta(days=7)
+    # Kept in step with ``_demo_entry_window`` above, which writes the same
+    # dates onto the entry EVENTS the public tier actually reads. These
+    # Setup values are the operator-facing copy of the same schedule; a
+    # reader who sees two different deadlines has found a fixture bug.
+    opening = datetime.combine(start - timedelta(days=120), time(9, 0), tzinfo=venue_zone)
+    deadline = datetime.combine(start - timedelta(days=14), time(23, 59), tzinfo=venue_zone)
+    withdrawal = datetime.combine(start - timedelta(days=10), time(23, 59), tzinfo=venue_zone)
+    draw_publication = datetime.combine(start - timedelta(days=7), time(12, 0), tzinfo=venue_zone)
+    tournament_start = datetime.combine(start, time(9, 0), tzinfo=venue_zone)
+    tournament_end = datetime.combine(end, time(19, 0), tzinfo=venue_zone)
     map_query = quote_plus(f"{tournament.venue}, {tournament.host}")
-    safe_slug = slug.removesuffix(f"-{tournament.id.lower()}")
     return {
         "general": {
-            "name": f"{tournament.name} ({tournament.year})",
-            "publicName": f"{tournament.name} {tournament.year}",
+            # Both spellings are the canonical name (see
+            # ``canonical_tournament_name``); the season below is where the
+            # year belongs. ``publicName`` is an operator override and is
+            # kept in step with the workspace title rather than restating it
+            # with a suffix.
+            "name": canonical_tournament_name(tournament.name),
+            "publicName": canonical_tournament_name(tournament.name),
             "organizer": "ShuttleWorks BWF Demo Circuit",
             "tournamentNumber": tournament.id,
             "tournamentType": tournament.level.lower().replace(" ", "-"),
@@ -1737,12 +2174,12 @@ def _demo_setup_sections(
             "timezone": timezone_name,
         },
         "dates": {
-            "entryOpening": f"{opening.isoformat()}T09:00:00",
-            "entryDeadline": f"{deadline.isoformat()}T23:59:00",
-            "withdrawalDeadline": f"{withdrawal.isoformat()}T23:59:00",
-            "drawPublication": f"{draw_publication.isoformat()}T12:00:00",
-            "tournamentStart": f"{start.isoformat()}T09:00:00",
-            "tournamentEnd": f"{end.isoformat()}T19:00:00",
+            "entryOpening": opening.isoformat(),
+            "entryDeadline": deadline.isoformat(),
+            "withdrawalDeadline": withdrawal.isoformat(),
+            "drawPublication": draw_publication.isoformat(),
+            "tournamentStart": tournament_start.isoformat(),
+            "tournamentEnd": tournament_end.isoformat(),
             "dailySessions": sessions,
         },
         "venue": {
@@ -1784,12 +2221,40 @@ def _demo_setup_sections(
         },
         "public-info": {
             "publicSlug": slug,
-            "description": f"Fictional, badminton-plausible demo of the {tournament.level} {tournament.name} at {tournament.venue}.",
-            "regulationsUrl": f"https://example.test/{safe_slug}/regulations.pdf",
+            "description": _DEMO_ORGANIZER_PROSE.get(
+                tournament.id,
+                f"{tournament.name} {tournament.year} at {tournament.venue}, "
+                f"{tournament.host}. All five disciplines, {tournament.date_range}.",
+            ),
             "logoUrl": _DEMO_LOGO_DATA_URI,
             "bannerUrl": _DEMO_BANNER_DATA_URI,
         },
     }
+
+
+# How far each Taipei discipline has actually got by the frozen demo clock
+# (2026-07-31 13:00 Asia/Taipei, day four of six). One number per round:
+# how many of that round's matches carry a recorded result.
+#
+# Varied on purpose (public-visual-fixes.md P0, "resolved later rounds …
+# varied match progress"). Before this the whole tournament sat in R32, so no
+# public surface anywhere in the fixture could show a resolved later round, a
+# populated semi-final, or a champion — every draw looked like the same
+# screenshot. Now one draw is finished, one is a round from finishing, one is
+# mid-draw, one has a fully resolved round waiting to be played, and one is
+# still in its opening round with live matches on court.
+_DEMO_LIVE_PROGRESS = {
+    # men's singles — opening round, ten of sixteen played, six on/awaiting court
+    "MS": {"R32": 10},
+    # women's singles — opening round complete, R16 half played
+    "WS": {"R32": 16, "R16": 4},
+    # men's doubles — into the quarter-finals
+    "MD": {"R32": 16, "R16": 8, "QF": 2},
+    # women's doubles — complete, champion decided
+    "WD": {"R32": 16, "R16": 8, "QF": 4, "SF": 2, "Final": 1},
+    # mixed doubles — R16 fully resolved and entirely unplayed
+    "XD": {"R32": 16},
+}
 
 
 def _demo_operational_event(event: dict, tournament_id: str) -> dict:
@@ -1798,24 +2263,67 @@ def _demo_operational_event(event: dict, tournament_id: str) -> dict:
     output = {**event, "record_scope": "full_draw", "historical": False}
     output.pop("topology_scope", None)
     output.pop("topology_edge_count", None)
-    completed_rounds = {"R64", "R32", "R16", "QF"}
+    progress = (
+        {}
+        if tournament_id == _DEMO_UPCOMING_TOURNAMENT
+        else _DEMO_LIVE_PROGRESS.get(str(output.get("discipline") or output.get("id")), {})
+    )
+    exceptional = (
+        {}
+        if tournament_id == _DEMO_UPCOMING_TOURNAMENT
+        else _DEMO_EXCEPTIONAL_RESULTS.get(
+            str(output.get("discipline") or output.get("id")), {}
+        )
+    )
     for round_code, units in zip(output.get("round_codes") or [], output["rounds"]):
+        played = progress.get(round_code, 0)
         for index, unit in enumerate(units):
-            # Taipei is deliberately caught during the opening round: ten of
-            # sixteen matches per discipline are complete, six remain. That
-            # leaves six concrete-participant matches live and another 24
-            # concrete matches waiting before the feeder-dependent rounds.
-            taipei_opening_complete = round_code == "R32" and index < 10
-            if (
-                tournament_id == _DEMO_UPCOMING_TOURNAMENT
-                or round_code not in completed_rounds
-                or (
-                    tournament_id == _DEMO_LIVE_TOURNAMENT
-                    and not taipei_opening_complete
-                )
-            ):
+            if index >= played:
                 unit.pop("result", None)
+                continue
+            kind = exceptional.get((round_code, index))
+            if kind is not None:
+                _apply_exceptional_result(unit, kind)
     return output
+
+
+# Two matches that did not finish the ordinary way, so every consumer has a
+# real one to render (public-visual-fixes.md P0). A walkover has NO score at
+# all — a fixture that invents 21-0 teaches the wrong lesson — and a
+# retirement keeps the score that was actually played when the match stopped.
+_DEMO_EXCEPTIONAL_RESULTS = {
+    "MS": {("R32", 3): "walkover"},
+    "WS": {("R32", 5): "retired"},
+}
+
+
+def _apply_exceptional_result(unit: dict, kind: str) -> None:
+    result = unit.get("result")
+    if not isinstance(result, dict):
+        return
+    if kind == "walkover":
+        result["walkover"] = True
+        result["reason"] = "walkover"
+        result["score"] = None
+        return
+    # Retired: the winner had taken the first game and led the second when
+    # the match was stopped. Orientation follows the recorded winner, never
+    # the game totals.
+    won_first, lost_first = (21, 15)
+    leading, trailing = (11, 7)
+    if result.get("winner_side") == "B":
+        sets = [
+            {"sideA": lost_first, "sideB": won_first},
+            {"sideA": trailing, "sideB": leading},
+        ]
+    else:
+        sets = [
+            {"sideA": won_first, "sideB": lost_first},
+            {"sideA": leading, "sideB": trailing},
+        ]
+    result["walkover"] = False
+    result["reason"] = "retired"
+    result["score"] = {"sets": sets}
 
 
 def _parse_demo_time(value: str | None) -> time:
@@ -1868,6 +2376,71 @@ def _place_on_courts(requests: list[dict], court_count: int) -> list[dict]:
     return placed
 
 
+def _demo_startable_units(event: dict) -> list[str]:
+    """Unplayed play units whose feeders have already produced both sides.
+
+    Round order, first-listed first. A unit with no feeders is a first-round
+    unit and is startable by definition.
+    """
+    decided = {
+        unit["id"]
+        for units in event["rounds"]
+        for unit in units
+        if unit.get("result") is not None
+    }
+    startable: list[str] = []
+    for units in event["rounds"]:
+        for unit in units:
+            if unit.get("result") is not None:
+                continue
+            feeders = [unit.get("feeder_a"), unit.get("feeder_b")]
+            if all(feeder is None or feeder in decided for feeder in feeders):
+                startable.append(unit["id"])
+    return startable
+
+
+def _demo_completed_placements(events: list[dict], court_count: int) -> dict[str, tuple[int, int]]:
+    """Place the live demo's results before its live wave, in sporting order.
+
+    Historical source dates describe a completed event. The live demo keeps
+    only some of those results, so it needs its own chronology: completed
+    feeders first, 09:00–19:00 sessions, and rest before a player's next match.
+    Slot 152 is the fixed 31 July 13:00 live wave on the Taipei floor.
+    """
+    free = dict.fromkeys(range(1, court_count + 1), 0)
+    rested: dict[str, int] = {}
+    placements: dict[str, tuple[int, int]] = {}
+    round_start = 0
+
+    def session_slot(slot: int, duration: int) -> int:
+        day, within = divmod(slot, 48)
+        return (day + 1) * 48 if within + duration > 20 else slot
+
+    for round_index in range(max((len(event["rounds"]) for event in events), default=0)):
+        round_end = round_start
+        for event in events:
+            if round_index >= len(event["rounds"]):
+                continue
+            for unit in event["rounds"][round_index]:
+                if unit.get("result") is None:
+                    continue
+                people = [str(person) for side in ("side_a", "side_b") for person in unit.get(side, [])]
+                duration = int(unit.get("duration_slots") or 2)
+                earliest = max(round_start, max((rested.get(person, 0) for person in people), default=0))
+                court = min(free, key=lambda key: (session_slot(max(free[key], earliest), duration), key))
+                slot = session_slot(max(free[court], earliest), duration)
+                end = slot + duration
+                if end >= 152:
+                    raise ValueError("Completed demo matches must finish before the fixed live wave")
+                placements[unit["id"]] = (slot, court)
+                free[court] = end
+                for person in people:
+                    rested[person] = end + 1
+                round_end = max(round_end, end)
+        round_start = round_end + 1
+    return placements
+
+
 def _demo_plan(
     tournament: Tournament,
     rows: list[HistoricalMatch],
@@ -1877,27 +2450,29 @@ def _demo_plan(
     zone = ZoneInfo(_demo_timezone(tournament))
     start_at = datetime.combine(start, time(9, 0), tzinfo=zone)
     court_count = _demo_court_count(tournament.id)
+    completed = (
+        _demo_completed_placements(events, court_count)
+        if tournament.id == _DEMO_LIVE_TOURNAMENT else {}
+    )
     requests: list[dict] = []
     live_candidates: list[str] = []
+    queued_ids: set[str] = set()
     if tournament.id == _DEMO_LIVE_TOURNAMENT:
-        by_event = [
-            [
-                unit["id"]
-                for round_code, units in zip(
-                    event.get("round_codes") or [], event["rounds"]
-                )
-                if round_code == "R32"
-                for unit in units
-                if unit.get("result") is None
-            ]
-            for event in events
-        ]
-        # One live match from every discipline, then a second MS match, gives
-        # all six courts distinct, concrete work without making the floor look
-        # artificially single-discipline.
+        # A match can only be ON COURT if it is unplayed AND both of its
+        # feeders have produced a winner — the same rule the product enforces
+        # at ``_require_resolved_play_unit``. Scanning for that rather than
+        # assuming "the opening round" is what lets the disciplines sit at
+        # different depths (_DEMO_LIVE_PROGRESS) without the live wave
+        # silently emptying.
+        by_event = [_demo_startable_units(event) for event in events]
+        # One live match from every discipline that still has one, then more
+        # from the same pools, so every court has distinct, concrete work
+        # without the floor looking artificially single-discipline.
         live_candidates = [group[0] for group in by_event if group]
-        live_candidates.extend(by_event[0][1:2] if by_event else [])
+        overflow = [unit_id for group in by_event for unit_id in group[1:]]
+        live_candidates.extend(overflow[: max(0, court_count - len(live_candidates))])
         live_candidates = live_candidates[:court_count]
+        queued_ids = {unit_id for group in by_event for unit_id in group}
     live_position = {play_unit_id: index for index, play_unit_id in enumerate(live_candidates)}
     pending_round_index: dict[str, int] = {}
     for event in events:
@@ -1924,6 +2499,11 @@ def _demo_plan(
                 # sequentially and can never overlap.
                 court_id: int | None = None
                 slot_id = minute_offset // _DEMO_INTERVAL_MINUTES
+                if unit["id"] in completed:
+                    slot_id, court_id = completed[unit["id"]]
+                    played_at = start_at + timedelta(minutes=slot_id * _DEMO_INTERVAL_MINUTES)
+                    unit["played_on"] = played_at.date().isoformat()
+                    unit["local_time"] = played_at.strftime("%H:%M")
                 if tournament.id == _DEMO_LIVE_TOURNAMENT and unit.get("result") is None:
                     if unit["id"] in live_position:
                         position = live_position[unit["id"]]
@@ -1944,13 +2524,13 @@ def _demo_plan(
                             slot_id = 240 + 2 * (position // court_count)
                         else:  # Finals
                             slot_id = 246 + 2 * (position // court_count)
-                    # Keep the remaining concrete R32 wave in the live-day
-                    # queue. Its source row still carries the planned court
-                    # and local time (and every later round stays on Plan), but
-                    # an Operations assignment means "physically on court",
-                    # so importing these 24 as assigned would truthfully leave
-                    # the queue empty while six matches are playing.
-                    if round_code == "R32" and unit["id"] not in live_position:
+                    # Keep the rest of the currently-playable wave in the
+                    # live-day queue. Its source row still carries the planned
+                    # court and local time (and every later round stays on
+                    # Plan), but an Operations assignment means "physically on
+                    # court", so importing these as assigned would truthfully
+                    # leave the queue empty while six matches are playing.
+                    if unit["id"] in queued_ids and unit["id"] not in live_position:
                         continue
                 requests.append(
                     {
@@ -2021,6 +2601,17 @@ def apply(
         "tournaments": {},
     }
     manifest["seedFormatVersion"] = _SEED_FORMAT_VERSION
+    # The reviewed cross-tournament person identity map, by provenance. The
+    # public projector reads ``personId`` off each roster row; this records
+    # WHERE that value came from so the claim is auditable rather than
+    # asserted (P6, 2026-09-08).
+    person_source = f"{seed_key}:{dataset.source_sha256[:12]}"
+    manifest["personIdentity"] = {
+        "source": person_source,
+        "sourceSha256": dataset.source_sha256,
+        "scope": "dataset_player_table",
+        "people": len(dataset.players),
+    }
     manifest["sourceSha256"] = dataset.source_sha256
     manifest["notesSha256"] = dataset.notes_sha256
     manifest["inputSha256"] = input_hash
@@ -2029,6 +2620,26 @@ def apply(
     by_tournament = dataset.matches_by_tournament
     historical_by_tournament = dataset.historical_by_tournament
     notes = dataset.notes_by_tournament
+    # The published-entrant layer (see _DEMO_CLUBS above). Both of these are
+    # dataset-wide rather than per-tournament: the featured people must be
+    # present in EVERY demo workspace for the linked identity to be real, and
+    # the six accounts are shared across them for the same reason.
+    demo_tournaments = {
+        tournament.id: historical_by_tournament.get(tournament.id, [])
+        for tournament in dataset.tournaments
+        if dataset.demo_generator_version is not None
+        and historical_by_tournament.get(tournament.id)
+    }
+    featured_people: dict[str, str] = {}
+    entrant_accounts: dict[str, str] = {}
+    if demo_tournaments:
+        featured_people = _demo_featured_people(demo_tournaments)
+        entrant_accounts = _demo_entry_accounts(client, featured_people)
+        manifest["publicEntrants"] = {
+            "accounts": entrant_accounts,
+            "featured": featured_people,
+            "clubs": [name for name, _email in _DEMO_CLUBS],
+        }
     for tournament in dataset.tournaments:
         entry = manifest["tournaments"].setdefault(tournament.id, {})
         rows = by_tournament[tournament.id]
@@ -2040,7 +2651,7 @@ def apply(
         )
         if not entry.get("workspaceId"):
             workspace = client.create_tournament(
-                f"{tournament.name} ({tournament.year})",
+                canonical_tournament_name(tournament.name),
                 kind="bracket",
                 modules=[
                     {"moduleId": "bracket", "status": "enabled"},
@@ -2118,36 +2729,27 @@ def apply(
         # Keeping this ahead of bracket import exercises the same checkout
         # fence as production instead of weakening it for fixture seeding.
         if not entry.get("entryPage"):
-            closed_at = (
-                f"{(demo_start - timedelta(days=14)).isoformat()}T23:59:59+00:00"
-                if demo_seed
-                else f"{tournament.end_date}T23:59:59+00:00"
-            )
-            note = notes.get(tournament.id)
-            details = (
-                f" {note.level_description[:1].upper()}{note.level_description[1:]} "
-                f"Draw listing: {note.draw_description}."
-                if note is not None
-                else ""
-            )
             coverage = dataset.historical_coverage.get(tournament.id)
-            demo_state = (
-                "Tournament in progress"
-                if tournament.id == _DEMO_LIVE_TOURNAMENT and demo_seed
-                else "Upcoming tournament"
-                if tournament.id == _DEMO_UPCOMING_TOURNAMENT and demo_seed
-                else "Completed tournament"
-            )
-            intro_text = (
-                f"{demo_state}: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the published draws and available results across all five events.{details}"
-                if demo_seed
-                else f"Completed tournament: {tournament.name} ({tournament.year}). {tournament.level}, {tournament.prize}, {tournament.host}, {tournament.venue}. Browse the complete published draws and results across all five events.{details}"
-            )
-            regulations_text = (
-                f"Fictional operational demo; entries are closed and match details are populated for visual testing. Source reference: {(coverage.source_url if coverage else tournament.source_url)}."
-                if demo_seed
-                else f"Read-only completed tournament; entries are closed. Source: {(coverage.source_url if coverage else tournament.source_url)}."
-            )
+            # Reader-facing copy is organizer prose, not a rendered inventory
+            # of the source record. The provenance the NOTES file carries
+            # (level description, "32-entry men's singles draw; …", source
+            # URL) is still imported and still reconciled — it lives in the
+            # manifest's ``source`` block, where a provenance audit reads it,
+            # and no longer in a sentence a spectator sees.
+            intro_text = _DEMO_ORGANIZER_PROSE.get(tournament.id) if demo_seed else None
+            if not intro_text:
+                intro_text = (
+                    f"{tournament.name} {tournament.year} at {tournament.venue}, "
+                    f"{tournament.host}. All five disciplines, {tournament.date_range}."
+                )
+            regulations_text = _DEMO_REGULATIONS_PROSE.get(tournament.id) if demo_seed else None
+            if not regulations_text:
+                regulations_text = (
+                    "Matches are played to the best of three games to 21, with a "
+                    "two-point advantage required from 20-all and a cap at 30. "
+                    "Report to the control desk thirty minutes before your "
+                    "scheduled time."
+                )
             client.upsert_entry_page(
                 tid,
                 {
@@ -2158,25 +2760,46 @@ def apply(
                     "waiverRequired": False,
                     "collectPhone": False,
                     "venueName": tournament.venue,
-                    "venueAddress": f"{tournament.host}; {tournament.date_range}; {tournament.draw_format}",
+                    "venueAddress": f"{tournament.venue}, {tournament.host}",
+                    # The public entry page owns pricing for submissions.
+                    # Keep its per-event tiers aligned with Setup's fees.
+                    **({
+                        "feeSchedule": {str(count): count * _DEMO_ENTRY_FEE_CENTS for count in range(1, len(_EVENTS) + 1)},
+                        "paymentInstructions": "Pay the entry fee at tournament check-in; include your entry reference.",
+                    } if demo_seed else {}),
                 },
             )
+            entry_event_ids: dict[str, str] = {}
             for row in rows:
-                client.create_entry_event(
+                opens_at, closes_at = _demo_entry_window(
+                    tournament, row.event, demo_start, demo_seed=demo_seed
+                )
+                created = client.create_entry_event(
                     tid,
                     {
                         "code": row.event,
-                        "discipline": row.event_label,
+                        # The human discipline name, not the source archive's
+                        # record label ("mens_doubles_final"), which reached
+                        # the public profile page verbatim as an event's
+                        # discipline.
+                        "discipline": _EVENT_NAMES.get(row.event, row.event_label),
                         "entryType": "doubles" if row.event in {"MD", "WD", "XD"} else "singles",
                         "bracketEventId": row.event,
-                        "opensAt": f"{tournament.year - 1:04d}-01-01T00:00:00+00:00",
-                        "closesAt": closed_at,
+                        "opensAt": opens_at,
+                        "closesAt": closes_at,
                     },
                 )
+                entry_event_ids[row.event] = str(created["id"])
+            entry["entryEventIds"] = entry_event_ids
             client.patch_entry_page_publication(
                 tid,
                 {
                     "audience": "public",
+                    # The public person directory — every linkable name and
+                    # every profile URL on the entrant tier — is gated on this
+                    # flag. Leaving it off is what made every
+                    # ``/e/{slug}/players/{key}`` request a 404.
+                    "entrantsPublished": True,
                     "drawsPublished": True,
                     "resultsPublished": tournament.id != _DEMO_UPCOMING_TOURNAMENT or not demo_seed,
                 },
@@ -2190,10 +2813,40 @@ def apply(
             token = client.display_token(tid)
             entry["displayToken"] = token.get("token")
             entry["urls"] = {
-                "console": f"/tournaments/{tid}/bracket",
+                "console": f"/tournaments/{tid}/overview",
                 "entrant": f"/e/{entry['slug']}",
                 "display": token.get("url", f"/display?token={token.get('token', '')}"),
             }
+            _write_manifest(path, manifest)
+
+        # Register the whole draw through the entries desk BEFORE the bracket
+        # is imported. Two reasons it cannot move later: the resulting
+        # ``entry_players.id`` becomes each person's bracket roster id, and a
+        # live workspace is checked out to an event node, which freezes every
+        # entries write (``EVENT_CHECKED_OUT``).
+        if demo_seed and not entry.get("entrantsRegistered"):
+            entry["entryPlayerIds"] = _register_demo_entrants(
+                client,
+                tid,
+                rows=historical_rows,
+                entry_event_ids=entry["entryEventIds"],
+                accounts=entrant_accounts,
+                featured=featured_people,
+                seed_key=seed_key,
+            )
+            # One deliberately unpublished person per workspace, so a 404 and
+            # a "Player not published" reference can both be exercised against
+            # a fixture that is otherwise fully linked. Withdrawn rather than
+            # never-registered: that is the state a real desk produces, and it
+            # keeps the person present-but-not-public rather than absent.
+            withheld = _demo_withheld_person(historical_rows, featured_people)
+            withheld_id = entry["entryPlayerIds"].get(withheld) if withheld else None
+            if withheld_id:
+                for row in client.list_entries(tid):
+                    if row.get("entryPlayerId") == withheld_id:
+                        client.withdraw_entry(tid, row["id"])
+                entry["withheldPerson"] = {"name": withheld, "entryPlayerId": withheld_id}
+            entry["entrantsRegistered"] = True
             _write_manifest(path, manifest)
 
         if not entry.get("bracketImported"):
@@ -2203,6 +2856,28 @@ def apply(
             if historical_rows:
                 coverage = dataset.historical_coverage[tournament.id]
                 identities = _HistoricalIdentityRegistry(tournament.id)
+                # The dataset's own player table is a REAL, reviewed
+                # identifier with provenance (its aliases table already
+                # collapsed "Aaron CHIA"/"Aaron Chia" before anything was
+                # stored), so it is preferred over any name heuristic
+                # downstream. Names absent from it simply carry no
+                # ``personId`` — no id is invented for them.
+                identities.person_ids = {
+                    source_name_key(player.name): player.id
+                    for player in dataset.players
+                }
+                identities.person_source = person_source
+                if demo_seed:
+                    identities.entry_player_ids = {
+                        name: player_id
+                        for name, player_id in (entry.get("entryPlayerIds") or {}).items()
+                    }
+                    for event_code in _EVENTS:
+                        identities.seeds.update(
+                            _demo_event_seeds(
+                                [row for row in historical_rows if row.event == event_code]
+                            )
+                        )
                 for event_code in _EVENTS:
                     event_rows = [row for row in historical_rows if row.event == event_code]
                     if not event_rows:
@@ -2232,7 +2907,14 @@ def apply(
                     name for row in rows for name in (*row.winner_players, *row.runner_up_players)
                 }
                 roster = [
-                    {"id": player.id, "name": player.name}
+                    {
+                        "id": player.id,
+                        "name": player.name,
+                        # Already the dataset id; stated explicitly so both
+                        # import paths publish identity the same way.
+                        "personId": player.id,
+                        "personSource": person_source,
+                    }
                     for player in players.values()
                     if player.name in used_names
                 ]
@@ -2331,11 +3013,672 @@ def apply(
     return manifest
 
 
+# ---------------------------------------------------------------------------
+# Synthetic, TEST-ONLY match outcomes.
+#
+# The imported BWF fixture is a record of matches that were actually played,
+# so it contains no walkover, no retirement and no bye — the three outcomes an
+# operator surface has to render and the three the surface books had nothing
+# to photograph. These entries add them, on matches the source leaves
+# UNPLAYED, and every one carries ``syntheticOutcome: True`` so nothing
+# downstream can mistake an invented result for a sourced one: the flag rides
+# into the manifest, and the note says in words that the outcome is fixture
+# scaffolding.
+#
+# THE BYE. A structural bye needs a draw slot with no participant. All five
+# Taipei draws are full SE-32s (160 participants, 80 first-round matches, zero
+# empty slots), so there is no bye among them to reference, and rebuilding one
+# of those draws to make room would be destructive. The third outcome here is a
+# FORFEIT instead: the remaining contingency ``reason`` the product supports,
+# and the one that shares the bye's "awarded without play" shape. A genuine
+# structural bye is supplied separately, by :data:`SYNTHETIC_BYE` below, which
+# ADDS a short test-only draw rather than regenerating a sourced one.
+#
+# Ids are pinned rather than derived: a fixture outcome must land on the same
+# match every time it is applied, on any deployment seeded from this dataset.
+SYNTHETIC_OUTCOMES: tuple[dict[str, Any], ...] = (
+    {
+        "tournamentId": "T029",
+        "kind": "walkover",
+        "reason": "walkover",
+        "playUnitId": (
+            "T029-MS-R32-a358fef8488e68c73f7fe29b0b795dc784bfb6cdd5711c486b9c3cdbc7502944"
+        ),
+        "winnerSide": "A",
+        "score": None,
+        "note": "synthetic: opponent withdrew before play (walkover)",
+    },
+    {
+        "tournamentId": "T029",
+        "kind": "retired",
+        "reason": "retired",
+        "playUnitId": (
+            "T029-WS-R32-df722c0eb5262f38de2e392b2202ef380e5a5176d82123ec622b1910fd40b911"
+        ),
+        "winnerSide": "A",
+        # A retirement keeps the games that WERE played: the product's score
+        # shape carries partial sets, so the second game stops mid-way rather
+        # than being blanked.
+        "score": {"sets": [{"sideA": 21, "sideB": 17}, {"sideA": 11, "sideB": 6}]},
+        "note": "synthetic: retired mid-second game, partial scores retained",
+    },
+    {
+        "tournamentId": "T029",
+        "kind": "forfeit",
+        "reason": "forfeit",
+        "playUnitId": (
+            "T029-MD-R32-2501b37acaf9cd5bf6e064f90f5947ca84e81d1c299cb4b316edbcadf0a13c59"
+        ),
+        "winnerSide": "B",
+        "score": None,
+        "note": "synthetic: forfeited without play (stands in for a bye — the draw has none)",
+    },
+)
+
+
+def apply_synthetic_outcomes(
+    *, seed_key: str, client: SimClient, run_dir: Path = _DEFAULT_RUN_DIR
+) -> dict:
+    """Apply :data:`SYNTHETIC_OUTCOMES` through the product's command path.
+
+    Every write is ``POST /tournaments/{id}/bracket/commands`` with a
+    DETERMINISTIC idempotency key, so the product's own replay machinery makes
+    a second run a no-op even if the local skip check were removed. Scoped to
+    the seed manifest: an outcome whose tournament this run did not create is
+    reported as ``missing`` rather than applied somewhere else.
+    """
+    path = _run_path(run_dir, seed_key)
+    manifest = status(seed_key=seed_key, run_dir=run_dir)
+    applied: list[dict[str, Any]] = []
+    unchanged: list[dict[str, Any]] = []
+    missing: list[str] = []
+    brackets: dict[str, set[str]] = {}
+    for outcome in SYNTHETIC_OUTCOMES:
+        entry = (manifest.get("tournaments") or {}).get(outcome["tournamentId"]) or {}
+        workspace_id = entry.get("workspaceId")
+        if not workspace_id:
+            missing.append(outcome["playUnitId"])
+            continue
+        if workspace_id not in brackets:
+            bracket = client.get_bracket(workspace_id)
+            brackets[workspace_id] = {
+                str(result.get("play_unit_id")) for result in bracket.get("results") or []
+            }
+        record = {
+            "tournamentId": outcome["tournamentId"],
+            "workspaceId": workspace_id,
+            "playUnitId": outcome["playUnitId"],
+            "kind": outcome["kind"],
+            "syntheticOutcome": True,
+            "note": outcome["note"],
+        }
+        if outcome["playUnitId"] in brackets[workspace_id]:
+            unchanged.append(record)
+            continue
+        body: dict[str, Any] = {
+            "id": command_uuid(0, "synthetic-outcome", outcome["playUnitId"], outcome["kind"]),
+            "kind": "record_result",
+            "play_unit_id": outcome["playUnitId"],
+            "winner_side": outcome["winnerSide"],
+            "reason": outcome["reason"],
+        }
+        if outcome["score"] is not None:
+            body["score"] = outcome["score"]
+        client.bracket_command(workspace_id, body)
+        brackets[workspace_id].add(outcome["playUnitId"])
+        applied.append({**record, "commandId": body["id"]})
+    manifest["syntheticOutcomes"] = {
+        "applied": [row["playUnitId"] for row in applied],
+        "unchanged": [row["playUnitId"] for row in unchanged],
+        "missing": missing,
+        "declared": [
+            {
+                "playUnitId": outcome["playUnitId"],
+                "kind": outcome["kind"],
+                "syntheticOutcome": True,
+                "note": outcome["note"],
+            }
+            for outcome in SYNTHETIC_OUTCOMES
+        ],
+    }
+    _write_manifest(path, manifest)
+    return {
+        "seedKey": seed_key,
+        "declared": len(SYNTHETIC_OUTCOMES),
+        "applied": applied,
+        "unchanged": unchanged,
+        "missing": missing,
+    }
+
+
+# ---------------------------------------------------------------------------
+# The synthetic bye fixture (debt-log OPR-0908-11).
+# ---------------------------------------------------------------------------
+#
+# All five seeded Taipei draws are full SE-32s, so the fixture contains no
+# structural bye and the surfaces that render one ("Bye" side labels, the
+# auto-recorded walkover, an advancement with nothing played) had nothing to be
+# checked against. Regenerating a sourced draw to make room for one would be
+# destructive, so the fixture gains a short, obviously synthetic draw of its
+# own instead: fifteen entrants in a sixteen bracket, whose sixteenth slot is a
+# bye.
+#
+# WHY ITS OWN WORKSPACE. The first attempt added the event to the live demo
+# workspace with ``POST /bracket/events/SYNBYE`` + ``/generate``. The event was
+# created and the generate answered 409:
+#
+#     play unit 'T029-MS-R16-79c24db8...' has unresolved sides; cannot schedule
+#
+# ``TournamentDriver.generate_event`` re-enters the solver with every OTHER
+# event's assigned play units as locked phantom matches, and Taipei's plan
+# legitimately holds assignments for R16 units whose feeders have not been
+# played, which ``bracket.adapter.build_problem`` refuses. Any per-event
+# generate on that workspace fails the same way, so there is no scoped
+# generate to use (logged as OPR-0908-12).
+#
+# The path that DOES install a draw without a solve is the one the seeded
+# SE-32s themselves use: ``POST /bracket/import`` -> ``parse_json_payload`` ->
+# ``register_draw``, which takes pre-paired rounds and an already-approved plan
+# verbatim, and whose ``auto_walkover_byes`` records the bye's walkover on the
+# way in. That route replaces the WHOLE bracket of the workspace it is called
+# on, so it can only be aimed at a workspace this fixture owns — hence a
+# dedicated, clearly-labelled test-only workspace rather than a sixth Taipei
+# event. Nothing sourced is touched, and the bye is still the product's own:
+# an empty round-0 side, not a shape invented downstream.
+#
+# It is deliberately obvious wherever it surfaces: the workspace title says
+# "test only", the event id and discipline are ``SYNBYE``, every entrant is
+# named "Synthetic Entrant NN", and the manifest records it with the same
+# ``syntheticOutcome`` provenance the walkover/retirement/forfeit fixtures
+# carry.
+SYNTHETIC_BYE: dict[str, Any] = {
+    # Manifest key. Deliberately outside the dataset's T0NN range: this
+    # workspace has no source row and must never be confused with one.
+    "tournamentId": "TSYN",
+    "workspaceName": "Synthetic Bye Fixture (test only)",
+    # Pinned rather than derived: the fixture has no source dates, and the
+    # demo clock is frozen inside the seeded week.
+    "workspaceDate": "2026-07-28",
+    "timeZone": "Asia/Taipei",
+    "startTime": "2026-07-28T09:00:00+08:00",
+    "eventId": "SYNBYE",
+    "discipline": "SYNBYE",
+    "format": "se",
+    "bracketSize": 16,
+    "entrantCount": 15,
+    "durationSlots": 2,
+    "courts": 2,
+    "totalSlots": 32,
+    "intervalMinutes": _DEMO_INTERVAL_MINUTES,
+    # Pinned, because the import installs the ids verbatim:
+    # ``{event_id}-R{round}-{match}``, with the bye first in round 0.
+    "byePlayUnitId": "SYNBYE-R0-0",
+    "note": "synthetic: test-only 15-entrant draw carrying the fixture's one structural bye",
+}
+
+
+def synthetic_bye_participants() -> list[dict[str, Any]]:
+    """The fifteen fixture entrants, in draw order."""
+    return [
+        {
+            "id": f"synthetic-bye-{index:02d}",
+            "name": f"Synthetic Entrant {index:02d}",
+        }
+        for index in range(1, int(SYNTHETIC_BYE["entrantCount"]) + 1)
+    ]
+
+
+def synthetic_bye_import_body() -> dict[str, Any]:
+    """The pre-paired SE draw, in ``POST /bracket/import`` shape.
+
+    Round 0 pairs the entrants in order and leaves the FIRST unit's B side
+    absent — ``_slot_from_side`` reads an omitted side as the engine's BYE
+    sentinel, and ``register_draw`` walks that unit over on import. Later
+    rounds carry feeder references only, exactly like a generated SE draw.
+    Only the seven playable round-0 units get plan cells; the bye holds no
+    court, and later rounds stay unscheduled until their feeders resolve.
+    """
+    participants = synthetic_bye_participants()
+    playable = participants[1:]
+    rounds: list[list[dict[str, Any]]] = []
+    duration = int(SYNTHETIC_BYE["durationSlots"])
+    first_round: list[dict[str, Any]] = [
+        {
+            "id": f"{SYNTHETIC_BYE['eventId']}-R0-0",
+            "side_a": [participants[0]["id"]],
+            # No ``side_b``: this is the structural bye.
+            "duration_slots": duration,
+            # The bye's walkover stated as a FACT of the payload rather than
+            # left to be inferred. ``register_draw`` would record it anyway
+            # (``auto_walkover_byes``), but declaring it here also makes the
+            # imported event "started" rather than "draft", which is what a
+            # draw with a recorded result and an approved plan actually is.
+            "result": {"winner_side": "A", "walkover": True, "reason": "walkover"},
+        }
+    ]
+    for match_index in range(len(playable) // 2):
+        first_round.append(
+            {
+                "id": f"{SYNTHETIC_BYE['eventId']}-R0-{match_index + 1}",
+                "side_a": [playable[match_index * 2]["id"]],
+                "side_b": [playable[match_index * 2 + 1]["id"]],
+                "duration_slots": duration,
+            }
+        )
+    rounds.append(first_round)
+    previous = [unit["id"] for unit in first_round]
+    round_index = 0
+    while len(previous) > 1:
+        round_index += 1
+        current: list[dict[str, Any]] = []
+        for match_index in range(0, len(previous), 2):
+            current.append(
+                {
+                    "id": f"{SYNTHETIC_BYE['eventId']}-R{round_index}-{match_index // 2}",
+                    "feeder_a": previous[match_index],
+                    "feeder_b": previous[match_index + 1],
+                    "duration_slots": duration,
+                }
+            )
+        rounds.append(current)
+        previous = [unit["id"] for unit in current]
+    assignments = [
+        {
+            "play_unit_id": unit["id"],
+            "slot_id": (index // int(SYNTHETIC_BYE["courts"])) * duration,
+            "court_id": index % int(SYNTHETIC_BYE["courts"]) + 1,
+            "duration_slots": duration,
+        }
+        for index, unit in enumerate(first_round[1:])
+    ]
+    return {
+        "courts": SYNTHETIC_BYE["courts"],
+        "total_slots": SYNTHETIC_BYE["totalSlots"],
+        "rest_between_rounds": 1,
+        "interval_minutes": SYNTHETIC_BYE["intervalMinutes"],
+        "time_limit_seconds": 5,
+        "start_time": SYNTHETIC_BYE["startTime"],
+        "roster": [dict(row) for row in participants],
+        "events": [
+            {
+                "id": SYNTHETIC_BYE["eventId"],
+                "discipline": SYNTHETIC_BYE["discipline"],
+                "format": SYNTHETIC_BYE["format"],
+                "participants": [dict(row) for row in participants],
+                "rounds": rounds,
+            }
+        ],
+        "assignments": assignments,
+    }
+
+
+def _event_unit_ids(session: dict | None, event_id: str) -> list[str]:
+    """Ids of ``event_id``'s play units in a serialized bracket session."""
+    if not isinstance(session, dict):
+        return []
+    return [
+        str(unit.get("id"))
+        for unit in session.get("play_units") or []
+        if unit.get("event_id") == event_id
+    ]
+
+
+def _structural_bye_unit_ids(session: dict | None, event_id: str) -> list[str]:
+    """Play units of ``event_id`` whose draw slot holds the BYE sentinel."""
+    if not isinstance(session, dict):
+        return []
+    found: list[str] = []
+    for unit in session.get("play_units") or []:
+        if unit.get("event_id") != event_id:
+            continue
+        for slot in (unit.get("slot_a"), unit.get("slot_b")):
+            if isinstance(slot, dict) and slot.get("participant_id") == _BYE_SENTINEL:
+                found.append(str(unit.get("id")))
+                break
+    return found
+
+
+def _seeded_workspace_ids(manifest: dict) -> set[str]:
+    """Every workspace the seed run itself owns, by id.
+
+    The bye fixture must never write to one of these: the import route
+    replaces a whole bracket, and the seeded workspaces hold sourced draws
+    (and, once a director has checked one out, refuse configuration writes
+    outright). This set is the guard rail, checked before every write.
+    """
+    return {
+        str(entry["workspaceId"])
+        for entry in (manifest.get("tournaments") or {}).values()
+        if isinstance(entry, dict) and entry.get("workspaceId")
+    }
+
+
+def _note(writes: list[dict[str, str]], route: str, workspace_id: str) -> None:
+    """Record a write and say so on stderr BEFORE it is attempted.
+
+    The CLI prints its JSON result only on success, so a run that fails
+    mid-way used to say nothing about where it had been pointing. These lines
+    survive the exception.
+    """
+    writes.append({"route": route, "workspaceId": workspace_id})
+    print(f"seed apply-bye -> {route}", file=sys.stderr)
+
+
+def _fixture_workspace_guard(
+    workspace_id: str | None, seeded: set[str], route: str
+) -> str:
+    """Reject absent or seeded workspace ids before fixture writes.
+
+    Mutation check: replacing this guard with a pass-through fails both
+    ``test_fixture_write_guard_rejects_missing_or_seeded_workspace`` cases.
+    """
+    if not workspace_id:
+        raise ValueError(f"refusing {route}: no fixture workspace resolved")
+    if workspace_id in seeded:
+        raise ValueError(
+            f"refusing {route}: {workspace_id} is a SEEDED workspace, not the bye "
+            "fixture's own — the import path replaces a whole bracket"
+        )
+    return workspace_id
+
+
+def _drop_stranded_bye_events(
+    manifest: dict, client: SimClient, event_id: str
+) -> list[dict[str, str]]:
+    """Clear an EMPTY ``event_id`` left on a seeded workspace by a failed run.
+
+    The first attempt at this fixture created the event on the live demo
+    workspace and then failed to generate its draw, leaving a draft event with
+    no play units that no surface can render. The ONLY write this makes is
+    ``DELETE /bracket/events/{id}``, which the API allows for draft events
+    only, and it fires only when the event has zero play units — so it can
+    never remove a draw that exists, and it never touches the import path.
+
+    A checked-out workspace refuses the delete with 409 ``CONFIG_LOCKED``.
+    That is reported as ``status: "locked"`` and the run continues: the
+    stranded row is cosmetic, and returning authority is the director's call,
+    not this tool's.
+    """
+    found: list[dict[str, str]] = []
+    for tournament_id, entry in (manifest.get("tournaments") or {}).items():
+        workspace_id = (entry or {}).get("workspaceId")
+        if not workspace_id:
+            continue
+        session = client.get_bracket_or_none(workspace_id)
+        if session is None:
+            continue
+        if event_id not in {str(event.get("id")) for event in session.get("events") or []}:
+            continue
+        row = {
+            "id": event_id,
+            "tournamentId": tournament_id,
+            "workspaceId": str(workspace_id),
+        }
+        if _event_unit_ids(session, event_id):
+            found.append({**row, "status": "kept"})
+            continue
+        print(
+            f"seed apply-bye -> DELETE /tournaments/{workspace_id}/bracket/events/{event_id}",
+            file=sys.stderr,
+        )
+        removed = client.delete_event(workspace_id, event_id)
+        found.append({**row, "status": "removed" if removed else "locked"})
+    return found
+
+
+def apply_synthetic_bye(
+    *, seed_key: str, client: SimClient, run_dir: Path = _DEFAULT_RUN_DIR
+) -> dict:
+    """Install :data:`SYNTHETIC_BYE`'s draw through the product's import path.
+
+    Every write goes to the fixture's OWN workspace, and nothing else: the
+    seeded workspaces' ids are collected from the manifest up front and
+    :func:`_fixture_workspace_guard` refuses each write that would land on
+    one. The single exception is the stranded-event cleanup, which is a
+    ``DELETE`` of an empty draft event and can never replace a draw.
+
+    Idempotent on the DRAW, not on the event row: the step re-imports whenever
+    the fixture workspace does not already hold the event's play units, so a
+    half-finished run is completed on the next attempt, and it never touches a
+    draw that is already there.
+    """
+    path = _run_path(run_dir, seed_key)
+    manifest = status(seed_key=seed_key, run_dir=run_dir)
+    event_id = str(SYNTHETIC_BYE["eventId"])
+    bye_unit_id = str(SYNTHETIC_BYE["byePlayUnitId"])
+    seeded = _seeded_workspace_ids(manifest)
+    writes: list[dict[str, str]] = []
+    record = dict(manifest.get("syntheticBye") or {})
+    stranded = _drop_stranded_bye_events(manifest, client, event_id)
+
+    # The recorded id is a HINT, and one earlier version of this step recorded
+    # a seeded workspace here. Trust it only when it is not one of the seed
+    # run's own workspaces and the workspace still exists.
+    workspace_id = record.get("workspaceId")
+    if workspace_id in seeded:
+        workspace_id = None
+    if workspace_id and client.get_tournament(workspace_id, expect=(200, 404)) is None:
+        workspace_id = None
+    if not workspace_id:
+        # A manifest can be lost or reset while the fixture workspace survives;
+        # adopt it by name rather than minting a second one.
+        workspace_id = next(
+            (
+                str(row["id"])
+                for row in client.list_tournaments() or []
+                if row.get("name") == SYNTHETIC_BYE["workspaceName"]
+                and str(row.get("id")) not in seeded
+            ),
+            None,
+        )
+    created_workspace = False
+    if not workspace_id:
+        _note(writes, "POST /tournaments", "(new)")
+        workspace = client.create_tournament(
+            str(SYNTHETIC_BYE["workspaceName"]),
+            kind="bracket",
+            modules=[
+                {"moduleId": "bracket", "status": "enabled"},
+                {"moduleId": "display", "status": "enabled"},
+            ],
+            tournament_date=str(SYNTHETIC_BYE["workspaceDate"]),
+            time_zone=str(SYNTHETIC_BYE["timeZone"]),
+        )
+        workspace_id = str(workspace["id"])
+        created_workspace = True
+
+    session = client.get_bracket_or_none(workspace_id)
+    imported = False
+    if not _event_unit_ids(session, event_id):
+        route = f"POST /tournaments/{workspace_id}/bracket/import"
+        _fixture_workspace_guard(workspace_id, seeded, route)
+        _note(writes, route, workspace_id)
+        session = client.import_bracket(workspace_id, synthetic_bye_import_body())
+        imported = True
+
+    # The import's ``register_draw`` walks the bye over on the way in, and the
+    # payload declares that walkover as well. Assert it rather than assume it:
+    # if the result is absent, record it through the same idempotent command
+    # path the other synthetic outcomes use, whose deterministic id makes a
+    # replay the product's replay.
+    walkover_command: str | None = None
+    results = {str(row.get("play_unit_id")) for row in (session or {}).get("results") or []}
+    if bye_unit_id not in results:
+        route = f"POST /tournaments/{workspace_id}/bracket/commands"
+        _fixture_workspace_guard(workspace_id, seeded, route)
+        _note(writes, route, workspace_id)
+        walkover_command = command_uuid(0, "synthetic-bye", bye_unit_id, "walkover")
+        client.bracket_command(
+            workspace_id,
+            {
+                "id": walkover_command,
+                "kind": "record_result",
+                "play_unit_id": bye_unit_id,
+                "winner_side": "A",
+                "reason": "walkover",
+            },
+        )
+        session = client.get_bracket_or_none(workspace_id)
+
+    bye_unit_ids = _structural_bye_unit_ids(session, event_id)
+    manifest["syntheticBye"] = {
+        "tournamentId": SYNTHETIC_BYE["tournamentId"],
+        "workspaceId": workspace_id,
+        "eventId": event_id,
+        "entrantCount": int(SYNTHETIC_BYE["entrantCount"]),
+        "byePlayUnitId": bye_unit_id,
+        "byePlayUnitIds": bye_unit_ids,
+        "unitCount": len(_event_unit_ids(session, event_id)),
+        "syntheticOutcome": True,
+        "note": SYNTHETIC_BYE["note"],
+        "state": "created" if imported else "unchanged",
+        "strandedEvents": stranded,
+    }
+    _write_manifest(path, manifest)
+    return {
+        "seedKey": seed_key,
+        "workspaceId": workspace_id,
+        "workspaceCreated": created_workspace,
+        "eventId": event_id,
+        "created": imported,
+        "unchanged": not imported,
+        "byePlayUnitIds": bye_unit_ids,
+        "walkoverCommandId": walkover_command,
+        "strandedEvents": stranded,
+        "writes": writes,
+    }
+
+
+def person_map(dataset: Dataset, *, seed_key: str) -> dict:
+    """The dataset's reviewed player table, keyed by canonical name.
+
+    The one input ``ops.seed_repair --backfill-person-ids`` needs: rows seeded
+    before the seed wrote ``personId`` correlate across tournaments by NAME,
+    and this is the map that replaces that leg with the dataset's own id
+    (debt-log OPR-0908-9). ``source`` is byte-identical to the value the seed
+    writes as ``personSource``, so a backfilled row is indistinguishable from
+    a freshly seeded one.
+    """
+    return {
+        "seedKey": seed_key,
+        "source": f"{seed_key}:{dataset.source_sha256[:12]}",
+        "sourceSha256": dataset.source_sha256,
+        "scope": "dataset_player_table",
+        "people": {
+            source_name_key(player.name): player.id for player in dataset.players
+        },
+    }
+
+
 def status(*, seed_key: str, run_dir: Path = _DEFAULT_RUN_DIR) -> dict:
     path = _run_path(run_dir, seed_key)
     if not path.exists():
         raise FileNotFoundError(f"no import run for seed key {seed_key!r}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def repair_names(
+    *, seed_key: str, client: SimClient, run_dir: Path = _DEFAULT_RUN_DIR
+) -> dict:
+    """Bring already-seeded workspaces onto the canonical-name rule.
+
+    Idempotent and **scoped to this seed run**: the only workspaces touched
+    are the ones this manifest's ``workspaceId`` entries name, and the name
+    written is derived from that entry's recorded ``source.name`` — never a
+    regex sweep over whatever titles the deployment happens to hold. A
+    workspace a director authored by hand is invisible to this command even
+    if its title looks the same shape.
+
+    Nothing else moves: ids, slugs, routes, dates, seasons, module state and
+    the archive/season split are all untouched. Re-running reports every
+    workspace as ``unchanged``.
+    """
+    path = _run_path(run_dir, seed_key)
+    manifest = status(seed_key=seed_key, run_dir=run_dir)
+    renamed: list[dict[str, str]] = []
+    setup_repaired: list[str] = []
+    setup_locked: list[str] = []
+    unchanged: list[str] = []
+    missing: list[str] = []
+    checked = 0
+    for tournament_id, entry in sorted(manifest.get("tournaments", {}).items()):
+        workspace_id = entry.get("workspaceId")
+        source = entry.get("source") or {}
+        source_name = source.get("name")
+        if not workspace_id or not source_name:
+            continue
+        checked += 1
+        canonical = canonical_tournament_name(str(source_name))
+        summary = client.get_tournament(workspace_id)
+        if summary is None:
+            missing.append(tournament_id)
+            continue
+        touched = False
+        if summary.get("name") != canonical:
+            client.update_tournament(workspace_id, {"name": canonical})
+            renamed.append(
+                {
+                    "tournamentId": tournament_id,
+                    "workspaceId": workspace_id,
+                    "from": summary.get("name"),
+                    "to": canonical,
+                }
+            )
+            touched = True
+        # The Setup ``general`` section carries the operator-facing copy of
+        # the same two names. Leaving it behind would put a stale title back
+        # on the next Setup save.
+        general = _setup_section_data(client.get_setup(workspace_id), "general")
+        if general is not None and (
+            general.get("name") != canonical or general.get("publicName") != canonical
+        ):
+            try:
+                client.seed_setup_sections(
+                    workspace_id,
+                    {"general": {**general, "name": canonical, "publicName": canonical}},
+                )
+            except Exception as exc:  # noqa: BLE001 - narrowed on the status below
+                # A tournament that has checked out freezes its preparation
+                # inputs (``CONFIG_LOCKED``). That fence is the product's,
+                # not a repair failure: the Setup section is operator-facing
+                # preparation copy, while every title a reader sees — Hub,
+                # workspace header, public tier, venue board — comes from the
+                # workspace ``name`` repaired above. Record it and move on
+                # rather than forcing a frozen checkpoint open.
+                if getattr(exc, "status", None) != 409:
+                    raise
+                setup_locked.append(tournament_id)
+            else:
+                setup_repaired.append(tournament_id)
+            touched = True
+        if not touched:
+            unchanged.append(tournament_id)
+    manifest["nameRepair"] = {
+        "renamed": [row["tournamentId"] for row in renamed],
+        "setupRepaired": setup_repaired,
+        "setupLocked": setup_locked,
+        "unchanged": unchanged,
+        "missingWorkspaces": missing,
+    }
+    _write_manifest(path, manifest)
+    return {
+        "seedKey": seed_key,
+        "checked": checked,
+        "renamed": renamed,
+        "setupRepaired": setup_repaired,
+        "setupLocked": setup_locked,
+        "unchanged": unchanged,
+        "missingWorkspaces": missing,
+    }
+
+
+def _setup_section_data(setup: dict | None, key: str) -> dict | None:
+    """Pull one section's ``data`` out of the Setup document."""
+    for section in (setup or {}).get("sections", []) or []:
+        if section.get("key") == key:
+            data = section.get("data")
+            return data if isinstance(data, dict) else None
+    return None
 
 
 def reset(

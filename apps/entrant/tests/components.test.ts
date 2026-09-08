@@ -27,11 +27,20 @@ import { SeasonStatusCell } from '../app/components/SeasonStatusCell';
 import { StatusChip } from '../app/components/StatusChip';
 import { StickyTotalBar } from '../app/components/StickyTotalBar';
 import { TabBar } from '../app/components/TabBar';
+import { Breadcrumbs } from '../app/components/Breadcrumbs';
 import { SegmentedNav } from '../app/components/SegmentedNav';
-import { capChipCountdown, formatDateInZone, formatDateLong } from '../app/lib/format';
+import type { FrameTab } from '../app/lib/tournamentFrame';
+import {
+  capChipCountdown,
+  formatDateInZone,
+  formatDateLong,
+  formatDateTimeInZone,
+  formatDayMonthInZone,
+  formatDayMonthTimeInZone,
+} from '../app/lib/format';
 import type { EntryEventDTO } from '../app/lib/entryPage.types';
 import type { DrawCardDTO } from '../app/lib/draws.types';
-import { statusCell } from '../app/lib/phase';
+import { actionCell, seasonModel } from '../app/lib/phase';
 import type { ChipState, Filters, SeasonRow } from '../app/lib/phase';
 import { EntrantSessionContext } from '../app/lib/sessionContext';
 
@@ -48,7 +57,7 @@ const row = (over: Partial<SeasonRow> = {}): SeasonRow => ({
   drawsPublished: false, winnersPublished: false, ...over,
 });
 
-const NO_FILTERS: Filters = { view: 'season', preset: null, from: null, to: null, q: '' };
+const NO_FILTERS: Filters = { year: null, q: '' };
 
 function event(overrides: Partial<EntryEventDTO> = {}): EntryEventDTO {
   return {
@@ -181,6 +190,49 @@ describe('formatDateInZone', () => {
   });
 });
 
+/**
+ * public-visual-fixes P7: the venue-local conversions, at the two boundaries
+ * that break a naive "trim the suffix" implementation — midnight and a
+ * cross-zone deadline.
+ */
+describe('venue-local instants (P7)', () => {
+  it('moves a deadline onto the RIGHT calendar day in the venue zone', () => {
+    // 15:30 UTC on 31 July is 00:30 on 1 August in Seoul. A day-only
+    // rendering that trimmed the suffix off the UTC value would state
+    // 31 July — the day before the deadline the director actually set.
+    expect(formatDayMonthInZone('2026-07-31 15:30 UTC', 'Asia/Seoul')).toBe('1 Aug');
+    expect(formatDayMonthTimeInZone('2026-07-31 15:30 UTC', 'Asia/Seoul')).toBe('1 Aug, 00:30');
+    expect(formatDateTimeInZone('2026-07-31 15:30 UTC', 'Asia/Seoul')).toBe('1 Aug 2026, 00:30');
+    // The same instant read at the venue in London is still 31 July.
+    expect(formatDayMonthTimeInZone('2026-07-31 15:30 UTC', 'Europe/London')).toBe('31 Jul, 16:30');
+  });
+
+  it('keeps midnight on its own day and does not roll a 23:30 evening over', () => {
+    // Exactly midnight, venue-local: the day is the one the clock reads,
+    // never the previous one via a 24:00 spelling.
+    expect(formatDayMonthTimeInZone('2026-07-31 15:00 UTC', 'Asia/Seoul')).toBe('1 Aug, 00:00');
+    // A 23:30 local match must not shift its day either — the case a
+    // UTC-rendered card gets wrong in the other direction.
+    expect(formatDayMonthTimeInZone('2026-08-01 14:30 UTC', 'Asia/Seoul')).toBe('1 Aug, 23:30');
+    expect(formatDateTimeInZone('2026-08-01 14:30 UTC', 'Asia/Seoul')).toBe('1 Aug 2026, 23:30');
+  });
+
+  it('never rounds a real deadline, and never prints a zone or an offset', () => {
+    const closes = formatDateTimeInZone('2026-08-14 23:59 UTC', 'Europe/London');
+    // 23:59 stays 23:59 (as 00:59 the next day in BST) — not "midnight",
+    // not "about 1am", not the 15th at 01:00.
+    expect(closes).toBe('15 Aug 2026, 00:59');
+    expect(closes).not.toMatch(/UTC|GMT|BST|[+-]\d{2}:?\d{2}|Europe\/London/);
+  });
+
+  it('omits an unparseable moment and degrades an unknown zone to UTC', () => {
+    expect(formatDayMonthTimeInZone('not-a-moment', 'Asia/Seoul')).toBeNull();
+    expect(formatDateTimeInZone('not-a-moment', 'Asia/Seoul')).toBeNull();
+    // An unrecognised zone is not a reason to drop a known instant.
+    expect(formatDateTimeInZone('2026-08-14 23:59 UTC', 'Mars/Olympus')).toBe('14 Aug 2026, 23:59');
+  });
+});
+
 // ---- DateBadge -------------------------------------------------------------
 
 describe('DateBadge', () => {
@@ -204,62 +256,83 @@ describe('DateBadge', () => {
   });
 });
 
-// ---- SeasonStatusCell (SP-P8 §2.4) -----------------------------------------
+// ---- SeasonStatusCell: the one action slot (P5) -----------------------------
 //
 // `TournamentCard` and `FilterStrip` used to be asserted here. Both are the
-// discovery card/sidebar the season calendar replaces, and both are deleted in
-// the task after this one; their describes went with the components rather
-// than being carried as tests for markup nothing renders.
+// discovery card/sidebar the season calendar replaced, and both were deleted;
+// their describes went with the components rather than being carried as tests
+// for markup nothing renders.
 
 describe('SeasonStatusCell', () => {
-  it('renders Results as a link and bare Completed as text (§7 trap 3)', () => {
+  it('renders Results as a link and the unpublished case as text (§7 trap 3)', () => {
     const winners = renderToStaticMarkup(
-      h(SeasonStatusCell, { cell: statusCell(row({ slug: 'x', status: 'completed_winners', winnersPublished: true })) }),
+      h(SeasonStatusCell, { cell: actionCell(row({ slug: 'x', status: 'completed_winners', winnersPublished: true }), true) }),
     );
     expect(winners).toContain('href="/e/x?tab=draws"');
     expect(winners).toContain('Results');
 
     const done = renderToStaticMarkup(
-      h(SeasonStatusCell, { cell: statusCell(row({ status: 'completed' })) }),
+      h(SeasonStatusCell, { cell: actionCell(row({ status: 'completed' }), true) }),
     );
-    expect(done).toContain('Completed');
+    expect(done).toContain('Results not published');
     expect(done).not.toContain('<a');
   });
 
-  it('gives Follow live the same arrow affordance as Results', () => {
+  it('gives Follow live the same affordance as Results', () => {
     const live = renderToStaticMarkup(
-      h(SeasonStatusCell, { cell: statusCell(row({ slug: 'x', status: 'in_progress_live' })) }),
+      h(SeasonStatusCell, { cell: actionCell(row({ slug: 'x', status: 'in_progress_live' }), false) }),
     );
-    expect(live).toContain('Follow live →');
+    // P7: the decorative trailing arrow is gone from every action arm — an
+    // underlined link already says it leads somewhere, and the glyph rode
+    // only two of the four arms.
+    expect(live).toContain('Follow live');
+    expect(live).not.toContain('→');
   });
 
   it('lifts every real link above the row-wide stretched link', () => {
-    for (const status of ['in_progress_live', 'completed_winners'] as const) {
-      const html = renderToStaticMarkup(
-        h(SeasonStatusCell, { cell: statusCell(row({ slug: 'x', status, drawsPublished: true })) }),
-      );
+    const cells = [
+      actionCell(row({ slug: 'x', status: 'in_progress_live' }), false),
+      actionCell(row({ slug: 'x', status: 'entries_open' }), false),
+      actionCell(row({ slug: 'x', status: 'completed_winners', drawsPublished: true }), true),
+    ];
+    for (const cell of cells) {
+      const html = renderToStaticMarkup(h(SeasonStatusCell, { cell }));
       expect(classTokens(html, 'z-10')).toContain('relative');
     }
   });
 
-  it('falls back to the relative-only chip when no exact deadline parses', () => {
-    const html = renderToStaticMarkup(
-      h(SeasonStatusCell, { cell: statusCell(row({ status: 'entries_open', closesInDays: 4 })) }),
-    );
-    expect(html).toContain('Entries open · closes in 4d');
-  });
-
-  it('states the exact tournament-timezone deadline as primary, the countdown secondary (V3-PE01.2)', () => {
+  it('links Enter to the real entry flow and names the closing day in the event zone', () => {
     const html = renderToStaticMarkup(
       h(SeasonStatusCell, {
-        cell: statusCell(row({
-          status: 'entries_open', closesInDays: 4,
-          closesAt: '2026-08-14 09:00 UTC', timeZone: 'UTC',
-        })),
+        cell: actionCell(row({
+          slug: 'korea', status: 'entries_open',
+          // 15:30 UTC on 31 July is already 1 August in Seoul — CONVERSION,
+          // not a trimmed suffix (contract §7.1). Trimming would name the
+          // wrong day here, which is exactly why the rule exists.
+          closesAt: '2026-07-31 15:30 UTC', timeZone: 'Asia/Seoul',
+        }), false),
       }),
     );
-    expect(html).toContain('Closes 14 Aug 2026, 09:00 UTC · 4d');
-    expect(html).not.toContain('closes in 4d');
+    expect(html).toContain('href="/e/korea/enter"');
+    expect(html).toContain('Enter · closes 1 Aug');
+    // No countdown, no offset, no zone spelling.
+    expect(html).not.toMatch(/\bd\b|GMT|KST|UTC/);
+  });
+
+  it('degrades to a bare Enter when the organizer set no deadline', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonStatusCell, { cell: actionCell(row({ slug: 'x', status: 'entries_open' }), false) }),
+    );
+    expect(html).toContain('>Enter</a>');
+    expect(html).not.toContain('closes');
+  });
+
+  it('says Entries closed where entry status is what matters', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonStatusCell, { cell: actionCell(row({ status: 'entries_closed' }), false) }),
+    );
+    expect(html).toContain('Entries closed');
+    expect(html).not.toContain('<a');
   });
 });
 
@@ -309,48 +382,109 @@ describe('NowStrip', () => {
   });
 });
 
-// ---- SeasonCalendar (SP-P8 §2.4) -------------------------------------------
+// ---- SeasonCalendar: one continuous season (P5) -----------------------------
+
+/** The model the page hands the calendar, built the same way the loader does. */
+const model = (rows: SeasonRow[], filters: Filters = NO_FILTERS, now = new Date(Date.UTC(2026, 7, 11))) =>
+  seasonModel(rows, filters, now);
 
 describe('SeasonCalendar', () => {
-  it('renders month headers and a trailing Completed section under Season', () => {
+  it('leads with upcoming months and trails with Earlier this season', () => {
     const html = renderToStaticMarkup(
       h(SeasonCalendar, {
-        view: 'season',
-        rows: [
+        model: model([
           row({ slug: 'a', name: 'Autumn', status: 'entries_open', date: '2026-09-11' }),
           row({ slug: 'b', name: 'Bygone', status: 'completed', date: '2026-05-30' }),
-        ],
+        ]),
       }),
     );
     expect(html).toContain('September 2026');
-    expect(html).toContain('Completed');
+    expect(html).toContain('May 2026');
+    expect(html).toContain('Earlier this season');
     expect(html).toContain('id="calendar"');
-    // Order: the live month leads, the completed section trails.
+    expect(html).toContain('id="past"');
     expect(html.indexOf('Autumn')).toBeLessThan(html.indexOf('Bygone'));
+  });
+
+  it('renders no past heading at all when the season has no past (§2.4)', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonCalendar, {
+        model: model([row({ slug: 'a', name: 'Autumn', status: 'entries_open', date: '2026-09-11' })]),
+      }),
+    );
+    expect(html).not.toContain('Earlier this season');
+    expect(html).not.toContain('id="past"');
+  });
+
+  it('quiets a past row by what it drops, and offers Results only', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonCalendar, {
+        model: model([
+          row({
+            slug: 'b', name: 'Bygone', status: 'completed_winners', date: '2026-05-30',
+            venueName: 'Riverside Hall', locality: 'Winchester, United Kingdom',
+            organizer: 'Wessex BC', winnersPublished: true,
+          }),
+        ]),
+      }),
+    );
+    expect(html).toContain('Results');
+    expect(html).not.toContain('Riverside Hall');
+    expect(html).not.toContain('Winchester');
+    expect(html).not.toContain('Wessex BC');
+    // P7: a completed tournament's NAME stays in normal ink — what makes
+    // the past section quieter is the venue/organizer line and the entry
+    // action it does NOT carry, not a greyed-out title.
+    expect(classTokens(html, 'after:absolute')).toContain('text-foreground');
+  });
+
+  it('keeps the venue block on an upcoming row', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonCalendar, {
+        model: model([
+          row({
+            slug: 'a', name: 'Autumn', status: 'entries_open', date: '2026-09-11',
+            venueName: 'Riverside Hall', organizer: 'Wessex BC',
+          }),
+        ]),
+      }),
+    );
+    expect(html).toContain('Riverside Hall · Wessex BC');
+  });
+
+  it('strips a duplicated year stamp from the title the month header already carries', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonCalendar, {
+        model: model([
+          row({ slug: 'a', name: '2026 Taipei Open', status: 'entries_open', date: '2026-09-11' }),
+        ]),
+      }),
+    );
+    expect(html).toContain('September 2026');
+    expect(html).toContain('>Taipei Open<');
+    expect(html).not.toContain('2026 Taipei Open');
   });
 
   it('lists an undated ACTIVE row under its own section, never hidden', () => {
     const html = renderToStaticMarkup(
       h(SeasonCalendar, {
-        view: 'season',
-        rows: [row({ slug: 'u', name: 'Undated Cup', status: 'entries_open', date: null })],
+        model: model([row({ slug: 'u', name: 'Undated Cup', status: 'entries_open', date: null })]),
       }),
     );
     expect(html).toContain('Undated Cup');
     expect(html).toContain('Date to be confirmed');
   });
 
-  // Controller ruling 1: `monthGroupsDesc` drops every unparseable date, so
-  // the Completed view rendered from it alone silently loses a completed
-  // tournament that never got a date — the row the Season view does show.
-  it('keeps an undated COMPLETED row in the Completed view (ruling 1)', () => {
+  // Controller ruling 1: the month grouper drops every unparseable date, so a
+  // page rendered from it alone silently loses a completed tournament that
+  // never got one.
+  it('keeps an undated COMPLETED row in the past half (ruling 1)', () => {
     const html = renderToStaticMarkup(
       h(SeasonCalendar, {
-        view: 'completed',
-        rows: [
+        model: model([
           row({ slug: 'd', name: 'Dated Cup', status: 'completed', date: '2026-05-30' }),
           row({ slug: 'u', name: 'Undated Cup', status: 'completed_winners', date: null }),
-        ],
+        ]),
       }),
     );
     expect(html).toContain('Dated Cup');
@@ -359,29 +493,15 @@ describe('SeasonCalendar', () => {
     expect(html.indexOf('Dated Cup')).toBeLessThan(html.indexOf('Undated Cup'));
   });
 
-  it('renders one ungrouped list under Taking entries — no month headers', () => {
-    const html = renderToStaticMarkup(
-      h(SeasonCalendar, {
-        view: 'open',
-        rows: [row({ slug: 'a', name: 'Autumn', status: 'entries_open', date: '2026-09-11' })],
-      }),
-    );
-    expect(html).toContain('Autumn');
-    // No section header at all — the `sr-only` long date carries the month
-    // words on every row, so the header ELEMENT is what "ungrouped" means.
-    expect(html).not.toContain('<h3');
-  });
-
   it('makes the row one stretched link and carries the date for AT', () => {
     const html = renderToStaticMarkup(
       h(SeasonCalendar, {
-        view: 'open',
-        rows: [
+        model: model([
           row({
             slug: 'a b', name: 'Autumn', status: 'entries_open', date: '2026-09-11',
             venueName: 'Hall', organizer: 'Wessex CBA', eventCount: 3,
           }),
-        ],
+        ]),
       }),
     );
     expect(html).toContain('href="/e/a%20b"');
@@ -391,21 +511,20 @@ describe('SeasonCalendar', () => {
     expect(html).not.toContain('events</span>');
   });
 
-  // Task 11 live QA (380x840), R11: the status cell held `min-w-[8rem]
-  // shrink-0` UNCONDITIONALLY around a chip that cannot wrap, which set the
+  // Task 11 live QA (380x840), R11: the action cell held `min-w-[8rem]
+  // shrink-0` UNCONDITIONALLY around a label that cannot wrap, which set the
   // card's min-content width to ~364px inside a 348px content box — the page
   // scrolled sideways and the control row could not wrap. The fixed column is
-  // a desktop property; below `sm:` the status drops under the name block.
-  it('drops the status under the name block below sm: (R11, 380px)', () => {
+  // a desktop property; below `sm:` the action drops under the name block.
+  it('drops the action under the name block below sm: (R11, 380px)', () => {
     const html = renderToStaticMarkup(
       h(SeasonCalendar, {
-        view: 'open',
-        rows: [
+        model: model([
           row({
-            slug: 'a', name: 'Autumn', status: 'entries_open', closesInDays: 4,
+            slug: 'a', name: 'Autumn', status: 'entries_open',
             date: '2026-09-11', venueName: 'Hall', eventCount: 3,
           }),
-        ],
+        ]),
       }),
     );
 
@@ -413,7 +532,7 @@ describe('SeasonCalendar', () => {
     expect(classTokens(html, 'sm:flex-row')).toEqual(
       expect.arrayContaining(['flex', 'flex-col', 'min-w-0', 'sm:items-center']),
     );
-    // Every fixed-width property on the status column is breakpoint-scoped —
+    // Every fixed-width property on the action column is breakpoint-scoped —
     // a bare `min-w-[8rem]`/`shrink-0` token here is the defect returning.
     const status = classTokens(html, 'sm:min-w-[8rem]');
     expect(status).toEqual(
@@ -429,127 +548,75 @@ describe('SeasonCalendar', () => {
   it('renders no sr-only date line for a row with no parseable date', () => {
     const html = renderToStaticMarkup(
       h(SeasonCalendar, {
-        view: 'open',
-        rows: [row({ slug: 'u', name: 'Undated', status: 'entries_open', date: null })],
+        model: model([row({ slug: 'u', name: 'Undated', status: 'entries_open', date: null })]),
       }),
     );
-    expect(classTokens(html, 'sr-only')).toEqual([]);
+    // The only `sr-only` element left is the outline heading; there is no
+    // spoken date line, because there is no date to speak.
+    expect(html.match(/class="sr-only"/g)).toHaveLength(1);
+    expect(html).toContain('>Upcoming tournaments<');
   });
 });
 
-// ---- SeasonControls (SP-P8 §2.3) -------------------------------------------
+// ---- SeasonControls: season selector + search (P5) ---------------------------
 
 describe('SeasonControls', () => {
-  const counts = { takingEntries: 2, completed: 3 };
-
-  it('renders live counts on the segments', () => {
-    const html = renderToStaticMarkup(h(SeasonControls, { filters: NO_FILTERS, counts }));
-    expect(html).toContain('Entries open · 2');
-    expect(html).toContain('Completed · 3');
-    expect(html).toContain('Live &amp; upcoming');
+  it('offers each published season and an all-seasons escape, and no lifecycle segment', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonControls, { filters: NO_FILTERS, season: 2026, years: [2026, 2025] }),
+    );
+    expect(html).toContain('aria-label="Season"');
+    expect(html).toContain('href="/e/?year=2026#calendar"');
+    expect(html).toContain('href="/e/?year=2025#calendar"');
+    expect(html).toContain('href="/e/?year=all#calendar"');
+    // The retired lifecycle vocabulary leaves nothing behind.
+    for (const gone of ['Live &amp; upcoming', 'Entries open ·', 'Completed ·', 'Filters', '<details']) {
+      expect(html).not.toContain(gone);
+    }
   });
 
-  it('keeps search a GET form aimed at the calendar, carrying the date filters', () => {
+  it('marks the season on screen as current, without making it a dead control', () => {
     const html = renderToStaticMarkup(
-      h(SeasonControls, { filters: { ...NO_FILTERS, preset: '7d', view: 'completed', scopeExplicit: true }, counts }),
+      h(SeasonControls, { filters: { year: 2025, q: '' }, season: 2025, years: [2026, 2025] }),
+    );
+    expect(html).toMatch(/href="\/e\/\?year=2025#calendar" aria-current="true"/);
+  });
+
+  it('keeps a season older than the offered ones selectable when a URL named it', () => {
+    const years = [2026, 2025, 2024, 2023, 2022, 2021, 2019];
+    const html = renderToStaticMarkup(
+      h(SeasonControls, { filters: { year: 2019, q: '' }, season: 2019, years }),
+    );
+    expect(html).toContain('href="/e/?year=2019#calendar"');
+    expect(html).not.toContain('2020');
+  });
+
+  it('keeps search a GET form aimed at the calendar, carrying the RESOLVED season', () => {
+    const html = renderToStaticMarkup(
+      h(SeasonControls, { filters: NO_FILTERS, season: 2026, years: [2026] }),
     );
     const form = html.match(/<form[^>]*>/)?.[0] ?? '';
     expect(form).toContain('method="get"');
     expect(form).toContain('action="/e/#calendar"');
-    expect(html).toMatch(/<input type="hidden" name="preset" value="7d"/);
-    expect(html).toMatch(/<input type="hidden" name="view" value="completed"/);
+    expect(form).toContain('role="search"');
+    // Not `filters.year` (null on a bare visit): searching must stay in the
+    // season on screen rather than silently widening to every season.
+    expect(html).toMatch(/<input type="hidden" name="year" value="2026"/);
   });
 
-  it('segments preserve the search text and the date filters, and drop the default view', () => {
+  it('carries the all-seasons scope through a search', () => {
     const html = renderToStaticMarkup(
-      h(SeasonControls, { filters: { ...NO_FILTERS, q: 'gold', preset: '7d' }, counts }),
+      h(SeasonControls, { filters: { year: 'all', q: 'gold' }, season: null, years: [2026] }),
     );
-    expect(html).toContain('href="/e/?q=gold&amp;view=open&amp;preset=7d#calendar"');
-    // Season is `parseFilters`' default, so its link names no view at all.
-    expect(html).toContain('href="/e/?q=gold&amp;preset=7d#calendar"');
+    expect(html).toMatch(/<input type="hidden" name="year" value="all"/);
+    expect(html).toMatch(/name="q"[^>]*value="gold"/);
   });
 
-  it('hides the date filters behind a native details panel — no client JS', () => {
-    const html = renderToStaticMarkup(h(SeasonControls, { filters: NO_FILTERS, counts }));
-    expect(html).toContain('<details');
-    expect(html).toContain('<summary');
-    expect(html).toContain('Filters');
-    expect(html).not.toContain('onclick');
-    // The three presets and the free range, as native controls.
-    // "This season" is the checked default, and its value is empty so the
-    // loader's `canonicalQuery` drops it from the submitted URL entirely.
-    expect(html).toMatch(/<input[^>]*name="preset"[^>]*checked=""[^>]*value=""/);
-    expect(html).toContain('Next 7 days');
-    expect(html).toContain('Next 3 months');
-    expect(html).toMatch(/<input[^>]*type="date"[^>]*name="from"/);
-    expect(html).toMatch(/<input[^>]*type="date"[^>]*name="to"/);
-  });
-
-  it('badges the summary with the count of active date filters only', () => {
-    expect(renderToStaticMarkup(h(SeasonControls, { filters: NO_FILTERS, counts }))).not.toContain(
-      'Filters · ',
-    );
-    const two = renderToStaticMarkup(
-      h(SeasonControls, {
-        filters: { ...NO_FILTERS, from: '2026-09-01', to: '2026-09-30', q: 'gold' },
-        counts,
-      }),
-    );
-    expect(two).toContain('Filters · 2');
-  });
-
-  it('renders no active-filter links or row in the default state (§7 trap 4)', () => {
+  it('keeps the search text when the reader switches season', () => {
     const html = renderToStaticMarkup(
-      h(SeasonControls, { filters: NO_FILTERS, counts: { takingEntries: 0, completed: 0 } }),
+      h(SeasonControls, { filters: { year: 2026, q: 'gold' }, season: 2026, years: [2026, 2025] }),
     );
-    expect(html).not.toContain('data-active-filter-row');
-  });
-
-  it('renders a removable text link per active date filter', () => {
-    const html = renderToStaticMarkup(
-      h(SeasonControls, {
-        filters: { ...NO_FILTERS, preset: '7d' },
-        counts: { takingEntries: 0, completed: 0 },
-      }),
-    );
-    expect(html).toContain('data-active-filter-row');
-    expect(html).toContain('Next 7 days');
-    expect(html).toContain('Clear all');
-    // Removing one filter is a link to the same query minus that param.
-    expect(html).toContain('href="/e/#calendar"');
-  });
-
-  it('emits no link for an UNPARSEABLE bound — it filters nothing', () => {
-    const html = renderToStaticMarkup(
-      h(SeasonControls, {
-        filters: { ...NO_FILTERS, preset: '7d', from: 'abc' },
-        counts: { takingEntries: 0, completed: 0 },
-      }),
-    );
-    expect(html).toContain('data-active-filter-row');
-    expect(html).toContain('Next 7 days');
-    expect(html).not.toContain('From abc');
-  });
-
-  it('labels a legacy 30d link honestly, though no radio offers it (D6)', () => {
-    const html = renderToStaticMarkup(
-      h(SeasonControls, {
-        filters: { ...NO_FILTERS, preset: '30d' },
-        counts: { takingEntries: 0, completed: 0 },
-      }),
-    );
-    expect(html).toContain('Next 30 days');
-  });
-
-  it('names both custom bounds as their own chips', () => {
-    const html = renderToStaticMarkup(
-      h(SeasonControls, {
-        filters: { ...NO_FILTERS, from: '2026-09-01', to: '2026-09-30' },
-        counts: { takingEntries: 0, completed: 0 },
-      }),
-    );
-    expect(html).toContain('From 2026-09-01');
-    expect(html).toContain('To 2026-09-30');
+    expect(html).toContain('href="/e/?q=gold&amp;year=2025#calendar"');
   });
 });
 
@@ -647,20 +714,26 @@ describe('HeroHeader', () => {
 // ---- TabBar ----------------------------------------------------------------
 
 describe('TabBar', () => {
-  const hrefFor = (tab: string) => (tab === 'overview' ? '/e/s' : `/e/s?tab=${tab}`);
+  // Contract §11: the bar is BUILT by the frame (`frameTabs`) and handed
+  // here whole, so every tournament route renders the same one.
+  const tabs: FrameTab[] = [
+    { id: 'overview', label: 'Overview', href: '/e/s' },
+    { id: 'schedule', label: 'Schedule', href: '/e/s/schedule' },
+    { id: 'draws', label: 'Draws', href: '/e/s?tab=draws' },
+    { id: 'players', label: 'Players', href: '/e/s?tab=players' },
+    { id: 'documents', label: 'Documents', href: '/e/s/regulations' },
+  ];
 
   it('renders nothing below two entries — a one-tab bar is a placeholder', () => {
     expect(
-      renderToStaticMarkup(h(TabBar, { tabs: ['overview'], active: 'overview', hrefFor })),
+      renderToStaticMarkup(h(TabBar, { tabs: tabs.slice(0, 1), active: 'overview' })),
     ).toBe('');
   });
 
   it('is a labelled nav of links with aria-current on the active one', () => {
-    const html = renderToStaticMarkup(
-      h(TabBar, { tabs: ['overview', 'draws', 'players'], active: 'draws', hrefFor }),
-    );
+    const html = renderToStaticMarkup(h(TabBar, { tabs: tabs.slice(0, 4), active: 'draws' }));
     expect(html).toContain('aria-label="Tournament sections"');
-    expect(html.match(/<a /g)).toHaveLength(3);
+    expect(html.match(/<a /g)).toHaveLength(4);
     const active = html.match(/<a[^>]*aria-current="page"[^>]*>[^<]*/g) ?? [];
     expect(active).toHaveLength(1);
     expect(active[0]).toContain('Draws');
@@ -669,13 +742,41 @@ describe('TabBar', () => {
     expect(html).not.toContain('disabled');
   });
 
-  it('seats Schedule second, after Overview (ADR 0028 order)', () => {
-    const html = renderToStaticMarkup(
-      h(TabBar, { tabs: ['overview', 'draws', 'players'], active: 'schedule', hrefFor, scheduleHref: '/e/s/schedule' }),
-    );
+  it('seats Schedule second and Documents last (ADR 0028 + contract §11.1)', () => {
+    const html = renderToStaticMarkup(h(TabBar, { tabs, active: 'documents' }));
     const labels = [...html.matchAll(/>([^<]+)<\/a>/g)].map((m) => m[1]);
-    expect(labels).toEqual(['Overview', 'Schedule', 'Draws', 'Players']);
-    expect(html).toMatch(/<a href="\/e\/s\/schedule" aria-current="page"/);
+    expect(labels).toEqual(['Overview', 'Schedule', 'Draws', 'Players', 'Documents']);
+    expect(html).toMatch(/<a href="\/e\/s\/regulations" aria-current="page"/);
+  });
+});
+
+// ---- Breadcrumbs -----------------------------------------------------------
+
+describe('Breadcrumbs', () => {
+  it('links every ancestor and marks the current segment, which is not a link', () => {
+    const html = renderToStaticMarkup(
+      h(Breadcrumbs, {
+        crumbs: [
+          { label: 'Tournaments', href: '/e/' },
+          { label: 'Korea Masters', href: '/e/korea' },
+          { label: 'Draws', href: '/e/korea?tab=draws' },
+          { label: "Men's Singles", href: null },
+        ],
+      }),
+    );
+    expect(html).toContain('aria-label="Breadcrumb"');
+    expect(html.match(/<a /g)).toHaveLength(3);
+    expect(html).toContain('href="/e/"');
+    expect(html).toContain('href="/e/korea"');
+    // The current page is text, never a link back to itself.
+    expect(html).toMatch(/<span aria-current="page"[^>]*>Men&#x27;s Singles<\/span>/);
+    expect(html).not.toContain('href="/e/korea/draws');
+  });
+
+  it('renders nothing when there is no trail to show', () => {
+    expect(
+      renderToStaticMarkup(h(Breadcrumbs, { crumbs: [{ label: 'Tournaments', href: null }] })),
+    ).toBe('');
   });
 });
 
@@ -710,17 +811,27 @@ describe('SegmentedNav', () => {
 
 // ---- EventRow --------------------------------------------------------------
 
-describe('EventRow', () => {
+/** A published draw card, reduced to what this row now reads. */
+function card(overrides: Partial<DrawCardDTO> = {}): DrawCardDTO {
+  return {
+    drawKey: 'MS', eventCode: 'MS', discipline: "Men's Singles", kind: 'se',
+    size: 16, drawParticipantCount: 16, hasConsolation: true,
+    matchCoverage: { imported: 0, expected: null, missing: null },
+    recordScope: 'full_draw', topologyScope: 'full_draw', historical: false,
+    sourceUrl: null, roundCount: 4, champions: [], finalists: [],
+    remainingMatchCount: 3, progress: null,
+    ...overrides,
+  } as DrawCardDTO;
+}
+
+describe('EventRow (public-visual-fixes P6: name · entrants · progress · Open)', () => {
   it('shows exactly one count, in one unit, once a draw is published (V3-PE04.2)', () => {
-    const draw = {
-      drawKey: 'ms', eventCode: 'MS', discipline: "Men's Singles", kind: 'se',
-      size: 8, drawParticipantCount: 6, hasConsolation: false,
-      matchCoverage: { imported: 0, expected: 7, missing: 7 },
-      recordScope: 'event', topologyScope: 'event', historical: false,
-      sourceUrl: null, roundCount: 3, champions: [], finalists: [],
-      remainingMatchCount: null,
-    } as DrawCardDTO;
-    const html = renderToStaticMarkup(h(EventRow, { event: event({ registrationCount: 7 }), draw, entrantsHref: null }));
+    const html = renderToStaticMarkup(
+      h(EventRow, {
+        event: event({ registrationCount: 7 }),
+        draw: card({ size: 8, drawParticipantCount: 6 }),
+      }),
+    );
     // The draw's own participant count wins over the registration count —
     // never both, and never a zero-looking mismatch between them.
     const countCell = html.match(/<p class="text-sm tabular-nums[^>]*>([^<]*)<\/p>/)?.[1];
@@ -732,7 +843,6 @@ describe('EventRow', () => {
     const html = renderToStaticMarkup(
       h(EventRow, {
         event: event({ code: 'mens_doubles_final', discipline: 'mens_doubles_final' }),
-        entrantsHref: null,
       }),
     );
     expect(html).toContain('Mens Doubles');
@@ -740,87 +850,97 @@ describe('EventRow', () => {
   });
 
   it('labels registration rows with one unit, never "of M" (G2 declined)', () => {
-    const html = renderToStaticMarkup(h(EventRow, { event: event(), entrantsHref: null }));
+    const html = renderToStaticMarkup(h(EventRow, { event: event() }));
     expect(html).toContain('7 players');
     expect(html).not.toMatch(/7 of \d/);
   });
 
-  it('labels the constraints and the open state as text + tone', () => {
-    const html = renderToStaticMarkup(
-      h(EventRow, { event: event({ ageBracketed: true }), entrantsHref: null }),
+  it('states the entry state as progress while there is no draw to describe', () => {
+    expect(renderToStaticMarkup(h(EventRow, { event: event() }))).toMatch(
+      /text-status-live[^>]*>Entries open</,
     );
-    expect(html).toContain('Men');
-    expect(html).toContain('Age-restricted');
-    expect(html).toMatch(/text-status-live[^>]*>Open</);
+    expect(renderToStaticMarkup(h(EventRow, { event: event({ isOpen: false }) }))).toContain(
+      'Entries closed',
+    );
   });
 
   it.each([
-    [null, 'Open to all'],
-    ['F', 'Women'],
-    ['mixed', 'mixed'],
-  ])('labels constraint %o as %s', (genderConstraint, label) => {
+    [{ state: 'in_play', roundLabel: 'R16', startTime: null }, 'R16 in play'],
+    [{ state: 'scheduled', roundLabel: 'Final', startTime: '14:00' }, 'Final 14:00'],
+    [{ state: 'to_play', roundLabel: 'QF', startTime: null }, 'QF to play'],
+    [{ state: 'complete', roundLabel: null, startTime: null }, 'Complete'],
+  ])('states real progress %o as "%s"', (progress, expected) => {
     const html = renderToStaticMarkup(
-      h(EventRow, { event: event({ genderConstraint }), entrantsHref: null }),
+      h(EventRow, {
+        event: event({ isOpen: false }),
+        draw: card({ progress: progress as DrawCardDTO['progress'] }),
+        drawHref: '/e/s/draws/MS',
+        slug: 's',
+      }),
     );
-    expect(html).toContain(label);
+    expect(html).toContain(expected);
   });
 
-  it('marks a closed event with the done tone', () => {
+  it('drops the derivable draw description the index used to repeat', () => {
     const html = renderToStaticMarkup(
-      h(EventRow, { event: event({ isOpen: false }), entrantsHref: null }),
+      h(EventRow, {
+        event: event({ isOpen: false }),
+        draw: card(),
+        drawHref: '/e/s/draws/MS',
+        slug: 's',
+      }),
     );
-    expect(html).toMatch(/text-status-done[^>]*>Closed</);
-  });
-
-  it('offers an Entrants button when given a directory link and entries exist', () => {
-    const html = renderToStaticMarkup(
-      h(EventRow, { event: event(), entrantsHref: '/e/s?tab=players' }),
-    );
-    expect(html).toContain('href="/e/s?tab=players"');
-    expect(html).toContain('>Entrants</a>');
-    expect(html).not.toContain('>Draw</a>');
-  });
-
-  it('adds the Draw button and the draw facts once a card is published (ADR 0028)', () => {
-    const card = {
-      drawKey: 'MS', eventCode: 'MS', discipline: "Men's Singles", kind: 'se' as const, size: 16,
-      hasConsolation: true, matchCoverage: { imported: 0, expected: null, missing: null },
-      recordScope: 'full_draw', topologyScope: 'full_draw', historical: false, sourceUrl: null,
-      roundCount: 4, champions: [], finalists: [], remainingMatchCount: 3,
-    };
-    const html = renderToStaticMarkup(
-      h(EventRow, { event: event({ isOpen: false }), entrantsHref: null, draw: card, drawHref: '/e/s/draws/MS', slug: 's' }),
-    );
-    expect(html).toContain('href="/e/s/draws/MS"');
-    expect(html).toContain('>View draw</a>');
-    expect(html).toContain('4 rounds');
-    expect(html).toContain('with consolation');
-    // V3-PE04.3: the action already says the draw exists — the state column
-    // does not repeat "Draw published" beside it.
+    // Round counts, consolation, eligibility and the publication message are
+    // all either derivable from the draw itself or duplicates of the link.
+    expect(html).not.toContain('4 rounds');
+    expect(html).not.toContain('with consolation');
+    expect(html).not.toContain('Open to all');
     expect(html).not.toContain('Draw published');
+    // The format is not a distinguishing fact when every row shares it.
+    expect(html).not.toContain('Elimination');
   });
 
-  it('explains a published draw that has no rounds yet', () => {
-    const card = {
-      drawKey: 'MS', eventCode: 'MS', discipline: "Men's Singles", kind: 'se' as const, size: 0,
-      hasConsolation: false, matchCoverage: { imported: 0, expected: null, missing: null },
-      recordScope: 'full_draw', topologyScope: 'full_draw', historical: false, sourceUrl: null,
-      roundCount: 0, champions: [], finalists: [], remainingMatchCount: null,
-    };
-    const html = renderToStaticMarkup(h(EventRow, { event: event({ isOpen: false }), entrantsHref: null, draw: card, drawHref: '/e/s/draws/MS', slug: 's' }));
-    expect(html).toContain('Draw published · rounds to be scheduled');
-    expect(html).not.toContain('0 rounds');
+  it('shows the format only when the index says the formats differ', () => {
+    const html = renderToStaticMarkup(
+      h(EventRow, {
+        event: event({ isOpen: false }),
+        draw: card({ kind: 'rr' }),
+        drawHref: '/e/s/draws/MS',
+        slug: 's',
+        showFormat: true,
+      }),
+    );
+    expect(html).toContain('Round robin');
   });
 
-  it('offers no link when the entrants tab is hidden or nobody entered', () => {
-    expect(
-      renderToStaticMarkup(h(EventRow, { event: event(), entrantsHref: null })),
-    ).not.toContain('<a ');
-    expect(
-      renderToStaticMarkup(
-        h(EventRow, { event: event({ entryCount: 0 }), entrantsHref: '/e/s?tab=entrants' }),
-      ),
-    ).not.toContain('<a ');
+  it('is ONE native link per row, with a focus ring and no nested link', () => {
+    const html = renderToStaticMarkup(
+      h(EventRow, {
+        event: event({ isOpen: false }),
+        draw: card({
+          champions: [
+            { identity: { id: 'p1', name: 'Ada Lovelace' }, resolution: 'resolved', label: null },
+          ],
+        }),
+        drawHref: '/e/s/draws/MS',
+        slug: 's',
+      }),
+    );
+    expect((html.match(/<a /g) ?? []).length).toBe(1);
+    expect(html).toContain('href="/e/s/draws/MS"');
+    expect(html).toContain('aria-label="Men&#x27;s singles draw"');
+    expect(html).toContain('focus-visible:ring-accent');
+    expect(html).toContain('>Open<');
+    // The champion still reads, as text: a link inside this link is not a
+    // link, so no `/players/` route escapes here.
+    expect(html).toContain('Ada Lovelace');
+    expect(html).not.toContain('/players/');
+    // The Entrants button is gone with the second link.
+    expect(html).not.toContain('>Entrants</a>');
+  });
+
+  it('offers no link at all before a draw is published', () => {
+    expect(renderToStaticMarkup(h(EventRow, { event: event() }))).not.toContain('<a ');
   });
 });
 
@@ -874,15 +994,71 @@ describe('EntrantsList (SP-P7 §3.2 — alphabetical, letter-grouped)', () => {
     expect(html).not.toContain('null');
   });
 
-  it('ships the filter substrate: data attributes, mount point, script', () => {
+  it('ships the filter substrate: data attributes, the native form, the script', () => {
     const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
     expect(html).toContain('data-name="tom barker"');
     expect(html).toContain('data-club="riverside bc"');
     expect(html).toContain('id="entrants-filter-root"');
     expect(html).toContain('src="/e/assets/entrants-filter.js"');
     expect(html).toContain('3 entrants');
-    // The no-matches line ships hidden; only the script reveals it.
+    // The no-matches line ships hidden while there is a list; only a search
+    // that empties it (server- or script-side) reveals it.
     expect(html).toMatch(/<p[^>]*data-no-matches[^>]*hidden/);
+  });
+
+  // ---- public-visual-fixes P7 ---------------------------------------------
+
+  it('searches natively: a GET form with an icon, a real sr-only label and no visible Find button', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, {
+        slug: 'spring-open',
+        entrants,
+        noun: 'player' as const,
+        action: '/e/spring-open',
+        hidden: [{ name: 'tab', value: 'players' }],
+      }),
+    );
+    // A real form, submitting by GET to the page it is on — Enter works with
+    // no script at all, and the query lands in a shareable URL.
+    expect(html).toMatch(/<form[^>]*action="\/e\/spring-open"[^>]*method="get"/);
+    // The other URL state travels with the search: without this the search
+    // would drop the reader back onto the Overview tab.
+    expect(html).toContain('<input type="hidden" name="tab" value="players"/>');
+    expect(html).toContain('name="q"');
+    // The label is REAL and associated — but not a visible "Find a player"
+    // repeating the placeholder underneath it.
+    expect(html).toMatch(/<label for="entrants-search" class="sr-only">Find a player<\/label>/);
+    expect(html).toContain('placeholder="Name or club"');
+    // The submit exists for assistive tech and the keyboard, and is invisible.
+    expect(html).toMatch(/<button type="submit" class="sr-only">Search<\/button>/);
+    expect(html).not.toMatch(/>Find<\/button>/);
+    expect(html).not.toMatch(/>Apply<\/button>/);
+    // The magnifier is decoration, so it is hidden from the accessibility tree.
+    expect(html).toContain('<svg width="16" height="16"');
+  });
+
+  it('applies ?q= on the SERVER, so the directory search works with no script', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, { slug: 'spring-open', entrants, noun: 'player' as const, query: 'northside' }),
+    );
+    // A club-only match still finds the person (same folding as the script).
+    expect(html).toContain('Tessa Ngo');
+    expect(html).not.toContain('Tom Barker');
+    expect(html).not.toContain('Priya');
+    // The count switches register while a query is on, exactly as the
+    // script's own count does.
+    expect(html).toContain('1 result');
+    // The field keeps what was typed.
+    expect(html).toContain('value="northside"');
+  });
+
+  it('shows the no-matches line when a server-side search empties the list', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, { slug: 'spring-open', entrants, noun: 'player' as const, query: 'nobody at all' }),
+    );
+    expect(html).toContain('No players match your search.');
+    expect(html).not.toMatch(/<p[^>]*data-no-matches[^>]*hidden/);
+    expect(html).toContain('0 results');
   });
 
   it('still carries no contact data — the strict projection, rendered', () => {
@@ -912,6 +1088,53 @@ describe('EntrantsList (SP-P7 §3.2 — alphabetical, letter-grouped)', () => {
     expect(html).toContain('3 entrants');
   });
 
+  it('composes the count, the search mount and the A-Z index into ONE sticky toolbar (P2)', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    const toolbar = html.match(/<div[^>]*data-directory-toolbar[\s\S]*?<\/nav><\/div>/)?.[0] ?? '';
+    expect(toolbar).not.toBe('');
+    // All three live inside it, so they cannot scroll apart on a long page.
+    expect(toolbar).toContain('data-search-count');
+    expect(toolbar).toContain('id="entrants-filter-root"');
+    expect(toolbar).toContain('aria-label="Jump to letter"');
+    // Sticky, with the offset stated (nothing else on this tier is sticky).
+    expect(toolbar).toMatch(/class="[^"]*\bsticky\b[^"]*\btop-0\b/);
+  });
+
+  it('makes every letter jump a keyboard jump that clears the sticky toolbar', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    const section = html.match(/<section[^>]*id="dir-P"[^>]*>/)?.[0] ?? '';
+    expect(section).not.toBe('');
+    // Focus follows the fragment only if the target can hold focus.
+    expect(section).toContain('tabindex="-1"');
+    // ...and lands below the bar it was clicked in, not underneath it.
+    expect(section).toContain('scroll-mt-28');
+    // The index link names its destination for anyone who arrives on it by
+    // keyboard — a bare "P" is not a destination.
+    expect(html).toContain('aria-label="Jump to P"');
+    expect(html).toContain('data-letter-jump="dir-P"');
+  });
+
+  it('writes accent-folded search text, so a plain-ASCII query still finds the person', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, {
+        slug: 'spring-open',
+        entrants: [
+          {
+            playerKey: 'entry-dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+            person: { identity: { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', name: 'Rasmus Kjær' }, resolution: 'resolved' as const, label: null },
+            club: 'Nørrebro BK',
+            eventCodes: ['MD'],
+          },
+        ],
+      }),
+    );
+    // The DISPLAYED name keeps its diacritics; only the search key is folded.
+    expect(html).toContain('Rasmus Kjær');
+    expect(html).toContain('Nørrebro BK');
+    expect(html).toContain('data-name="rasmus kjaer"');
+    expect(html).toContain('data-club="norrebro bk"');
+  });
+
   it('renders no A-Z index for a single-letter roster (nothing useful to jump between)', () => {
     const html = renderToStaticMarkup(
       h(EntrantsList, { slug: 'spring-open', entrants: [entrants[0]] }),
@@ -926,6 +1149,8 @@ describe('StickyTotalBar', () => {
   const base = {
     chip: OPEN_CHIP,
     deadline: '2026-08-14 23:59 UTC',
+    // P7: the bar converts the deadline into the tournament's own zone.
+    timeZone: 'Europe/London',
     quoteAction: '/e/api/quote/spring-open',
   };
 
@@ -959,7 +1184,11 @@ describe('StickyTotalBar', () => {
       h(StickyTotalBar, { ...base, state: { kind: 'unquoted' } }),
     );
     expect(html).toContain('Entries open · closes in 4d');
-    expect(html).toContain('14 Aug 2026, 23:59 UTC');
+    // P7: CONVERTED into the tournament's zone, and with no zone spelling —
+    // 23:59 UTC on 14 August is 00:59 on the 15th in London (BST), which is
+    // exactly why trimming the suffix off a UTC rendering is not a fix.
+    expect(html).toContain('15 Aug 2026, 00:59');
+    expect(html).not.toContain('UTC');
   });
 
   it('omits the moment when no deadline is known, and the countdown when closed', () => {
@@ -992,6 +1221,7 @@ describe('StickyTotalBar', () => {
         state: { kind: 'unquoted' },
         chip: OPEN_CHIP,
         deadline: '2026-08-14 23:59 UTC',
+        timeZone: 'Europe/London',
         quoteAction: '/e/api/quote/spring-open',
       }),
     );

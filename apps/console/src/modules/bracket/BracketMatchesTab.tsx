@@ -19,6 +19,7 @@ import { useListScrollRestore } from '../../hooks/useListScrollRestore';
 import { useCanEdit } from '../../hooks/useCanEdit';
 import {
   ActionsBar,
+  OPERATOR_INVENTORY_PAGE_SIZE,
   DenseDataTable,
   DenseDataToolbar,
   DetailDock,
@@ -61,6 +62,7 @@ import {
 } from './BracketMatchControls';
 import { type CommitEventFn } from './BracketPlayerFields';
 import { formatBracketSlot } from './formatBracketSlot';
+import { TEXT_SECONDARY } from '../../lib/textRoles';
 import {
   exportBracketMatchesXlsx,
   type BracketMatchExportRow,
@@ -93,7 +95,10 @@ export function BracketMatchesTab({
   const canEdit = useCanEdit();
   // Preserve the shared ?q= deep-link contract alongside namespaced table state.
   const [query, setQuery] = useSearchParamState('q', '');
-  const [storedDenseState, denseActions] = useDenseDataState({ pageSize: 100 }, 'bracket-matches');
+  const [storedDenseState, denseActions] = useDenseDataState(
+    { pageSize: OPERATOR_INVENTORY_PAGE_SIZE },
+    'bracket-matches',
+  );
   const denseState = { ...storedDenseState, search: query };
   const setDenseState = (next: typeof denseState) => {
     denseActions.setState(next);
@@ -230,7 +235,11 @@ export function BracketMatchesTab({
       ));
     }
     return (
-      <span className="text-xs italic text-muted-foreground">
+      // P2: an unresolved side is a FACT about the draw ("Winner of R32·11",
+      // "To be decided"), not a dead control. Italic keeps it distinguishable
+      // from a resolved name without colour; the ink stays in the secondary
+      // register rather than the muted one a disabled button wears.
+      <span className={`text-xs italic ${TEXT_SECONDARY}`}>
         {formatSideLines(sideModel)[0]}
       </span>
     );
@@ -509,7 +518,7 @@ export function BracketMatchesTab({
               // "the Events and Draw tabs" named a nav that stopped existing
               // when Events folded into Draws (2026-06-26). Bracket has
               // Roster / Draws / Matches / Configuration.
-              body="Matches come from the draws. Create and generate a draw in Bracket → Draws; its matches appear here and feed Operations."
+              body="Matches come from the draws. Create and generate a draw in Bracket, then Draws; its matches appear here and feed Operations."
             />
           ) : (
             <>

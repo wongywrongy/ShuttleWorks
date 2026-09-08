@@ -13,6 +13,7 @@ from entries.entries_site import (
     PersonReferenceDTO,
     PlayerDrawPathDTO,
     PlayerEventDTO,
+    PlayerHistoryEntryDTO,
     PlayerMatchDTO,
     PlayerMatchSideDTO,
     PlayerPageDTO,
@@ -30,18 +31,19 @@ EXPECTED = {
     PersonReferenceDTO: {"identity", "resolution", "label"},
     EntrantRowDTO: {"person", "club", "eventCodes"},
     ReserveRowDTO: {"eventCode", "position", "person", "club"},
-    DrawCardDTO: {"drawKey", "eventCode", "discipline", "kind", "size", "hasConsolation", "matchCoverage", "recordScope", "topologyScope", "roundCount", "champions", "finalists", "drawParticipantCount", "remainingMatchCount", "historical", "sourceUrl"},
+    DrawCardDTO: {"drawKey", "eventCode", "discipline", "kind", "size", "hasConsolation", "matchCoverage", "recordScope", "topologyScope", "roundCount", "champions", "finalists", "drawParticipantCount", "remainingMatchCount", "progress", "historical", "sourceUrl"},  # public-visual-fixes P6: draw progress
     DrawPlayerDTO: {"playerKey", "person", "club", "eventCodes"},
     TeamDTO: {"participantKey", "persons", "club", "seed"},
     HonorDTO: {"persons", "club"},
-    PlayerDrawPathDTO: {"roundLabel", "opponents"},
+    PlayerDrawPathDTO: {"roundLabel", "opponents", "outcome", "score", "reference"},  # operator/public remediation P6: a path STEP states its round, opponents, outcome and score - the arrow-joined sentence is gone
     PlayerEventDTO: {"code", "discipline", "partner", "seed", "drawPath"},
     PlayerMatchSideDTO: {"persons", "placeholder", "winner", "seed", "unresolved"},  # v3 pkg 29: the discriminated Side.unresolved (contract §2.1)
-    PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt", "scoresPublished"},  # v3 pkg 29
-    PlayerPageDTO: {"person", "club", "events", "matches"},
+    PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt", "scoresPublished", "reference", "shortReference", "scheduledDate"},  # v3 pkg 29; public-visual-fixes P3: the shared match reference (state-and-formatting §6.1); operator/public remediation P7: the APPROVED day beside the approved time and court
+    PlayerHistoryEntryDTO: {"slug", "tournamentName", "date", "endDate", "playerKey", "current", "eventCodes", "drawsPublished", "resultsPublished", "events", "expanded"},  # public-visual-fixes P2 (profile v1); operator/public remediation P6: cross-tournament history carries its per-event detail where it is expanded
+    PlayerPageDTO: {"person", "club", "events", "matches", "history"},  # public-visual-fixes P2
     ScheduleDayFacetDTO: {"day", "count"},
     ScheduleSideDTO: {"participantKey", "persons", "placeholder", "unresolved"},  # v3 pkg 29
-    ScheduleMatchDTO: {"matchKey", "source", "eventCode", "discipline", "roundLabel", "status", "scheduledDate", "scheduledTime", "court", "sides", "score", "walkover", "updatedAt"},
+    ScheduleMatchDTO: {"matchKey", "source", "eventCode", "discipline", "roundLabel", "status", "scheduledDate", "scheduledTime", "court", "sides", "score", "walkover", "updatedAt", "reference", "shortReference", "winnerSide"},  # public-visual-fixes P3: the shared match reference + the authoritative outcome
     ScheduleFacetsDTO: {"days", "events", "courts", "states"},
     MyEntryLineDTO: {"eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner", "partnerInviteMailFailed", "shortReference"},  # v3 pkg 24: delivery flag, no person data. pkg 30 (V3-24-1): the reference of the act this line came from - this account's own name for its own submission, no person data
     MyTournamentCardDTO: {"slug", "tournamentName", "orgName", "entrantsPublished", "resultsPublished", "date", "venueName", "status", "feeTotalCents", "submittedAt", "events", "submissionId", "withdrawsUntil", "shortReference"},  # v3 pkg 30 (V3-24-1)

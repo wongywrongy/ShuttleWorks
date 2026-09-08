@@ -37,6 +37,7 @@ import {
   UnitSlot,
 } from '../../platform/engine-config/SettingsControls';
 import { ActiveChoice } from '../../components/ActiveChoice';
+import { NAV_LINK_ROW, NavCaret } from '../../components/NavCaret';
 
 /** Dirty check for the draft. `TournamentConfig` holds an array (`breaks`) and
  *  a record (`courtOverrides`), so a key-by-key `===` sweep would call an
@@ -168,9 +169,10 @@ export function VenueScheduleTab() {
             tid ? (
               <Link
                 to={workflowHref(tid, tournamentKind === 'bracket' ? 'bracket-matches' : 'matches')}
-                className="ml-1 font-medium text-accent hover:underline"
+                className={`ml-1 font-medium text-accent hover:underline ${NAV_LINK_ROW}`}
               >
-                View matches →
+                <span>View matches</span>
+                <NavCaret />
               </Link>
             ) : null
           }

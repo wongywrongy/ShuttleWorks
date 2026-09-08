@@ -705,61 +705,68 @@ function SetupEditor({ tid }: { tid: string }) {
   const Editor = PAGE_EDITORS[page];
 
   return (
-    <div className="flex min-h-full flex-col bg-background">
+    // Same root as every other module surface (`flex h-full min-h-0 flex-col`
+    // + one scrolling region): Setup used `min-h-full` with no scroll region,
+    // so its ActionsBar scrolled away with the form while Configuration's,
+    // Draws' and Matches' stayed pinned. The page title sat at a different
+    // baseline on every scroll position.
+    <div className="flex h-full min-h-0 flex-col bg-background">
       <ActionsBar
         title={PAGE_LABELS[page]}
         status={<span role="status">{loading && !setup ? 'Loading…' : dirty ? 'Unsaved changes' : saved ? 'Saved' : ''}</span>}
       />
-      <PageBody variant="form">
-        <div className="space-y-4">
-          {setup ? (
-            <>
-              {blockingCount ? (
-                <StatusPill tone="red">
-                  {blockingCount} blocking issue{blockingCount === 1 ? '' : 's'}
-                </StatusPill>
-              ) : null}
-              {issues.length ? (
-                <div className="space-y-2">
-                  {issues.map((issue) => (
-                    <Notice
-                      key={`${issue.code}:${issue.path ?? ''}`}
-                      tone={issue.severity === 'blocking' ? 'warning' : 'info'}
-                      title={issue.message}
-                    />
-                  ))}
+      <div className="min-h-0 flex-1 overflow-auto">
+        <PageBody variant="form">
+          <div className="space-y-4">
+            {setup ? (
+              <>
+                {blockingCount ? (
+                  <StatusPill tone="red">
+                    {blockingCount} blocking issue{blockingCount === 1 ? '' : 's'}
+                  </StatusPill>
+                ) : null}
+                {issues.length ? (
+                  <div className="space-y-2">
+                    {issues.map((issue) => (
+                      <Notice
+                        key={`${issue.code}:${issue.path ?? ''}`}
+                        tone={issue.severity === 'blocking' ? 'warning' : 'info'}
+                        title={issue.message}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                <div className="space-y-6" ref={editorRef} key={editorRevision}>
+                  <Editor tid={tid} timezone={timezone} drafts={drafts} onChange={onChange} />
                 </div>
-              ) : null}
-              <div className="space-y-6" ref={editorRef} key={editorRevision}>
-                <Editor tid={tid} timezone={timezone} drafts={drafts} onChange={onChange} />
-              </div>
-              <div className="flex justify-end">
-                <FormActions
-                  dirty={dirty}
-                  saving={saving}
-                  error={error ?? undefined}
-                  cleanReason={saved ? 'Saved' : 'No changes'}
-                  className="flex-wrap justify-end"
-                  onDiscard={() => {
-                    dirtyRef.current = false;
-                    setDirtyKeys([]);
-                    setSaved(false);
-                    if (setup) adopt(setup);
-                    setEditorRevision((value) => value + 1);
-                    void load();
-                  }}
-                  onSave={() => void save()}
-                  saveLabel="Save"
-                />
-              </div>
-            </>
-          ) : loading ? (
-            <div className="rounded border border-border bg-card p-6 text-sm text-muted-foreground">Loading setup…</div>
-          ) : error ? (
-            <Notice tone="warning" title="Setup needs attention">{error}</Notice>
-          ) : null}
-        </div>
-      </PageBody>
+                <div className="flex justify-end">
+                  <FormActions
+                    dirty={dirty}
+                    saving={saving}
+                    error={error ?? undefined}
+                    cleanReason={saved ? 'Saved' : 'No changes'}
+                    className="flex-wrap justify-end"
+                    onDiscard={() => {
+                      dirtyRef.current = false;
+                      setDirtyKeys([]);
+                      setSaved(false);
+                      if (setup) adopt(setup);
+                      setEditorRevision((value) => value + 1);
+                      void load();
+                    }}
+                    onSave={() => void save()}
+                    saveLabel="Save"
+                  />
+                </div>
+              </>
+            ) : loading ? (
+              <div className="rounded border border-border bg-card p-6 text-sm text-muted-foreground">Loading setup…</div>
+            ) : error ? (
+              <Notice tone="warning" title="Setup needs attention">{error}</Notice>
+            ) : null}
+          </div>
+        </PageBody>
+      </div>
     </div>
   );
 }

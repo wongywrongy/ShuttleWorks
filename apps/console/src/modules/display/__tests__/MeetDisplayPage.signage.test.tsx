@@ -13,13 +13,14 @@
  * `?id=`/`?token=` so `useLiveTracking`/`useDisplaySync` never attempt a
  * network call.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MeetDisplayPage } from '../MeetDisplayPage';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { ScheduleDTO, MatchDTO, TournamentConfig, MatchStateDTO, PlayerDTO } from '../../../api/dto';
+import { resolveSignageNameSize } from '../publicDisplay/tvSizing';
 
 const DOUBLES_MATCHES: MatchDTO[] = [
   {
@@ -100,6 +101,13 @@ function seed(states: Record<string, MatchStateDTO> = {}) {
   useMatchStateStore.getState().setMatchStates(states);
 }
 
+/** Seed the schedule/config/state without touching the player roster the
+ *  caller has already set (used by the long-name fixture). */
+function seedNames(states: Record<string, MatchStateDTO> = {}) {
+  useTournamentStore.setState({ config: CONFIG, schedule: SCHEDULE, matches: DOUBLES_MATCHES });
+  useMatchStateStore.getState().setMatchStates(states);
+}
+
 afterEach(() => {
   useTournamentStore.getState().reset();
   useMatchStateStore.getState().reset();
@@ -132,13 +140,14 @@ describe('MeetDisplayPage — venue signage', () => {
 
     const { container } = renderBoard();
 
-    // Contract §3.4: the lane collapses to nothing — no cell, no reserved
-    // width, and no "0–0" anywhere on the board.
-    expect(container.querySelector('[data-testid="court-score-1"]')).toBeNull();
+    // Contract rule 7 (P1): not-started is the ABSENCE of the ledger — no
+    // score column on either side, no reserved width, no "0–0" on the wall.
+    expect(container.querySelector('[data-testid="court-score-1-a"]')).toBeNull();
+    expect(container.querySelector('[data-testid="court-score-1-b"]')).toBeNull();
     expect(container.textContent).not.toMatch(/0\s*[–-]\s*0/);
   });
 
-  it('prints the recorded score once, in the lane between the two sides', () => {
+  it('prints each side\'s score in its own aligned column beside that side (P1)', () => {
     seed({
       m1: {
         matchId: 'm1',
@@ -149,8 +158,11 @@ describe('MeetDisplayPage — venue signage', () => {
     });
 
     renderBoard();
-    expect(screen.getByTestId('court-score-1').textContent).toContain('21');
-    expect(screen.getByTestId('court-score-1').textContent).toContain('18');
+    // P1 rules 1-2: the number beside a name belongs to that name — side A's
+    // column carries 21 and ONLY 21, side B's carries 18. The centred lane
+    // between the two sides, where a number belonged to neither, is gone.
+    expect(screen.getByTestId('court-score-1-a').textContent).toBe('21');
+    expect(screen.getByTestId('court-score-1-b').textContent).toBe('18');
   });
 
   it('hides every score when the board setting is off', () => {
@@ -164,7 +176,8 @@ describe('MeetDisplayPage — venue signage', () => {
     });
 
     const { container } = renderBoard({ board: { ...BOARD, showScores: false } });
-    expect(container.querySelector('[data-testid="court-score-1"]')).toBeNull();
+    expect(container.querySelector('[data-testid="court-score-1-a"]')).toBeNull();
+    expect(container.querySelector('[data-testid="court-score-1-b"]')).toBeNull();
   });
 
   it('makes the court number the largest element on the card', () => {
@@ -239,6 +252,21 @@ describe('MeetDisplayPage — venue signage', () => {
     );
   });
 
+  it('shows the fixed demo instant in venue time without freezing the real clock', () => {
+    vi.stubEnv('VITE_ENVIRONMENT', 'local');
+    vi.stubEnv('VITE_DEMO_NOW', '2026-07-31T05:15:00Z');
+    try {
+      seed();
+      const realBefore = Date.now();
+      renderBoard({ timeZone: 'Asia/Taipei' });
+      expect(screen.getByTestId('board-clock')).toHaveAttribute('dateTime', '2026-07-31T05:15:00.000Z');
+      expect(screen.getByTestId('board-clock')).toHaveTextContent('1:15 PM');
+      expect(Date.now()).toBeGreaterThanOrEqual(realBefore);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('keeps freshness diagnostics off the wall and in the operator preview', () => {
     seed();
     const venue = renderBoard();
@@ -248,6 +276,142 @@ describe('MeetDisplayPage — venue signage', () => {
 
     renderBoard({ preview: true });
     expect(screen.getByTestId('tv-live-status')).toBeInTheDocument();
+  });
+
+  // ── P4 ────────────────────────────────────────────────────────────────
+  it('groups a long doubles pairing into two sides, each score beside its own side', () => {
+    // A real three-game BWF doubles result (handoff-P0, MD R32·1) with names
+    // long enough to wrap on a board card.
+    useTournamentStore.setState({
+      players: [
+        { id: 'a1', name: 'CHIA Aaron', groupId: 'g1', availability: [] },
+        { id: 'a2', name: 'SOH Wooi Yik', groupId: 'g1', availability: [] },
+        { id: 'b1', name: 'HOKI Takuro', groupId: 'g2', availability: [] },
+        { id: 'b2', name: 'KOBAYASHI Yugo', groupId: 'g2', availability: [] },
+      ] as PlayerDTO[],
+    });
+    seedNames({
+      m1: {
+        matchId: 'm1',
+        status: 'started',
+        actualStartTime: new Date().toISOString(),
+        sets: [
+          { sideA: 18, sideB: 21 },
+          { sideA: 21, sideB: 15 },
+          { sideA: 21, sideB: 13 },
+        ],
+      } as MatchStateDTO,
+    });
+
+    renderBoard();
+
+    // Every partner is on its own line and none is dropped.
+    for (const name of ['CHIA Aaron', 'SOH Wooi Yik', 'HOKI Takuro', 'KOBAYASHI Yugo']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    // Side A owns 18/21/21; side B owns 21/15/13. Score ownership is what the
+    // grouping exists to make unambiguous at hall distance.
+    expect(screen.getByTestId('court-score-1-a').textContent).toBe('182121');
+    expect(screen.getByTestId('court-score-1-b').textContent).toBe('211513');
+  });
+
+  it('list mode groups the two sides the same way and drops the shared centred lane', () => {
+    useTournamentStore.setState({ config: { ...CONFIG, tvDisplayMode: 'list' } });
+    seed({
+      m1: {
+        matchId: 'm1',
+        status: 'started',
+        actualStartTime: new Date().toISOString(),
+        sets: [{ sideA: 21, sideB: 18 }],
+      } as MatchStateDTO,
+    });
+    useTournamentStore.setState({ config: { ...CONFIG, tvDisplayMode: 'list' } });
+
+    renderBoard();
+
+    // Non-vacuity: this really is LIST mode, not the card grid.
+    expect(screen.queryByTestId('court-card-1')).toBeNull();
+    expect(screen.getByTestId('court-match-1')).toBeInTheDocument();
+    expect(screen.getByTestId('court-score-1-a').textContent).toBe('21');
+    expect(screen.getByTestId('court-score-1-b').textContent).toBe('18');
+    // Both doubles partners render as their own lines inside their side.
+    for (const name of ['Alice Anderson', 'Amy Baker', 'Bea Carter', 'Bella Diaz']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+  });
+
+  it('honours the board Show scores setting on a known scored match in BOTH modes', () => {
+    const state = {
+      m1: {
+        matchId: 'm1',
+        status: 'started',
+        actualStartTime: new Date().toISOString(),
+        sets: [{ sideA: 21, sideB: 18 }],
+      } as MatchStateDTO,
+    };
+    for (const mode of ['auto', 'list'] as const) {
+      seed(state);
+      useTournamentStore.setState({ config: { ...CONFIG, tvDisplayMode: mode } });
+      const on = renderBoard();
+      expect(screen.getByTestId('court-score-1-a').textContent).toBe('21');
+      expect(screen.getByTestId('court-score-1-b').textContent).toBe('18');
+      on.unmount();
+
+      seed(state);
+      useTournamentStore.setState({ config: { ...CONFIG, tvDisplayMode: mode } });
+      const off = renderBoard({ board: { ...BOARD, showScores: false } });
+      expect(off.container.querySelector('[data-testid="court-score-1-a"]')).toBeNull();
+      expect(off.container.querySelector('[data-testid="court-score-1-b"]')).toBeNull();
+      // The names are still there — only the ledger is withheld.
+      expect(screen.getByText('Alice Anderson')).toBeInTheDocument();
+      off.unmount();
+    }
+  });
+
+  // ── OPR-0908-10 ─────────────────────────────────────────
+  it('wraps a long name between words only — never mid-word, never hyphenated', () => {
+    // The reported case: a long single name sharing a card with a long
+    // opponent name. The board used to render "Koki Watanab / e" once the
+    // side column narrowed below the longest word.
+    useTournamentStore.setState({
+      players: [
+        { id: 'a1', name: 'Koki Watanabe', groupId: 'g1', availability: [] },
+        { id: 'a2', name: 'Kunlavut Vitidsarn', groupId: 'g1', availability: [] },
+        { id: 'b1', name: 'Anders Christiansen', groupId: 'g2', availability: [] },
+        { id: 'b2', name: 'Mia Blichfeldt', groupId: 'g2', availability: [] },
+      ] as PlayerDTO[],
+    });
+    seedNames({
+      m1: {
+        matchId: 'm1',
+        status: 'started',
+        actualStartTime: new Date().toISOString(),
+        sets: [{ sideA: 21, sideB: 18 }],
+      } as MatchStateDTO,
+    });
+
+    renderBoard();
+
+    // The RESOLVED style on each rendered name line, not a class list
+    // mirroring itself: a class name proves nothing about how the text wraps.
+    for (const name of ['Koki Watanabe', 'Kunlavut Vitidsarn', 'Anders Christiansen', 'Mia Blichfeldt']) {
+      const line = screen.getByText(name);
+      const style = getComputedStyle(line);
+      expect(style.overflowWrap).toBe('normal');
+      expect(style.wordBreak).toBe('normal');
+      expect(line.className).not.toMatch(/break-(words|all)/);
+    }
+
+    // "Christiansen" (12) is past the tier's character budget, so the card's
+    // names step DOWN one tier rather than split — a smaller true name beats
+    // a larger false one. Both sides step together.
+    const sizes = ['Koki Watanabe', 'Anders Christiansen'].map(
+      (name) => /text-(\d)xl/.exec(screen.getByText(name).parentElement!.className)?.[1],
+    );
+    expect(sizes[0]).toBe(sizes[1]);
+    expect(Number(sizes[0])).toBe(
+      Number(/text-(\d)xl/.exec(resolveSignageNameSize(96))![1]) - 1,
+    );
   });
 
   it('shows the operator board branding', () => {

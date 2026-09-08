@@ -118,6 +118,8 @@ const SE_DRAW = {
             {
               nodeKey: "sf1",
               position: 1,
+              reference: "MS SF1",
+              shortReference: "SF1",
               sides: [
                 {
                   participantKey: "p1",
@@ -151,6 +153,8 @@ const SE_DRAW = {
             {
               nodeKey: "sf2",
               position: 2,
+              reference: "MS SF2",
+              shortReference: "SF2",
               sides: [
                 {
                   participantKey: "p3",
@@ -179,6 +183,8 @@ const SE_DRAW = {
             {
               nodeKey: "f1",
               position: 1,
+              reference: "MS F",
+              shortReference: "F",
               sides: [
                 {
                   participantKey: "p1",
@@ -189,10 +195,15 @@ const SE_DRAW = {
                 },
                 {
                   participantKey: null,
-                  placeholder: "Winner of SF 2",
+                  // The wire's legacy prose twin still says "Winner of …";
+                  // the renderer reads the DISCRIMINANT (contract §2.1) and,
+                  // since public-visual-fixes P3, renders the public tier's
+                  // empty slot + muted feeder line from it.
+                  placeholder: "Winner of SF2",
                   bye: false,
                   feederNodeKey: "sf2",
                   feederTake: "winner",
+                  unresolved: { kind: "winner_of", reference: "SF2" },
                 },
               ],
               result: null,
@@ -240,6 +251,8 @@ const RR_DRAW = {
             {
               nodeKey: "r1m1",
               position: 1,
+              reference: "WS R1·1",
+              shortReference: "R1·1",
               sides: [
                 {
                   participantKey: "a",
@@ -339,14 +352,17 @@ async function render(path: string): Promise<string> {
 }
 
 describe("the tab bar under full publication", () => {
-  it("renders the four ADR 0028 entries: Overview · Schedule · Draws · Players", async () => {
+  // Contract §11.1: Documents joins the ADR 0028 four whenever the organizer
+  // published regulations, and it is how the reader reaches them — the
+  // regulations reader no longer carries a navigation of its own.
+  it("renders Overview · Schedule · Draws · Players · Documents", async () => {
     stubApi({});
     const html = await render("/e/spring-open");
     const nav =
       html.match(/<nav aria-label="Tournament sections"[\s\S]*?<\/nav>/)?.[0] ??
       "";
     const labels = [...nav.matchAll(/>([^<]+)<\/a>/g)].map((m) => m[1]);
-    expect(labels).toEqual(["Overview", "Schedule", "Draws", "Players"]);
+    expect(labels).toEqual(["Overview", "Schedule", "Draws", "Players", "Documents"]);
   });
 });
 
@@ -364,15 +380,19 @@ describe("the Players tab", () => {
 });
 
 describe("the Draws panel (§3.4, ADR 0028)", () => {
-  it("lists every event with its draw facts and a View draw button into each draw", async () => {
+  // public-visual-fixes P6: the row is name · entrants · progress · Open,
+  // and the WHOLE row is the link into the draw. The facts line it used to
+  // carry (format, eligibility, round count) described the draw's shape,
+  // which the draw page itself states.
+  it("lists every event as one row-wide link into its draw", async () => {
     stubApi({ "/draws": DRAWS_INDEX });
     const html = await render("/e/spring-open?tab=draws");
 
     expect(html).toContain('href="/e/spring-open/draws/MS"');
-    expect(html).toContain(">View draw</a>");
-    expect(html).toContain("Elimination");
+    expect(html).toContain(">Open<");
     expect(html).toContain("4 players");
-    expect(html).toContain("2 rounds");
+    expect(html).not.toContain(">View draw</a>");
+    expect(html).not.toContain("2 rounds");
   });
 
   it("names the champion on a decided row, as a person link beside the Draw button", async () => {
@@ -395,7 +415,10 @@ describe("the Draws panel (§3.4, ADR 0028)", () => {
     const html = await render("/e/spring-open?tab=draws");
 
     expect(html).toContain("Champion");
-    expect(html).toContain('/players/11111111-1111-4111-8111-111111111111');
+    // P6: the row IS a link, so the champion reads as text inside it — a
+    // link inside a link is not a link.
+    expect(html).toContain("Ada Lovelace");
+    expect(html).not.toContain('/players/11111111-1111-4111-8111-111111111111');
     expect(html).toContain('aria-label="Men&#x27;s singles draw"');
   });
 
@@ -431,21 +454,30 @@ describe("the Draws panel (§3.4, ADR 0028)", () => {
     expect(html).not.toContain("No draws yet.");
   });
 
-  it.each(["seeds", "winners"])("returns 404 for removed %s tab URLs", async (removed) => {
-    const html = await render(`/e/spring-open?tab=${removed}`);
-    expect(html).toContain('This entry page is not available');
+  // P6: `?tab=seeds` and `?tab=winners` were panels of this same Draws
+  // surface, and both URLs are still in circulation — they canonicalise onto
+  // it rather than 404ing.
+  it.each(["events", "seeds", "winners"])("redirects the retired %s tab URL onto Draws", async (alias) => {
+    stubApi({ "/draws": DRAWS_INDEX });
+    const build = (await vite.ssrLoadModule(
+      "virtual:react-router/server-build",
+    )) as unknown as ServerBuild;
+    const response = await createRequestHandler(build, "development")(
+      new Request(`http://entrant.test/e/spring-open?tab=${alias}`),
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/e/spring-open?tab=draws");
   });
 });
 
 describe("the elimination draw page", () => {
-  // Rewritten for V3-PE10.2 / contract §4.3 P5: with no explicit `?view=`,
-  // the response now renders BOTH the Round block (the mobile default,
-  // `md:hidden`) and the Bracket canvas (`hidden md:block`) — CSS decides
-  // which one a given viewport shows, so a first mobile visit gets Round
-  // without any client redirect or JavaScript. The old assertion that the
-  // default response was bracket-only, with no match detail, no longer
-  // holds; this test now covers both blocks in one response.
-  it("renders both the Round default and the Bracket canvas, CSS-toggled by width", async () => {
+  // Rewritten for public-visual-fixes P4 / contract §4.3: there is ONE tree
+  // in the response now, at every width. "Round" stopped being a page mode
+  // (it is navigation inside the bracket), so the pair of CSS-toggled
+  // blocks that shipped the whole draw twice — and the previous/next round
+  // pager that repeated the round heading on the page it was already on —
+  // are both gone. The bracket is the default; List is the other mode.
+  it("renders one bracket, in its own named scroll region, at every width", async () => {
     stubApi({ "/draws/MS": SE_DRAW });
     const html = await render("/e/spring-open/draws/MS");
 
@@ -454,40 +486,185 @@ describe("the elimination draw page", () => {
     expect(html).toMatch(/Ada Lovelace[\s\S]*\[.*1.*\]/);
     expect(html).toMatch(/Katherine Johnson[\s\S]*\[.*2.*\]/);
     expect(html).toContain("Bye");
-    expect(html).toContain("Winner of SF 2");
+    // public-visual-fixes P3: an unresolved side is an empty slot with a
+    // muted feeder line naming the SHARED reference — never "Winner of".
+    expect(html).toContain("from SF2");
+    expect(html).not.toContain("Winner of");
     expect(html).toContain("21");
-    // D12: the raw ISO date is never in prose — humanized instead.
-    expect(html).not.toContain("2026-08-01");
-    expect(html).toContain("Saturday, August 1");
     expect(html).not.toContain("demo-generated:");
-    // The two adaptive containers are both present in the one response.
-    expect(html).toContain('<div class="md:hidden">');
-    expect(html).toContain('<div class="hidden md:block">');
-    // Wide content scrolls in its own container (R11).
-    expect(html).toContain("overflow-x-auto");
+    // The two CSS-toggled copies of the draw are gone.
+    expect(html).not.toContain('<div class="md:hidden">');
+    expect(html).not.toContain('<div class="hidden md:block">');
+    // ...and so is the round pager that duplicated the round heading.
+    expect(html).not.toContain("Previous round");
+    expect(html).not.toContain("Next round");
+    // The tree scrolls in its own region: bounded, named, keyboard-reachable
+    // (§4.3), and snapped by round on narrow screens.
     expect(html).toContain('data-testid="public-bracket-canvas"');
+    expect(html).toContain("data-bracket-scroll");
+    expect(html).toMatch(/role="region"[^>]*tabindex="0"/);
+    expect(html).toContain('aria-label="Men&#x27;s Singles bracket"');
+    expect(html).toContain("bracket-scroll");
+    expect(html).toContain("overflow-auto");
+    expect(html).toContain("snap-x snap-mandatory");
     expect(html).toContain("w-max min-w-full");
+    // Round headers stay in view inside that region.
+    expect(html).toContain("bracket-round-header");
     expect(html).toContain('data-match-variant="bracket-node"');
     expect(html).toContain('data-bracket-links="true"');
     expect(html).toContain('src="/e/assets/bracket-path.js"');
     expect(html).not.toContain("/e/assets/bracket-connectors.js");
-    // 2 Round-block cards (the default round, Semifinals) + 3 Bracket nodes.
-    expect((html.match(/<article/g) ?? []).length).toBe(5);
-    // V3-PE10.1: every bracket node carries a visible human match number.
-    expect(html).toContain("Match 1");
-    expect(html).toContain("Match 2");
+    // Three nodes: the whole draw, once.
+    expect((html.match(/<article/g) ?? []).length).toBe(3);
+    // V3-PE10.1 / §6.1 (P3): every bracket node carries the SHARED match
+    // reference — the same string the operator's match list shows — and no
+    // surface renumbers locally as "Match n".
+    expect(html).not.toContain("Match 1");
+    expect(html).not.toContain("Match 2");
 
-    const bracketOnly = await render("/e/spring-open/draws/MS?view=bracket");
-    expect(bracketOnly).not.toContain('<div class="md:hidden">');
-    expect((bracketOnly.match(/<article/g) ?? []).length).toBe(3);
-
-    const roundOnly = await render("/e/spring-open/draws/MS?view=round");
-    expect(roundOnly).not.toContain('data-testid="public-bracket-canvas"');
-    expect(roundOnly).toMatch(/Round[\s\S]{0,20}1[\s\S]{0,20}of[\s\S]{0,20}2/);
+    // The two modes on offer are Bracket and List — Round is not a mode.
+    const nav = html.match(/<nav aria-label="Draw view"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    expect([...nav.matchAll(/>([^<]+)</g)].map((m) => m[1])).toEqual([
+      "Bracket",
+      "List",
+    ]);
 
     const list = await render("/e/spring-open/draws/MS?view=list");
+    // D12: the raw ISO date is never in prose — humanized instead.
+    expect(list).not.toContain("2026-08-01");
     expect(list).toContain("Saturday, August 1");
     expect(list).toContain("10:30 · Court 1");
+    expect(list).not.toContain('data-testid="public-bracket-canvas"');
+  });
+
+  it("offers R32 · R16 · QF · SF · F round controls as native anchors into the columns", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const html = await render("/e/spring-open/draws/MS");
+    const nav = html.match(/<nav aria-label="Rounds"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    // Adapted to this draw's own format: a two-round draw is SF · F.
+    expect(nav).toContain(">SF<");
+    expect(nav).toContain(">F<");
+    // Native anchors into ids the columns actually carry — no JS required.
+    expect(nav).toContain('href="#draw-round-semifinals"');
+    expect(nav).toContain('href="#draw-round-final"');
+    expect(html).toContain('id="draw-round-semifinals"');
+    expect(html).toContain('id="draw-round-final"');
+    // ...and the mount point the enhancement builds its controls into.
+    expect(html).toContain("data-bracket-toolbar");
+  });
+
+  it("keeps legacy ?view=round links working by positioning the requested round", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const html = await render("/e/spring-open/draws/MS?view=round&round=1");
+    // The bracket answers the old URL...
+    expect(html).toContain('data-testid="public-bracket-canvas"');
+    // ...positioned at the round it asked for, and marked in the controls.
+    expect(html).toContain('data-initial-round="draw-round-final"');
+    expect(html).toMatch(/aria-current="true"[^>]*>[\s\S]{0,80}>F</);
+    // The duplicate "Round 2 of 2" heading and its pager are gone.
+    expect(html).not.toMatch(/Round[\s\S]{0,20}2[\s\S]{0,20}of[\s\S]{0,20}2/);
+  });
+
+  it("keeps a ?view=path link lighting the selected player with no JavaScript", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const html = await render(
+      "/e/spring-open/draws/MS?view=path&player=11111111-1111-4111-8111-111111111111",
+    );
+    // The path is painted SERVER-side: the classes the script would add are
+    // already on the document, so the fallback shows the same thing.
+    expect(html).toContain("has-person-path");
+    expect(html).toContain("is-person-path");
+    expect(html).toContain('data-pinned-person="11111111-1111-4111-8111-111111111111"');
+    // ...with the selected player named, and a reset that needs no script.
+    expect(html).toContain("Ada Lovelace");
+    expect(html).toContain("Clear path");
+  });
+
+  it("resolves ?player= by stable identity, and treats a typed name as a search only", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    // An id: this IS the person, so the path pins and the banner names her.
+    const byId = await render(
+      "/e/spring-open/draws/MS?player=11111111-1111-4111-8111-111111111111",
+    );
+    expect(byId).toContain('data-pinned-person="11111111-1111-4111-8111-111111111111"');
+    expect(byId).toMatch(/found for[\s\S]{0,60}Ada Lovelace/);
+
+    // A name: a search. It highlights and filters, but asserts no identity —
+    // nobody's path is pinned and no full name is printed as if the reader
+    // had chosen it (the P2-flagged substring resolution).
+    const byName = await render("/e/spring-open/draws/MS?view=list&player=ada");
+    expect(byName).not.toContain("data-pinned-person");
+    expect(byName).toMatch(/found for[\s\S]{0,60}>ada</);
+    expect(byName).toMatch(/font-semibold underline decoration-2/);
+    // The only way a name becomes an identity: the reader picks it from an
+    // offer — which is also the no-JavaScript way into a pinned path.
+    expect(byName).toContain(
+      "view=path&amp;player=11111111-1111-4111-8111-111111111111",
+    );
+    expect(byName).toMatch(/Show[\s\S]{0,60}Ada Lovelace[\s\S]{0,40}s path/);
+
+    // Accent- and case-blind, through the tier's one folding.
+    const folded = await render("/e/spring-open/draws/MS?view=list&player=LOVELACE");
+    // Both of Ada's matches, from an all-caps query.
+    expect(folded).toMatch(/>2<[\s\S]{0,60}matches[\s\S]{0,40}found for/);
+  });
+
+  // P8: a minted person key resolves inside ONE draw. Pointed at a draw the
+  // person is not in, the page used to echo the 71-character key into the
+  // search box and into "0 matches found for '<key>'" - the raw-identifier
+  // leak the surface book recorded on S44.
+  it("never echoes a person key that belongs to another draw", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const key = "player-b61e72b4391ee25a74ac2bc312736fa6ed87cd6fe653425994067699c123e1dc";
+    const html = await render(`/e/spring-open/draws/MS?player=${key}`);
+
+    expect(html).toContain("That player is not in this draw.");
+    // Never as VISIBLE text: not in the search box, not in the status line.
+    // (The key still rides the view/segment hrefs - that is the URL the
+    // reader arrived on, and "Clear search" is the way out of it.)
+    expect(html).toContain('name="player" value=""');
+    expect(html).not.toContain(`>${key}<`);
+    expect(html).not.toMatch(/found for/);
+  });
+
+  // ---- public-visual-fixes P3 -----------------------------------------
+
+  it("uses the event-code-dropped reference in this single-event view", async () => {
+    // §6.1: a draw page has ONE event, so the compact line reads
+    // `SF1 · … · 10:30 · Court 1` — the same match the operator's list calls
+    // `MS SF1`, minus the code the page already states in its own subtitle.
+    stubApi({ "/draws/MS": SE_DRAW });
+    const list = await render("/e/spring-open/draws/MS?view=list");
+    expect(list).toContain("SF1 · Saturday, August 1 · Scheduled 10:30 · Court 1");
+    expect(list).not.toContain("MS SF1");
+    // ...and the node carries the same string.
+    const bracket = await render("/e/spring-open/draws/MS?view=bracket");
+    expect(bracket).toContain(">SF1<");
+    expect(bracket).toContain(">F<");
+  });
+
+  it("gives each side its own aligned game column on the node (P1)", async () => {
+    // **Operator/public remediation P1 supersedes public-visual-fixes P4.**
+    // A bracket node is a stacked layout, so the number beside a name
+    // belongs to that name: two games x two sides = four cells on the one
+    // decided node, and no per-game emphasis on any of them. The paired
+    // spelling survives only in the node's accessible summary.
+    stubApi({ "/draws/MS": SE_DRAW });
+    const bracket = await render("/e/spring-open/draws/MS?view=bracket");
+    expect((bracket.match(/place-items-center/g) ?? []).length).toBe(4);
+    expect(bracket).toContain("Score 21–15, 21–12");
+    // The node's own metadata line carries the reference alone now.
+    expect(bracket).not.toContain('<span class="tabular-nums">21–15, 21–12</span>');
+  });
+
+  it("leaves an unreached slot empty with a muted feeder line", async () => {
+    stubApi({ "/draws/MS": SE_DRAW });
+    const bracket = await render("/e/spring-open/draws/MS?view=bracket");
+    expect(bracket).toContain("data-feeder-slot");
+    expect(bracket).toContain("from SF2");
+    expect(bracket).not.toContain("Winner of");
+    // Never a machine identifier in visible prose (§4.3).
+    expect(bracket).not.toMatch(/>sf2</);
   });
 
   it("offers the Draw / Consolation link-pills and honors ?segment=", async () => {
@@ -520,6 +697,99 @@ describe("the elimination draw page", () => {
     expect(html).toMatch(/font-semibold underline decoration-2/);
     expect(html).toContain('Find a player or pair');
   });
+
+  // public-visual-fixes P8: the two draw sizes the product actually ships at
+  // scale. The fixture above is a 4 draw, so before this nothing rendered a
+  // full R16 or R32 tree through the route — the round labels, the column
+  // count and the node count all adapt to `size`, and adapting wrongly at 32
+  // is invisible in a two-round fixture.
+  function sizedDraw(size: number) {
+    const labels = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Final"];
+    const shortNames = ["R32", "R16", "QF", "SF", "F"];
+    const roundCount = Math.log2(size);
+    const first = labels.length - roundCount;
+    const rounds = [];
+    for (let round = 0; round < roundCount; round++) {
+      const width = size / 2 ** (round + 1);
+      const short = shortNames[first + round];
+      rounds.push({
+        label: labels[first + round],
+        matches: Array.from({ length: width }, (_, slot) => ({
+          nodeKey: `${short}-${slot + 1}`,
+          position: slot + 1,
+          reference: `MS ${short}${width > 4 ? "\u00b7" : ""}${slot + 1}`,
+          shortReference: `${short}${width > 4 ? "\u00b7" : ""}${slot + 1}`,
+          sides: [0, 1].map((side) => ({
+            participantKey: round === 0 ? `p${slot * 2 + side + 1}` : null,
+            placeholder: null,
+            bye: false,
+            feederNodeKey: round === 0 ? null : `${shortNames[first + round - 1]}-${slot * 2 + side + 1}`,
+            feederTake: round === 0 ? null : "winner",
+            unresolved:
+              round === 0
+                ? null
+                : {
+                    kind: "winner_of",
+                    reference: `${shortNames[first + round - 1]}${
+                      size / 2 ** round > 4 ? "\u00b7" : ""
+                    }${slot * 2 + side + 1}`,
+                  },
+          })),
+          result: null,
+          scheduledTime: null,
+          court: null,
+          playedOn: null,
+          localTime: null,
+          courtLabel: null,
+          sourceUrl: null,
+          sourceRef: null,
+        })),
+      });
+    }
+    return {
+      ...SE_DRAW,
+      size,
+      matchCoverage: { imported: size - 1, expected: size - 1, missing: 0 },
+      teams: Array.from({ length: size }, (_, index) => ({
+        participantKey: `p${index + 1}`,
+        persons: [
+          ref(
+            null,
+            // A long, real-shaped name in every slot: the column width is set
+            // by its longest row, and a short-name fixture measures a tree
+            // nobody has.
+            `Muhammad Reza Pahlevi Isfahani ${index + 1}`,
+          ),
+        ],
+        club: "Northgate Badminton Club",
+        seed: index < 8 ? index + 1 : null,
+      })),
+      segments: [{ id: "MAIN", label: "Draw", rounds }],
+    };
+  }
+
+  it.each([
+    [16, ["Round of 16", "Quarterfinals", "Semifinals", "Final"], 15],
+    [32, ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Final"], 31],
+  ])("renders every round of a %i draw, once", async (size, labels, nodes) => {
+    stubApi({ "/draws/MS": sizedDraw(size) });
+    const html = await render("/e/spring-open/draws/MS");
+
+    for (const label of labels) expect(html).toContain(label);
+    // One column per round, one node per match, and the whole tree once —
+    // not the two CSS-toggled copies P4 removed.
+    const columns = [...html.matchAll(/<section id="draw-round-/g)].length;
+    expect(columns).toBe(labels.length);
+    expect((html.match(/<article/g) ?? []).length).toBe(nodes);
+    // Long names are carried whole; nothing is truncated to make a column fit.
+    expect(html).toContain("Muhammad Reza Pahlevi Isfahani 1");
+    expect(html).not.toContain("text-ellipsis");
+    // Every unreached slot names the node it waits on, in the shared grammar.
+    expect(html).toContain("data-feeder-slot");
+    expect(html).not.toContain("Winner of");
+    expect(html).not.toContain("Match 1");
+  });
+
 });
 
 describe("the round-robin draw page", () => {

@@ -37,6 +37,76 @@ they disagree. The four changes it makes to this page, each applied in place and
    stay entirely with the operator.
 :::
 
+::: danger Amended 2026-09-07 — public visual fixes, package P0
+`public-visual-fixes.md` is approved product direction for the **public entrant tier**. It extends
+the operator amendment above (which still holds in full) with five changes, each applied in place
+below and marked *(public P0)*:
+
+1. **One match reference, both tiers** (§2.2, §4.2, §4.3). A public bracket node and the operator's
+   match list name the same match with the same string, from the same identity authority —
+   `MS R32·11`, `MS R16·2`. The public `Match 1` / `Match 2` labels and the public tier's own
+   `"SF 1"` speller are deleted. In a single-event view the compact form `R16-2 · 10:00 · Court 3`
+   drops the event code; a mixed-event schedule keeps it.
+2. **A public empty side is empty** (§2.1, §4.3). An unresolved public side renders empty
+   participant slots and one muted feeder line; the phrase "Winner of" leaves the public tier
+   entirely, and no `nodeKey`, play-unit id or slot index ever appears.
+3. **Paired scorelines and seeds, publicly** (§2.7, §3.4, §4.2, §4.3). `21–16, 22–20` in
+   first-listed-side order, no per-game emphasis, right-aligned in a bracket node and attached to
+   its own side's row on a schedule card. Available seed values render beside the side.
+4. **The bracket scrolls natively** (§4.3). The canvas lives in its own `overflow: auto`,
+   accessibly-named, keyboard-reachable region with sticky round headers; the page itself never
+   scrolls horizontally. Total-height ceilings and fixed node heights are withdrawn — node height
+   derives from content, and a doubles node is taller than a singles node.
+5. **Venue-local time, stated once** (§4.2). The tournament frame says "All times local to the
+   venue" once; cards then print bare venue-local values with no IANA identifier and no offset, and
+   a day-grouped list does not repeat its date on every card.
+:::
+
+::: danger Amended 2026-09-08 — operator/public remediation, package P0
+`operator-public-remediation-plan.md` is approved product direction and **supersedes both
+amendments above wherever they disagree**. Its correction is single and load-bearing:
+
+> **A centred paired score lane is NOT the universal match presentation.**
+
+The two 2026-09-07 amendments generalised one lane to every surface. That is withdrawn. Match
+*interpretation* stays shared — one score authority, one canonical side order, one outcome
+vocabulary — but **layout is a per-context variant**, chosen from this table and from nowhere else:
+
+| Context | Required layout |
+| --- | --- |
+| Bracket node | Two stacked opponent sides, with aligned game-score columns **beside each side** |
+| Compact public result/history card | The same two-side score grid (the white BWF reference) |
+| Doubles node/card | Two names form **one** side group; one score row belongs to that whole side |
+| Operator row sheet | Paired game scores may remain in a dedicated, consistently aligned column |
+| Horizontal schedule/list row | Compact dark-BWF form: time, opponents, paired game scores at right, supporting match metadata |
+| Venue board | Clearly separated sides and legible scores; scale adapts to viewing distance while score ownership stays correct |
+
+Rules that hold across every row of that table:
+
+1. **Canonical side A/B ordering.** Scores are never reordered independently of participants, and
+   ordering is never inferred from winner styling. Where a side order is positional on the wire, a
+   renderer that reverses sides reverses the score pair with it.
+2. **Stacked layouts align each game's two scores vertically in the same column**, at consistent
+   widths, with tabular numerals, a semantic reading order and accessible score labels.
+3. **Doubles partners group inside a side** with less spacing than separates the opponents; the
+   side boundary is unambiguous without relying on colour.
+4. **The centred extra score row is removed** from bracket nodes and stacked result cards.
+   Input-like name boxes are replaced by match-row presentation unless the control is actually
+   editable in the current mode.
+5. **Winner emphasis stays a readable weight plus a restrained marker**, and loser-name contrast is
+   preserved. The per-game "no emphasis" rule of the 2026-09-07 amendments still holds: no
+   individual game score is bolded or coloured.
+6. **Walkover, retirement, bye and every other supported outcome appear once**, in the outcome
+   area. Numeric games are never fabricated for a non-played result.
+7. **Zero, missing and not-yet-started are three distinct states.** Two- and three-game matches and
+   every scoring configuration the product already supports must render correctly.
+
+Where a section below still says "one centred lane between the opponents" or "the match list
+renders one centred score lane", read it as: *the shared score authority still produces one ordered
+pair sequence; how that sequence is laid out is decided by the table above.* Each such line is
+marked *(superseded 2026-09-08)* in place.
+:::
+
 [[toc]]
 
 ---
@@ -213,7 +283,7 @@ a name. It is never a blank row, and the ledger stays collapsed (§3.4).
 
 | Field | Rule |
 | --- | --- |
-| `reference` | Derived once by the tier's identity authority (`matchIdentity.ts` console-side) and rendered *verbatim* on every renderer, including the board and the compact chip (plan §3 correction 10). Never re-spelled per view. |
+| `reference` | Derived once by the identity authority (`matchIdentity.ts` console-side) and rendered *verbatim* on every renderer, including the board and the compact chip (plan §3 correction 10). Never re-spelled per view. *(public P0, 2026-09-07)* **One authority, not one per tier**: a public bracket node and the operator's match list must show the **same string** for the same match. A view whose event is unambiguous may drop the event code (`R16-2`); a mixed-event view keeps it (`MS R16-2`). Public `Match {position}` labels are deleted. *(public P3, 2026-09-07)* **Delivered**: the public DTOs carry `reference` / `shortReference`, spelled by `apps/api/src/shared/match_reference.py` from the same coordinates `matchIdentity.ts` formats from. |
 | `eventLabel` / `roundLabel` | One speller per tier (state-and-formatting §6.3). When the round label cannot be derived, the bare sequence ("Match 12") is used — never an empty header. |
 | `tournamentName` | **Omitted inside a tournament-scoped view.** The mockup repeated it on every card; plan §3 correction 4 removes it. It is present only where cards from more than one workspace can appear on one screen: the hub, a cross-workspace search result, an entrant's own "my matches" list, and email. |
 | slot indexes | **Never rendered.** V3-OC16.1: "slot 52 · court 5" is replaced by the tournament-timezone time and court; the slot index is not user-facing at any density. |
@@ -289,8 +359,9 @@ Four rules, all from state-and-formatting §5.1, all of which the mockup violate
    by "which number is larger".
 3. **No per-game emphasis at all** *(P0, 2026-09-07)*. The mockup keyed the per-game cell off the
    *match* winner; the earlier correction here keyed it off `game.winner` instead. Both are now
-   deleted. Every game score in the ledger renders in one weight, in one centred lane between the
-   opponents, read as a comma-separated pair sequence — `18–21, 21–15, 21–13` — where the **first
+   deleted. Every game score in the ledger renders in one weight, in the layout its context's row of the
+   2026-09-08 table prescribes *(superseded 2026-09-08: the lane is no longer universal)*, read as a
+   comma-separated pair sequence — `18–21, 21–15, 21–13` — where the **first
    number of every pair belongs to the first-listed side**. A losing side can win games (fixture
    MC-08) and that stays legible from the numbers, not from ink.
 4. **The match winner comes from `outcome`, never from the ledger.** Retirement and walkover
@@ -389,7 +460,7 @@ The per-game scores for both sides, aligned in columns.
 | --- | --- |
 | **collapse** | when `games` is empty **and** no outcome word is needed, the ledger renders **nothing at all**: no cell, no reserved width, no padding, no separating rule, no invisible winner mark. Plan §3, "Collapse empty score cells" — *adopt fully*. The current entrant card emits an `aria-hidden` empty `span` per game column; that is deleted. |
 | padding | never padded to the configured game count. Three columns are rendered when three games exist, one when one does. |
-| alignment | *(P0, 2026-09-07)* one **centred lane between the opponents**, reading `18–21, 21–15, 21–13`; the first number of each pair is the first-listed side. Tabular figures; the lane is wide enough for a two-digit pair without changing width between cards on the same screen. A renderer that instead columns both sides' game *n* vertically (the earlier V3-OC17.1 treatment) stays valid only where the surface has no single lane to give — never on a match list. |
+| alignment | *(superseded 2026-09-08 — see the remediation amendment; the centred lane survives only where its context's row of that table asks for one, and a bracket node or stacked result card now uses aligned per-side score columns instead)* one **centred lane between the opponents**, reading `18–21, 21–15, 21–13`; the first number of each pair is the first-listed side. Tabular figures; the lane is wide enough for a two-digit pair without changing width between cards on the same screen. A renderer that instead columns both sides' game *n* vertically (the earlier V3-OC17.1 treatment) stays valid only where the surface has no single lane to give — never on a match list. |
 | emphasis | **none** *(P0, 2026-09-07)*. No game score is ever bolded, coloured or otherwise emphasised, for a `complete` game or an `in_progress` one. `game.winner` no longer drives any ink. |
 | live game | the current game's running score sits in the **same lane** as the completed games, in the same weight. Missing scores are never fabricated to fill it. |
 | special outcomes | a partial ledger from a retirement or walkover renders **with** the outcome word; the outcome, not the ledger, decides the winner mark. |
@@ -460,6 +531,24 @@ tournament name inside a tournament-scoped view. A saturated header band on ever
 card. A repeated ISO date on each card under a day heading that already carries the date. "Live" as
 a match state.
 
+**Amended by public P0, 2026-09-07.** Four additions and one deletion:
+
+- **The card carries the shared match reference** (state-and-formatting §6.1), the same string the
+  operator's list shows. In a single-event context the compact line is
+  `R16-2 · 10:00 · Court 3`; in a mixed-event day schedule the event code stays: `MS R16-2 · 10:00 ·
+  Court 3`. The bare labels `Match 1`, `Match 2` are deleted.
+- **The approved court is shown whenever it exists**, in every grouping mode including *By time* —
+  a card that omits a court the operator has approved is not "quieter", it is wrong. A court that is
+  genuinely absent, withheld or disputed renders nothing at all, and such a match is never described
+  as "On court".
+- **Scores attach to sides.** Each side's games sit on that side's own row, paired sequence, no
+  per-game emphasis, winner shown only by the winning side's name (state-and-formatting §5.1 rule 6).
+  Seeds render beside the side they belong to.
+- **Sides stack; doubles partners stack within a side.** One person per line, so a doubles card is
+  taller than a singles card rather than compressing two names onto one.
+- **Deleted: the repeated per-card date** inside a list already grouped by day, and every per-card
+  timezone note. The date context returns for a multi-day or ungrouped list.
+
 **Envelope.** 320 px: both sides, the state word and the ledger are all visible; names wrap rather
 than truncate; the card never scrolls horizontally. 390/768/1440: progressively more metadata on
 one line, never more *information*. 200% zoom at 320 px: the card grows vertically; no element
@@ -484,7 +573,7 @@ narrow-screen behaviour (plan §3 correction 7) — **rejected**.
 
 | Width | Behaviour |
 | --- | --- |
-| < 768 px | the **Round view is the default**; the full Bracket tab remains an explicit, labelled option, and an explicitly chosen view is preserved in navigation. No "this bracket is wide, scroll sideways" instruction in the default state. |
+| < 768 px | *(public tier, superseded by P4 below: the bracket is the default here too, scrolled and snapped by round.)* On the console this row still reads: the **Round view is the default**; the full Bracket tab remains an explicit, labelled option, and an explicitly chosen view is preserved in navigation. No "this bracket is wide, scroll sideways" instruction in the default state. |
 | ≥ 768 px | the bracket canvas renders. It **enlarges rather than shrinking names**: node width and height grow to fit the tallest side at the ≥ 14 px floor, and the canvas scrolls inside its own labelled region rather than widening the document. |
 | any width | zoom-out is a *canvas* transform the reader chooses; it is never the default that makes names unreadable. |
 
@@ -492,6 +581,55 @@ The console's current `BRACKET_CARD_HEIGHT = 160` comment already records the co
 budget the worst case its own data produces, because "the canvas auto-fit absorbs the extra height;
 truncation and overlap may not". This contract makes that a rule: **node geometry is derived from
 the tallest rendered side, not from a constant chosen for a typical name.**
+
+**Amended by public P0, 2026-09-07 — the public bracket.** The console's `DrawView` keeps the rules
+above; the public bracket node additionally obeys:
+
+- **The reference on a public node is the shared one** (state-and-formatting §6.1) — the identical
+  string the operator's match list shows for that match. Not `Match 3`, not a per-round renumbering,
+  not a locally computed `"SF 1"`.
+- **An unresolved side is empty, with a muted feeder line.** No "Winner of", no `nodeKey`, no
+  participant key, no slot index. The relationship travels in the connector geometry and in the one
+  muted line; the participant slots stay at their normal height so nothing jumps as results land.
+  A partly-known doubles side keeps its known player and leaves the other slot empty.
+- **Seeds and paired scores render against the node's trailing edge** — `21–16, 22–20`,
+  first-listed-side order, no per-game emphasis. *(Amended 2026-09-08: in a bracket node the games
+  are aligned score **columns beside each stacked side**, not one shared lane; the pair order and
+  the no-emphasis rule are unchanged.)*
+- **The canvas scrolls natively, in its own region.** `overflow: auto`, height bounded to the
+  available viewport, an accessible name, reachable and scrollable by keyboard, and it never traps
+  the page. The **page** never scrolls horizontally. Round headers stay sticky at the top of that
+  region. Round controls (`R32 · R16 · QF · SF · F`, adapted to the format) are **native anchors**
+  that work with no JavaScript and may be enhanced by a page-scoped script.
+- **Node geometry derives from content**, per the rule already stated above. *Withdrawn:* total
+  draw-height ceilings and any fixed per-node height — in particular a 44 px node cannot hold a
+  doubles side, which is two person lines at the ≥ 14 px floor. Tests assert readable content,
+  non-overlap, scroll reachability and connector correctness rather than a DOM shape or a height
+  number (§6.1).
+- **First-round separation starts in the 8–12 px range** and grows with node height; connector
+  geometry is recomputed for varied node heights, and the Finals column is never clipped.
+
+**Amended by public P4, 2026-09-07 — round navigation is inside the bracket.** On the public tier
+"Round" is no longer a page MODE beside Bracket and List:
+
+- The **bracket is the default at every width**, and it is rendered ONCE. The pair of CSS-toggled
+  copies (Round below 768 px, canvas above it) is withdrawn: it shipped the whole draw twice and
+  made the same tree answer to two different vocabularies. Below 768 px the same tree scrolls
+  horizontally and **snaps by round**, at full name size — the narrow-screen answer is scroll, not
+  shrink.
+- The **round controls are the round navigation**. The previous/next round pager, and the
+  `Round n of m` heading it carried on a page that already names the round, are deleted.
+- **`?view=round` and `?view=path` stay live.** The first resolves to the bracket, positioned at the
+  requested round and marked in the controls; the second lights the selected player's path — painted
+  server-side, so the fallback needs no JavaScript. **List** remains a real mode.
+- **A name is a link.** Plain activation of a `PersonRef` opens that person's profile. Path
+  selection happens in an explicit **Highlight path** mode, where a plain activation selects the
+  path in place and a **View profile** link is exposed; the anchor keeps its real `href` throughout,
+  so modified-click and open-in-new-tab still reach the profile. Path selection is persistent and
+  resettable (button, and Escape); hover is a preview only, and never the only way in.
+- **`?player=` resolves by stable identity.** A typed name is a search — case- and accent-blind,
+  through the tier's one folding — that highlights and filters but **asserts no identity**: it pins
+  nobody's path and prints nobody's full name as though the reader had chosen them.
 
 **Envelope.** 320/390: Round view. 768/1440: canvas, no node overlap, connectors meeting the right
 sides. 200% zoom: nodes grow; the canvas scrolls; names stay whole.
@@ -634,7 +772,7 @@ New: `apps/entrant/tests/matchCard.contract.render.test.ts`, driving every MC fi
 | the winner mark is absent | MC-01, MC-05, MC-06, MC-07, MC-12 |
 | the winner mark carries the accessible word "Winner" | MC-08, MC-09, MC-10 |
 | **no game score is emphasised** on any fixture — assert the absence of a winner-weighted game cell, not which side carries it *(P0, 2026-09-07; replaces "game 2 of MC-08 emphasises the losing side")* | MC-07, MC-08 |
-| the recorded games render as one centred pair sequence whose first number is the first-listed side | MC-02, MC-03, MC-08 |
+| the recorded games render as an ordered pair sequence whose first number is the first-listed side, laid out per the 2026-09-08 context table *(superseded 2026-09-08: no longer asserts a centred lane)* | MC-02, MC-03, MC-08 |
 | the state word is "On court", never "Live" | MC-07 |
 | the public schedule word is "Scheduled" or "Time to be confirmed" and nothing else | MC-01, MC-05, MC-06 |
 | no placeholder footer text: `/Date to be confirmed/`, `/Time not assigned/`, `/Court information unavailable/` never appear on a card | MC-06 |
@@ -653,7 +791,7 @@ per-module cases in the Bracket and Meet match tests.
 | --- | --- |
 | **game completion is computed by the score authority**, with a table-driven case set: 21–19 complete, 20–19 not complete under `deuceEnabled`, 21–20 not complete, 30–29 complete where a cap exists, 15–3 complete under a 15-point format | this is the replacement for "which score is larger" |
 | `setsWinner()`-style inference is not called on any render path | assert `outcome.winner` drives the mark; MC-09/MC-10 fail loudly under a counting implementation |
-| the match list renders one centred score lane between the opponents, first number = first-listed side, with **no per-game emphasis** *(P0; replaces the two-sides-share-a-column-index assertion)* | MC-02, MC-03, MC-08 |
+| the match list (operator row sheet) renders paired game scores in a dedicated, consistently aligned column, first number = first-listed side, with **no per-game emphasis**; a bracket node instead renders aligned per-side score columns beside each stacked side *(superseded 2026-09-08 — the 2026-09-07 "one centred lane everywhere" assertion is withdrawn)* | MC-02, MC-03, MC-08 |
 | the match list has no standalone **Issues** or **Status** text column; an exceptional LIVE/PENDING state renders as a leading mark and issue detail lives in the inspector *(P0)* | MC-06, MC-07 |
 | a doubles side stacks one partner per line, two lines per side, at a consistent standard row height with the full name reachable and no clipping at 200% text zoom; a singles side is one line *(P0)* | MC-02, MC-03 |
 | the row exposes a *minimum* height and no maximum: assert the computed `min-height` intent via the component's declared density prop, **never a measured `offsetHeight` equality** | plan §6 |

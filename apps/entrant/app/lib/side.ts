@@ -41,6 +41,27 @@ export interface UnresolvedSideDTO {
 /** The §6.1 wording for a side one player short. One spelling, one place. */
 export const PENDING_MEMBER_LABEL = 'partner to be confirmed';
 
+/**
+ * The muted feeder line for a side whose predecessor has not been played
+ * (state-and-formatting §6.2, match-card §4.3 — public-visual-fixes P3).
+ *
+ * The public tier does NOT say "Winner of {reference}". That phrasing
+ * dressed a structural placeholder as a participant, so a draw's unplayed
+ * half read as generated player content; the operator tier keeps it, the
+ * public tier renders an empty participant slot carrying one muted line
+ * instead. The relationship itself travels in the connector geometry and in
+ * `feederNodeKey`, never in visible prose, and the reference is the SHARED
+ * one (§6.1) — the same string the node it points at is labelled with, so
+ * "from QF2" resolves by reading, not by counting rows.
+ *
+ * `loser_of` reads the same way on purpose: the public tier states where the
+ * side comes FROM, and the draw structure says which half of that match it
+ * is. One spelling, both takes.
+ */
+export function feederLabel(reference: string | null | undefined): string {
+  return reference ? `from ${reference}` : 'from an earlier match';
+}
+
 export interface SideLike {
   persons: PersonReferenceDTO[];
   placeholder?: string | null;
@@ -56,9 +77,8 @@ export function unresolvedLabel(unresolved: UnresolvedSideDTO | null | undefined
     case 'bye':
       return 'Bye';
     case 'winner_of':
-      return `Winner of ${unresolved.reference ?? 'an earlier match'}`;
     case 'loser_of':
-      return `Loser of ${unresolved.reference ?? 'an earlier match'}`;
+      return feederLabel(unresolved.reference);
     case 'withheld':
       return 'Player not published';
     case 'undetermined':
@@ -69,6 +89,13 @@ export function unresolvedLabel(unresolved: UnresolvedSideDTO | null | undefined
       // caller could not resolve, so it falls back to §6.2's wording.
       return null;
   }
+}
+
+/** True when this side is an empty participant slot fed by an unplayed
+ *  match — the case that renders as a muted feeder line rather than as a
+ *  name-shaped placeholder (§6.2). */
+export function isFeederSide(side: SideLike): boolean {
+  return side.unresolved?.kind === 'winner_of' || side.unresolved?.kind === 'loser_of';
 }
 
 /** True when this side is a pair with a member still outstanding — the case

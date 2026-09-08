@@ -13,7 +13,7 @@ Monorepo: a CP-SAT scheduling product (meets + bracket draws) plus a shared desi
 - `packages/shared-contract/` — data both tiers read (`non-scheduling-keys.json`).
 - `infra/compose` + `infra/nginx` — the six deployment stacks and the nginx configs. Dockerfiles stay with their apps. Since SP-HOST-1 the frontend image ships **three** files, one server block each: `http-shared.conf` (maps, rate-limit zones, realip — http context, no server), `console.conf` (`listen 8080`, operator console + `/api/`), `play.conf` (`listen 8081`, the public entrant tier). One server block per FILE is load-bearing: `apps/entrant/tests/helpers/nginxConf.ts` models a conf without tracking which `server {}` encloses a location, so two blocks in one file merge the tiers and leave every ingress assertion green while describing a config nginx never serves. **No hostname appears in any of them** — the Cloudflare tunnel routes hostname→port (`APP_HOSTNAME`→8080, `PLAY_HOSTNAME`→8081), so the domain stays configuration.
 - `tests/backend`, `tests/e2e`, `simulator/`, `tools/` — top level; none of them belongs to one app.
-- `archive/` — FROZEN pre-merge tournament product. Never edit.
+- Retired pre-merge products and deployment files live in Git history.
 
 ## Commands
 - Frontend tests: `npm --prefix apps/console run test:run`  (vitest)
@@ -72,7 +72,7 @@ No external code-index service or MCP server is required for repository navigati
 
 ## Architecture boundaries (enforced by dependency-cruiser)
 - `apps/console/src/platform/` is the foundation layer — it must NOT import from `apps/console/src/modules/` or the retired pages layer (**ERROR**, clean), nor from `apps/console/src/app/` (**ERROR** since the `workspaceNav` relocation, clean — the nav model now lives in `apps/console/src/platform/product-shell/`).
-- Feature modules under `apps/console/src/modules/{meet,bracket,operations,display,hub,settings,workspace,entries}/` must NOT import each other's internals. **A NEW cross-module edge is an ERROR** since SP-REORG-1 Phase 4; the 16 that predate the ratchet are enumerated by source in `KNOWN_CROSS_MODULE` (`apps/console/.dependency-cruiser.cjs`) and warn. Retiring a cluster = fix its edges, delete its line — the list only shortens. ADR 0011 + ADR 0013. Shared code lives in `components/`, `hooks/`, `lib/`, `store/`, `apps/console/src/api/` or `apps/console/src/platform/domain/` — the sorting rule is a table in `CODE_HEALTH.md` 1b, keyed on consumer count. (`utils/` is gone; it merged into `lib/`.) `SourceChip`, used by three modules, lives in `components/`.
+- Feature modules under `apps/console/src/modules/{meet,bracket,operations,display,hub,settings,workspace,entries}/` must NOT import each other's internals. **A NEW cross-module edge is an ERROR** since SP-REORG-1 Phase 4; the 16 that predate the ratchet are enumerated by source in `KNOWN_CROSS_MODULE` (`apps/console/.dependency-cruiser.cjs`) and warn. Retiring a cluster = fix its edges, delete its line — the list only shortens. ADR 0011 + ADR 0013. Shared code lives in `components/`, `hooks/`, `lib/`, `store/`, `apps/console/src/api/` or `apps/console/src/platform/domain/` — the sorting rule is a table in `CODE_HEALTH.md` 1b, keyed on consumer count. (`utils/` is gone; it merged into `lib/`.) Shared React UI used by multiple console modules lives in `components/`.
 - Layer conventions are documented in `apps/console/src/{components,store,hooks,lib}/README.md` and `apps/console/src/platform/contracts/moduleContract.ts`.
 
 ## Vocabulary — workspace vs tournament

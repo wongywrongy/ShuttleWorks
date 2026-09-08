@@ -102,14 +102,65 @@ describe('match-card contract — state and schedule words (§3.3)', () => {
 });
 
 describe('match-card contract — bracket node (§4.3)', () => {
-  it('every node carries a visible human match number (V3-PE10.1)', () => {
-    expect(renderNode(MC.singlesScheduled)).toContain('Match 1');
-    expect(renderNode(MC.unresolvedPredecessor)).toContain('Match 5');
+  it('every node carries the SHARED match reference, never a bare "Match n" (V3-PE10.1, §6.1)', () => {
+    // public-visual-fixes P3: the same string the operator's match list
+    // shows for this match, event code dropped because a draw page has one
+    // event. `Match 1` was a per-surface renumbering nobody could quote at
+    // the desk, and it is deleted rather than restyled.
+    expect(renderNode(MC.singlesScheduled)).toContain('MS R16·1');
+    expect(renderNode(MC.unresolvedPredecessor)).toContain('MS R16·5');
+    expect(renderNode(MC.singlesScheduled)).not.toContain('Match 1');
   });
 
-  it('an unresolved predecessor renders its label, never inventing a person', () => {
+  it('an exceptional outcome reads as a LEADING cue, not a second trailing word', () => {
+    const html = renderNode(MC.walkover);
+    // The cue precedes the reference on the node's one metadata line.
+    expect(html).toMatch(/Walkover<\/span>[\s\S]{0,80}MS R16·9|Walkover MS R16·9/);
+  });
+
+  it('each side carries its OWN aligned game column, not one shared lane (P1)', () => {
+    // **Operator/public remediation P1 supersedes public-visual-fixes P4.**
+    // A node is a stacked layout, so the number beside a name belongs to
+    // that name: three games x two sides = six cells, and the trailing
+    // paired lane (`21–15, 18–21, 21–19` on the node's header line) is gone.
+    const html = renderNode(MC.completedLoserWonAGame);
+    expect((html.match(/place-items-center/g) ?? []).length).toBe(6);
+    // The visible lane is withdrawn; the paired spelling survives ONLY in
+    // the card's one accessible summary, which is an `aria-label`.
+    expect(html).not.toMatch(/<span class="tabular-nums">21–15, 18–21, 21–19<\/span>/);
+    expect(html).toContain('Score 21–15, 18–21, 21–19');
+  });
+
+  it('a walkover fabricates no numeric game on the node (rule 6)', () => {
+    const html = renderNode(MC.walkover);
+    // §5.1 rule 6 / P1 rule 6: an absent score renders nothing. Never 0–0,
+    // never a dash, and no score column on either side.
+    expect(html).not.toContain('–');
+    expect(html).not.toContain('place-items-center');
+  });
+
+  it('a not-yet-started node renders no score column at all (P1 rule 7)', () => {
+    expect(renderNode(MC.singlesScheduled)).not.toContain('place-items-center');
+  });
+
+  it('an unresolved predecessor is an EMPTY slot with a muted feeder line', () => {
+    // §6.2 / §4.3 (public-visual-fixes P3): no "Winner of", no node key, no
+    // slot index — one muted `from {reference}` line in a slot that keeps a
+    // name's own height, so nothing jumps when the result lands.
     const html = renderNode(MC.unresolvedPredecessor);
-    expect(html).toContain('Winner of QF1');
+    expect(html).toContain('from QF1');
+    expect(html).not.toContain('Winner of');
+    expect(html).toContain('data-feeder-slot');
+  });
+
+  it('a bye and a withheld person stay distinct from an unknown feeder', () => {
+    // Three different facts, three different renderings: a settled bye, a
+    // real person the organizer has not published, and a slot nobody has
+    // reached yet. The last is the only muted one.
+    expect(renderNode(MC.bye)).not.toContain('data-feeder-slot');
+    expect(renderNode(MC.withheldSide)).not.toContain('data-feeder-slot');
+    expect(renderNode(MC.bye)).toContain('Bye');
+    expect(renderNode(MC.withheldSide)).toContain('Player not published');
   });
 
   it('a bye side renders "Bye" in the same structure as a name', () => {
@@ -160,7 +211,9 @@ describe('match-card contract — accessible summary (§6.1 "versus"/"and")', ()
 
   it('an unresolved side folds into the phrase by its label, not a slash join', () => {
     const html = renderNode(MC.unresolvedPredecessor);
-    expect(html).toContain('Ada Lovelace versus Winner of QF1');
+    // One spelling, visible and accessible (P3): the phrase says where the
+    // side comes from rather than asserting a winner that does not exist.
+    expect(html).toContain('Ada Lovelace versus from QF1');
   });
 
   it('MC-04: the pending partner is a term in the phrase, joined with "and"', () => {
@@ -183,7 +236,10 @@ describe('match-card contract — labels come from the discriminant (§2.1/§6.1
       ] as typeof MC.unresolvedPredecessor.sides,
     };
     const html = renderNode(match);
-    expect(html).toContain('Loser of SF 2');
+    // P3: both feeder takes read the same way on the public tier — the
+    // structure says which half of SF 2 this side is, the line says where
+    // it comes from, and neither claims an outcome nobody has recorded.
+    expect(html).toContain('from SF 2');
     expect(html).not.toContain('NONSENSE');
   });
 
@@ -198,5 +254,45 @@ describe('match-card contract — labels come from the discriminant (§2.1/§6.1
     const html = renderNode(match);
     expect(html).toContain('To be decided');
     expect(html).not.toMatch(/>TBD</);
+  });
+});
+
+describe('operator/public parity — the approved schedule wins (P7)', () => {
+  // The imported source record (`localTime` / `courtLabel`) says where a
+  // match was ORIGINALLY played. Once Operations approves a slot and a
+  // court, those are the published schedule, and the public card must state
+  // them: preferring the source record published "Court 8 / 10:00" on the
+  // draw while the operator console and the public schedule both said
+  // "Court 1 / 13:00" for the same live match.
+  const rescheduled = {
+    ...MC.liveWithLead,
+    scheduledTime: '13:00',
+    court: 1,
+    localTime: '10:00',
+    courtLabel: 'Court 8',
+  };
+
+  it('states the approved court, not the source record\'s court label', () => {
+    const html = renderCard(rescheduled);
+    expect(html).toContain('Court 1');
+    expect(html).not.toContain('Court 8');
+  });
+
+  it('states the approved slot time, not the source record\'s clock', () => {
+    const html = renderCard(rescheduled);
+    expect(html).toContain('13:00');
+    expect(html).not.toContain('10:00');
+  });
+
+  it('still falls back to the source record when nothing is approved', () => {
+    const html = renderCard({
+      ...MC.completedLoserWonAGame,
+      scheduledTime: null,
+      court: null,
+      localTime: '10:00',
+      courtLabel: 'Court 8',
+    });
+    expect(html).toContain('Court 8');
+    expect(html).toContain('10:00');
   });
 });

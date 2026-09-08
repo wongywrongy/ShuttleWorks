@@ -13,9 +13,12 @@ import { useState } from 'react';
 import { useCanEdit } from '../../../hooks/useCanEdit';
 import { useConfirmClick } from '../../../hooks/useConfirmClick';
 import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
+import { NavCaret, NAV_LINK_ROW } from '../../../components/NavCaret';
+import { TEXT_SECONDARY } from '../../../lib/textRoles';
 import type { RunMatch } from '../runtime/runModel';
 import type { MeetRunOps } from './useMeetRunOps';
 import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
+import { formatGamePairs } from '../../../components/control-plane';
 
 export interface RunFinishedProps {
   /** The full Run match list — this component filters to `done` itself. */
@@ -31,16 +34,25 @@ export function RunFinished({ matches, meetOps }: RunFinishedProps) {
   if (done.length === 0) return null;
 
   return (
-    <div data-testid="run-finished">
-      <div className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint">
-        Finished
-      </div>
+    // P4: history is collapsed by default. A finished day put a hundred
+    // completed rows between the desk and the queue it actually works from;
+    // the rows are one click away, in the same order, with the same Undo.
+    <details data-testid="run-finished">
+      <summary
+        data-testid="run-finished-toggle"
+        className={`${NAV_LINK_ROW} w-full cursor-pointer list-none px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint hover:text-foreground`}
+      >
+        <span className="inline-flex transition-transform duration-fast [details[open]_&]:rotate-90">
+          <NavCaret />
+        </span>
+        Finished ({done.length})
+      </summary>
       <ul className="divide-y divide-border/60 border-t border-border/60">
         {done.map((m) => (
           <FinishedRow key={m.key} match={m} meetOps={meetOps} />
         ))}
       </ul>
-    </div>
+    </details>
   );
 }
 
@@ -56,11 +68,16 @@ function FinishedRow({ match, meetOps }: { match: RunMatch; meetOps?: MeetRunOps
   // matches on a finished bracket day.
   const score = match.score ?? (undoable ? meetOps!.matchStates[match.id]?.score : undefined);
   const sets = match.score?.sets;
+  // P1: one score speller per tier. This row used to build its own en-dash
+  // join — a fourth spelling of `18–21, 21–15` in the console — so it now
+  // goes through the shared `formatGamePairs`, in canonical A-then-B order.
+  // A finished row with no per-game detail falls back to the recorded
+  // aggregate, exactly as the match rows do; nothing is fabricated.
   const scoreLine =
     sets && sets.length > 0
-      ? sets.map((set) => `${set.sideA}–${set.sideB}`).join(', ')
+      ? formatGamePairs(sets)
       : score
-        ? `${score.sideA}–${score.sideB}`
+        ? formatGamePairs([score])
         : null;
 
   const handleUndo = async () => {
@@ -83,9 +100,9 @@ function FinishedRow({ match, meetOps }: { match: RunMatch; meetOps?: MeetRunOps
 
   return (
     <li className="flex items-center gap-2 px-4 py-1.5 text-xs">
-      <span className={`${EYEBROW_CLASS} shrink-0 text-muted-foreground`}>{formatMatchIdentity(match.identity, match.id)}</span>
+      <span className={`${EYEBROW_CLASS} shrink-0 ${TEXT_SECONDARY}`}>{formatMatchIdentity(match.identity, match.id)}</span>
       {match.court != null && (
-        <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">C{match.court}</span>
+        <span className={`shrink-0 text-2xs tabular-nums ${TEXT_SECONDARY}`}>C{match.court}</span>
       )}
       <span className="min-w-0 flex-1 break-words text-muted-foreground">
         {match.sideA} <span className="text-muted-foreground">vs</span> {match.sideB}

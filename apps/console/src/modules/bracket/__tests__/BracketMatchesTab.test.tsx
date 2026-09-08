@@ -7,7 +7,7 @@
  * Pins the shared banded-list grammar: per-group `#` numbering that
  * restarts on each event AND stays stable under search (numbers are
  * assigned before filtering), friendly play-unit codes ("MS SF1"),
- * status-column tones, and muted-italic unresolved-side placeholders in
+ * status-column tones, and secondary-italic unresolved-side placeholders in
  * the match-card contract's fixed §2.1 vocabulary ("To be decided",
  * never "TBD").
  */
@@ -203,7 +203,7 @@ describe('<BracketMatchesTab />', () => {
     }
   });
 
-  it('renders unresolved sides as a muted-italic placeholder in the fixed §2.1 vocabulary', () => {
+  it('renders unresolved sides as a secondary-italic placeholder in the fixed §2.1 vocabulary', () => {
     // v3-10c / match-card contract §2.1, §2.4: an unresolved side never
     // renders "TBD" — the fixed label for a slot with no claim at all is
     // "To be decided".
@@ -212,7 +212,11 @@ describe('<BracketMatchesTab />', () => {
     expect(tbds).toHaveLength(4); // two finals × two sides
     for (const el of tbds) {
       expect(el.className).toContain('italic');
-      expect(el.className).toContain('text-muted-foreground');
+      // P2: the SECONDARY ink, not the muted one. An unresolved side is a
+      // fact about the draw, and the muted register is what a disabled
+      // control wears — italic already separates it from a resolved name.
+      expect(el.className).toContain('text-text-secondary');
+      expect(el.className).not.toContain('text-muted-foreground');
       expect(el.className).toContain('text-xs');
     }
   });

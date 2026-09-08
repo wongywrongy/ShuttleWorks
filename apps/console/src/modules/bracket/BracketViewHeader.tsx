@@ -8,6 +8,7 @@ import { Seg, type SegOption } from "../../platform/engine-config/SettingsContro
 import { formatLabel, disciplineLabel } from "./bracketLabels";
 import { descriptorFor } from "./formatRegistry";
 import type { BracketLayoutMode } from "./DrawView";
+import { BackCaret, NAV_LINK_ROW } from "../../components/NavCaret";
 
 const LAYOUT_OPTIONS: readonly SegOption<BracketLayoutMode>[] = [
   { value: "one-sided", label: "One-sided" },
@@ -55,9 +56,10 @@ export function BracketViewHeader({
               explicit way back rather than stranding the operator. */}
           <Link
             to={`/tournaments/${tid}/bracket/draws`}
-            className={UTILITY_BUTTON}
+            className={`${UTILITY_BUTTON} ${NAV_LINK_ROW}`}
           >
-            ← Draws
+            <BackCaret />
+            <span>Draws</span>
           </Link>
           <Select
             value={eventId}

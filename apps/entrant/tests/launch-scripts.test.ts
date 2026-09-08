@@ -113,7 +113,7 @@ test('keeps the entrant SSR list tied to every createServer test and partitions 
   const unit = all.filter((name) => !ssr.includes(name));
 
   expect(ssr).toEqual(discoveredSsr);
-  expect(ssr).toHaveLength(23);
+  expect(ssr).toHaveLength(24);
   expect(new Set([...unit, ...ssr])).toEqual(new Set(all));
   expect(unit).not.toEqual([]);
   expect(new Set(unit).size + new Set(ssr).size).toBe(all.length);

@@ -24,7 +24,7 @@ features:
     details: Entries is intake, Meet and Bracket are the engines, Operations is the live-ops layer, Display is the read-only output. Four are user-enableable; Operations is a Tier-2 architectural module.
     link: /explanation/architecture/system-overview
   - title: An SSR-first public tier
-    details: The site where a player finds a tournament and enters it is a separate server-rendered app under /e/. Complete HTML and native writes work without hydration; bounded same-origin route modules enhance search, draws, account state, and entry progress. Poster and discovery pages have a blocking 4 KB budget; the persistent entry journey has an 8 KB budget.
+    details: The site where a player finds a tournament and enters it is a separate server-rendered app under /e/. Complete HTML and native writes work without hydration; bounded same-origin route modules enhance search, draws, account state, and entry progress. Poster and discovery pages have a blocking 4 KB budget; the persistent entry journey has an 8 KB budget; the published-results documents have a 14 KB one.
     link: /explanation/architecture/entrant-tier
   - title: Test-enforced module contracts
     details: The seams between modules are declared in a typed, test-enforced descriptor. Each contract page states what crosses the boundary, who owns it, and the clean interface.
@@ -40,6 +40,7 @@ features:
 | --- | --- |
 | Understand the product and its vocabulary | [What ShuttleWorks is](/explanation/what-is-shuttleworks) |
 | Run it on your machine | [Running locally](/how-to/running-locally) |
+| Update the Tailscale demo and share review books | [Publish a demo review](/how-to/publish-demo-review) |
 | Know where code lives | [Repo layout](/reference/repo-layout) |
 | See the module shape | [System overview](/explanation/architecture/system-overview) |
 | Trace how data moves | [Data flow](/explanation/architecture/data-flow) |

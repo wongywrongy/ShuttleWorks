@@ -30,6 +30,19 @@ export interface ScheduleMatchDTO {
   matchKey: string;
   source: "bracket" | "meet";
   eventCode: string;
+  /** The SHARED human match reference (state-and-formatting §6.1, "One
+   *  reference, both tiers") — the identical string the operator's match
+   *  list shows for this match, e.g. `MS R32·11`. `shortReference` drops the
+   *  event code for a view whose event is already unambiguous (a single
+   *  draw: `R16·2 · 10:00 · Court 3`). Both are null when the coordinates
+   *  cannot name a match; nothing is rendered then — never a row number,
+   *  never `Match n`. */
+  reference?: string | null;
+  shortReference?: string | null;
+  /** The AUTHORITATIVE outcome (contract §3.5/§5.1 rule 3): which side won,
+   *  from the recorded result. A renderer must never count games instead —
+   *  retirement and walkover contradict the ledger outright. */
+  winnerSide?: "A" | "B" | null;
   discipline: string | null;
   roundLabel: string | null;
   /**

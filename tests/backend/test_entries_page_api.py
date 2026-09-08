@@ -224,6 +224,36 @@ def test_the_projection_carries_the_tournament_its_date_and_its_events(client, p
     }
 
 
+def test_the_public_name_overrides_the_title_and_a_blank_one_does_not(client, page):
+    """OPR-0908-3: Setup's "Name shown to players" is read here, and only here.
+
+    The field's own label promises it "appears on the public site" and
+    "defaults to the tournament name if left blank"; before this it was
+    written by the form and read by nothing. Both halves of that promise are
+    pinned: a set override IS the public title, and clearing it falls back to
+    the workspace name rather than publishing a blank.
+    """
+    def _patch_public_name(value):
+        etag = client.get(f"/tournaments/{page['tid']}/setup").headers["etag"]
+        r = client.patch(
+            f"/tournaments/{page['tid']}/setup/general",
+            headers={"If-Match": etag, **CSRF},
+            json={"data": {"name": "Spring Open", "publicName": value}},
+        )
+        assert r.status_code == 200, r.text
+
+    _patch_public_name("Spring Open · Club Championships")
+    assert (
+        _projection(client, page)["tournament"]["name"]
+        == "Spring Open · Club Championships"
+    )
+    # The workspace itself is NOT renamed: the override is a public title.
+    assert client.get(f"/tournaments/{page['tid']}").json()["name"] == "Spring Open"
+
+    _patch_public_name("   ")
+    assert _projection(client, page)["tournament"]["name"] == "Spring Open"
+
+
 def test_the_projection_carries_the_fee_and_the_regulations_version(client, page):
     payload = _projection(client, page)
     assert _event(payload, page["ms"])["feeCents"] == 1500

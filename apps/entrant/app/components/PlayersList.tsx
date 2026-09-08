@@ -6,10 +6,13 @@ export function PlayersList({
   slug,
   roster,
   drawsPublished,
+  query = '',
 }: {
   slug: string;
   roster: PlayersDTO;
   drawsPublished: boolean;
+  /** The URL's `?q=` — the directory search, applied server-side (P7). */
+  query?: string;
 }) {
   if (roster.players.length === 0) {
     return <p className="text-muted-foreground">No players published yet.</p>;
@@ -20,6 +23,9 @@ export function PlayersList({
       entrants={roster.players}
       noun="player"
       linkEventsToDraws={drawsPublished}
+      query={query}
+      action={`/e/${encodeURIComponent(slug)}`}
+      hidden={[{ name: 'tab', value: 'players' }]}
     />
   );
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@scheduler/design-system';
-import { Select } from '@scheduler/design-system/components';
+import { Select, TextField } from '@scheduler/design-system/components';
 import { SectionCard, PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { apiClient } from '../../api/client';
@@ -210,11 +210,11 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
   }
 
   const now = Date.now();
-  // Package 16: one board name everywhere — "Venue board". The composed
-  // Displays page (`WorkspaceShellSurface`'s `display/board` pane) already
-  // titles itself once via `DisplayConfig`'s own heading directly above this
-  // component, so this scope renders no second heading/intro for the same
-  // page (V3-OC22.2 — no repeated "public display link" headings).
+  // Package 16: one board name everywhere — "Venue board". The PAGE owns
+  // that title: `DisplayBoardSettings` (`WorkspaceShellSurface`) names it
+  // once in its `ActionsBar`, so neither this scope nor `DisplayConfig`
+  // renders a heading/intro for the same page (V3-OC22.2 — no repeated
+  // "public display link" headings; OPR-0908-4 — one heading owner).
   const heading = scope === 'site'
     ? 'Public site'
     : scope === 'team'
@@ -251,9 +251,28 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
             ariaLabel="Invite role"
             size="sm"
           />
-          {inviteMode === 'email' && <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-foreground">Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" aria-label="Invite email" className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40" />
-          </label>}
+          {inviteMode === 'email' && (
+            // OPR-0908-5: the chrome comes from `TextField` (control border
+            // token, focus ring, disabled treatment) instead of a local class
+            // string. The label stays beside the field on this one action row,
+            // so the word is rendered beside it exactly as "Role" is beside
+            // the Select above (a <span>, not a second <label> — TextField
+            // brings its own, sr-only, and labels cannot nest).
+            <span className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-foreground">
+              <span>Email</span>
+              <TextField
+                label="Invite email"
+                labelHidden
+                size="sm"
+                className="min-w-0 flex-1"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email address"
+                aria-label="Invite email"
+              />
+            </span>
+          )}
           <Button size="sm" onClick={create} disabled={busy || !online || (inviteMode === 'email' && !email.trim())}>
             {busy ? (inviteMode === 'email' ? 'Sending…' : 'Creating…') : inviteMode === 'email' ? 'Send invitation' : 'Create share link'}
           </Button>

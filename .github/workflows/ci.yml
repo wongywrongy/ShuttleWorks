@@ -135,6 +135,11 @@ jobs:
       # stack anyway). That replaces ruling R8-F's 123 KB, which budgeted for
       # a React Router hydration floor no browser ever downloaded. See
       # docs/reference/debt-log.md for the record.
+      # Public P8 added the three published-results documents — Players,
+      # a full 32 draw, and the schedule — each measured at its worst
+      # case and each carrying a different page-scoped script. Their
+      # budget is a separate, derived 14 KB; the 4 KB and 8 KB ceilings
+      # above are unchanged.
       - name: Page-weight budget (entry page, HTML + referenced scripts gzipped)
         run: node apps/entrant/scripts/measure-page-weight.mjs
 

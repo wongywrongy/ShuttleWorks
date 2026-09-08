@@ -46,7 +46,7 @@ from typing import Annotated, AsyncGenerator, Dict, List, Literal, Optional, Seq
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
-from pydantic import AfterValidator, BaseModel, Field, ValidationError
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, ValidationError
 
 from shared.sport.badminton import schedule_config_for_bracket
 from shared.sides import (
@@ -237,6 +237,14 @@ class ParticipantIn(StrictModel):
     # ``ParticipantOut`` that is missing here makes the echo a 422 - or, if
     # the client strips it, silently erases the key on every roster edit.
     entryPlayerId: Optional[str] = None
+    # P6's cross-tournament identity for an IMPORTED person, the same pair
+    # ``BracketPlayerDTO`` carries on the roster row: ``personId`` is the
+    # source dataset's own player id and ``personSource`` names where it
+    # came from. A pre-paired import states it per participant as well as
+    # per roster row, so both halves of the wire shape must accept it -
+    # StrictModel forbade the extra and turned every such import into a 422.
+    personId: Optional[Identifier] = None
+    personSource: Optional[Annotated[str, StringConstraints(max_length=200)]] = None
 
 
 class EventIn(StrictModel):
@@ -280,6 +288,11 @@ class ParticipantOut(BaseModel):
     # hand-added participant has neither.
     entryPlayerId: Optional[str] = None
     sourceEntryId: Optional[str] = None
+    # Echoed for the same reason ``entryPlayerId`` is: the console upserts a
+    # roster by sending participants straight back, so a key that leaves on
+    # the read and is absent on the write is erased on the first edit.
+    personId: Optional[str] = None
+    personSource: Optional[str] = None
 
 
 class BracketSlotOut(BaseModel):
@@ -515,6 +528,13 @@ class BracketAssignIn(StrictModel):
 
 class BracketUnassignIn(StrictModel):
     """Body for POST /bracket/unassign — remove a play unit's court assignment."""
+
+    play_unit_id: Identifier
+    command_id: Optional[uuid.UUID] = None
+
+
+class BracketClearCourtIn(StrictModel):
+    """Body for POST /bracket/clear-court — drop the published court only."""
 
     play_unit_id: Identifier
     command_id: Optional[uuid.UUID] = None
@@ -1254,6 +1274,8 @@ def _participant_out(participant: Participant) -> ParticipantOut:
         seed=metadata.get("seed"),
         entryPlayerId=(metadata.get("entryPlayerId") if isinstance(metadata, dict) else None),
         sourceEntryId=(metadata.get("sourceEntryId") if isinstance(metadata, dict) else None),
+        personId=(metadata.get("personId") if isinstance(metadata, dict) else None),
+        personSource=(metadata.get("personSource") if isinstance(metadata, dict) else None),
     )
 
 
@@ -1866,6 +1888,8 @@ def create_bracket(
                     **(dict(p.meta) if getattr(p, "meta", None) else {}),
                     **({"seed": p.seed} if p.seed is not None else {}),
                     **({"entryPlayerId": p.entryPlayerId} if p.entryPlayerId else {}),
+                    **({"personId": p.personId} if p.personId else {}),
+                    **({"personSource": p.personSource} if p.personSource else {}),
                 },
             )
             for p in ev.participants
@@ -2433,11 +2457,20 @@ def upsert_event(
                     "type": "TEAM" if p.members else "PLAYER",
                     "member_ids": list(p.members or []),
                     # The source here is the wire ``ParticipantIn``, which
-                    # has no ``meta`` — only the two lifted columns. An
-                    # upsert therefore still clears ``meta``; what it must
-                    # NOT clear is the person key the client echoed back.
+                    # has no free-form ``meta``. Preserve the explicit person
+                    # identity fields echoed by the client alongside the
+                    # lifted seed and entry-player columns.
                     **_participant_persist_fields(
-                        {"seed": p.seed, "entryPlayerId": p.entryPlayerId}
+                        {
+                            "seed": p.seed,
+                            "entryPlayerId": p.entryPlayerId,
+                            **({"personId": p.personId} if p.personId else {}),
+                            **(
+                                {"personSource": p.personSource}
+                                if p.personSource
+                                else {}
+                            ),
+                        }
                     ),
                 }
                 for p in body.participants
@@ -3274,6 +3307,43 @@ def unassign_bracket_court(
         raise HTTPException(status_code=422, detail="current user id is not a UUID")
     outcome = BracketAssignmentService().apply(
         repo, tournament_id, play_unit_id=body.play_unit_id, action="unassign",
+        slot_id=None, court_id=None, actor_id=actor_id, command_id=body.command_id,
+    )
+    response_cache.invalidate(tournament_id)
+    return _serialize_session(outcome.session)
+
+
+@router.post("/clear-court", response_model=TournamentOut, dependencies=[_OPERATOR])
+def clear_bracket_court(
+    body: BracketClearCourtIn,
+    tournament_id: uuid.UUID = Path(...),
+    repo: LocalRepository = Depends(get_repository),
+    user: AuthUser = Depends(get_current_user),
+) -> TournamentOut:
+    """Withdraw the PUBLISHED court while the plan slot stays exactly as it is.
+
+    The third court verb, and the one the other two could not express
+    (OPR-0908-8). ``/bracket/assign`` materializes the Operations ``matches``
+    row that the public tier reads as "this match is on court N";
+    ``/bracket/unassign`` clears that row but also drops the play unit's plan
+    assignment, returning it to the queue. An operator who sent a match to
+    court and changed their mind had no way back to "planned at this slot, no
+    approved court" — the public tier kept publishing the court.
+
+    This endpoint un-materializes the court alone: the session assignment
+    (slot, court, duration) is untouched, and the ``matches`` row keeps its
+    ``time_slot`` with ``court_id`` set to NULL, which is precisely what the
+    public projection reads as "no court yet".
+
+    Idempotent by ``command_id`` like its siblings, and a no-op 200 when the
+    unit has no assignment at all.
+    """
+    from bracket.application import BracketAssignmentService
+    actor_id = user.as_uuid()
+    if actor_id is None:
+        raise HTTPException(status_code=422, detail="current user id is not a UUID")
+    outcome = BracketAssignmentService().apply(
+        repo, tournament_id, play_unit_id=body.play_unit_id, action="clear-court",
         slot_id=None, court_id=None, actor_id=actor_id, command_id=body.command_id,
     )
     response_cache.invalidate(tournament_id)

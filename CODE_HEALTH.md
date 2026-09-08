@@ -38,7 +38,7 @@ in exactly one of four places:
 | --- | --- |
 | `platform/domain/` | cross-module DOMAIN logic — the module model, the match contract, anything that knows what a tournament *is* |
 | `lib/` | any other pure, React-free helper — dates, slugs, formatting, queues |
-| `components/` | React-touching shared UI (the `SourceChip` precedent: three consumers, so it lives here) |
+| `components/` | React-touching shared UI used by multiple console modules |
 | `packages/design-system` | a component used by more than one APP, not just more than one module |
 
 Two rules keep it honest. **Promote, never copy** — a second consumer means the

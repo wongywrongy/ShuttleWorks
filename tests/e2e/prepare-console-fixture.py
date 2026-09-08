@@ -12,6 +12,33 @@ VIEWER_EMAIL = "console-viewer@example.test"
 VIEWER_PASSWORD = "FixtureOnly!2026-aZ"
 
 
+LIVE_COURT_COUNT = 6
+
+
+def _assert_one_live_match_per_court(probe: SimClient, slug: str) -> None:
+    """Every live match publishes a court, and no two share one."""
+    live: list[dict] = []
+    page = 1
+    while True:
+        payload = probe.request(
+            "GET", f"/e/api/page/{slug}/matches?page={page}", expect=(200,)
+        ).json()
+        items = payload.get("items") or []
+        live.extend(item for item in items if item.get("status") == "live")
+        if page * int(payload.get("pageSize") or 25) >= int(payload.get("total") or 0):
+            break
+        page += 1
+    if len(live) != LIVE_COURT_COUNT:
+        raise SystemExit(
+            f"expected {LIVE_COURT_COUNT} live matches, one per court, got {len(live)}"
+        )
+    courts = [item.get("court") for item in live]
+    if any(court is None for court in courts):
+        raise SystemExit("a live match published no court")
+    if len(set(courts)) != len(courts):
+        raise SystemExit(f"two live matches share a court: {sorted(courts)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
@@ -43,8 +70,11 @@ def main() -> int:
             raise SystemExit(f"Taipei must have six courts, got {taipei.get('courts')!r}")
         if len(taipei.get("play_units") or []) != 155:
             raise SystemExit("Taipei must contain the complete 155-match draw")
-        if len(taipei.get("results") or []) != 50:
-            raise SystemExit("Taipei must contain exactly 50 completed opening matches")
+        if len(taipei.get("results") or []) != 103:
+            # 103 = the per-discipline progress plan in
+            # ``simulator/tournament_sim/seed.py::_DEMO_LIVE_PROGRESS``:
+            # MS 10, WS 20, MD 26, WD 31 (a completed draw), XD 16.
+            raise SystemExit("Taipei must contain exactly 103 recorded results")
         if len(korea.get("play_units") or []) != 155:
             raise SystemExit("Korea must contain the complete 155-match draw")
         if korea.get("results"):
@@ -60,17 +90,84 @@ def main() -> int:
             raise SystemExit("viewer identity must see Taipei and no other workspace")
         if viewer_rows[0].get("role") != "viewer":
             raise SystemExit("viewer workspace list did not report a viewer role")
+        page = owner.entry_page_projection(entries["T030"]["slug"])
+        if page.status_code != 200:
+            raise SystemExit("Korea public page projection is not readable")
     finally:
         owner.close()
         viewer.close()
 
+    # The public person handles every downstream consumer needs. A surface
+    # book, a browser test and a reviewer all want the same three things and
+    # none of them should have to guess a UUID: one person whose profile URL
+    # is a real page, one who is present but deliberately unpublished, and one
+    # key that belongs to nobody at all.
+    featured = (manifest.get("publicEntrants") or {}).get("featured") or {}
+    korea_players = entries["T030"].get("entryPlayerIds") or {}
+    taipei_players = entries["T029"].get("entryPlayerIds") or {}
+    featured_name = featured.get("MS")
+    player_key = korea_players.get(featured_name) if featured_name else None
+    if not player_key:
+        raise SystemExit("fixture has no featured published player on Korea")
+    linked_key = taipei_players.get(featured_name)
+    if not linked_key:
+        raise SystemExit("featured player is not registered in both tournaments")
+    withheld = entries["T030"].get("withheldPerson") or {}
+
     output = {
         "taipeiTid": taipei_id,
+        "taipeiSlug": entries["T029"]["slug"],
         "koreaTid": korea_id,
+        "koreaSlug": entries["T030"]["slug"],
         "displayToken": entries["T029"]["displayToken"],
         "viewerEmail": VIEWER_EMAIL,
         "viewerPassword": VIEWER_PASSWORD,
+        "playerKey": player_key,
+        "playerName": featured_name,
+        # The SAME human, in the other workspace. Same entrant account, same
+        # stored name, different ``entry_players`` row — which is exactly what
+        # a cross-tournament profile history has to be built from.
+        "linkedPlayerKey": linked_key,
+        # Registered, then withdrawn: present in the draw, resolves to
+        # "Player not published", and its profile URL is a real 404.
+        "withheldPlayerKey": withheld.get("entryPlayerId"),
+        # Well-formed and belongs to nobody — the other 404 branch.
+        "missingPlayerKey": "00000000-0000-4000-8000-000000000000",
     }
+    # Prove the three player handles above before anything downstream trusts
+    # them: a fixture that merely *claims* a working profile URL is how the
+    # missing-player finding survived a whole review cycle.
+    probe = SimClient(args.base_url)
+    try:
+        slug = entries["T030"]["slug"]
+        profile = probe.request(
+            "GET", f"/e/api/page/{slug}/players/{player_key}", expect=(200,)
+        ).json()
+        if not profile.get("events"):
+            raise SystemExit("featured player profile carries no events")
+        for key, expected in (
+            (output["withheldPlayerKey"], 404),
+            (output["missingPlayerKey"], 404),
+        ):
+            if key is None:
+                raise SystemExit("fixture is missing a withheld-player handle")
+            probe.request(
+                "GET", f"/e/api/page/{slug}/players/{key}", expect=(expected,)
+            )
+
+        # The live floor, checked where a reader meets it. The seed pins one
+        # match per court on the six-court Taipei floor
+        # (``simulator/tournament_sim/seed.py::_demo_plan``), and the public
+        # schedule shows a court only for a CURRENTLY LIVE claim — so if two
+        # live matches ever land on one court, or a live match publishes no
+        # court at all, the clean fixture is quietly showing the disputed-court
+        # state that belongs exclusively to ``FIXTURE_MODE=failure``. Asserted
+        # against the public projection rather than a table, because that is
+        # the surface the finding is about.
+        _assert_one_live_match_per_court(probe, entries["T029"]["slug"])
+    finally:
+        probe.close()
+
     args.output.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 

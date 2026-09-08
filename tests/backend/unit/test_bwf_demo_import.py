@@ -145,7 +145,13 @@ def test_demo_operational_overlays_are_scheduled_and_have_expected_results():
     attach_historical_sources(dataset, source_map_path=fixtures / "bwf-full-match-sources.json")
     complete_demo_historical_draws(dataset)
 
-    expected_results = {"T029": 50, "T030": 0}
+    # Taipei's per-discipline progress plan
+    # (``simulator/tournament_sim/seed.py::_DEMO_LIVE_PROGRESS``): MS 10,
+    # WS 20, MD 26, WD 31 (a draw played out to its final), XD 16. Korea is
+    # upcoming and has none. Before public-visual-fixes.md P0 every discipline
+    # sat in R32 and the total was 50, which left no resolved later round
+    # anywhere in the fixture.
+    expected_results = {"T029": 103, "T030": 0}
     for tournament_id, result_count in expected_results.items():
         tournament = next(row for row in dataset.tournaments if row.id == tournament_id)
         rows = dataset.historical_by_tournament[tournament_id]
@@ -177,7 +183,7 @@ def test_demo_operational_overlays_are_scheduled_and_have_expected_results():
         session = parse_json_payload(body)
 
         assert len(session.state.play_units) == 155
-        assert len(session.state.assignments) == (131 if tournament_id == "T029" else 155)
+        assert len(session.state.assignments) == (133 if tournament_id == "T029" else 155)
         assert len(session.state.results) == result_count
         assert len(live_ids) == (6 if tournament_id == "T029" else 0)
         expected_courts = set(range(1, 7 if tournament_id == "T029" else 9))
@@ -196,7 +202,10 @@ def test_demo_operational_overlays_are_scheduled_and_have_expected_results():
                 if unit.id not in session.state.assignments
                 and unit.id not in session.state.results
             ]
-            assert len(queued_units) == 24
+            # The rest of the currently-playable wave: unplayed units whose
+            # feeders have already produced both sides, held in the live-day
+            # queue rather than assigned to a court.
+            assert len(queued_units) == 22
             assert all(unit.side_a and unit.side_b for unit in queued_units)
         assert all(row.local_time and row.court for row in rows)
 

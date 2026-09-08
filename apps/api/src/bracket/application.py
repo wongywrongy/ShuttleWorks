@@ -729,7 +729,7 @@ class BracketAssignmentService:
         from fastapi import HTTPException
         from sync.service import append_local_operation
 
-        if action not in {"assign", "unassign"}:
+        if action not in {"assign", "unassign", "clear-court"}:
             raise ValueError(f"unsupported bracket assignment action: {action}")
         if action == "assign" and (slot_id is None or court_id is None):
             raise ValueError("assign requires a slot and court")
@@ -766,8 +766,15 @@ class BracketAssignmentService:
                     duration_slots=duration,
                     actual_start_slot=None,
                 )
-            else:
+            elif action == "unassign":
                 state.state.assignments.pop(play_unit_id, None)
+            else:
+                # clear-court (OPR-0908-8): the PLAN is deliberately untouched.
+                # Only the materialized Operations row below changes, so the
+                # match stays planned at its slot and the public tier stops
+                # publishing a court for it.
+                planned = state.state.assignments.get(play_unit_id)
+                slot_id = planned.slot_id if planned is not None else None
             _persist_session_metadata(
                 repo,
                 tournament_id,
@@ -779,7 +786,9 @@ class BracketAssignmentService:
                 tournament_id,
                 play_unit_id,
                 court_id=court_id if action == "assign" else None,
-                slot_id=slot_id if action == "assign" else None,
+                # ``clear-court`` keeps the approved slot on the row; only the
+                # court is withdrawn. ``unassign`` clears both.
+                slot_id=slot_id if action != "unassign" else None,
                 commit=False,
             )
             if settings.deployment_profile != "cloud":
@@ -802,7 +811,7 @@ class BracketAssignmentService:
                     payload={
                         "action": action,
                         "courtId": court_id if action == "assign" else None,
-                        "slotId": slot_id if action == "assign" else None,
+                        "slotId": slot_id if action != "unassign" else None,
                     },
                     expected_version=None,
                     operation_id=operation_id,

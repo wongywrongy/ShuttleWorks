@@ -3,8 +3,14 @@
  * (`apps/api/src/entries/entries_site.py` — PlayerPageDTO and friends).
  *
  * Scores and decided state arrive already gated server-side, so the renderer
- * never decides what may be shown, only how. Cross-tournament records are
- * intentionally not part of this person-in-tournament projection.
+ * never decides what may be shown, only how. Since public-visual-fixes P2 the
+ * projection ALSO carries `history` — the same person's other public
+ * tournaments, joined server-side on verified canonical identity (the entrant
+ * account that owns the row) or, for an IMPORTED draw-roster person who has
+ * no account at all, on the import's own declared identity — never on a
+ * similarity guess made in the browser. The renderer composes
+ * URLs from `slug` + `playerKey` through the one shared link-target resolver
+ * (`personHref`); it never assembles a person key of its own.
  */
 
 import type { PersonReferenceDTO } from './person.types';
@@ -27,12 +33,23 @@ export interface PlayerMatchSideDTO {
 export interface PlayerMatchDTO {
   eventCode: string;
   roundLabel: string | null;
+  /** The SHARED human match reference (state-and-formatting §6.1, "One
+   *  reference, both tiers") — the identical string the operator's match
+   *  list shows for this match, e.g. `MS R32·11`. `shortReference` drops the
+   *  event code for a view whose event is already unambiguous (a single
+   *  draw: `R16·2 · 10:00 · Court 3`). Both are null when the coordinates
+   *  cannot name a match; nothing is rendered then — never a row number,
+   *  never `Match n`. */
+  reference?: string | null;
+  shortReference?: string | null;
   sides: PlayerMatchSideDTO[];
   /** Sets as [a, b] pairs; null while unplayed or unpublished. */
   score: number[][] | null;
   decided: boolean;
   /** Venue-local HH:MM; null until scheduled. */
   scheduledTime: string | null;
+  /** The approved slot's venue-local calendar day (P7); null until scheduled. */
+  scheduledDate?: string | null;
   court: number | null;
   courtLabel?: string | null;
   playedOn?: string | null;
@@ -47,14 +64,62 @@ export interface PlayerMatchDTO {
   scoresPublished?: boolean;
 }
 
+/** One ROUND STEP of a person's path through one draw.
+ *
+ *  A step, not a sentence: the profile used to join these with an arrow into
+ *  "R32 → R16 → QF", which named no opponent, carried no result and read as
+ *  one unlabelled run-on. Each step now carries its own outcome, so the
+ *  renderer lays them out as rows. `outcome` is null while the step is
+ *  undecided OR while the tournament withholds results — never inferred
+ *  from the existence of a later round. */
+export interface PlayerDrawStepDTO {
+  roundLabel: string;
+  opponents: PersonReferenceDTO[];
+  outcome?: 'won' | 'lost' | null;
+  /** Sets as `[mine, theirs]` pairs — this person's side order, not the
+   *  draw's A/B order. */
+  score?: number[][] | null;
+  /** The shared human match reference, e.g. `MS R32·11`. */
+  reference?: string | null;
+}
+
 export interface PlayerEventDTO {
   code: string;
   discipline: string;
   /** §3.3 "with <partner>" — the accepted, publicly-visible doubles partner,
-   *  or null (singles, no acceptance yet, or the partner is not public). */
+   *  or null (singles, no acceptance yet, or the partner is not public).
+   *  For a draw-roster person this is the OTHER member of their pair in the
+   *  published draw, which is the only pair record such a person has. */
   partner?: PersonReferenceDTO | null;
   seed?: number | null;
-  drawPath: Array<{ roundLabel: string; opponents: PersonReferenceDTO[] }>;
+  drawPath: PlayerDrawStepDTO[];
+}
+
+/** One workspace in a person's public tournament history (profile v1).
+ *
+ *  A row is a LINK TARGET, not a summary: `slug` + `playerKey` address that
+ *  workspace's own page for this same human. Only published, permitted
+ *  workspaces are present at all — the API omits the rest rather than
+ *  describing them, so the renderer has no visibility decision to make. */
+export interface PlayerHistoryEntryDTO {
+  slug: string;
+  tournamentName: string | null;
+  /** Venue-local start date, `YYYY-MM-DD`; null when the organizer set none. */
+  date: string | null;
+  endDate?: string | null;
+  /** `entry_players.id` in THAT workspace — a different row, same human. */
+  playerKey: string;
+  /** The workspace being read. Present in the list, never linked to itself. */
+  current: boolean;
+  eventCodes: string[];
+  drawsPublished: boolean;
+  resultsPublished: boolean;
+  /** Per-event participation in THAT workspace, through that workspace's own
+   *  publication gates. Populated only for expanded rows. */
+  events?: PlayerEventDTO[];
+  /** True when `events` is complete for this row. False means "open the
+   *  link to see it", never "this person played nothing there". */
+  expanded?: boolean;
 }
 
 export interface PlayerPageDTO {
@@ -62,4 +127,6 @@ export interface PlayerPageDTO {
   club: string | null;
   events: PlayerEventDTO[];
   matches: PlayerMatchDTO[];
+  /** Newest first, undated last; always at least the current tournament. */
+  history?: PlayerHistoryEntryDTO[];
 }

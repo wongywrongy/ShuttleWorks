@@ -11,12 +11,13 @@ endpoint free of per-row queries (see the SP-A spec's N+1 guardrail).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 import re
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from core.demo_clock import utcnow as event_utcnow
 from db.models import display_dependency_satisfied
 from shared.court_occupancy import (
     courts_free as _courts_free,
@@ -673,7 +674,7 @@ def _entries_attention(
     if entries is None:
         return []
 
-    moment = now or datetime.now(timezone.utc)
+    moment = now or event_utcnow()
     out: List[AttentionReasonDTO] = []
 
     if entries.any_event_open and entries.next_close_at is not None:
@@ -863,6 +864,17 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
             data_blob, to_do, counts.match_status_by_id
         )
 
+    play_phase = _derive_phase(data_blob, counts)
+    entry_phase = _entries_phase(counts.entries)
+    # Active play is the operator's strongest lifecycle signal. A stale
+    # uncommitted entry must not hide courts currently in play; once play is
+    # over, entries_review still correctly remains the actionable state.
+    phase = (
+        "live"
+        if entry_phase is not None and (matches_metrics.playing or 0) > 0
+        else entry_phase or play_phase
+    )
+
     return WorkspaceSignalsDTO(
         health=health,
         attention=attention,
@@ -874,7 +886,7 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
         # E4: the entries phases are a PREFIX on the existing four, so the
         # play-state derivation is untouched and is what answers once the
         # desk is clear.
-        phase=_entries_phase(counts.entries) or _derive_phase(data_blob, counts),
+        phase=phase,
         planFinalized=bool(data_blob.get("planFinalized")),
         entries=_entries_metrics(counts.entries),
     )

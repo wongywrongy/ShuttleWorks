@@ -16,34 +16,30 @@
  * `aria-current`, deliberately not an ARIA tablist (Z6) — each switch is a
  * full, KB-scale document load.
  */
-import { isRouteErrorResponse, useRouteError } from 'react-router';
+import { isRouteErrorResponse, redirect, useRouteError } from 'react-router';
 
-import { EventRow } from '../components/EventRow';
+import { EVENT_ROW_COLUMNS, EventRow } from '../components/EventRow';
 import { PersonRef } from '../components/PersonRef';
-import { HeroHeader } from '../components/HeroHeader';
 import { MessagePage } from '../components/MessagePage';
 import { PlayShell } from '../components/PlayShell';
 import { PlayersList } from '../components/PlayersList';
-import { SectionCard, SectionRow } from '../components/SectionCard';
-import { TabBar } from '../components/TabBar';
+import { SectionCard, SectionProse, SectionRow } from '../components/SectionCard';
+import { TournamentFrame } from '../components/TournamentFrame';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
+import { demoNowMs } from '../lib/demoClock.server';
 import type { DrawCardDTO, DrawsIndexDTO, PlayersDTO } from '../lib/draws.types';
 import { eventCodeLabel } from '../lib/draws.types';
 import type { EntryPageDTO, ReserveRowDTO } from '../lib/entryPage.types';
-import { capChipCountdown, dateOfIso, formatDateLong, formatMomentInZone } from '../lib/format';
+import { dateOfIso, formatDateLong, formatDayMonthTimeInZone } from '../lib/format';
 import {
   activeTab,
-  chipState,
-  ctaState,
-  nearestCloseAt,
-  phaseLabel,
+  legacyDrawsTab,
   timelineModel,
-  tournamentPhase,
   visibleTabs,
   type Tab,
 } from '../lib/phase';
 import type { Route } from './+types/tournament';
-import { LIST_CARD, LIST_CARD_ROW } from '../lib/ui';
+import { ACTION_LINK, LIST_CARD, LIST_CARD_ROW } from '../lib/ui';
 
 export interface TournamentLoaderData {
   page: EntryPageDTO;
@@ -55,6 +51,9 @@ export interface TournamentLoaderData {
    * per document, never a fan-out (SP-P7 §3.4–3.6). */
   draws?: DrawsIndexDTO;
   players?: PlayersDTO;
+  /** The Players directory's `?q=` — filtered on the server (P7), so the
+   * search works with no script and the URL is shareable. */
+  playerQuery?: string;
 }
 
 /**
@@ -86,13 +85,27 @@ export async function loader({
   }
 
   const tabs = visibleTabs(page.events, page.entrants, page.publication);
-  const active = activeTab(new URL(request.url).searchParams.get('tab'), tabs);
+  const requested = new URL(request.url).searchParams.get('tab');
+  // Retired section names (`events`, `seeds`, `winners`) are aliases of this
+  // page's ONE Draws surface, not sections of their own: send the reader to
+  // the canonical URL rather than 404ing a link that is still in circulation
+  // (public-visual-fixes P6). A workspace with no Draws tab has nowhere
+  // honest to send them, so it keeps the uniform 404 below.
+  const alias = legacyDrawsTab(requested);
+  if (alias !== null && tabs.includes(alias)) {
+    // Root-relative and WITHOUT the basename: React Router prefixes
+    // `config.basename` (`/e/`) onto a loader redirect itself, so passing
+    // `/e/{slug}` here lands on `/e/e/{slug}` (`discovery.tsx` carries the
+    // same note over the same trap).
+    throw redirect(`/${encodeURIComponent(slug)}?tab=${alias}`, 302);
+  }
+  const active = activeTab(requested, tabs);
   if (active === null) throw notFound();
   const payload: TournamentLoaderData = {
     page,
     tabs,
     active,
-    nowMs: Date.now(),
+    nowMs: demoNowMs(),
   };
   const base = `/e/api/page/${encodeURIComponent(slug)}`;
   if (active === 'players') {
@@ -100,6 +113,7 @@ export async function loader({
     // roster rows. This keeps the public directory complete before and after
     // draws are released without maintaining a second client-side roster.
     payload.players = await apiGet<PlayersDTO>(`${base}/players`);
+    payload.playerQuery = (new URL(request.url).searchParams.get('q') ?? '').trim();
   } else if (active === 'draws' && page.publication?.draws) {
     // The Draws panel is the event list from day one; the draw index joins
     // it only once the organizer has published draws (ADR 0028). Seeds ride
@@ -158,64 +172,75 @@ function tabHref(slug: string, tab: Tab): string {
 // ---- Overview --------------------------------------------------------------
 
 function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
-  const tournamentView = page.tournament as EntryPageDTO['tournament'] & { timeZone?: string | null };
   const slug = page.page.slug;
+  // `?? 'UTC'`: a projection without a declared zone must still render a
+  // real instant, and never in the SSR node's own local zone (P7).
+  const timeZone = page.tournament.timeZone ?? 'UTC';
   const moments = timelineModel(page.events, page.tournament.date, now);
   const regulations = page.page.regulationsText;
-  // SP-P7 §3.7: fees left the overview entirely — pricing lives on the entry
-  // form and receipt only (Kyle's mockup-review ruling), and the payment
-  // prose renders inside the entry flow (`receipt.tsx`), not here. What
-  // remains is a pointer row saying where the quote happens.
   const updated = dateOfIso(page.page.regulationsUpdatedAt);
   const entriesOpen = page.events.some((event) => event.isOpen);
   const drawsHref = tabHref(slug, 'draws');
-  // V3-PE03.2: the internal registration aggregate answered no entry
-  // question once entries closed — a 253-player tournament with five
-  // 32-entry draws still read "Event registrations 0" here, because that
-  // count and the published draw rosters are two different, unrelated
-  // sources. Show it only while it IS an entry question ("how many have
-  // entered so far"); omit the row entirely otherwise rather than print an
-  // unexplained zero.
-  const registeredSoFar = page.events.reduce(
-    (total, event) => total + (event.registrationCount ?? event.entryCount),
-    0,
-  );
 
   return (
-    // v3-consolidated work package 26b: `min-w-0` on this div and the two
-    // below. Each is a CSS Grid container with NO `grid-template-columns`
-    // below `md:` (it only gets one at `md:` — the intro/dates pair and
-    // the key-dates/venue pair are both a single implicit column below
-    // that breakpoint), and an implicit grid item defaults to
-    // `min-width: auto`, sizing the shared column to its widest child's
-    // min-content. A long organizer-authored intro paragraph, and a long
-    // venue address line, both measurably forced this page past a
-    // 320/390px viewport (plan §6 "Responsive/signage") the same way one
-    // calendar row did on Discovery, fixed alongside this in the same
-    // package (`SeasonCalendar.tsx`/`discovery.tsx`) — see those files'
-    // comments for the full mechanism, verified against a real running
-    // page rather than reasoned about.
-    <div className="grid min-w-0 gap-4">
+    // public-visual-fixes P6: two columns, and what is in each is now a
+    // decision rather than a flow. The LEFT column is the organizer's own
+    // words — an About card that spans it, because a description is the one
+    // thing on this page nobody else can write. The RIGHT column is the
+    // short facts: the dates that are still a question, where to play, and
+    // (only while it is one) where the price is quoted.
+    //
+    // What LEFT the page: the small "Events / Entered so far" facts card —
+    // the Draws tab lists the events and their entrant counts one click
+    // away, in the units each event actually uses, so the aggregate here
+    // was a second, coarser answer to a question already answered better.
+    //
+    // `min-w-0` on every grid container: an implicit grid item defaults to
+    // `min-width: auto` and sizes its column to its widest child's
+    // min-content, so one long address line or unbroken document version
+    // measurably forced this page past a 320/390px viewport (v3 package
+    // 26b; see `SeasonCalendar.tsx` for the full mechanism).
+    <div className="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(0,1fr)_20rem]">
       <h2 className="sr-only">Overview</h2>
-      <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_18rem] md:items-start">
-        {page.page.introText ? (
-          <p className="max-w-prose text-pretty text-base leading-7 text-foreground">{page.page.introText}</p>
-        ) : <p className="max-w-prose text-pretty text-base leading-7 text-muted-foreground">Tournament information, events, and published results from the organizer.</p>}
-        <dl className={`grid grid-cols-2 gap-x-4 gap-y-3 ${LIST_CARD} p-4 text-sm`}>
-          <div><dt className="text-xs text-muted-foreground">Events</dt><dd className="mt-0.5 font-semibold tabular-nums">{page.events.length}</dd></div>
-          {entriesOpen && registeredSoFar > 0 ? (
-            <div><dt className="text-xs text-muted-foreground">Entered so far</dt><dd className="mt-0.5 font-semibold tabular-nums">{registeredSoFar}</dd></div>
-          ) : null}
-          {tournamentView.timeZone ? <div className="col-span-2"><dt className="text-xs text-muted-foreground">Tournament time</dt><dd className="mt-0.5 font-medium">{tournamentView.timeZone}</dd></div> : null}
-        </dl>
+      <div className="grid min-w-0 gap-4">
+        <SectionCard title="About" labelledBy="ov-about">
+          <SectionProse>
+            {page.page.introText ??
+              'Tournament information, events, and published results from the organizer.'}
+          </SectionProse>
+        </SectionCard>
+
+        {/* The regulations DOCUMENT ROW (§3.7): the text itself moved to a
+            routed, deep-linkable reader — multi-page rules do not belong
+            inline on an overview. No document, no card: an empty Documents
+            section states nothing (P6, "no negative filler rows"). */}
+        {regulations ? (
+          <SectionCard title="Documents" labelledBy="ov-docs">
+            <div className={LIST_CARD_ROW}>
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">Tournament regulations</p>
+                <p className="text-xs text-muted-foreground">
+                  {`Version ${page.page.regulationsVersion}`}
+                  {updated ? ` · updated ${formatDateLong(updated)}` : ''}
+                </p>
+              </div>
+              <a
+                href={`/e/${encodeURIComponent(slug)}/regulations`}
+                className={`shrink-0 ${ACTION_LINK}`}
+              >
+                View
+              </a>
+            </div>
+          </SectionCard>
+        ) : null}
       </div>
 
-      <div className="grid min-w-0 items-start gap-4 md:grid-cols-2">
+      <div className="grid min-w-0 items-start gap-4">
         {/* Key dates as plain rows (ADR 0028): the model arrives pre-computed
-            (`timelineModel`) — absent moments are omitted, no "TBD"
-            placeholders (rule 4) — and per-event disagreement renders as a
-            variance line pointing at the Draws panel rather than a false
-            single moment. */}
+            (`timelineModel`) — elapsed and absent moments are both omitted,
+            no "TBD" placeholders (rule 4) — and per-event disagreement
+            renders as a variance line pointing at the Draws panel rather
+            than a false single moment. */}
         {moments.length > 0 ? (
           <SectionCard title="Key dates" labelledBy="ov-dates">
             {moments.map((moment) => (
@@ -227,10 +252,21 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
                       see Draws
                     </a>
                   </>
-                ) : moment.label === 'Tournament' ? (
+                ) : moment.kind === 'play' ? (
                   formatDateLong(moment.at)
                 ) : (
-                  formatMomentInZone(moment.at!, tournamentView.timeZone)
+                  // Venue-local, converted (contract §7.1) — never a UTC
+                  // instant with its zone spelling trimmed off, and never an
+                  // offset in public prose: the hero already says all times
+                  // are local to the venue.
+                  //
+                  // P7: a DEADLINE is stated to the minute ("Closes 1 Aug,
+                  // 23:59"). It is the one row here a reader can be late
+                  // for, and a day alone silently rounds it — usually
+                  // forward, by the better part of a day.
+                  [moment.status, formatDayMonthTimeInZone(moment.at!, timeZone)]
+                    .filter(Boolean)
+                    .join(' ')
                 )}
               </SectionRow>
             ))}
@@ -244,54 +280,30 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
           </SectionCard>
         ) : null}
 
-        <SectionCard title="Fees & payment" labelledBy="ov-fees">
-          <SectionRow label="Pricing">
-            {entriesOpen
-              ? 'Quoted on the entry form before you submit'
-              : 'Fees are not published for this closed tournament'}
-            {/* The link exists only while an event is open — a closed
-                tournament must carry no path into the entry form anywhere
-                on the page (the hero's own rule, held by its tests). */}
-            {entriesOpen ? (
-              <>
-                {' · '}
-                <a
-                  href={`/e/${encodeURIComponent(slug)}/enter`}
-                  className="text-accent underline-offset-4 hover:underline"
-                >
-                  Go to entry form
-                </a>
-              </>
-            ) : null}
-          </SectionRow>
-        </SectionCard>
-
-        {/* The regulations DOCUMENT ROW (§3.7): the text itself moved to a
-            routed, deep-linkable reader — multi-page rules do not belong
-            inline on an overview. */}
-        {regulations ? (
-          <SectionCard title="Documents" labelledBy="ov-docs">
-            <div className={LIST_CARD_ROW}>
-              <div className="min-w-0">
-                <p className="font-medium text-foreground">Tournament regulations</p>
-                <p className="text-xs text-muted-foreground">
-                  {`Version ${page.page.regulationsVersion}`}
-                  {updated ? ` · updated ${formatDateLong(updated)}` : ''}
-                </p>
-              </div>
+        {/* SP-P7 §3.7: fees left the overview entirely — pricing is quoted on
+            the entry form and restated on the receipt. What remains is a
+            pointer, and only while there is somewhere to point: a closed
+            tournament used to get a card whose whole content was "Fees are
+            not published", which is filler, not a fee. */}
+        {entriesOpen ? (
+          <SectionCard title="Fees & payment" labelledBy="ov-fees">
+            <SectionRow label="Pricing">
+              Quoted on the entry form before you submit
+              {' · '}
               <a
-                href={`/e/${encodeURIComponent(slug)}/regulations`}
-                className="shrink-0 font-medium text-accent underline-offset-4 hover:underline"
+                href={`/e/${encodeURIComponent(slug)}/enter`}
+                className="text-accent underline-offset-4 hover:underline"
               >
-                View
+                Go to entry form
               </a>
-            </div>
+            </SectionRow>
           </SectionCard>
         ) : null}
+
+        {updated ? (
+          <p className="text-xs text-muted-foreground">{`Information updated ${formatDateLong(updated)}`}</p>
+        ) : null}
       </div>
-      {updated ? (
-        <p className="text-xs text-muted-foreground">{`Information updated ${formatDateLong(updated)}`}</p>
-      ) : null}
     </div>
   );
 }
@@ -300,34 +312,36 @@ function OverviewPanel({ page, now }: { page: EntryPageDTO; now: Date }) {
 
 /**
  * Every event as one row, joined to its published draw card by event code.
- * Before draws exist this is the entry state per event (Open · Closed · N
- * entered); afterwards each row gains the draw's format facts, a Draw button
- * and, once decided, the champion. One document, at most one extra read.
+ *
+ * public-visual-fixes P6 reduced the row to four cells — event · entrants ·
+ * progress · Open — and made the whole row one link into the draw. Two
+ * consequences live HERE rather than in the row: the "STATE" column heading
+ * is gone (a heading over a button column named nothing a reader could act
+ * on), and `showFormat` is decided across the whole index, because a format
+ * tag distinguishes rows only when the formats actually differ.
  */
 function DrawsPanel({
   page,
   draws,
-  entrantsHref,
 }: {
   page: EntryPageDTO;
   draws: DrawsIndexDTO | undefined;
-  entrantsHref: string | null;
 }) {
   const slug = page.page.slug;
   const cards = new Map<string, DrawCardDTO>();
   for (const card of draws?.draws ?? []) cards.set(eventCodeLabel(card.eventCode), card);
-  const columns = 'sm:grid-cols-[minmax(0,1fr)_7rem_6rem_auto]';
+  const showFormat = new Set((draws?.draws ?? []).map((card) => card.kind)).size > 1;
   return (
     <div className="grid gap-4">
       <h2 className="sr-only">Draws</h2>
       <div className={LIST_CARD}>
-        <div aria-hidden className={`hidden gap-4 px-4 pb-2 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:grid ${columns}`}>
+        <div aria-hidden className={`hidden gap-3 px-4 pb-2 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:grid ${EVENT_ROW_COLUMNS}`}>
           <span>Event</span>
           {/* V3-PE04.2: one column, one unit — "N players"/"N pairs" — not a
               combined "registrations / draw participants" header describing
               two sources at once. */}
-          <span>Entered</span>
-          <span>State</span>
+          <span>Entrants</span>
+          <span>Progress</span>
           <span />
         </div>
         <ul className="divide-y divide-rule-soft border-t border-rule-soft">
@@ -337,10 +351,10 @@ function DrawsPanel({
               <EventRow
                 key={event.id}
                 event={event}
-                entrantsHref={entrantsHref}
                 draw={card}
                 drawHref={card ? `/e/${encodeURIComponent(slug)}/draws/${encodeURIComponent(card.drawKey)}` : null}
                 slug={slug}
+                showFormat={showFormat}
               />
             );
           })}
@@ -360,79 +374,21 @@ function DrawsPanel({
 }
 
 export default function Tournament({ loaderData }: Route.ComponentProps) {
-  const { page, tabs, active, nowMs } = loaderData;
-  const tournamentView = page.tournament as EntryPageDTO['tournament'] & { phase?: string | null; status?: string | null; timeZone?: string | null };
+  const { page, active, nowMs } = loaderData;
   const now = new Date(nowMs);
   const slug = page.page.slug;
-  // V3-26-5: cap the relative countdown at an absolute date past the
-  // threshold (the hero's status line).
-  const chip = capChipCountdown(
-    chipState(page.events, now),
-    nearestCloseAt(page.events),
-    tournamentView.timeZone ?? 'UTC',
-  );
-  const cta = ctaState(page.events, slug);
-  const phase = tournamentPhase({
-    phase: tournamentView.phase,
-    status: tournamentView.status,
-    publication: page.publication,
-    events: page.events,
-  });
-  const hasExplicitPhase = Boolean(tournamentView.phase || tournamentView.status);
-  const phaseAction = phase === 'entries_open'
-    ? { label: 'Enter this tournament', href: `/e/${encodeURIComponent(slug)}/enter` }
-    : phase === 'live' && tabs.includes('draws')
-      ? { label: 'Follow live matches', href: `/e/${encodeURIComponent(slug)}/schedule` }
-      : phase === 'draws_published' && tabs.includes('draws')
-        ? { label: 'View draws', href: tabHref(slug, 'draws') }
-        : (phase === 'complete' || phase === 'archived') && tabs.includes('draws')
-          ? { label: 'View results', href: tabHref(slug, 'draws') }
-          : phase === 'entries_closed' && tabs.includes('players')
-            ? { label: 'View entrants', href: tabHref(slug, 'players') }
-            : phase === 'announced'
-              ? { label: 'View tournament information', href: `/e/${encodeURIComponent(slug)}` }
-              : null;
-  // Date, timezone, and venue are each presented once in the overview cards.
-  // Keeping them out of the hero prevents the same facts being repeated in
-  // two competing reading sequences (PE03.3).
-  const metaLine = '';
-  // V3-PE03.3: once the server states an explicit phase, the subtitle leads
-  // with it — "Live now", not "Entries closed" under a "Follow live
-  // matches" button. Entry closure is still available; it moved to the Key
-  // dates section (`timelineModel`'s "Entries close" row) rather than being
-  // the first line a spectator reads.
-  const statusOverride = hasExplicitPhase
-    ? { label: phaseLabel(phase), live: phase === 'entries_open' || phase === 'live' }
-    : null;
-  // The by-event anchors died with the by-event grouping (SP-P7 §3.2): the
-  // list is alphabetical now, so an event's "N entered" links to the tab.
-  const entrantsHref = tabs.includes('players')
-    ? () => tabHref(slug, 'players')
-    : null;
 
   return (
     <PlayShell>
-      <HeroHeader
-        orgName={page.org?.name === 'Local Workspace' ? null : page.org?.name ?? null}
-        title={page.tournament.name ?? slug}
-        metaLine={metaLine}
-        chip={chip}
-        cta={cta}
-        phaseAction={hasExplicitPhase ? phaseAction : null}
-        statusOverride={statusOverride}
-      >
-        <TabBar
-          tabs={tabs}
-          active={active}
-          hrefFor={(tab) => tabHref(slug, tab)}
-          scheduleHref={`/e/${encodeURIComponent(slug)}/schedule`}
-        />
-      </HeroHeader>
+      {/* Contract §11: hero, tabs and breadcrumbs are the frame's, not this
+          route's. Overview is the tournament itself, so its breadcrumb trail
+          ends at the tournament name and the frame supplies no tail. */}
+      <TournamentFrame page={page} nowMs={nowMs} active={active} />
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-8 md:py-8">
+      <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
         {active === 'overview' ? <OverviewPanel page={page} now={now} /> : null}
         {active === 'draws' ? (
-          <DrawsPanel page={page} draws={loaderData.draws} entrantsHref={entrantsHref === null ? null : entrantsHref()} />
+          <DrawsPanel page={page} draws={loaderData.draws} />
         ) : null}
         {active === 'players' && loaderData.players ? (
           <>
@@ -446,6 +402,7 @@ export default function Tournament({ loaderData }: Route.ComponentProps) {
               slug={slug}
               roster={loaderData.players}
               drawsPublished={page.publication.draws}
+              query={loaderData.playerQuery ?? ''}
             />
             <ReserveList reserves={page.reserves ?? []} slug={page.page.slug} />
           </>

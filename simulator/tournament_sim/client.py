@@ -277,8 +277,24 @@ class SimClient:
             body["timeZone"] = time_zone
         return self._json("POST", "/tournaments", json=body, expect=OK_OR_CREATED)
 
+    def get_tournament(self, tid: str, *, expect: Iterable[int] = OK) -> Optional[dict]:
+        """Return the workspace summary row, or ``None`` when it is gone.
+
+        A seed manifest outlives the workspaces it names (someone may delete
+        one from the Hub), so the name repair has to tell "absent" from
+        "wrong" without raising.
+        """
+        resp = self.request("GET", f"/tournaments/{tid}", expect=frozenset(expect) | {404})
+        if resp.status_code == 404:
+            return None
+        return resp.json()
+
     def update_tournament(self, tid: str, body: dict) -> dict:
         return self._json("PATCH", f"/tournaments/{tid}", json=body)
+
+    def get_setup(self, tid: str) -> dict:
+        """``GET /tournaments/{id}/setup`` — the Setup document as served."""
+        return self._json("GET", f"/tournaments/{tid}/setup")
 
     def seed_setup_sections(self, tid: str, sections: dict[str, dict]) -> dict:
         """Write Setup sections in one optimistic-concurrency chain."""
@@ -448,6 +464,45 @@ class SimClient:
     def get_bracket(self, tid: str) -> dict:
         return self._json("GET", f"/tournaments/{tid}/bracket")
 
+    def get_bracket_or_none(self, tid: str) -> Optional[dict]:
+        """As :meth:`get_bracket`, but ``None`` when the workspace has no
+        bracket session yet (the route 404s rather than returning an empty
+        one). Lets a caller ask "is there a draw here?" without a try/except."""
+        resp = self.request("GET", f"/tournaments/{tid}/bracket", expect=(200, 404))
+        if resp.status_code == 404:
+            return None
+        return resp.json()
+
+    def delete_event(self, tid: str, event_id: str) -> bool:
+        """``DELETE /tournaments/{tid}/bracket/events/{event_id}``.
+
+        The API allows this for DRAFT events only, so it cannot remove a draw
+        that has been generated or started. 404 is tolerated: the caller's
+        intent is absence. Return False for a checkout lock; other conflicts
+        remain errors."""
+        response = self.request(
+            "DELETE",
+            f"/tournaments/{tid}/bracket/events/{event_id}",
+            expect=(204, 404, 409),
+        )
+        if response.status_code == 409:
+            detail = response.json().get("detail")
+            if isinstance(detail, dict) and detail.get("code") == "CONFIG_LOCKED":
+                return False
+            raise ApiError("DELETE", str(response.url), 409, response.text)
+        return True
+
+    def upsert_event(self, tid: str, event_id: str, body: dict) -> dict:
+        """``POST /tournaments/{tid}/bracket/events/{event_id}`` — create or
+        replace ONE event of an existing bracket session, leaving the others
+        alone (unlike ``import_bracket``, which wipes the whole bracket)."""
+        return self._json(
+            "POST",
+            f"/tournaments/{tid}/bracket/events/{event_id}",
+            json=body,
+            expect=OK_OR_CREATED,
+        )
+
     def generate_event(self, tid: str, event_id: str, wipe: bool = False) -> dict:
         return self._json(
             "POST", f"/tournaments/{tid}/bracket/events/{event_id}/generate", json={"wipe": wipe}
@@ -490,14 +545,28 @@ class SimClient:
     def confirm_entry(self, tid: str, entry_id: str) -> dict:
         return self._json("POST", f"/tournaments/{tid}/entries/{entry_id}/confirm")
 
+    def withdraw_entry(self, tid: str, entry_id: str) -> dict:
+        return self._json("POST", f"/tournaments/{tid}/entries/{entry_id}/withdraw")
+
     def commit_entries(self, tid: str) -> dict:
         return self._json("POST", f"/tournaments/{tid}/entries/commit")
 
+    def import_entries(self, tid: str, body: dict) -> dict:
+        """``POST /tournaments/{tid}/entries/import`` — the operator import seam.
+
+        The bulk counterpart of the public form below. It still goes through
+        ``entries.submissions.create_submission`` (no direct ORM writes) but
+        takes an already-resolved account id and workspace event ids, so one
+        request can register a whole draw's worth of people. Idempotent on
+        ``idempotencyKey`` per account.
+        """
+        return self._json("POST", f"/tournaments/{tid}/entries/import", json=body)
+
     # ---- entries: the public write surface ---------------------------------
     #
-    # These are the ONLY way an entry row can exist — there is no operator
-    # "create entry" route — so seeding a desk means being a real entrant:
-    # an account, a session cookie, and the form's own CSRF token.
+    # Together with ``import_entries`` above these are the only ways an entry
+    # row can exist; seeding a desk from the public side means being a real
+    # entrant: an account, a session cookie, and the form's own CSRF token.
 
     def entrant_signup(self, body: dict, *, expect: Iterable[int] = (202,)):
         """``POST /e/account/signup``, as JSON.
@@ -509,6 +578,15 @@ class SimClient:
         is the production one with no stub in it.
         """
         return self.request("POST", "/e/account/signup", json=body, expect=expect)
+
+    def entrant_me(self) -> dict:
+        """``GET /e/account/me`` — the signed-in entrant account.
+
+        Signup answers with a deliberately non-enumerating envelope that
+        carries no id, so a seeder that needs the ``accountId`` the entries
+        import seam wants has to sign in once and ask.
+        """
+        return self._json("GET", "/e/account/me")
 
     def entrant_login(self, email: str, password: str) -> httpx.Response:
         """``POST /e/account/login`` — sets ``sw_play_session`` on the jar."""

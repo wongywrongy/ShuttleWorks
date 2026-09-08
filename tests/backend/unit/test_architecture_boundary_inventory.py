@@ -24,6 +24,29 @@ FIELDS = (
 )
 
 
+def _tournament_data_references(tree: ast.AST) -> int:
+    """Count executable references and SQL strings, excluding prose."""
+    docstrings = {
+        id(node.body[0].value)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+        and ast.get_docstring(node, clean=False) is not None
+    }
+    count = 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if id(node) not in docstrings:
+                count += node.value.count("tournaments.data")
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr == "data"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "tournaments"
+        ):
+            count += 1
+    return count
+
+
 def _scan() -> dict[str, dict[str, int]]:
     results: dict[str, dict[str, int]] = {}
     for path in sorted(SRC.rglob("*.py")):
@@ -51,10 +74,21 @@ def _scan() -> dict[str, dict[str, int]]:
                 counts["sqlalchemyImports"] += 1
             if isinstance(node, ast.Import) and any(alias.name.startswith("sqlalchemy") for alias in node.names):
                 counts["sqlalchemyImports"] += 1
-        counts["tournamentDataReferences"] = path.read_text().count("tournaments.data")
+        counts["tournamentDataReferences"] = _tournament_data_references(tree)
         if any(counts.values()):
             results[str(path.relative_to(SRC))] = counts
     return results
+
+
+def test_blob_reference_scan_ignores_documentation_but_keeps_code_and_sql():
+    source = '''
+"""The tournaments.data blob."""
+# Read tournaments.data below.
+def read():
+    """Read tournaments.data."""
+    return tournaments.data, "SELECT tournaments.data FROM tournaments"
+'''
+    assert _tournament_data_references(ast.parse(source)) == 2
 
 
 def test_boundary_inventory_is_machine_readable_owned_and_non_growing():

@@ -344,6 +344,12 @@ export interface BracketPlayerDTO {
    *  `bracket_participants.entry_player_id`; this blob copy is what the
    *  roster/availability surfaces read. */
   entryPlayerId?: string;
+  /** P6 — cross-tournament identity for an IMPORTED person: the source
+   *  dataset's own player id, plus `personSource` naming where it came from.
+   *  The public profile joins its cross-tournament history on this; the
+   *  console neither mints nor edits it. */
+  personId?: string;
+  personSource?: string;
   remarks?: string;
 }
 
@@ -1164,6 +1170,24 @@ export interface EntryPageDTO {
   entrantsPublished: boolean;
   drawsPublished: boolean;
   resultsPublished: boolean;
+}
+
+/** Where the workspace's public entry site lives (`GET
+ *  /tournaments/{id}/entry-page/public-site`), OPR-0908-6.
+ *
+ *  The console runs on the operator origin and the entrant tier on its own
+ *  (SP-HOST-1), so the console cannot compose a public URL — the server,
+ *  which is the only party that knows the deployment's origins, hands it
+ *  back. `origin` is blank in local mode, where one host serves both tiers
+ *  and `url` is therefore relative. */
+export interface EntryPagePublicSiteDTO {
+  origin: string;
+  slug: string;
+  /** Absolute when an origin is configured, relative otherwise. */
+  url: string;
+  audience: 'private' | 'unlisted' | 'public';
+  entrantsPublished: boolean;
+  drawsPublished: boolean;
 }
 
 /** PATCH body for the publication card — patch semantics: only the flags

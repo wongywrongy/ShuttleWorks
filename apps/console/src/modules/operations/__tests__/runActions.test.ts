@@ -10,6 +10,7 @@ const seams = () => ({
     matchAction: vi.fn().mockResolvedValue(DTO),
     assignCourt: vi.fn().mockResolvedValue(DTO),
     unassign: vi.fn().mockResolvedValue(DTO),
+    clearCourt: vi.fn().mockResolvedValue(DTO),
   },
   bracketResult: vi.fn(),
   setCalledBracket: vi.fn(),
@@ -74,6 +75,35 @@ describe('runAction routing', () => {
       slot_id: 7,
     });
     expect(s.bracketApi.matchAction).not.toHaveBeenCalled();
+  });
+  // OPR-0908-8: the third court verb. `unassign` also drops the plan, so an
+  // operator who changed their mind about a court could not stop publishing it
+  // without losing the slot. `clearCourt` withdraws the published court alone,
+  // is legal only while the match is still `scheduled`, and is a no-op for a
+  // meet match (whose plan row IS its court).
+  it('bracket clearCourt calls clearCourt and applies the returned DTO', async () => {
+    const s = seams();
+    await runAction(
+      m({ id: 'cc', source: 'bracket', status: 'scheduled', court: 3, slot: 4 }),
+      'clearCourt',
+      undefined,
+      s,
+    );
+    expect(s.bracketApi.clearCourt).toHaveBeenCalledWith({ play_unit_id: 'cc' });
+    expect(s.bracketApi.unassign).not.toHaveBeenCalled();
+    expect(s.onBracketData).toHaveBeenCalledWith(DTO);
+  });
+  it('clearCourt is refused once the match is playing, and never for a meet match', async () => {
+    const s = seams();
+    await runAction(
+      m({ id: 'cc', source: 'bracket', status: 'playing', court: 3 }),
+      'clearCourt',
+      undefined,
+      s,
+    );
+    await runAction(m({ id: 'mm', status: 'scheduled', court: 3 }), 'clearCourt', undefined, s);
+    expect(s.bracketApi.clearCourt).not.toHaveBeenCalled();
+    expect(s.meetSubmit).not.toHaveBeenCalled();
   });
   it('bracket postpone calls unassign with play_unit_id', () => {
     const s = seams();

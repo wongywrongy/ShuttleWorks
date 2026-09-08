@@ -21,12 +21,13 @@
  * column count). The retired 'strip' mode maps to 'auto' before it gets here.
  */
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
-import { ScoreLane, type SetPair } from '../../../components/control-plane/MatchCard';
+import { SideScores, type SetPair } from '../../../components/control-plane/MatchCard';
 import { formatPlayers, sideLines, isCourtClosedNow, hasResolvedSides } from './helpers';
 import {
   resolveSignageCourtSize,
   resolveSignageNameSize,
   resolveSignageScoreSize,
+  SIGNAGE_NAME_WRAP,
 } from './tvSizing';
 
 type CourtStatus = 'active' | 'called' | 'empty';
@@ -74,7 +75,8 @@ interface CourtsViewProps {
 }
 
 /**
- * The games to print in the shared `ScoreLane`, or none.
+ * The games to print, in the per-side `SideScores` columns both render
+ * modes now use — or none.
  *
  * Per-game detail when the state carries it, else the recorded aggregate as
  * a single pair — the same rule the operator's match rows use, so a score
@@ -113,8 +115,8 @@ function CourtsListMode({
         // exactly like an empty one to the hall.
         const suppressed = isClosed || !!conflictMatches?.length;
         const sets = suppressed ? [] : laneSets(state, tvShowScores);
-        const sideA = !suppressed && match ? formatPlayers(match.sideA, playerNames) : '';
-        const sideB = !suppressed && match ? formatPlayers(match.sideB, playerNames) : '';
+        const linesA = !suppressed && match ? sideLines(match.sideA, playerNames) : [];
+        const linesB = !suppressed && match ? sideLines(match.sideB, playerNames) : [];
         const preview =
           !suppressed && !match && showNext && nextMatch && hasResolvedSides(nextMatch, playerNames)
             ? nextMatch
@@ -127,38 +129,84 @@ function CourtsListMode({
             // `min-h`, not `h`: the players cell wraps rather than
             // ellipsising, so a long doubles pairing makes the row taller
             // instead of hiding a surname from the far side of the hall.
-            className="grid min-h-[3.5rem] items-center gap-3 px-4 text-base text-foreground grid-cols-[4rem_1fr_10rem]"
+            className="grid min-h-[3.5rem] items-center gap-3 px-4 py-2 text-base text-foreground grid-cols-[4rem_1fr]"
           >
             {/* The court number leads and outweighs everything beside it. */}
             <span
+              data-testid={`court-number-${courtId}`}
               className={`tabular-nums text-4xl font-bold leading-none ${
                 isClosed ? 'text-muted-foreground line-through' : ''
               }`}
             >
               {courtId}
             </span>
-            <span className="min-w-0 break-words">
-              {match && !suppressed ? (
-                <>
-                  <span className="font-medium">{sideA}</span>
-                  <span className="px-2 text-muted-foreground">vs</span>
-                  <span className="font-medium">{sideB}</span>
-                </>
-              ) : preview ? (
-                <span className="text-muted-foreground">
-                  <span className="font-semibold uppercase tracking-wide text-foreground">Next</span>{' '}
-                  {formatPlayers(preview.sideA, playerNames)} vs{' '}
-                  {formatPlayers(preview.sideB, playerNames)}
-                </span>
-              ) : null}
-            </span>
-            <span className="text-right">
-              <ScoreLane sets={sets} size="text-xl" sideALabel={sideA} sideBLabel={sideB} />
-            </span>
+            {match && !suppressed ? (
+              /* P4: the same two-group grammar the card mode renders — one
+                 row per SIDE, both doubles partners inside their own row,
+                 and that side's score in the column beside it. The old
+                 single "A vs B" line put one score block at the far right
+                 belonging visibly to neither side. */
+              <div
+                data-testid={`court-match-${courtId}`}
+                // The score column EXISTS only when there is a score:
+                // `SideScores` renders nothing for an empty ledger, and a
+                // two-column track with nothing in its second column used to
+                // drop side B into it — the two sides sat abreast, each name
+                // in half a card, and the name column narrowed below its own
+                // longest word (OPR-0908-10). `min-content` is the floor when
+                // the column does exist.
+                className={`grid min-w-0 items-center gap-x-3 ${
+                  sets.length
+                    ? 'grid-cols-[minmax(min-content,1fr)_auto]'
+                    : 'grid-cols-[minmax(min-content,1fr)]'
+                }`}
+              >
+                <ListSide lines={linesA} />
+                <SideScores
+                  sets={sets}
+                  side="A"
+                  size="text-xl"
+                  className="font-bold"
+                  sideLabel={linesA.join(' and ')}
+                  data-testid={`court-score-${courtId}-a`}
+                />
+                <ListSide lines={linesB} className="mt-1 border-t border-border pt-1" />
+                <SideScores
+                  sets={sets}
+                  side="B"
+                  size="text-xl"
+                  className="mt-1 border-t border-transparent pt-1 font-bold"
+                  sideLabel={linesB.join(' and ')}
+                  data-testid={`court-score-${courtId}-b`}
+                />
+              </div>
+            ) : preview ? (
+              <span className="min-w-0 text-muted-foreground" style={SIGNAGE_NAME_WRAP}>
+                <span className="font-semibold uppercase tracking-wide text-foreground">Next</span>{' '}
+                {formatPlayers(preview.sideA, playerNames)} vs{' '}
+                {formatPlayers(preview.sideB, playerNames)}
+              </span>
+            ) : (
+              <span />
+            )}
           </div>
         );
       })}
     </div>
+  );
+}
+
+/** One side of a LIST-mode row: one line per participant, so a doubles pair
+ *  reads as two names inside one group rather than a slash-joined string. */
+function ListSide({ lines, className = '' }: { lines: string[]; className?: string }) {
+  return (
+    <span className={`min-w-0 font-medium leading-tight ${className}`} style={SIGNAGE_NAME_WRAP}>
+      {lines.map((line, i) => (
+        <span key={i} className="block" style={SIGNAGE_NAME_WRAP}>
+          {line}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -231,7 +279,6 @@ function CourtCard({
 }: CourtCardProps) {
   const { courtId, match, state, conflictMatches, nextMatch } = row;
   const courtSize = resolveSignageCourtSize(cardHeightPx);
-  const nameSize = resolveSignageNameSize(cardHeightPx);
   const scoreSize = resolveSignageScoreSize(cardHeightPx);
   // Disputed courts are suppressed, never arbitrated: picking one of two
   // claims would put a wrong match on the wall with full confidence.
@@ -240,6 +287,11 @@ function CourtCard({
   const sets = laneSets(suppressed ? null : state, tvShowScores);
   const linesA = current ? sideLines(current.sideA, playerNames) : [];
   const linesB = current ? sideLines(current.sideB, playerNames) : [];
+  // The tier is derived from the card AND from the names on it: a word too
+  // long for the column steps the whole card's names down one tier rather
+  // than breaking (OPR-0908-10). Both sides step together — two name rows at
+  // two sizes would read as a hierarchy the match does not have.
+  const nameSize = resolveSignageNameSize(cardHeightPx, [...linesA, ...linesB]);
   // The Next preview rides an idle court AND an occupied one: "what does
   // this court play next" is the question the setting is for, and a hall in
   // full flow has no idle courts to put it on.
@@ -270,18 +322,44 @@ function CourtCard({
       </span>
 
       {current ? (
-        <>
+        /* P1 (contract rules 2-3): a court card is a STACKED layout, so each
+           side owns its own aligned score column and the centred lane
+           between the two sides is gone — at hall distance a number between
+           two names belongs to neither. `SideScores` sizes its cells in
+           `em`, so the columns stay aligned as the board scales the type.
+           The hairline between the rows is the side boundary, stated
+           without colour; the partner lines inside a side sit tighter than
+           the gap that separates the two sides. */
+        <div
+          data-testid={`court-match-${courtId}`}
+          // Two columns only while there IS a score to put in the second one
+          // — see the list-mode note: an empty score column used to swallow
+          // side B and halve the name column (OPR-0908-10).
+          className={`grid w-full items-center gap-x-3 ${
+            sets.length
+              ? 'grid-cols-[minmax(min-content,1fr)_auto]'
+              : 'grid-cols-[minmax(min-content,1fr)]'
+          }`}
+        >
           <SignageSide lines={linesA} nameSize={nameSize} />
-          <ScoreLane
+          <SideScores
             sets={sets}
+            side="A"
             size={scoreSize}
             className="font-bold"
-            sideALabel={linesA.join(' / ')}
-            sideBLabel={linesB.join(' / ')}
-            data-testid={`court-score-${courtId}`}
+            sideLabel={linesA.join(' and ')}
+            data-testid={`court-score-${courtId}-a`}
           />
-          <SignageSide lines={linesB} nameSize={nameSize} />
-        </>
+          <SignageSide lines={linesB} nameSize={nameSize} className="mt-1 border-t border-border pt-1" />
+          <SideScores
+            sets={sets}
+            side="B"
+            size={scoreSize}
+            className="mt-1 border-t border-transparent pt-1 font-bold"
+            sideLabel={linesB.join(' and ')}
+            data-testid={`court-score-${courtId}-b`}
+          />
+        </div>
       ) : null}
 
       {preview ? (
@@ -311,14 +389,25 @@ function CourtCard({
 /**
  * One side of the board card: one line PER PARTICIPANT (match-card §3.1 — a
  * doubles pair is never joined onto one line at signage density). The score
- * is NOT here; it lives once, in the centred lane between the two sides
- * (§3.4), which is the same lane every other match surface renders.
+ * sits in this side's OWN column beside it (P1 contract rules 2-3), never in
+ * a centred lane between the two sides.
  */
-function SignageSide({ lines, nameSize }: { lines: string[]; nameSize: string }) {
+function SignageSide({
+  lines,
+  nameSize,
+  className = '',
+}: {
+  lines: string[];
+  nameSize: string;
+  className?: string;
+}) {
   return (
-    <span className={`${nameSize} w-full text-center font-semibold leading-tight text-foreground`}>
+    <span
+      className={`${nameSize} w-full text-center font-semibold leading-tight text-foreground ${className}`}
+      style={SIGNAGE_NAME_WRAP}
+    >
       {lines.map((line, i) => (
-        <span key={i} className="block break-words">
+        <span key={i} className="block" style={SIGNAGE_NAME_WRAP}>
           {line}
         </span>
       ))}

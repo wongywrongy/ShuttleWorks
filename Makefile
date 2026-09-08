@@ -1,9 +1,12 @@
 .PHONY: help \
         scheduler scheduler-dev scheduler-rebuild \
-        demo-up demo-rebuild demo-status demo-down demo-reset \
+        demo-up demo-update demo-rebuild demo-status demo-down demo-reset \
         demo-backup demo-backup-verify demo-restore-drill demo-restore demo-backup-install \
         demo-seed-preview demo-seed-apply demo-seed-resume demo-seed-status demo-seed-reset \
-        surface-books surface-books-status \
+        demo-seed-repair-names demo-seed-repair-names-locked demo-seed-apply-outcomes \
+        demo-seed-apply-bye \
+        demo-seed-person-map demo-seed-backfill-person-ids demo-seed-drop-stray-match \
+        surface-books surface-books-status surface-books-serve surface-books-url \
         entrant-dev full-dev local-dev \
         dev-postgres dev-postgres-stop phase4-observability-rehearsal \
         stop logs ps clean \
@@ -37,6 +40,18 @@ DEMO_SEED_LOCKED := flock -w 300 "$(shell $(DEMO_COMPOSE) state-dir)/.lifecycle.
 DEMO_MATCH_DATA ?=
 DEMO_JAPAN_RESULTS ?=
 DEMO_CHINA_RESULTS ?=
+# The seed manifest as the API CONTAINER sees it. $(DEMO_SEED_RUN_DIR) is the
+# host side of the same bind mount (DEMO_STATE_DIR/data -> /app/data), so these
+# two paths are one file.
+DEMO_SEED_MANIFEST_IN_API := /app/data/import-runs/$(DEMO_SEED_KEY).json
+DEMO_SEED_PERSON_MAP := $(DEMO_SEED_RUN_DIR)/$(DEMO_SEED_KEY).person-map.json
+DEMO_SEED_PERSON_MAP_IN_API := /app/data/import-runs/$(DEMO_SEED_KEY).person-map.json
+# P7's probe left one Operations matches row behind that no API path can
+# remove (debt-log OPR-0908-8). Pinned by id so the target cannot drop
+# anything else.
+DEMO_STRAY_MATCH_ID ?= T029-MD-R16-da44fceb5e81618542a38708ce78e16e6b71cabf688f6e996594cd773b9ffd63
+DEMO_SEED_REPAIR := flock -w 300 "$(shell $(DEMO_COMPOSE) state-dir)/.lifecycle.lock" \
+	$(DEMO_COMPOSE) seed-repair --manifest $(DEMO_SEED_MANIFEST_IN_API)
 DEMO_SEED_SOURCE_ARGS = $(if $(DEMO_MATCH_DATA),--match-data $(DEMO_MATCH_DATA)) \
 	$(if $(DEMO_JAPAN_RESULTS),--daily-results T027=$(DEMO_JAPAN_RESULTS)) \
 	$(if $(DEMO_CHINA_RESULTS),--daily-results T028=$(DEMO_CHINA_RESULTS)) \
@@ -45,7 +60,7 @@ SURFACE_REPORT_DIR ?= docs/screenshots/ui-review
 
 # Every Python tree ruff is expected to lint. Spelled out rather than `.`
 # because pyproject.toml now sits at the repo root, so a bare `ruff check .`
-# would walk archive/ and node_modules looking for reasons to fail.
+# would walk node_modules looking for reasons to fail.
 PY_SOURCES := apps/api tests/backend tests/e2e simulator tools packages/scheduler-core
 
 # Default target — list everything.
@@ -58,6 +73,7 @@ help:
 	@echo "  make scheduler-dev      API in Docker, Vite dev server on :5173"
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
 	@echo "  make demo-up            Start the Tailscale-only tech demo"
+	@echo "  make demo-update        Back up and rebuild current worktree without reseeding"
 	@echo "  make demo-rebuild       Rebuild and restart the tech demo"
 	@echo "  make demo-status        Show tech demo container status and URLs"
 	@echo "  make demo-down          Back up and stop the tech demo"
@@ -71,8 +87,16 @@ help:
 	@echo "  make demo-seed-status   Show the resumable import manifest"
 	@echo "  make demo-seed-resume   Resume an interrupted fixture import"
 	@echo "  make demo-seed-reset    Delete only workspaces owned by this seed run"
+	@echo "  make demo-seed-repair-names  Re-apply canonical tournament names to this seed run"
+	@echo "  make demo-seed-repair-names-locked  Repair the frozen Setup copy of the title (in-container)"
+	@echo "  make demo-seed-apply-outcomes      Apply the synthetic walkover/retired/forfeit fixtures"
+	@echo "  make demo-seed-apply-bye           Import the synthetic 15-entrant draw with one bye"
+	@echo "  make demo-seed-drop-stray-match    Delete one stray Operations matches row by id"
+	@echo "  make demo-seed-backfill-person-ids Write personId onto pre-P6 roster rows"
 	@echo "  make surface-books      Capture numbered operator + entrant UI review PDFs"
 	@echo "  make surface-books-status Summarize the latest capture manifests or active run"
+	@echo "  make surface-books-serve  Serve generated books from SURFACE_REPORT_DIR over Tailscale"
+	@echo "  make surface-books-url    Print the Tailscale URL for the served books"
 	@echo "  make entrant-dev        Public entrant site (SSR) on :5174 against a host API on :8600"
 	@echo "  make full-dev           Both surfaces at once: operator :5173 + entrant :5174"
 	@echo "                          (local only — see docs/how-to/running-locally)"
@@ -143,6 +167,9 @@ scheduler-rebuild:
 demo-up:
 	$(DEMO_COMPOSE) up
 
+demo-update:
+	$(DEMO_COMPOSE) update
+
 demo-rebuild:
 	$(DEMO_COMPOSE) rebuild
 
@@ -184,6 +211,48 @@ demo-seed-resume:
 demo-seed-status:
 	@$(DEMO_SEED) status --seed-key $(DEMO_SEED_KEY) --run-dir $(DEMO_SEED_RUN_DIR)
 
+# Idempotent, manifest-scoped title repair. Only workspaces this seed run
+# created are touched; user-authored tournaments are never rewritten.
+demo-seed-repair-names:
+	@$(DEMO_SEED_LOCKED) repair-names --seed-key $(DEMO_SEED_KEY) \
+		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
+
+# The Setup document's copy of the title cannot be repaired over HTTP once a
+# workspace has checked out (409 CONFIG_LOCKED), so this one runs inside the
+# API container against the database directly. Manifest-scoped and idempotent.
+demo-seed-repair-names-locked:
+	@$(DEMO_SEED_REPAIR) --include-locked
+
+# Synthetic walkover / retirement / forfeit fixtures, applied through the
+# product's own idempotent bracket command path. Safe to run twice.
+demo-seed-apply-outcomes:
+	@$(DEMO_SEED_LOCKED) apply-outcomes --seed-key $(DEMO_SEED_KEY) \
+		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
+
+# The synthetic bye fixture (OPR-0908-11): one test-only 15-entrant SE draw
+# whose sixteenth slot is a real BYE, installed through the same
+# POST /bracket/import path the seeded SE-32s use, into its own clearly
+# labelled fixture workspace (that route replaces a whole bracket, so it must
+# never be aimed at a seeded one). Imports only when the draw is absent, so it
+# is safe to run twice; no reseed, and no seeded workspace is touched except to
+# remove an EMPTY SYNBYE event left by the first, failed attempt.
+demo-seed-apply-bye:
+	@$(DEMO_SEED_LOCKED) apply-bye --seed-key $(DEMO_SEED_KEY) \
+		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
+
+demo-seed-drop-stray-match:
+	@$(DEMO_SEED_REPAIR) --drop-match $(DEMO_STRAY_MATCH_ID)
+
+# Two steps: the simulator emits the dataset's reviewed player table beside the
+# manifest (same bind mount), then the in-container tool writes personId onto
+# roster rows that predate the seed writing it.
+demo-seed-person-map:
+	@$(DEMO_SEED) person-map $(DEMO_SEED_FILE) --notes $(DEMO_SEED_NOTES) \
+		$(DEMO_SEED_SOURCE_ARGS) --seed-key $(DEMO_SEED_KEY) --out $(DEMO_SEED_PERSON_MAP)
+
+demo-seed-backfill-person-ids: demo-seed-person-map
+	@$(DEMO_SEED_REPAIR) --backfill-person-ids $(DEMO_SEED_PERSON_MAP_IN_API)
+
 demo-seed-reset: demo-backup
 	@$(DEMO_SEED_LOCKED) reset --seed-key $(DEMO_SEED_KEY) --confirm $(DEMO_SEED_KEY) \
 		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
@@ -197,13 +266,14 @@ surface-books:
 	workspace_id="$$(jq -er '.tournaments.T029.workspaceId' "$$seed_manifest")"; \
 	display_token="$$(jq -er '.tournaments.T029.displayToken' "$$seed_manifest")"; \
 	entrant_slug="$$(jq -er '.tournaments.T030.slug' "$$seed_manifest")"; \
+	results_slug="$$(jq -er '.tournaments.T029.slug' "$$seed_manifest")"; \
 	event_tz="$$(curl -fsS "http://$$demo_ip:8092/tournaments/$$workspace_id" | jq -r '.timeZone // empty')"; \
 	AUTH_ME_URL="http://$$demo_ip:8090/api/auth/me" \
 	FIXTURE_MODE="$${FIXTURE_MODE:-normal}" EVENT_TIMEZONE="$$event_tz" \
 	WS_ID="$$workspace_id" DISPLAY_TOKEN="$$display_token" \
 		node tools/surface-capture.mjs console "http://$$demo_ip:8090" \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
-	FIXTURE_MODE="$${FIXTURE_MODE:-normal}" \
+	FIXTURE_MODE="$${FIXTURE_MODE:-normal}" RESULTS_SLUG="$$results_slug" \
 	SLUG="$$entrant_slug" node tools/surface-capture.mjs entrant "http://$$demo_ip:8091" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
 	@$(MAKE) --no-print-directory surface-books-status
@@ -212,6 +282,12 @@ surface-books-status:
 	@node tools/surface-capture-status.mjs \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.manifest.json" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.manifest.json"
+
+surface-books-serve:
+	@SURFACE_REPORT_DIR="$(SURFACE_REPORT_DIR)" bash tools/serve-surface-books.sh up "$(SURFACE_REPORT_DIR)"
+
+surface-books-url:
+	@SURFACE_REPORT_DIR="$(SURFACE_REPORT_DIR)" bash tools/serve-surface-books.sh url "$(SURFACE_REPORT_DIR)"
 
 scheduler-dev:
 	@echo "Starting development environment..."
@@ -522,17 +598,35 @@ surface-books-fixture:
 	console_url="$$(jq -er .consoleBaseUrl "$$fixture_json")"; \
 	entrant_url="$$(jq -er .entrantBaseUrl "$$fixture_json")"; \
 	workspace_id="$$(jq -er .taipeiTid "$$fixture_json")"; \
+	meet_workspace_id="$$(jq -r '.meetTid // ""' "$$fixture_json")"; \
+	meet_invite_token="$$(jq -r '.meetInviteToken // ""' "$$fixture_json")"; \
 	display_token="$$(jq -er .displayToken "$$fixture_json")"; \
 	entrant_slug="$$(jq -er .koreaSlug "$$fixture_json")"; \
 	fixture_mode="$$(jq -r '.fixtureMode // "normal"' "$$fixture_json")"; \
+	demo_now="$$(jq -er .demoNow "$$fixture_json")"; \
+	reviewed_build_sha="$$(jq -r '.reviewedBuildSha // "unprovided"' "$$fixture_json")"; \
+	player_key="$$(jq -r '.playerKey // ""' "$$fixture_json")"; \
+	results_slug="$$(jq -r '.taipeiSlug // ""' "$$fixture_json")"; \
+	submission_id="$$(jq -r '.submissionId // ""' "$$fixture_json")"; \
+	partner_token="$$(jq -r '.partnerToken // ""' "$$fixture_json")"; \
+	reset_token="$$(jq -r '.resetToken // ""' "$$fixture_json")"; \
+	entrant_email="$$(jq -r '.reviewEntrantEmail // ""' "$$fixture_json")"; \
+	entrant_password="$$(jq -r '.reviewEntrantPassword // ""' "$$fixture_json")"; \
+	withheld_key="$$(jq -r '.withheldPlayerKey // ""' "$$fixture_json")"; \
 	api_url="$$(jq -er .apiBaseUrl "$$fixture_json")"; \
 	event_tz="$$(curl -fsS "$$api_url/tournaments/$$workspace_id" | jq -r '.timeZone // empty')"; \
 	mkdir -p "$(SURFACE_REPORT_DIR)"; \
+	AUTH_ME_URL="$$console_url/api/auth/me" \
+	SHUTTLEWORKS_DEMO_NOW="$$demo_now" REVIEWED_BUILD_SHA="$${REVIEWED_BUILD_SHA:-$$reviewed_build_sha}" \
 	FIXTURE_MODE="$$fixture_mode" EVENT_TIMEZONE="$$event_tz" \
-	WS_ID="$$workspace_id" DISPLAY_TOKEN="$$display_token" \
+	WS_ID="$$workspace_id" MEET_WS_ID="$$meet_workspace_id" DISPLAY_TOKEN="$$display_token" \
+	INVITE_TOKEN="$$meet_invite_token" \
 		node tools/surface-capture.mjs console "$$console_url" \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \
-	FIXTURE_MODE="$$fixture_mode" \
+	FIXTURE_MODE="$$fixture_mode" PLAYER_KEY="$$player_key" SUBMISSION_ID="$$submission_id" PARTNER_TOKEN="$$partner_token" \
+	SHUTTLEWORKS_DEMO_NOW="$$demo_now" REVIEWED_BUILD_SHA="$${REVIEWED_BUILD_SHA:-$$reviewed_build_sha}" \
+	RESET_TOKEN="$$reset_token" ENTRANT_EMAIL="$$entrant_email" ENTRANT_PASSWORD="$$entrant_password" \
+	RESULTS_SLUG="$$results_slug" WITHHELD_PLAYER_KEY="$$withheld_key" \
 	SLUG="$$entrant_slug" node tools/surface-capture.mjs entrant "$$entrant_url" \
 		"$(SURFACE_REPORT_DIR)/public-entrant-surface-book.pdf"
 	@$(MAKE) --no-print-directory surface-books-status

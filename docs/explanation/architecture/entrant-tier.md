@@ -12,7 +12,8 @@ operator state directly.
 - **Bounded progressive enhancement.** Same-origin route modules enhance only browser-dependent
   surfaces: entry progress, My Entries, receipts, regulations navigation, entrant filtering, and
   bracket path highlighting. Native forms remain the write path and the page-weight budgets are
-  blocking: 4 KB for poster/discovery routes and 8 KB for the persistent entry journey.
+  blocking: 4 KB for poster/discovery routes, 8 KB for the persistent entry journey, and 14 KB
+  for the published-results documents (Players directory, full draw, schedule).
 - **One outbound SSR seam.** `apiGet` (`apps/entrant/app/lib/apiFetch.server.ts`) is GET-only,
   restricted to `/e/api/` and its frozen `accept` header allow-list. The node renderer never relays
   credentials, so server renders cannot identify the viewer.
@@ -111,4 +112,4 @@ The backend projection is implemented in `apps/api/src/entries/entries_site.py`,
 `entries_public.py`, and `entries_json.py`; frontend mirrors live in
 `apps/entrant/app/lib/`. The binding visual artifact is
 [`public-universality-usability-v2.html`](https://github.com/wongywrongy/ShuttleWorks/blob/main/public-universality-usability-v2.html), and the dated
-implementation/audit record is [SP-P9 findings](/audits/2026-08-SP-P9-findings).
+SP-P9 implementation/audit record is retained in Git history.

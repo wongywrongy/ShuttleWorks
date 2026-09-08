@@ -14,6 +14,12 @@
  *   - bracket `postpone` → bracketApi.unassign({ play_unit_id })
  *     Removes the court assignment from a play unit, returning it to the queue;
  *     no solver, no result change.  Backend: POST /bracket/unassign.
+ *   - bracket `clearCourt` → bracketApi.clearCourt({ play_unit_id })
+ *     Withdraws the PUBLISHED court while the plan slot stays exactly as it is
+ *     — the verb `unassign` could not express, because it also drops the plan
+ *     and the public tier then loses the slot too.  Backend: POST
+ *     /bracket/clear-court (OPR-0908-8).  Meet has no twin: its plan and its
+ *     court are the same record.
  *
  * pinMatch (POST /bracket/pin) and matchAction('reset') are NOT used for live
  * court-ops: pinMatch re-runs CP-SAT and 409s for unscheduled units; reset
@@ -47,6 +53,8 @@ interface BracketApiSeam {
   }) => Promise<unknown>;
   /** Task 9b non-solver removal — strips the court assignment, returns to queue. */
   unassign: (body: { play_unit_id: string }) => Promise<unknown>;
+  /** OPR-0908-8 — withdraws the published court and keeps the plan slot. */
+  clearCourt: (body: { play_unit_id: string }) => Promise<unknown>;
 }
 
 export interface RunSeams {
@@ -112,6 +120,7 @@ export function slotForAssign(
  *   Bracket record → bracketResult({ matchId, winnerSide })
  *   Bracket assign → bracketApi.assignCourt({ play_unit_id, court_id, slot_id })
  *   Bracket postpone → bracketApi.unassign({ play_unit_id })
+ *   Bracket clearCourt → bracketApi.clearCourt({ play_unit_id })
  */
 export function runAction(
   match: RunMatch,
@@ -150,6 +159,10 @@ export function runAction(
       case 'postpone':
         void seams.meetSubmit('postpone_match', match.id, {});
         return Promise.resolve();
+      case 'clearCourt':
+        // Meet keeps no separate published court to withdraw — its plan row
+        // IS the court — so the verb is bracket-only and this is a no-op.
+        return Promise.resolve();
     }
   } else {
     // bracket source
@@ -169,6 +182,8 @@ export function runAction(
       }
       case 'postpone':
         return applyDto(seams.bracketApi.unassign({ play_unit_id: match.id }));
+      case 'clearCourt':
+        return applyDto(seams.bracketApi.clearCourt({ play_unit_id: match.id }));
     }
   }
   return Promise.resolve();

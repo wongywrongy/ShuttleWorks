@@ -207,28 +207,33 @@ describe('WorkspaceRow', () => {
         group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
       />,
     );
-    expect(screen.getByTestId('row-date')).toHaveTextContent('2026-07-28 → 08-03');
+    expect(screen.getByTestId('row-date')).toHaveTextContent('2026-07-28 – 08-03');
   });
 
-  it('drops a year the date already supplies from the displayed name', () => {
+  // P5 (2026-09-08): the Hub renders the STORED name, unedited. It used to
+  // strip a trailing year that matched the event date, so the same workspace
+  // read one way in the Hub and another in the workspace header, the public
+  // tier and on the venue board. The redundant year is now removed where the
+  // name is WRITTEN (the seed generator plus `seed repair-names`), never at
+  // one render site, and a director-authored title is left exactly as typed.
+  it('renders the stored workspace name verbatim', () => {
     render(
       <WorkspaceRow
-        tournament={{ ...t, name: 'Yunavero Club Open 2026', tournamentDate: '2026-07-01' }}
+        tournament={{ ...t, name: 'Yunavero Club Open (2026)', tournamentDate: '2026-07-01' }}
         group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
       />,
     );
-    expect(screen.getByText('Yunavero Club Open')).toBeInTheDocument();
-    expect(screen.queryByText('Yunavero Club Open 2026')).toBeNull();
+    expect(screen.getByText('Yunavero Club Open (2026)')).toBeInTheDocument();
   });
 
-  it('keeps a year the date does NOT supply', () => {
+  it('falls back to Untitled when the workspace has no name', () => {
     render(
       <WorkspaceRow
-        tournament={{ ...t, name: 'Yunavero Club Open 2025', tournamentDate: '2026-07-01' }}
+        tournament={{ ...t, name: '  ' }}
         group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
       />,
     );
-    expect(screen.getByText('Yunavero Club Open 2025')).toBeInTheDocument();
+    expect(screen.getByText('Untitled')).toBeInTheDocument();
   });
 
   // 2026-08-11 design audit, T4: the menu was revealed only by
@@ -276,6 +281,10 @@ describe('WorkspaceRow', () => {
           tournament={{
             ...t,
             kind: 'bracket',
+            modules: [
+              ...t.modules!,
+              { moduleId: 'entries', status: 'enabled', config: null },
+            ],
             signals: {
               ...t.signals!,
               attention: [{ code: 'ENTRIES_NOT_COMMITTED', label: 'Confirmed entries not on the roster' }],

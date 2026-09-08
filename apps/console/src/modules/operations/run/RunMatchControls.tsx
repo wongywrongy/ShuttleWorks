@@ -85,6 +85,37 @@ export function RunAssignmentActions({
     );
   }
 
+  // OPR-0908-8. `/bracket/assign` publishes a court by materializing the
+  // Operations match row the public tier reads; `postpone` (unassign) takes
+  // the whole plan with it. Between them there was no way back to "planned at
+  // this slot, no court announced", so an operator who changed their mind kept
+  // publishing a court they were no longer using. Bracket only: a meet match's
+  // plan row IS its court, so there is nothing separate to withdraw.
+  if (
+    role === 'now' &&
+    match.source === 'bracket' &&
+    match.court != null &&
+    can(match.status, 'clearCourt')
+  ) {
+    return (
+      <div>
+        <button
+          type="button"
+          data-testid="run-act-clear-court"
+          className={actionBtn}
+          disabled={!canEdit}
+          title={canEdit ? undefined : READ_ONLY_MESSAGE}
+          onClick={() => onAction('clearCourt')}
+        >
+          Clear court
+        </button>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Stops announcing a court publicly. The match keeps its planned slot.
+        </p>
+      </div>
+    );
+  }
+
   return null;
 }
 

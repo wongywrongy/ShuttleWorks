@@ -77,30 +77,49 @@ test.afterAll(async () => {
   await vite.close();
 });
 
-test('public discovery keeps bounded, stable pages at mobile and desktop widths', async ({ page }, testInfo) => {
+test('public discovery keeps one bounded, stable season at mobile and desktop widths', async ({ page }, testInfo) => {
+  // P5 replaced the lifecycle segments and their pagination with ONE season:
+  // upcoming ascending, then "Earlier this season" descending, all on one
+  // page. What is bounded is the SEASON, not a page size — so the property
+  // this evidence run holds is that the same season renders identically at
+  // both widths and that no pager exists to disagree with.
   const idsAtWidth: string[][] = [];
   for (const width of [390, 1440]) {
     await load(page, '/e/', width);
-    await expect(page.locator('#calendar li')).toHaveCount(10);
+    await expect(page.locator('#calendar li')).toHaveCount(40);
+    await expect(page.locator('nav[aria-label="Tournament pages"]')).toHaveCount(0);
+    await expect(page.locator('#past')).toHaveCount(1);
     idsAtWidth.push(await page.locator('#calendar li a[href^="/e/current-"]').evaluateAll((links) => links.map((link) => link.getAttribute('href'))));
-    await page.screenshot({ path: testInfo.outputPath(`public-current-${width}.png`), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath(`public-season-${width}.png`), fullPage: true });
   }
   expect(idsAtWidth[0]).toEqual(idsAtWidth[1]);
-  await load(page, '/e/?view=completed', 1440);
-  await expect(page.locator('#calendar li')).toHaveCount(20);
-  await expect(page.getByText('Showing 1–20 of 29 tournaments')).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('public-completed-page-1.png'), fullPage: true });
-  await load(page, '/e/?view=completed&page=2', 390);
-  await expect(page.locator('#calendar li')).toHaveCount(9);
-  await expect(page.getByText('Showing 21–29 of 29 tournaments')).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('public-completed-page-2.png'), fullPage: true });
+  // The past half is on the same page, muted, with no venue line and a
+  // results-only action — no archive detour to follow.
+  await load(page, '/e/', 1440);
+  const past = page.locator('#past ~ ul li');
+  await expect(past.first().locator('a[href$="?tab=draws"]')).toHaveText(/Results/);
+  await expect(page.getByText('Looking for past results?')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('public-season-past.png'), fullPage: true });
 });
 
-test('large result sets use bounded numeric pagination', async ({ page }) => {
-  const largeFixture = { ...fixture, tournaments: Array.from({ length: 1000 }, (_, index) => row(index, 'completed_winners')) };
-  globalThis.fetch = (async () => new Response(JSON.stringify(largeFixture), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof globalThis.fetch;
-  await load(page, '/e/?view=completed', 1440);
-  expect(await page.locator('nav[aria-label="Tournament pages"] a[aria-label^="Page "]').count()).toBeLessThan(8);
+test('one season is the content boundary — older seasons are not rendered at all', async ({ page }) => {
+  // Ten seasons of history. Rendering all of them at once is the failure this
+  // bounds against; the page must show the current season and offer the rest
+  // as a selection.
+  const decade = {
+    ...fixture,
+    tournaments: Array.from({ length: 500 }, (_, index) => ({
+      ...row(index, 'completed_winners'),
+      slug: `historic-${index}`,
+      date: `${2017 + (index % 10)}-06-${String((index % 27) + 1).padStart(2, '0')}`,
+    })),
+    now: null,
+  };
+  globalThis.fetch = (async () => new Response(JSON.stringify(decade), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof globalThis.fetch;
+  await load(page, '/e/?year=2019', 1440);
+  const rendered = await page.locator('#calendar li').count();
+  expect(rendered).toBeLessThan(decade.tournaments.length);
+  await expect(page.locator('nav[aria-label="Season"] a')).not.toHaveCount(0);
 });
 
 test('signup form stays within a 320px viewport', async ({ page }, testInfo) => {

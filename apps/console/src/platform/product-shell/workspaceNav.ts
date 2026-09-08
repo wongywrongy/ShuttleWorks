@@ -373,6 +373,23 @@ const ADMIN_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   "ws-settings",
 ]);
 
+/** The page title for a shell-rendered segment.
+ *
+ *  Administration and Overview used to render with NO page-title bar at all
+ *  while every module surface carried an `ActionsBar` — so the title baseline
+ *  moved as soon as the director crossed into Administration. Titles here are
+ *  the SAME words the rail uses; a destination that renames itself on arrival
+ *  reads as a different place. */
+export const SHELL_SEGMENT_TITLE: Partial<Record<AppTab, string>> = {
+  overview: "Overview",
+  "ws-venue": "Venue",
+  "ws-members": "Team",
+  "ws-sharing": "Site",
+  "ws-modules": "Modules",
+  "ws-sync": "Workspace",
+  "ws-settings": "Workspace",
+};
+
 /** Segments rendered by the shell itself (Overview / Display config / admin). */
 export const SHELL_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
   "overview",

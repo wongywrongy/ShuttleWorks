@@ -9,12 +9,16 @@ The route lists mirror the surface-book capture tool
 (`tools/surface-capture.mjs`). The reviewed v2 books retain their historical
 39 operator and 46 public surface IDs; current capture sheets use canonical
 destinations plus explicitly labelled state and continuation sheets. Optional
-invite, Meet-workspace, partner-token, and player-detail states are added only
-when their fixture data exists. Compatibility URLs are excluded from current
-visual inventories.
+valid invite, Meet-workspace, partner-token, and player-detail states are added
+only when their fixture data exists. Compatibility URLs and fabricated missing
+capability/token/guard states are excluded from current visual inventories.
 Visual
-baselines: `make surface-books` renders every surface at 1440×900 and
+baselines: `make surface-books` renders every included surface at 1440×900 and
 390×844 into HTML/PDF books under `docs/screenshots/ui-review/`.
+
+The current canonical review, including inventory exclusions, fixture
+provenance, and final visual ledger, is recorded in
+[`docs/audits/surface-book-remediation/canonical-review.md`](../audits/surface-book-remediation/canonical-review.md).
 
 `WS` = a workspace id; `SLUG` = a public tournament slug. Conservative
 zone marks the workflows the consolidation pass deliberately did not
@@ -35,7 +39,6 @@ Every workspace surface renders inside the product shell:
 | Hub — create workspace | `/new` | `PageBody form`, `TextField`, `Button` |
 | Global settings | `/settings` | `SettingsControls` (`Section`, `FieldRow`, `Toggle`) |
 | Global settings — Security / Sessions / Appearance | `/settings?section=security`, `/settings?section=sessions`, `/settings?section=appearance` | same settings shell with each registered section selected |
-| Invite — missing fixture token | `/invite/missing-fixture-token` | explicit unavailable-token guard; no valid invite claim |
 | Overview | `/tournaments/WS/overview` | `SetupChecklist`, `SectionCard`, `Eyebrow`, `StatusPill` |
 | Setup (4 pages) | `/tournaments/WS/setup/{details,entries,scoring,public-site}` | `SettingsControls` (`Section`, `SectionHeader`, `FieldRow`, `Seg`, `Toggle`, `NumberInput`, `SelectInput`), `SectionCard` |
 | Participants — Roster | `/tournaments/WS/participants/people` | `DenseDataTable`, `DetailDock` + `DetailPanel`, `OverflowMenu`, `SchoolChip`, `EmptyState` |
@@ -56,7 +59,7 @@ Every workspace surface renders inside the product shell:
 | Display — Preview | `/tournaments/WS/display/preview` | `MeetDisplayPage` preview |
 | Display — venue board | `/display?token=…` | `MeetDisplayPage` court grid, `LiveStatusPill` (dark-only) |
 | Administration (3 rail items: Team, Modules, Workspace; Workspace holds the settings / backups / activity-log tabs, so 5 URLs) | `/tournaments/WS/administration/*` | `SettingsControls`, `DenseDataTable`, `Modal` + `DialogFooter`, `ConfirmDeleteButton` |
-| Module guards (2) | `/tournaments/WS/meet/{matches,team-structure}` on a bracket workspace | `ModuleUnavailablePanel`, `EmptyState` |
+| Module guards (2) *(only when the selected workspace kind makes the guard reachable)* | `/tournaments/WS/meet/{matches,team-structure}` | `ModuleUnavailablePanel`, `EmptyState` |
 
 ### Historical route debt
 
@@ -90,20 +93,54 @@ plus the page-scoped scripts in `apps/entrant/public/assets/`.
 
 | Surface | Route | Main components |
 | --- | --- | --- |
-| Discovery — live & upcoming | `/e/` | `SeasonCalendar`, `SeasonControls`, `SeasonStatusCell`, `EmptyState` |
-| Discovery — live & upcoming · requested page 2 | `/e/?page=2#calendar` | 10-item scope; the two-current-event demo correctly clamps this request to page one |
-| Discovery — entries open | `/e/?view=open#calendar` | explicit entries-open status scope |
-| Discovery — all results search | `/e/?view=all&q=Open#calendar` | search across all public tournaments with explicit all-results scope |
-| Discovery — completed · page 2 | `/e/?view=completed&page=2#calendar` | `Pagination`, year/status filter, 20-item result scope |
-| Tournament — overview | `/e/SLUG` | `HeroHeader`, `TabBar` (`SegmentedNav`), `SectionCard` + `SectionRow`, `NowStrip` |
-| Tournament — draws / players | `/e/SLUG?tab=draws`, `?tab=players` (ADR 0028; these are the only public tournament index tabs) | `TabBar`, `EventRow` (+ `Button` Entrants / Draw), `PlayersList`, `EntrantsList`, `PersonRef`/`PersonGroup`, `StatusChip` |
+| Discovery — season calendar | `/e/` | `SeasonCalendar`, `SeasonControls`, `SeasonStatusCell`, `NowStrip`, `EmptyState` |
+| Discovery — earlier this season | `/e/#past` | the same page at its past-section anchor; the selected season's finished tournaments, muted, Results only |
+| Discovery — another season | `/e/?year=YYYY#calendar` | the season selector; one season is the content boundary |
+| Discovery — search across seasons | `/e/?q=Open&year=all#calendar` | search widened past the selected season |
+
+The retired lifecycle and pagination queries (`?view=season|open|completed|all`,
+`?preset=`, `?from=`, `?to=`, `?page=`) are **compatibility URLs, not
+surfaces**: the loader canonicalises them off the URL, and `?view=completed`
+lands on `/e/#past`. They are covered by route tests and are not requested by
+the surface book.
+
+The retired tournament section names (`?tab=events`, `?tab=seeds`,
+`?tab=winners`) are compatibility URLs on the same terms: all three were
+panel names for the ONE Draws surface, and the loader redirects them onto
+`?tab=draws`. They are covered by route tests and are not requested by the
+surface book.
+
+The retired draw views (`?view=round`, `?view=path`) join them: public P4
+made ONE bracket the draw at every width, and both queries resolve onto it.
+They are covered by route tests and are not requested by the surface book.
+
+The book therefore counts three kinds of sheet (`routeCoverage` in
+`tools/surface-capture.mjs`):
+
+| Count | Means |
+| --- | --- |
+| `canonicalDestinations` | unique product surfaces — distinct paths, ignoring query and fragment |
+| `stateSheets` | product sheets, including a surface captured in more than one state |
+| `enhancedStateSheets` | a progressive-enhancement state of a surface already counted (`Results draw · Highlighted player path`) |
+| `expectedErrorSheets` | a genuine refusal journey backed by a real fixture or valid revoked state, captured under `Expected refusal · …`; fabricated unknown tokens, missing IDs, and kind-mismatched guards are omitted |
+
+`RESULTS_SLUG` names a second public tournament whose results are published.
+`SLUG` is the entry-taking one the account and entry-form sheets need, and on
+that tournament every draw is unplayed — so without the second slug no sheet
+in the book carries a score, a resolved later round or a champion. The
+content surfaces are captured against both under `Results tournament · …`
+and `Results draw · …`.
+
+| Surface | Route | Main components |
+| --- | --- | --- |
+| Tournament — overview | `/e/SLUG` | `HeroHeader`, `TabBar` (`SegmentedNav`), `SectionCard` (About, Key dates, Venue, Documents) + `SectionRow`/`SectionProse` |
+| Tournament — draws / players | `/e/SLUG?tab=draws`, `?tab=players` (ADR 0028; these are the only public tournament index tabs) | `TabBar`, `EventRow` (one row-wide link: name · entrants · progress · Open), `PlayersList`, `EntrantsList`, `PersonRef`/`PersonGroup`, `StatusChip` |
 | Schedule and live | `/e/SLUG/schedule` | `HeroHeader`, `SegmentedNav` (days, by time / by court), `MatchCard`, filter card (`FIELD_INPUT` controls) |
-| Draws (full / round / path / list) | `/e/SLUG/draws/KEY` | `SegmentedNav` (view, segments), bracket grid (`.bracket-link-slot` CSS in `apps/entrant/app/app.css`), `MatchCard`, `PersonRef` |
-| Regulations | `/e/SLUG/regulations` | `SectionCard`, prose |
+| Draws (one bracket; `?view=list`, `?player=ID`) | `/e/SLUG/draws/KEY` | scroll region `[data-bracket-scroll]` + sticky round headers (`.bracket-scroll`, `.bracket-round-header`, `.bracket-slot` in `apps/entrant/app/app.css`), `MatchCard`, `PersonRef`, `public/assets/bracket-path.js` |
+| Regulations | `/e/SLUG/regulations` | document heading + version line, `Print`/`Download`, section outline, parsed prose/lists, `public/assets/regulations-print.css` (print) |
 | Entry wizard | `/e/SLUG/enter` | `TextField`, `Notice`, `Button` + `BUTTON_SECONDARY`, `StickyTotalBar`, `CARD`, `CHIP`, `StatusChip` |
 | Account (login / signup / verify / reset / partner) | `/e/login`, `/e/signup`, `/e/verify`, `/e/reset`, `/e/partner/:token` | `TextField`, `Notice`, `Button`, `CARD`, `MessagePage` |
 | Doubles partner invitation · token *(optional `PARTNER_TOKEN`)* | `/e/partner/TOKEN` | token-backed partner invitation form or unavailable state |
-| Partner invitation — missing fixture token | `/e/partner/missing-fixture-token` | explicit unavailable-token guard |
 | My entries | `/e/me/entries` | entry cards (`LIST_CARD` bands, built by `my-entries.js`), `CHIP` |
 | Receipt | `/e/SLUG/receipt/REFERENCE` | `SectionCard variant="eyebrow"`, definition rows |
 | Player page | `/e/SLUG/players/KEY` | hero band, `PersonRef`, `MatchCard` |
@@ -111,19 +148,19 @@ plus the page-scoped scripts in `apps/entrant/public/assets/`.
 ## Route reconciliation
 
 The capture book covers the following registered route patterns. Dynamic
-segments use the documented `WS`, `SLUG`, `KEY`, `REFERENCE`, or token fixture;
-the capture script adds a missing-fixture guard when no valid token is supplied.
+segments use the documented `WS`, `SLUG`, `KEY`, `REFERENCE`, or token fixture.
+Token-backed pages are included only when a valid fixture token is available.
 
 | Registry | Registered patterns and capture treatment |
 | --- | --- |
-| Console public | `/login`, `/display`, and `/invite/:token` (missing-fixture guard always; valid token only with `INVITE_TOKEN`) |
+| Console public | `/login`, `/display`, and `/invite/:token` (valid token/capability only when supplied by fixture data) |
 | Console authenticated | `/`, `/new`, `/settings`, and the concrete workspace paths listed in the Operator table; retired compatibility paths are excluded and return the standard not-found state |
 | Entrant discovery/auth | `/`, `/health`, `/signup` (with validated `next` context), `/login` plus its three outcomes, `/verify` plus its three outcomes, `/forgot`, `/reset` plus its five outcomes |
-| Entrant partner | `/partner/:token`, `/partner/accepted`, `/partner/failed`; sign-up continuation uses canonical `/signup?next=…`, while valid invitation states require `PARTNER_TOKEN` |
+| Entrant partner | `/partner/:token`, `/partner/accepted`, `/partner/failed`; sign-up continuation uses canonical `/signup?next=…`; token-backed pages are captured only with a real `PARTNER_TOKEN` |
 | Entrant tournament | `:slug`, `:slug/receipt/:reference`, `:slug/schedule`, `:slug/enter`, `:slug/enter/signed-in`, `:slug/enter/created`, `:slug/regulations`, `:slug/players/:personKey`, `:slug/draws/:drawKey` |
 | Entrant resources | `/sitemap.xml`, `/robots.txt` and `/health` are resource/health responses, documented for route completeness and excluded from visual surface counts |
 | Historical console aliases | The old redirect set above is retained for audit traceability only. Current capture books contain canonical screens and do not issue requests for these URLs. |
-| Route boundaries and exclusions | Console `/tracking` and `/live-ops` return not-found; retired workspace paths such as `/tournaments/:id/bracket` and `/tournaments/:id/settings` return not-found; `/tournaments/:id` remains the root-to-Overview redirect. Entrant logout/API endpoints and auth POST targets are method-owned resources and are not visual page captures. |
+| Route boundaries and exclusions | Console `/tracking` and `/live-ops` return not-found; retired workspace paths such as `/tournaments/:id/bracket` and `/tournaments/:id/settings` return not-found; `/tournaments/:id` remains the root-to-Overview redirect. Entrant logout/API endpoints and auth POST targets are method-owned resources and are not visual page captures. Missing-token, missing-person, and fabricated capability URLs are not book pages. |
 
 ## What pins each surface
 

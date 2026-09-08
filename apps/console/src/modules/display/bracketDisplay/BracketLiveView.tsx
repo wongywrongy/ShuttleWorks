@@ -1,6 +1,7 @@
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import { liveMatches, type LiveRow } from './bracketDisplayData';
-import { ScoreLane } from '../../../components/control-plane/MatchCard';
+import { SideScores } from '../../../components/control-plane/MatchCard';
+import { SIGNAGE_NAME_WRAP, stepDownSignageNameSize } from '../publicDisplay/tvSizing';
 
 /**
  * Read-only "what's playing now" view for the bracket TV — the bracket analog
@@ -84,9 +85,11 @@ export function BracketLiveView({
   );
 }
 
-/** Names stacked one participant per line (match-card §3.1) with the shared
- *  centred score lane between the two sides (§3.4) — the same grammar the
- *  meet board and every operator surface render. */
+/** Names stacked one participant per line (match-card §3.1), each side with
+ *  its OWN aligned game-score column beside it (P1, contract rules 2-3) —
+ *  the same stacked grammar the meet board and the bracket node render. The
+ *  centred lane between the two sides is withdrawn: on a wall, a number
+ *  sitting between two names belongs visibly to neither. */
 function MatchNames({
   row,
   nameSize,
@@ -103,22 +106,53 @@ function MatchNames({
   const ink = muted ? 'text-muted-foreground' : 'text-foreground';
   const lines = (value: string) =>
     value.split(' / ').map((name) => (
-      <span key={name} className="block break-words">
+      // Wrap between words only — never inside a surname (OPR-0908-10).
+      <span key={name} className="block" style={SIGNAGE_NAME_WRAP}>
         {name}
       </span>
     ));
+  const sets = showScores ? row.sets : [];
+  // A word too long for the column steps the card's names down one tier
+  // rather than splitting; both sides step together.
+  const size = stepDownSignageNameSize(nameSize, [
+    ...row.sideA.split(' / '),
+    ...row.sideB.split(' / '),
+  ]);
   return (
-    <>
-      <span className={`${nameSize} font-semibold leading-tight ${ink}`}>{lines(row.sideA)}</span>
-      <ScoreLane
-        sets={showScores ? row.sets : []}
+    // The score column exists only when there is a score: `SideScores`
+    // renders nothing for an empty ledger, and an empty second track used to
+    // receive side B instead — the two sides sat abreast in half a card each
+    // and the name column narrowed below its own longest word (OPR-0908-10).
+    <div
+      className={`grid w-full items-center gap-x-3 ${
+        sets.length
+          ? 'grid-cols-[minmax(min-content,1fr)_auto]'
+          : 'grid-cols-[minmax(min-content,1fr)]'
+      }`}
+    >
+      <span className={`${size} font-semibold leading-tight ${ink}`}>{lines(row.sideA)}</span>
+      <SideScores
+        sets={sets}
+        side="A"
         size={scoreSize}
         className="font-bold"
-        sideALabel={row.sideA}
-        sideBLabel={row.sideB}
-        data-testid={`bracket-court-score-${row.court}`}
+        sideLabel={row.sideA}
+        data-testid={`bracket-court-score-${row.court}-a`}
       />
-      <span className={`${nameSize} font-semibold leading-tight ${ink}`}>{lines(row.sideB)}</span>
-    </>
+      {/* The hairline is the side boundary — stated without colour, so the
+          two partners of a doubles pair group tighter inside a side than the
+          sides do against each other (contract rule 3). */}
+      <span className={`${size} mt-1 border-t border-border pt-1 font-semibold leading-tight ${ink}`}>
+        {lines(row.sideB)}
+      </span>
+      <SideScores
+        sets={sets}
+        side="B"
+        size={scoreSize}
+        className="mt-1 pt-1 font-bold"
+        sideLabel={row.sideB}
+        data-testid={`bracket-court-score-${row.court}-b`}
+      />
+    </div>
   );
 }

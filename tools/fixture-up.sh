@@ -42,6 +42,7 @@
 #   FIXTURE_CHECK_ACCOUNT_JOURNEYS default 1 — run tests/e2e/check-account-journeys.py
 #                              (work package 23: signup/confirm/login/reset over real HTTP)
 #   FIXTURE_KEEP               default 0 — keep the temp dir on exit (debugging)
+#   FIXTURE_REVIEW_EXTRAS      default 0 — add representative review workspaces/handles
 #   PYTHON_BIN                 default .venv/bin/python, else python3
 set -euo pipefail
 
@@ -77,6 +78,26 @@ SKIP_CONSOLE_BUILD="${FIXTURE_SKIP_CONSOLE_BUILD:-0}"
 SKIP_ENTRANT="${FIXTURE_SKIP_ENTRANT:-0}"
 CHECK_ACCOUNT_JOURNEYS="${FIXTURE_CHECK_ACCOUNT_JOURNEYS:-1}"
 
+# Refuse occupied ports before writing a database: a healthy response from an
+# older fixture must never be mistaken for this process's API or frontend.
+"${PYTHON_BIN}" - "${API_PORT}" "${CONSOLE_PORT}" "${ENTRANT_PORT}" "${SKIP_ENTRANT}" <<'PYEOF'
+import socket
+import sys
+
+ports = sys.argv[1:3] + ([] if sys.argv[4] == "1" else [sys.argv[3]])
+sockets = []
+try:
+    for port in ports:
+        sock = socket.socket()
+        sockets.append(sock)
+        sock.bind(("127.0.0.1", int(port)))
+except OSError as exc:
+    raise SystemExit(f"Fixture port {port} is unavailable; stop its owner first: {exc}") from exc
+finally:
+    for sock in sockets:
+        sock.close()
+PYEOF
+
 API_URL="http://127.0.0.1:${API_PORT}"
 CONSOLE_URL="http://127.0.0.1:${CONSOLE_PORT}"
 ENTRANT_URL="http://127.0.0.1:${ENTRANT_PORT}"
@@ -91,12 +112,19 @@ FIXTURE_JSON="${FIXTURE_ROOT}/fixture.json"
 API_PID=""
 CONSOLE_PID=""
 ENTRANT_PID=""
+IDLE_PID=""
 
 cleanup() {
   local status=$?
+  if [[ -n "${IDLE_PID}" ]]; then kill "${IDLE_PID}" 2>/dev/null || true; fi
   if [[ -n "${ENTRANT_PID}" ]]; then kill "${ENTRANT_PID}" 2>/dev/null || true; fi
   if [[ -n "${CONSOLE_PID}" ]]; then kill "${CONSOLE_PID}" 2>/dev/null || true; fi
   if [[ -n "${API_PID}" ]]; then kill "${API_PID}" 2>/dev/null || true; fi
+  # Servers below are direct child processes, not npm wrappers. Reap them
+  # before removing the database or releasing the fixture pointer.
+  for fixture_pid in "${ENTRANT_PID}" "${CONSOLE_PID}" "${API_PID}"; do
+    if [[ -n "${fixture_pid}" ]]; then wait "${fixture_pid}" 2>/dev/null || true; fi
+  done
   if [[ -n "${FIXTURE_STATE_FILE:-}" ]]; then rm -f -- "${FIXTURE_STATE_FILE}"; fi
   if [[ "${FIXTURE_KEEP:-0}" == "1" ]]; then
     echo "kept fixture at ${FIXTURE_ROOT}"
@@ -113,6 +141,10 @@ export BACKEND_DATA_DIR="${FIXTURE_ROOT}/data"
 export ENVIRONMENT="local"
 export AUTH_MODE="local"
 export SHUTTLEWORKS_DEMO_NOW="2026-07-31T05:15:00+00:00"
+# The seed creates six club/personal accounts and the journey suite creates
+# several more from the same loopback IP. Keep a finite fixture-only budget
+# for that workload; production defaults and throttle contract tests stay 8.
+export ENTRANT_SIGNUP_MAX_PER_IP=32
 
 echo "Fixture mode: ${FIXTURE_MODE} (defects pass: $([[ "${APPLY_DEFECTS}" == "1" ]] && echo on || echo off))"
 echo "Creating disposable migrated database: ${DATABASE_PATH}"
@@ -168,8 +200,9 @@ if [[ "${SKIP_ENTRANT}" != "1" ]]; then
   echo "Starting the public entrant SSR server on :${ENTRANT_PORT} against ${API_URL}"
   (
     cd "${REPO_ROOT}/apps/entrant"
-    API_BASE_URL="${API_URL}" SESSION_COOKIE_SECURE=false \
-      exec npm run dev -- --port "${ENTRANT_PORT}" --strictPort --host 127.0.0.1
+    API_BASE_URL="${API_URL}" VITE_API_PROXY_TARGET="${API_URL}" SESSION_COOKIE_SECURE=false \
+      exec node "${REPO_ROOT}/node_modules/vite/bin/vite.js" \
+        --port "${ENTRANT_PORT}" --strictPort --host 127.0.0.1
   ) >"${FIXTURE_ROOT}/entrant.log" 2>&1 &
   ENTRANT_PID=$!
 
@@ -228,6 +261,14 @@ if [[ "${APPLY_DEFECTS}" == "1" ]]; then
     --base-url "${API_URL}" --fixture "${FIXTURE_JSON}"
 fi
 
+if [[ "${FIXTURE_REVIEW_EXTRAS:-0}" == "1" ]]; then
+  echo "Preparing representative review workspaces and real journey handles"
+  PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" \
+    "${REPO_ROOT}/tools/prepare-review-fixture.py" \
+    --base-url "${API_URL}" --fixture "${FIXTURE_JSON}" --manifest "${MANIFEST_PATH}" \
+    --api-log "${FIXTURE_ROOT}/api.log"
+fi
+
 if [[ "${SKIP_CONSOLE_BUILD}" != "1" ]]; then
   echo "Building the console with the runtime-error harness"
   (
@@ -260,11 +301,15 @@ fi
 # a developer's browser tab, a follow-up script) needs.
 "${PYTHON_BIN}" - "${FIXTURE_JSON}" "${CONSOLE_URL}" "${ENTRANT_URL}" "${API_URL}" "${SKIP_ENTRANT}" "${FIXTURE_MODE}" <<'PYEOF'
 import json
+import os
+import subprocess
 import sys
 
 path, console_url, entrant_url, api_url, skip_entrant, fixture_mode = sys.argv[1:7]
 data = json.loads(open(path, encoding="utf-8").read())
 data["fixtureMode"] = fixture_mode
+data["demoNow"] = os.environ["SHUTTLEWORKS_DEMO_NOW"]
+data["reviewedBuildSha"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 data["consoleBaseUrl"] = console_url
 data["apiBaseUrl"] = api_url
 data["entrantBaseUrl"] = None if skip_entrant == "1" else entrant_url
@@ -306,4 +351,11 @@ Fixture ready.
 Press Ctrl-C to tear down.
 INFO
 
-while true; do sleep 3600; done
+# Waiting on a background child lets Bash deliver TERM immediately. Waiting
+# on a foreground sleep postponed the trap for up to an hour and left all
+# three ports owned by the supposedly stopped fixture.
+while true; do
+  sleep 60 &
+  IDLE_PID=$!
+  wait "${IDLE_PID}"
+done

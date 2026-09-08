@@ -117,7 +117,13 @@ export function formatMomentInZone(wire: string, timeZone: string): string | nul
  */
 export function formatDateInZone(wire: string, timeZone: string): string | null {
   const moment = parseMoment(wire);
-  if (moment === null) return null;
+  return moment === null ? null : dateFromInstant(moment, timeZone);
+}
+
+/** `12 Sep 2026` for an already-parsed instant read in `timeZone` — the
+ * day-first vocabulary the rest of this module speaks, not `Intl`'s
+ * locale-ordered default. */
+function dateFromInstant(moment: Date, timeZone: string): string {
   try {
     const parts = new Intl.DateTimeFormat('en', {
       day: 'numeric', month: 'short', year: 'numeric', timeZone,
@@ -126,6 +132,101 @@ export function formatDateInZone(wire: string, timeZone: string): string | null 
     return `${value('day')} ${value('month')} ${value('year')}`;
   } catch {
     return `${moment.getUTCDate()} ${MONTHS[moment.getUTCMonth()]} ${moment.getUTCFullYear()}`;
+  }
+}
+
+/**
+ * An ISO-8601 INSTANT (`2026-09-12T10:35:00+00:00` — what the matches
+ * projection stamps, not the pinned `_moment` wire shape) as a venue-local
+ * `12 Sep 2026, 19:35`.
+ *
+ * P7: the schedule's freshness line used to build its own `Intl` format and
+ * came out `Sep 12, 2026, 7:35 PM` — the one American, 12-hour date on a
+ * tier whose every other date is day-first and 24-hour. Unparseable input
+ * returns null, so the caller omits the line rather than printing raw ISO.
+ */
+export function formatInstantInZone(iso: string, timeZone: string): string | null {
+  const moment = new Date(iso);
+  if (Number.isNaN(moment.getTime())) return null;
+  return `${dateFromInstant(moment, timeZone)}, ${formatClockInZone(moment, timeZone)}`;
+}
+
+/**
+ * The closing DAY, in the tournament's own zone, with no year and no zone
+ * spelling: `15 Aug` (P5).
+ *
+ * The season calendar's entry action names a deadline a reader can act on
+ * this week, beside a month header that already carries the year, so the year
+ * and the offset would both be noise. Same rules as its siblings: an
+ * unrecognised `timeZone` degrades to the UTC day rather than omitting a known
+ * instant, and an unparseable `wire` is `null`, never raw ISO.
+ *
+ * CONVERSION, not suffix-trimming (contract §7.1): a deadline at 23:59 in
+ * Seoul is a different calendar day from the same instant read in UTC, and
+ * dropping the zone name off a UTC rendering would state the wrong day.
+ */
+export function formatDayMonthInZone(wire: string, timeZone: string): string | null {
+  const moment = parseMoment(wire);
+  if (moment === null) return null;
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      day: 'numeric', month: 'short', timeZone,
+    }).formatToParts(moment);
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('day')} ${value('month')}`;
+  } catch {
+    return `${moment.getUTCDate()} ${MONTHS[moment.getUTCMonth()]}`;
+  }
+}
+
+/**
+ * A DEADLINE in the tournament's own zone, to the minute, with no zone
+ * spelling: `1 Aug, 23:59` (public-visual-fixes P7).
+ *
+ * A closing time is the one instant on a tournament page a reader can be
+ * late for, so the tier states it exactly — the minute is never rounded to
+ * a friendlier one, and never widened to a bare day, because "closes 1 Aug"
+ * and "closes 1 Aug, 23:59" are different promises. The year is absent for
+ * the same reason it is absent from `formatDayMonthInZone`: the page it sits
+ * on already says which tournament, and which year that is.
+ *
+ * CONVERSION, not suffix-trimming (contract §7.1): 15:30 UTC on 31 July is
+ * 1 August in Seoul, and printing the UTC clock without its zone would state
+ * the wrong day AND the wrong time.
+ */
+export function formatDayMonthTimeInZone(wire: string, timeZone: string): string | null {
+  const moment = parseMoment(wire);
+  if (moment === null) return null;
+  const day = formatDayMonthInZone(wire, timeZone);
+  const clock = formatClockInZone(moment, timeZone);
+  return day === null ? null : `${day}, ${clock}`;
+}
+
+/**
+ * The same instant with its year — `14 Aug 2026, 23:59` — for a deadline
+ * quoted away from the tournament's own date context (the entry form's
+ * sticky total bar). Same rules as its siblings.
+ */
+export function formatDateTimeInZone(wire: string, timeZone: string): string | null {
+  const moment = parseMoment(wire);
+  if (moment === null) return null;
+  const day = formatDateInZone(wire, timeZone);
+  const clock = formatClockInZone(moment, timeZone);
+  return day === null ? null : `${day}, ${clock}`;
+}
+
+/** 24-hour `HH:MM` for an instant read in `timeZone`; an unrecognised zone
+ * degrades to the UTC clock, exactly as the date helpers degrade to the UTC
+ * day, rather than dropping a known instant. */
+function formatClockInZone(moment: Date, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone,
+    }).formatToParts(moment);
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('hour')}:${value('minute')}`;
+  } catch {
+    return `${String(moment.getUTCHours()).padStart(2, '0')}:${String(moment.getUTCMinutes()).padStart(2, '0')}`;
   }
 }
 
@@ -157,4 +258,41 @@ export function capChipCountdown(
   }
   const exact = formatDateInZone(closesAt, timeZone);
   return exact === null ? state : { ...state, closesAtAbsolute: exact };
+}
+
+/**
+ * Which CLOCK a wall-clock string is (operator/public remediation P2).
+ *
+ * A bare `10:30` on a finished match's card is ambiguous: a reader takes it
+ * for when the match actually started, when it is in fact the approved slot
+ * it was scheduled into. The public wire publishes exactly ONE of the three
+ * — the venue-local approved time — so the honest fix is to say which one it
+ * is rather than to invent the other two. `estimated` and `actual` exist so
+ * a surface that later gains those fields spells them the same way, and so
+ * no call site reaches for its own word.
+ */
+export type ClockKind = 'scheduled' | 'estimated' | 'actual';
+
+/** A `switch`, not a module-scope lookup object: `tests/enter.loader.test.ts`
+ *  holds this file to zero shared mutable module-scope containers, and a
+ *  `const {...}` map is exactly that. */
+function clockKindLabel(kind: ClockKind): string {
+  switch (kind) {
+    case 'estimated':
+      return 'Estimated';
+    case 'actual':
+      return 'Started';
+    default:
+      return 'Scheduled';
+  }
+}
+
+/**
+ * `('scheduled', '10:30')` → `'Scheduled 10:30'`; a null clock returns null
+ * so the caller OMITS the fact rather than rendering a labelled blank
+ * (contract §3.2 — a missing value is never placeheld).
+ */
+export function labelledClock(kind: ClockKind, clock: string | null | undefined): string | null {
+  if (!clock) return null;
+  return `${clockKindLabel(kind)} ${clock}`;
 }

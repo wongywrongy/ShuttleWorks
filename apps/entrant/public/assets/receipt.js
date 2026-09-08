@@ -187,7 +187,12 @@ export function renderReceipt(root, receipt) {
   fact("Submitted", formatMoment(receipt.submittedAt) || "Recorded");
   fact("Payment", paymentSummary(receipt));
   if (receipt.venueName) fact("Venue", receipt.venueName);
-  if (receipt.orgName) fact("Organizer", receipt.orgName);
+  // The local simulator's bootstrap label is an implementation fallback,
+  // not organizer information an entrant can act on. Keep receipt details
+  // consistent with the tournament frame, which suppresses it as well.
+  if (receipt.orgName && receipt.orgName !== "Local Workspace") {
+    fact("Organizer", receipt.orgName);
+  }
   summary.appendChild(facts);
   const copy = el(doc, "button", "mt-3 text-left text-sm font-medium text-accent underline underline-offset-4", "Copy reference");
   copy.type = "button";

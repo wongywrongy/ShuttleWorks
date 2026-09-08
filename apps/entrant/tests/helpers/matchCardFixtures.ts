@@ -37,7 +37,8 @@ export const matchCardFixtures = {
   /** MC-01: singles, both sides resolved, approved slot + court, no games. */
   singlesScheduled: {
     ...base,
-    matchNumber: 1,
+    reference: 'MS R16·1',
+    shortReference: 'R16·1',
   } satisfies MatchCardData,
 
   /** MC-02: doubles, four resolved persons, approved slot + court, no games. */
@@ -48,7 +49,8 @@ export const matchCardFixtures = {
       { persons: [person('p1', 'Ada Lovelace'), person('p2', 'Grace Hopper')], placeholder: null, winner: false },
       { persons: [person('p3', 'Katherine Johnson'), person('p4', 'Hedy Lamarr')], placeholder: null, winner: false },
     ],
-    matchNumber: 2,
+    reference: 'MS R16·2',
+    shortReference: 'R16·2',
   } satisfies MatchCardData,
 
   /**
@@ -75,7 +77,8 @@ export const matchCardFixtures = {
         winner: false,
       },
     ],
-    matchNumber: 3,
+    reference: 'MS R16·3',
+    shortReference: 'R16·3',
   } satisfies MatchCardData,
 
   /**
@@ -99,7 +102,8 @@ export const matchCardFixtures = {
       },
       { persons: [person('p3', 'Katherine Johnson'), person('p4', 'Hedy Lamarr')], placeholder: null, winner: false },
     ],
-    matchNumber: 4,
+    reference: 'MS R16·4',
+    shortReference: 'R16·4',
   } satisfies MatchCardData,
 
   /** MC-05: side A resolved, side B `winner_of` QF1; slot approved, court
@@ -118,7 +122,8 @@ export const matchCardFixtures = {
     ],
     scheduledTime: '14:00',
     court: null,
-    matchNumber: 5,
+    reference: 'MS R16·5',
+    shortReference: 'R16·5',
   } satisfies MatchCardData,
 
   /** MC-06: both sides resolved, no time, no court, no day. */
@@ -127,7 +132,8 @@ export const matchCardFixtures = {
     status: 'scheduled',
     scheduledTime: null,
     court: null,
-    matchNumber: 6,
+    reference: 'MS R16·6',
+    shortReference: 'R16·6',
   } satisfies MatchCardData,
 
   /** MC-07: `playing`, game 1 complete 21-17 to A, game 2 in progress 19-17 to A. */
@@ -136,7 +142,8 @@ export const matchCardFixtures = {
     status: 'live',
     score: [[21, 17], [19, 17]],
     decided: false,
-    matchNumber: 7,
+    reference: 'MS R16·7',
+    shortReference: 'R16·7',
   } satisfies MatchCardData,
 
   /** MC-08: `finished`, decided to A; the losing side won a game. */
@@ -150,7 +157,8 @@ export const matchCardFixtures = {
       { persons: [person('p2', 'Grace Hopper')], placeholder: null, winner: false },
     ],
     durationMinutes: 42,
-    matchNumber: 8,
+    reference: 'MS R16·8',
+    shortReference: 'R16·8',
   } satisfies MatchCardData,
 
   /** MC-09: `finished`, walkover, winner A, absent side B, no games. */
@@ -163,7 +171,8 @@ export const matchCardFixtures = {
       { persons: [person('p1', 'Ada Lovelace')], placeholder: null, winner: true },
       { persons: [person('p2', 'Grace Hopper')], placeholder: null, winner: false },
     ],
-    matchNumber: 9,
+    reference: 'MS R16·9',
+    shortReference: 'R16·9',
   } satisfies MatchCardData,
 
   /** MC-10: `retired`, winner A, partial ledger. */
@@ -176,7 +185,8 @@ export const matchCardFixtures = {
       { persons: [person('p1', 'Ada Lovelace')], placeholder: null, winner: true },
       { persons: [person('p2', 'Grace Hopper')], placeholder: null, winner: false },
     ],
-    matchNumber: 10,
+    reference: 'MS R16·10',
+    shortReference: 'R16·10',
   } satisfies MatchCardData,
 
   /**
@@ -194,7 +204,8 @@ export const matchCardFixtures = {
       { persons: [{ identity: null, resolution: 'dead', label: 'Player not published' }], placeholder: null, winner: false },
     ],
     score: null,
-    matchNumber: 11,
+    reference: 'MS R16·11',
+    shortReference: 'R16·11',
   } satisfies MatchCardData,
 
   /** MC-12: side B is a bye, no games, no outcome. */
@@ -205,7 +216,8 @@ export const matchCardFixtures = {
       { persons: [], placeholder: 'Bye', winner: false, unresolved: { kind: 'bye' } },
     ],
     score: null,
-    matchNumber: 12,
+    reference: 'MS R16·12',
+    shortReference: 'R16·12',
   } satisfies MatchCardData,
 
   /** MC-13: three ledger widths — never padded to a configured maximum. */

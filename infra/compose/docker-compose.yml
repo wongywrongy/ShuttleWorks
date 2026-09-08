@@ -112,6 +112,7 @@ services:
       dockerfile: apps/console/Dockerfile
       args:
         VITE_API_BASE_URL: /api
+        VITE_ENVIRONMENT: production
         SOURCE_REVISION: ${SOURCE_REVISION:-unknown}
     # Two ports since SP-HOST-1: 8080 is the operator tier, 8081 the public
     # entrant tier. In production they are two hostnames on the tunnel and

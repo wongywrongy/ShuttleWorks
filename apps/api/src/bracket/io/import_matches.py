@@ -276,15 +276,37 @@ def _build_draw_from_import(ev, *, roster_ids: Optional[set[str]] = None) -> Dra
                     f"event {ev.id!r}: participant {p.id!r} references roster "
                     f"players that do not exist: {missing_roster_ids}"
                 )
+        # ``seed`` and ``entryPlayerId`` ride in the engine participant's
+        # ``metadata`` between here and persist, where
+        # ``brackets._participant_persist_fields`` lifts them back into their
+        # own columns. Dropping them here (as this builder used to) silently
+        # discarded both on every import: a pre-paired draw could carry seeds
+        # and an Entries provenance link on the wire, and neither reached the
+        # ``bracket_participants`` row, the bracket read model, or the public
+        # ``TeamDTO.seed`` the draw page renders.
+        metadata: Dict[str, object] = {}
+        if p.seed is not None:
+            metadata["seed"] = p.seed
+        if p.entryPlayerId:
+            metadata["entryPlayerId"] = p.entryPlayerId
+        # P6's imported-person identity travels the same way: it lands in the
+        # participant row's free-form ``meta`` (``_participant_persist_fields``
+        # lifts only ``seed``/``entryPlayerId`` into columns) and hydrates
+        # back onto the participant, so the read model can echo it.
+        if p.personId:
+            metadata["personId"] = p.personId
+        if p.personSource:
+            metadata["personSource"] = p.personSource
         if p.members:
             participants[p.id] = Participant(
                 id=p.id,
                 name=p.name,
                 type=ParticipantType.TEAM,
                 member_ids=list(p.members),
+                metadata=metadata,
             )
         else:
-            participants[p.id] = Participant(id=p.id, name=p.name)
+            participants[p.id] = Participant(id=p.id, name=p.name, metadata=metadata)
 
     play_units: Dict[str, PlayUnit] = {}
     slots: Dict[str, Tuple[BracketSlot, BracketSlot]] = {}

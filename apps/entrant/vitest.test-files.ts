@@ -23,4 +23,5 @@ export const SSR_TEST_FILES = [
   'tests/sitemap.test.ts',
   'tests/tournament.meta.test.ts',
   'tests/tournament.render.test.ts',
+  'tests/tournamentFrame.render.test.ts',
 ] as const;

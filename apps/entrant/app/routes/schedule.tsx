@@ -1,20 +1,18 @@
 /** `/e/{slug}/schedule` — public, URL-backed matches document. */
 import { isRouteErrorResponse, useRouteError } from "react-router";
 
-import { Button } from "@scheduler/design-system/components";
-
 import { EmptyState } from "../components/EmptyState";
-import { HeroHeader } from "../components/HeroHeader";
 import { MatchCard, type MatchCardData } from "../components/MatchCard";
 import { MessagePage } from "../components/MessagePage";
 import { PlayShell } from "../components/PlayShell";
+import { SearchField } from "../components/SearchField";
 import { SegmentedNav } from "../components/SegmentedNav";
-import { TabBar } from "../components/TabBar";
+import { TournamentFrame } from "../components/TournamentFrame";
 import { ApiError, apiGet } from "../lib/apiFetch.server";
+import { demoNowMs } from "../lib/demoClock.server";
 import type { EntryPageDTO } from "../lib/entryPage.types";
 import { eventDisciplineLabel } from "../lib/draws.types";
-import { capChipCountdown, formatCalendarMonth, formatDateLong } from "../lib/format";
-import { chipState, nearestCloseAt, tournamentPhase, visibleTabs } from "../lib/phase";
+import { formatInstantInZone } from "../lib/format";
 import {
   SCHEDULE_STATES,
   schedulePublicState,
@@ -26,7 +24,8 @@ import {
   type ScheduleMatchDTO,
   type ScheduleState,
 } from "../lib/schedule.types";
-import { EYEBROW, FIELD_INPUT, LIST_CARD, SELECT_CONTROL } from "../lib/ui";
+import { ACTION_LINK, ACTION_LINK_MUTED, EYEBROW, SELECT_CONTROL } from "../lib/ui";
+import { Chevron } from "../components/Chevron";
 import type { Route } from "./+types/schedule";
 
 export type ScheduleOrganization = "time" | "court";
@@ -128,7 +127,7 @@ export async function loader({
       page,
       matches,
       filters,
-      nowMs: Date.now(),
+      nowMs: demoNowMs(),
     } satisfies ScheduleLoaderData;
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) throw notFound();
@@ -157,9 +156,6 @@ function isCompleted(match: ScheduleMatchDTO): boolean {
     match.status === "retired"
   );
 }
-function gamesWon(score: number[][], side: 0 | 1): number {
-  return score.filter((game) => (game[side] ?? 0) > (game[side === 0 ? 1 : 0] ?? 0)).length;
-}
 /**
  * One anatomy: a schedule row dressed as the public MatchCard (ADR 0028).
  * Every name flows through the card's PersonGroup / PersonRef seam; this
@@ -170,14 +166,14 @@ function scheduleToMatch(
   options: { showDate: boolean } = { showDate: true },
 ): MatchCardData {
   const decided = isCompleted(match);
+  // Contract §3.5/§5.1 rule 3 (public-visual-fixes P3): the winner comes
+  // from the AUTHORITATIVE outcome the wire now publishes. This adapter used
+  // to count games won and call the higher total the winner — which is
+  // precisely the inference retirement and walkover break: a retired match's
+  // ledger usually favours the side that did not win it, and a walkover has
+  // no games at all.
   const winnerIndex =
-    decided && match.score?.length
-      ? gamesWon(match.score, 0) > gamesWon(match.score, 1)
-        ? 0
-        : gamesWon(match.score, 1) > gamesWon(match.score, 0)
-          ? 1
-          : null
-      : null;
+    match.winnerSide === 'A' ? 0 : match.winnerSide === 'B' ? 1 : null;
   const sides = [0, 1].map((index) => {
     const side = match.sides[index];
     return {
@@ -191,6 +187,12 @@ function scheduleToMatch(
   return {
     eventCode: match.eventCode,
     roundLabel: match.roundLabel,
+    // §6.1: a whole-day schedule is a MIXED-EVENT view, so it keeps the
+    // event code — `MS R16·2 · 10:00 · Court 3`. Same authority, same
+    // string as the operator's list and the bracket node; only the event
+    // code's presence differs, and it differs because the context does.
+    reference: match.reference ?? null,
+    shortReference: match.shortReference ?? null,
     sides,
     score: match.score,
     decided,
@@ -233,40 +235,47 @@ function dayDistance(a: string, b: string): number {
     : 99;
 }
 
-/** Human-readable freshness in the tournament's configured timezone. */
+/**
+ * Human-readable freshness, converted into the tournament's own timezone.
+ *
+ * Contract §7.1 (public P0): the instant is CONVERTED to venue-local time —
+ * removing a suffix from a UTC value would be a wrong time stated
+ * confidently — but the rendered prose carries no zone abbreviation, offset
+ * or IANA identifier, because the frame already said "All times local to the
+ * venue" once. `timeZoneName: 'short'` is what left with P1.
+ *
+ * P7: it delegates to the entrant time authority (`lib/format.ts`) instead
+ * of composing its own `Intl` format, which rendered this ONE date on the
+ * tier in American order and on a 12-hour clock. An unparseable server value
+ * is returned verbatim — at worst the server's own display string, never an
+ * invented date.
+ */
 export function formatScheduleUpdated(value: string | null, timeZone: string): string {
   if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  try {
-    return new Intl.DateTimeFormat('en', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone,
-      timeZoneName: 'short',
-    }).format(date);
-  } catch {
-    return value;
-  }
+  return formatInstantInZone(value, timeZone) ?? value;
 }
 
-// D11: redirects to the entrant time authority (`lib/format.ts`) — see
-// `scheduleDateLabel`'s note; the same second-formatter defect applied here.
-const monthLabel = formatCalendarMonth;
-function DayNavigation({
-  slug,
-  filters,
-  matches,
-}: {
-  slug: string;
-  filters: ScheduleFilters;
-  matches: ScheduleMatchesDTO;
-}) {
+/** The sticky row's offset, stated once — the same decision `EntrantsList`
+ * writes down for the directory toolbar: nothing above it on this tier is
+ * sticky, so it sits at the top of the viewport. */
+const TOOLBAR_OFFSET = "top-0";
+/**
+ * The day control, in the one sticky row.
+ *
+ * A short, consecutive run of days stays a row of LINKS — the shape a
+ * spectator can hit without opening anything, and one that needs no script.
+ * A long or gappy run (a season-length archive) becomes a native `<select>`
+ * inside the filter form instead of the month-grouped block of dozens of
+ * anchors it used to be: that block could not live in one row, and the row
+ * is the point (P7). Either way the mechanism is native — the select carries
+ * a no-JS submit through the form's own `sr-only` control, and the
+ * change-submit script only saves the second step.
+ */
+const DAY_LINK_LIMIT = 5;
+
+function scheduleDays(filters: ScheduleFilters, matches: ScheduleMatchesDTO): ScheduleDayFacetDTO[] {
   const facets = matches.facets.days;
-  const days = [
+  return [
     ...facets,
     ...(filters.day && !facets.some((day) => day.day === filters.day)
       ? [{ day: filters.day, count: 0 }]
@@ -277,66 +286,106 @@ function DayNavigation({
         list.findIndex((other) => other.day === day.day) === index,
     )
     .sort((a, b) => a.day.localeCompare(b.day));
-  if (!days.length) return null;
-  const consecutive = days.every(
-    (day, index) =>
-      index === 0 || dayDistance(days[index - 1].day, day.day) <= 1,
-  );
-  if (consecutive)
-    return (
-      <SegmentedNav
-        label="Schedule days"
-        segments={days.map((day) => ({
-          label: `${scheduleDateLabel(day.day)} · ${dayMatchCountLabel(day.count)}`,
-          href: matchesPath(slug, { ...filters, day: day.day, page: 1 }),
-          current: Boolean(filters.day) && day.day === filters.day,
-        }))}
-      />
-    );
-  const months = new Map<string, ScheduleDayFacetDTO[]>();
-  days.forEach((day) => {
-    const month = /^\d{4}-\d{2}/.exec(day.day)?.[0] ?? day.day;
-    months.set(month, [...(months.get(month) ?? []), day]);
-  });
+}
+
+function daysAreLinkable(days: ScheduleDayFacetDTO[]): boolean {
   return (
-    <nav
-      aria-label="Schedule days"
-      className="grid gap-4 border-y border-rule-soft py-4"
-    >
-      {[...months.entries()].map(([month, monthDays]) => (
-        <section key={month}>
-          <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
-            {monthLabel(month)}
-          </h2>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
-            {monthDays.map((day) => {
-              const active = Boolean(filters.day) && day.day === filters.day;
-              return (
-                <a
-                  key={day.day}
-                  href={matchesPath(slug, {
-                    ...filters,
-                    day: day.day,
-                    page: 1,
-                  })}
-                  aria-current={active ? "page" : undefined}
-                  className={`text-sm underline-offset-4 hover:underline ${active ? "font-semibold text-foreground" : "text-muted-foreground"}`}
-                >
-                  {scheduleDateLabel(day.day)}{" "}
-                  <span className="tabular-nums">
-                    ({dayMatchCountLabel(day.count)})
-                  </span>
-                </a>
-              );
-            })}
-          </div>
-        </section>
-      ))}
-    </nav>
+    days.length > 0 &&
+    days.length <= DAY_LINK_LIMIT &&
+    days.every((day, index) => index === 0 || dayDistance(days[index - 1].day, day.day) <= 1)
   );
 }
 
-function Filters({
+function DayNavigation({
+  slug,
+  filters,
+  days,
+}: {
+  slug: string;
+  filters: ScheduleFilters;
+  days: ScheduleDayFacetDTO[];
+}) {
+  if (!days.length) return null;
+  return (
+    <SegmentedNav
+      label="Schedule days"
+      segments={[
+        {
+          label: "All days",
+          href: matchesPath(slug, { ...filters, day: "", page: 1 }),
+          current: filters.day === "",
+        },
+        ...days.map((day) => ({
+          label: `${scheduleDateLabel(day.day)} · ${dayMatchCountLabel(day.count)}`,
+          href: matchesPath(slug, { ...filters, day: day.day, page: 1 }),
+          current: Boolean(filters.day) && day.day === filters.day,
+        })),
+      ]}
+    />
+  );
+}
+
+function DaySelect({
+  filters,
+  days,
+}: {
+  filters: ScheduleFilters;
+  days: ScheduleDayFacetDTO[];
+}) {
+  return (
+    <>
+      <label className="sr-only" htmlFor="schedule-day">
+        Day
+      </label>
+      <select
+        id="schedule-day"
+        name="day"
+        defaultValue={filters.day}
+        className={`${SELECT_CONTROL} w-auto`}
+      >
+        <option value="">All days</option>
+        {days.map((day) => (
+          <option key={day.day} value={day.day}>
+            {`${scheduleDateLabel(day.day)} · ${dayMatchCountLabel(day.count)}`}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+}
+
+function OrganizationSwitch({
+  slug,
+  filters,
+}: {
+  slug: string;
+  filters: ScheduleFilters;
+}) {
+  const href = (organization: ScheduleOrganization) =>
+    matchesPath(slug, { ...filters, organization, page: 1 });
+  return (
+    <SegmentedNav
+      label="Schedule organization"
+      currentAttr="true"
+      segments={[
+        { label: "By time", href: href("time"), current: filters.organization === "time" },
+        { label: "By court", href: href("court"), current: filters.organization === "court" },
+      ]}
+    />
+  );
+}
+
+/**
+ * ONE sticky control row (P7): day · By time / By court · search, with the
+ * remaining facets folded into a disclosure that opens in place.
+ *
+ * It used to be two stacked cards — a day/organisation band above a
+ * four-column filter grid with an "Apply" button — over an explanatory
+ * sentence that repeated the controls in prose. Everything here is native:
+ * the day and the organisation are links (or a select), the search is a GET
+ * field whose Enter submits, and the only submit control is `sr-only`.
+ */
+function ScheduleControls({
   slug,
   filters,
   matches,
@@ -363,103 +412,114 @@ function Filters({
   const states = [
     ...new Set([...matches.facets.states, filters.state].filter(Boolean)),
   ] as ScheduleState[];
+  const days = scheduleDays(filters, matches);
+  const dayAsLinks = daysAreLinkable(days);
+  const moreOpen = Boolean(filters.event || filters.court || filters.state);
   return (
-    <form
-      method="get"
-      action={`/e/${encodeURIComponent(slug)}/schedule`}
-      className="grid items-center gap-2 border-t border-rule-soft px-4 py-3 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))_auto]"
-      aria-label="Filter schedule"
+    <div
+      className={`sticky ${TOOLBAR_OFFSET} z-20 -mx-4 border-b border-rule-soft bg-surface-base px-4 py-2`}
     >
-      <input type="hidden" name="organization" value={filters.organization} />
-      <input type="hidden" name="day" value={filters.day} />
-      <input
-        name="player"
-        defaultValue={filters.player}
-        placeholder="Search a player"
-        aria-label="Player"
-        className={FIELD_INPUT}
-      />
-      <details className="group md:contents" open={Boolean(filters.event || filters.court || filters.state) || undefined}>
-        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-sm border border-rule-soft px-3 text-sm font-medium text-foreground marker:hidden md:hidden">
-          More filters
-          <span aria-hidden className="text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
-        </summary>
-        <div className="grid gap-2 md:contents">
-          <select
-            name="event"
-            defaultValue={filters.event}
-            aria-label="Event"
-            className={SELECT_CONTROL}
-          >
-            <option value="">All events</option>
-            {events.map((event) => (
-              <option key={event.code} value={event.code}>
-                {event.label}
-              </option>
-            ))}
-          </select>
-          <select
-            name="court"
-            defaultValue={filters.court}
-            aria-label="Court"
-            className={SELECT_CONTROL}
-          >
-            <option value="">All courts</option>
-            {courts.map((court) => (
-              <option key={court} value={court}>{`Court ${court}`}</option>
-            ))}
-          </select>
-          <select
-            name="state"
-            defaultValue={filters.state}
-            aria-label="State"
-            className={SELECT_CONTROL}
-          >
-            <option value="">All states</option>
-            {states.map((state) => (
-              <option key={state} value={state}>
-                {scheduleStateLabel(state)}
-              </option>
-            ))}
-          </select>
-        </div>
-      </details>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" variant="outline" size="sm">
-          Apply
-        </Button>
-        {hasScheduleFilters(filters) ? (
-          <a
-            href={`/e/${encodeURIComponent(slug)}/schedule?organization=${filters.organization}`}
-            className="text-sm font-medium text-accent underline-offset-4 hover:underline"
-          >
-            Clear filters
-          </a>
+      <form
+        method="get"
+        action={`/e/${encodeURIComponent(slug)}/schedule`}
+        data-schedule-filters
+        aria-label="Filter schedule"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2"
+      >
+        <input type="hidden" name="organization" value={filters.organization} />
+        {dayAsLinks ? <input type="hidden" name="day" value={filters.day} /> : null}
+        {dayAsLinks ? (
+          <DayNavigation slug={slug} filters={filters} days={days} />
+        ) : days.length ? (
+          <DaySelect filters={filters} days={days} />
         ) : null}
-      </div>
-    </form>
+        <OrganizationSwitch slug={slug} filters={filters} />
+        <div className="flex min-w-0 flex-1 basis-64 flex-wrap items-center gap-x-3 gap-y-2">
+          <SearchField
+            id="schedule-player"
+            name="player"
+            label="Search matches by player"
+            placeholder="Search a player"
+            defaultValue={filters.player}
+            submitLabel="Search matches"
+            className="min-w-0 flex-1 basis-48"
+          />
+          <details className="group min-w-0" open={moreOpen || undefined}>
+            <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-foreground marker:hidden">
+              More filters
+              <Chevron direction="down" className="text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <div>
+                <label className="sr-only" htmlFor="schedule-event">Event</label>
+                <select
+                  id="schedule-event"
+                  name="event"
+                  defaultValue={filters.event}
+                  className={SELECT_CONTROL}
+                >
+                  <option value="">All events</option>
+                  {events.map((event) => (
+                    <option key={event.code} value={event.code}>
+                      {event.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="sr-only" htmlFor="schedule-court">Court</label>
+                <select
+                  id="schedule-court"
+                  name="court"
+                  defaultValue={filters.court}
+                  className={SELECT_CONTROL}
+                >
+                  <option value="">All courts</option>
+                  {courts.map((court) => (
+                    <option key={court} value={court}>{`Court ${court}`}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="sr-only" htmlFor="schedule-state">Status</label>
+                <select
+                  id="schedule-state"
+                  name="state"
+                  defaultValue={filters.state}
+                  className={SELECT_CONTROL}
+                >
+                  <option value="">Any status</option>
+                  {states.map((state) => (
+                    <option key={state} value={state}>
+                      {scheduleStateLabel(state)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* The scriptless path: with no JavaScript a changed select is
+                  applied by this control (or by Enter in the search field).
+                  With the enhancement, changing a select applies it at once
+                  and this is never needed. */}
+              <button type="submit" className="sr-only">
+                Apply filters
+              </button>
+            </div>
+          </details>
+          {hasScheduleFilters(filters) ? (
+            <a
+              href={`/e/${encodeURIComponent(slug)}/schedule?organization=${filters.organization}`}
+              className={ACTION_LINK_MUTED}
+            >
+              Clear filters
+            </a>
+          ) : null}
+        </div>
+      </form>
+      <script type="module" src="/e/assets/schedule-filters.js" />
+    </div>
   );
 }
-function OrganizationSwitch({
-  slug,
-  filters,
-}: {
-  slug: string;
-  filters: ScheduleFilters;
-}) {
-  const href = (organization: ScheduleOrganization) =>
-    matchesPath(slug, { ...filters, organization, page: 1 });
-  return (
-    <SegmentedNav
-      label="Schedule organization"
-      currentAttr="true"
-      segments={[
-        { label: "By time", href: href("time"), current: filters.organization === "time" },
-        { label: "By court", href: href("court"), current: filters.organization === "court" },
-      ]}
-    />
-  );
-}
+
 function LiveBand({
   slug,
   matches,
@@ -478,9 +538,13 @@ function LiveBand({
       >
         Live now
       </h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Scores update as the desk records them
-      </p>
+      {/* public-visual-fixes P3: the "Scores update as the desk records
+          them" line is deleted. This tier ships no client framework and no
+          polling — the document is what the server rendered — so the line
+          promised an update the page cannot make, and a spectator watching a
+          stale card wait for a score it will never receive is worse served
+          than one who knows to reload. The freshness line below the list
+          states what IS true: when this document was built. */}
       {/* v3-consolidated work package 26b: `min-w-0`. Same implicit-grid-
           track mechanism fixed on Discovery and Overview in this package
           (see `SeasonCalendar.tsx`'s comment): below `md:` this is a
@@ -589,78 +653,38 @@ function ByCourt({
 export default function Schedule({ loaderData }: Route.ComponentProps) {
   const { page, matches, filters, nowMs } = loaderData;
   const slug = page.page.slug;
-  const phase = tournamentPhase({
-    publication: page.publication,
-    events: page.events,
-  });
-  const tabs = visibleTabs(page.events, page.entrants, page.publication);
   const pages = Math.ceil(matches.total / matches.pageSize);
   const previous =
     filters.page > 1 ? { ...filters, page: filters.page - 1 } : null;
   const next =
     filters.page < pages ? { ...filters, page: filters.page + 1 } : null;
   const live = matches.items.filter((match) => match.status === "live");
+  // §4.2 (P3): the repeated per-card date is deleted wherever the list is
+  // already scoped to one day — the day navigation or the single date the
+  // whole set shares already says it, and repeating it on every card is the
+  // furniture the critique named. It RETURNS the moment the list actually
+  // spans days, which is the case a day-scoped rule would silently break.
+  const visibleDays = new Set(
+    matches.items.map((match) => match.scheduledDate).filter(Boolean),
+  );
+  const showDate = !filters.day && visibleDays.size > 1;
   // The API already orders the complete filtered set live-first. Keep the
   // current queue visible on entry even when no day facet is selected; a
   // spectator should not have to know the tournament's local date first.
   const showNow = live.length > 0;
   return (
     <PlayShell>
-      <HeroHeader
-        orgName={page.org?.name === 'Local Workspace' ? null : page.org?.name ?? null}
-        title={page.tournament.name ?? slug}
-        metaLine={[formatDateLong(page.tournament.date), page.venue?.name]
-          .filter(Boolean)
-          .join(" · ")}
-        chip={capChipCountdown(
-          chipState(page.events, new Date(nowMs)),
-          nearestCloseAt(page.events),
-          page.tournament.timeZone,
-        )}
-        cta={{ kind: "closed" }}
-        phaseAction={
-          phase === "entries_open"
-            ? {
-                label: "Enter this tournament",
-                href: `/e/${encodeURIComponent(slug)}/enter`,
-              }
-            : null
-        }
-        freshness={
-          matches.updatedAt
-          ? `Schedule updated ${formatScheduleUpdated(matches.updatedAt, matches.timeZone)} · ${matches.timeZone}`
-            : `Tournament time · ${matches.timeZone}`
-        }
-      >
-        <TabBar
-          tabs={tabs}
-          active="schedule"
-          hrefFor={(tab) =>
-            tab === "overview"
-              ? `/e/${encodeURIComponent(slug)}`
-              : `/e/${encodeURIComponent(slug)}?tab=${tab}`
-          }
-          scheduleHref={`/e/${encodeURIComponent(slug)}/schedule`}
-        />
-      </HeroHeader>
-      <main
-        className="mx-auto w-full max-w-6xl px-4 py-4 md:py-8"
-        aria-labelledby="schedule-title"
-      >
-        <div className="grid gap-1 md:gap-2">
-          <h2
-            id="schedule-title"
-            className="type-display text-2xl tracking-[-0.02em] text-foreground"
-          >
-            Schedule
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Find matches by day, time, or court in tournament time (
-            {matches.timeZone}).
-          </p>
-        </div>
-        {/* The hero already carries the freshness timestamp; repeating it here
-            pushes the first live/next row below the mobile viewport. */}
+      {/* Contract §11: Schedule had its OWN hero, with its own metadata, its
+          own chip, its own freshness line and a timezone identifier repeated
+          three times down the page. It now wears the one frame, with the
+          Schedule tab current; freshness moved below the list. */}
+      <TournamentFrame page={page} nowMs={nowMs} active="schedule" />
+      {/* P7: the route's own "Schedule" title and its "Find matches by day,
+          time, or court." sentence are gone. The frame's breadcrumb, its
+          current tab and the browser tab all already name this page, and the
+          sentence described the controls sitting immediately below it. The
+          landmark keeps the name for assistive technology. */}
+      <main className="mx-auto w-full max-w-6xl px-4 py-4 md:py-8" aria-label="Schedule">
         {!matches.published ? (
           <div className="mt-6">
             <EmptyState
@@ -669,26 +693,20 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
             />
           </div>
         ) : (
-          <div className="mt-3 grid gap-4 md:mt-6 md:gap-6">
-            <div className={LIST_CARD}>
-              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 md:gap-3 md:px-4 md:py-3">
-                <DayNavigation slug={slug} filters={filters} matches={matches} />
-                <OrganizationSwitch slug={slug} filters={filters} />
-              </div>
-              <Filters
-                slug={slug}
-                filters={filters}
-                matches={matches}
-                page={page}
-              />
-            </div>
+          <div className="grid gap-4 md:gap-6">
+            <ScheduleControls
+              slug={slug}
+              filters={filters}
+              matches={matches}
+              page={page}
+            />
             {showNow ? (
-              <LiveBand slug={slug} matches={live} showDate={!filters.day} />
+              <LiveBand slug={slug} matches={live} showDate={showDate} />
             ) : null}
             {matches.items.length === 0 ? (
               <EmptyState
                 heading="No matches found"
-                body="Try clearing a filter or choosing another day, event, court, or state."
+                body="Try another day, or clear a filter."
                 action={
                   hasScheduleFilters(filters)
                     ? {
@@ -707,12 +725,12 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
                     : ""}
                 </p>
                 {filters.organization === "court" ? (
-                  <ByCourt slug={slug} matches={matches.items} showDate={!filters.day} />
+                  <ByCourt slug={slug} matches={matches.items} showDate={showDate} />
                 ) : (
                   <ByTime
                     slug={slug}
                     matches={showNow ? matches.items.filter((match) => match.status !== "live") : matches.items}
-                    showDate={!filters.day}
+                    showDate={showDate}
                   />
                 )}
                 {previous || next ? (
@@ -722,11 +740,8 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
                   >
                     <span>
                       {previous ? (
-                        <a
-                          href={matchesPath(slug, previous)}
-                          className="text-sm font-medium text-accent underline-offset-4 hover:underline"
-                        >
-                          ← Previous
+                        <a href={matchesPath(slug, previous)} className={ACTION_LINK}>
+                          Previous
                         </a>
                       ) : (
                         <span />
@@ -736,14 +751,21 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
                       Page {filters.page} of {pages}
                     </span>
                     {next ? (
-                      <a
-                        href={matchesPath(slug, next)}
-                        className="text-sm font-medium text-accent underline-offset-4 hover:underline"
-                      >
-                        Next →
+                      <a href={matchesPath(slug, next)} className={ACTION_LINK}>
+                        Next
                       </a>
                     ) : null}
                   </nav>
+                ) : null}
+                {/* Contract §11.1/§7.1: the ONE freshness line, below the
+                    thing it describes, in venue-local time and with no zone
+                    identifier or offset in the prose. It used to sit in this
+                    route's own hero, in two variants, with the IANA name
+                    appended. */}
+                {matches.updatedAt ? (
+                  <p className="text-xs text-muted-foreground">
+                    {`Updated ${formatScheduleUpdated(matches.updatedAt, matches.timeZone)}`}
+                  </p>
                 ) : null}
               </>
             )}

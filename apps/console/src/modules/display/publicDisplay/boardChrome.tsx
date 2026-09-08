@@ -15,6 +15,7 @@
  *    construction: it is what gets projected on the wall.
  */
 import { formatDateTime } from '../../../lib/formatDateTime';
+import { demoNow } from '../../../lib/demoClock';
 
 /** The default board accent, used when the operator has set none. */
 export const DEFAULT_BOARD_ACCENT = '#10b981';
@@ -104,12 +105,15 @@ export function BoardClock({
   now: Date;
   timeZone: string | null | undefined;
 }) {
-  const label = boardClock(now, timeZone);
+  // Only the visible event clock follows the demo instant. Network freshness
+  // and token expiry keep their real elapsed clock in the polling hooks.
+  const displayNow = demoNow(now);
+  const label = boardClock(displayNow, timeZone);
   if (!label) return null;
   return (
     <time
       data-testid="board-clock"
-      dateTime={now.toISOString()}
+      dateTime={displayNow.toISOString()}
       // Secondary to the courts: muted, and a step below the court numbers.
       className="tabular-nums text-3xl text-muted-foreground"
     >

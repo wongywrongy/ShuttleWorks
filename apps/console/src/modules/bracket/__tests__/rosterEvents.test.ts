@@ -141,3 +141,11 @@ describe('partnerIdForPlayer', () => {
     ).toBeNull();
   });
 });
+
+
+it('echoes imported identity through roster edits', () => {
+  expect(toUpsertParticipant({ id: 'P1', name: 'Alpha', personId: 'P0001', personSource: 'fixture:1' }))
+    .toEqual({ id: 'P1', name: 'Alpha', personId: 'P0001', personSource: 'fixture:1' });
+  expect(toUpsertParticipant({ id: 'P2', name: 'Beta', personId: null, personSource: null }))
+    .toEqual({ id: 'P2', name: 'Beta' });
+});

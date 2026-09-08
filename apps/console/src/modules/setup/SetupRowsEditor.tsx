@@ -16,6 +16,7 @@
  *   status, phone) round-trip untouched.
  */
 import { Button } from '@scheduler/design-system';
+import { TextField } from '@scheduler/design-system/components';
 import { Fragment, useState, type CSSProperties } from 'react';
 
 export type SetupRow = Record<string, unknown>;
@@ -29,6 +30,10 @@ export interface RowsColumn {
   placeholder?: string;
 }
 
+// Select chrome only — the text cells come from the design system's
+// `TextField` (OPR-0908-5); the package ships no Select-in-a-grid
+// primitive at this height, so this string still dresses the two
+// <select> cells and is kept in step with TextField's own sizing.
 const INPUT_CLASS =
   'h-8 w-full rounded-sm border border-rule-control bg-bg-elev px-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -157,17 +162,24 @@ export function SetupRowsEditor({
                           </select>
                         </label>
                       ) : (
-                        <label key={`${rowKey}-${column.field}`} className="block min-w-0 sm:contents">
+                        // OPR-0908-5: the cell's chrome comes from `TextField`.
+                        // Its label is `labelHidden` — the grid's column header
+                        // (and the small-screen span above) already names the
+                        // cell — but it is a real <label for>, replacing the
+                        // hand-written `aria-label` with the same text. A <div>,
+                        // not a <label>: TextField brings one and they cannot nest.
+                        <div key={`${rowKey}-${column.field}`} className="block min-w-0 sm:contents">
                           <span className="mb-1 block text-xs font-medium text-muted-foreground sm:hidden">{column.label}</span>
-                          <input
+                          <TextField
+                            label={`${column.label} for row ${index + 1}`}
+                            labelHidden
                             type={column.type ?? 'text'}
                             value={cellValue(row, column)}
                             placeholder={column.placeholder}
                             onChange={(event) => patchRow(index, column.field, parsedValue(event.target.value, column))}
-                            aria-label={`${column.label} for row ${index + 1}`}
-                            className={INPUT_CLASS}
+                            inputClassName="h-8"
                           />
-                        </label>
+                        </div>
                       ),
                     )}
                     <Button
@@ -223,7 +235,7 @@ export function SetupRowsEditor({
                 ...columns.map((column) =>
                   column.type === 'list' ? (
                     <div key={`${rowKey}-${column.field}`} className="col-span-full min-w-0">
-                      <input type="text" value={listDrafts[`${rowKey}-${column.field}`] ?? cellValue(row, column)} placeholder={column.placeholder} onFocus={() => setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${column.field}`]: cellValue(row, column) }))} onChange={(event) => { setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${column.field}`]: event.target.value })); patchRow(index, column.field, listDraftValue(event.target.value)); }} onBlur={(event) => { patchRow(index, column.field, parsedValue(event.target.value, column)); setListDrafts((drafts) => { const next = { ...drafts }; delete next[`${rowKey}-${column.field}`]; return next; }); }} aria-label={`${column.label} for row ${index + 1}`} className={INPUT_CLASS} />
+                      <TextField label={`${column.label} for row ${index + 1}`} labelHidden type="text" value={listDrafts[`${rowKey}-${column.field}`] ?? cellValue(row, column)} placeholder={column.placeholder} onFocus={() => setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${column.field}`]: cellValue(row, column) }))} onChange={(event) => { setListDrafts((drafts) => ({ ...drafts, [`${rowKey}-${column.field}`]: event.target.value })); patchRow(index, column.field, listDraftValue(event.target.value)); }} onBlur={(event) => { patchRow(index, column.field, parsedValue(event.target.value, column)); setListDrafts((drafts) => { const next = { ...drafts }; delete next[`${rowKey}-${column.field}`]; return next; }); }} inputClassName="h-8" />
                       <p className="mt-1 whitespace-normal text-xs leading-4 text-muted-foreground">{cellValue(row, column) || 'No courts assigned'}</p>
                     </div>
                   ) : column.type === 'checkbox' ? (
@@ -249,14 +261,15 @@ export function SetupRowsEditor({
                       ))}
                     </select>
                   ) : (
-                    <input
+                    <TextField
                       key={`${rowKey}-${column.field}`}
+                      label={`${column.label} for row ${index + 1}`}
+                      labelHidden
                       type={column.type ?? 'text'}
                       value={cellValue(row, column)}
                       placeholder={column.placeholder}
                       onChange={(event) => patchRow(index, column.field, parsedValue(event.target.value, column))}
-                      aria-label={`${column.label} for row ${index + 1}`}
-                      className={INPUT_CLASS}
+                      inputClassName="h-8"
                     />
                   ),
                 ),

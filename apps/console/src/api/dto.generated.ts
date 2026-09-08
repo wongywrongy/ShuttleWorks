@@ -1064,6 +1064,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/bracket/clear-court": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Bracket Court
+         * @description Withdraw the PUBLISHED court while the plan slot stays exactly as it is.
+         *
+         *     The third court verb, and the one the other two could not express
+         *     (OPR-0908-8). ``/bracket/assign`` materializes the Operations ``matches``
+         *     row that the public tier reads as "this match is on court N";
+         *     ``/bracket/unassign`` clears that row but also drops the play unit's plan
+         *     assignment, returning it to the queue. An operator who sent a match to
+         *     court and changed their mind had no way back to "planned at this slot, no
+         *     approved court" — the public tier kept publishing the court.
+         *
+         *     This endpoint un-materializes the court alone: the session assignment
+         *     (slot, court, duration) is untouched, and the ``matches`` row keeps its
+         *     ``time_slot`` with ``court_id`` set to NULL, which is precisely what the
+         *     public projection reads as "no court yet".
+         *
+         *     Idempotent by ``command_id`` like its siblings, and a no-op 200 when the
+         *     unit has no assignment at all.
+         */
+        post: operations["clear_bracket_court_tournaments__tournament_id__bracket_clear_court_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/bracket/import": {
         parameters: {
             query?: never;
@@ -2315,6 +2351,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/entry-page/public-site": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entry Page Public Site
+         * @description The public address of this workspace's entry site (OPR-0908-6).
+         *
+         *     The console cannot build this URL: it runs on the operator origin and
+         *     the entrant tier runs on its own (SP-HOST-1), and no console-visible
+         *     response carried the play origin. So the server composes it, from
+         *     ``settings.play_origin`` — never the raw ``public_*_origin``, which is
+         *     where the tier decision and the trailing-slash normalisation live — and
+         *     the page's own slug. Exactly the shape ``GET
+         *     /tournaments/{id}/display-token`` already uses for the venue board.
+         *
+         *     The publication flags ride along so a caller can tell a live public page
+         *     from a page that exists but publishes nothing; they are the same columns
+         *     ``GET /entry-page`` returns, not a second source of truth.
+         */
+        get: operations["get_entry_page_public_site_tournaments__tournament_id__entry_page_public_site_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/entry-page/publication": {
         parameters: {
             query?: never;
@@ -2784,9 +2852,15 @@ export interface paths {
          *
          *     Discoverability rides ``entrants_published`` (§4) — with the list
          *     unpublished, a person page answers the uniform 404 like everything
-         *     else unpublished. The person must hold a CONFIRMED entry: pending
-         *     submissions never appear publicly (§3.2), on their page-of-one no less
-         *     than on the list.
+         *     else unpublished. An ENTRY-BACKED person must additionally hold a
+         *     CONFIRMED entry: pending submissions never appear publicly (§3.2), on
+         *     their page-of-one no less than on the list.
+         *
+         *     Two key spellings reach here and both are the SAME key space (P6):
+         *     ``entry_players.id`` — the bare UUID the entrant tier has always used —
+         *     and a draw-roster id, which is what the players list emits for an
+         *     imported tournament. Whichever arrives, it resolves to one roster key
+         *     and every projection below joins on that.
          */
         get: operations["player_page_e_api_page__slug__players__person_key__get"];
         put?: never;
@@ -3990,6 +4064,16 @@ export interface components {
             duration_slots: number;
         };
         /**
+         * BracketClearCourtIn
+         * @description Body for POST /bracket/clear-court — drop the published court only.
+         */
+        BracketClearCourtIn: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Command Id */
+            command_id?: string | null;
+        };
+        /**
          * BracketCommandRequest
          * @description Body of ``POST /tournaments/{tournament_id}/bracket/commands``.
          *
@@ -4085,6 +4169,10 @@ export interface components {
             sourceEntryId?: string | null;
             /** Entryplayerid */
             entryPlayerId?: string | null;
+            /** Personid */
+            personId?: string | null;
+            /** Personsource */
+            personSource?: string | null;
             /** Remarks */
             remarks?: string | null;
         };
@@ -4704,6 +4792,7 @@ export interface components {
             finalists?: components["schemas"]["HonorDTO"][];
             /** Remainingmatchcount */
             remainingMatchCount?: number | null;
+            progress?: components["schemas"]["DrawProgressDTO"] | null;
             /**
              * Historical
              * @default false
@@ -4764,6 +4853,32 @@ export interface components {
             club?: string | null;
             /** Eventcodes */
             eventCodes: string[];
+        };
+        /**
+         * DrawProgressDTO
+         * @description How far a published draw has actually got — the Draws index's one
+         *     progress fact (public-visual-fixes P6).
+         *
+         *     The index used to describe a draw by its topology (format, size, round
+         *     count, "Draw published · rounds to be scheduled"), which is derivable
+         *     from the draw page and says nothing a reader wants to know. What they
+         *     want is where play has reached, so this states exactly that and nothing
+         *     else: ``complete``, or the earliest unfinished round plus how it stands
+         *     (``in_play`` once one of its matches has a result, ``scheduled`` with a
+         *     venue-local ``startTime`` when the grid places it, ``to_play``
+         *     otherwise).
+         *
+         *     Derived from RESULTS, so it is published only under
+         *     ``results_published`` — the same gate the champions and
+         *     ``remainingMatchCount`` on this card already sit behind.
+         */
+        DrawProgressDTO: {
+            /** State */
+            state: string;
+            /** Roundlabel */
+            roundLabel?: string | null;
+            /** Starttime */
+            startTime?: string | null;
         };
         /** DrawsIndexDTO */
         DrawsIndexDTO: {
@@ -5210,6 +5325,44 @@ export interface components {
              */
             reserves: components["schemas"]["ReserveRowDTO"][];
             viewer: components["schemas"]["ViewerDTO"];
+        };
+        /**
+         * EntryPagePublicSiteDTO
+         * @description Where this workspace's public entry site lives, as an operator link.
+         *
+         *     The console runs on ``app.<domain>`` and the entrant tier on
+         *     ``play.<domain>`` (SP-HOST-1), so the console cannot compose a public URL
+         *     on its own — inventing a hostname is exactly what the two-origin split
+         *     forbids. This is the entry page's twin of ``GET
+         *     /tournaments/{id}/display-token``: the server, which is the only party
+         *     that knows the deployment's origins, hands back the address.
+         *
+         *     ``origin`` is ``settings.play_origin`` — blank in local mode, where one
+         *     host serves both tiers and a relative ``url`` is the correct link.
+         */
+        EntryPagePublicSiteDTO: {
+            /** Origin */
+            origin: string;
+            /** Slug */
+            slug: string;
+            /** Url */
+            url: string;
+            /**
+             * Audience
+             * @default private
+             * @enum {string}
+             */
+            audience: "private" | "unlisted" | "public";
+            /**
+             * Entrantspublished
+             * @default false
+             */
+            entrantsPublished: boolean;
+            /**
+             * Drawspublished
+             * @default false
+             */
+            drawsPublished: boolean;
         };
         /**
          * EntryPagePublicationPatchDTO
@@ -6076,11 +6229,17 @@ export interface components {
             nodeKey: string;
             /** Position */
             position: number;
+            /** Reference */
+            reference?: string | null;
+            /** Shortreference */
+            shortReference?: string | null;
             /** Sides */
             sides: components["schemas"]["SideDTO"][];
             result?: components["schemas"]["NodeResultDTO"] | null;
             /** Scheduledtime */
             scheduledTime?: string | null;
+            /** Scheduleddate */
+            scheduledDate?: string | null;
             /** Court */
             court?: number | null;
             /** Playedon */
@@ -6520,6 +6679,10 @@ export interface components {
             seed?: number | null;
             /** Entryplayerid */
             entryPlayerId?: string | null;
+            /** Personid */
+            personId?: string | null;
+            /** Personsource */
+            personSource?: string | null;
         };
         /** ParticipantOut */
         ParticipantOut: {
@@ -6535,6 +6698,10 @@ export interface components {
             entryPlayerId?: string | null;
             /** Sourceentryid */
             sourceEntryId?: string | null;
+            /** Personid */
+            personId?: string | null;
+            /** Personsource */
+            personSource?: string | null;
         };
         /** PartnerAcceptedDTO */
         PartnerAcceptedDTO: {
@@ -6718,13 +6885,29 @@ export interface components {
         };
         /**
          * PlayerDrawPathDTO
-         * @description One round in a person's public draw path.
+         * @description One ROUND STEP in a person's public draw path.
+         *
+         *     A step, not a sentence: the entrant tier used to join these into
+         *     "R32 → R16 → QF" prose with an arrow separator, which said nothing about
+         *     who was played or how it went and read as a single unlabelled run-on to a
+         *     screen reader. Each step now carries its own result, so the renderer can
+         *     lay them out as structured rows (P6, 2026-09-08).
+         *
+         *     ``outcome`` is ``None`` while the step is undecided OR while results are
+         *     unpublished — the same gate ``score`` answers to, never inferred from the
+         *     presence of a later round.
          */
         PlayerDrawPathDTO: {
             /** Roundlabel */
             roundLabel: string;
             /** Opponents */
             opponents?: components["schemas"]["PersonReferenceDTO"][];
+            /** Outcome */
+            outcome?: ("won" | "lost") | null;
+            /** Score */
+            score?: number[][] | null;
+            /** Reference */
+            reference?: string | null;
         };
         /** PlayerEventDTO */
         PlayerEventDTO: {
@@ -6737,6 +6920,52 @@ export interface components {
             seed?: number | null;
             /** Drawpath */
             drawPath?: components["schemas"]["PlayerDrawPathDTO"][];
+        };
+        /**
+         * PlayerHistoryEntryDTO
+         * @description One workspace in a person's public tournament history (profile v1).
+         *
+         *     A history row is a LINK TARGET, not a summary: ``slug`` + ``playerKey``
+         *     address that workspace's own person page, and ``eventCodes`` address its
+         *     published draws. Every value here is copied from the other workspace's
+         *     OWN public projection gates, so a row can never say more about a
+         *     tournament than that tournament says about itself.
+         */
+        PlayerHistoryEntryDTO: {
+            /** Slug */
+            slug: string;
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Enddate */
+            endDate?: string | null;
+            /** Playerkey */
+            playerKey: string;
+            /**
+             * Current
+             * @default false
+             */
+            current: boolean;
+            /** Eventcodes */
+            eventCodes?: string[];
+            /**
+             * Drawspublished
+             * @default false
+             */
+            drawsPublished: boolean;
+            /**
+             * Resultspublished
+             * @default false
+             */
+            resultsPublished: boolean;
+            /** Events */
+            events?: components["schemas"]["PlayerEventDTO"][];
+            /**
+             * Expanded
+             * @default false
+             */
+            expanded: boolean;
         };
         /**
          * PlayerImpact
@@ -6769,6 +6998,8 @@ export interface components {
             decided: boolean;
             /** Scheduledtime */
             scheduledTime?: string | null;
+            /** Scheduleddate */
+            scheduledDate?: string | null;
             /** Court */
             court?: number | null;
             /** Playedon */
@@ -6777,6 +7008,10 @@ export interface components {
             localTime?: string | null;
             /** Courtlabel */
             courtLabel?: string | null;
+            /** Reference */
+            reference?: string | null;
+            /** Shortreference */
+            shortReference?: string | null;
             /** Status */
             status?: string | null;
             /** Durationminutes */
@@ -6813,6 +7048,8 @@ export interface components {
             events: components["schemas"]["PlayerEventDTO"][];
             /** Matches */
             matches: components["schemas"]["PlayerMatchDTO"][];
+            /** History */
+            history?: components["schemas"]["PlayerHistoryEntryDTO"][];
         };
         /** PlayersDTO */
         PlayersDTO: {
@@ -7357,8 +7594,14 @@ export interface components {
              * @default false
              */
             walkover: boolean;
+            /** Winnerside */
+            winnerSide?: ("A" | "B") | null;
             /** Updatedat */
             updatedAt?: string | null;
+            /** Reference */
+            reference?: string | null;
+            /** Shortreference */
+            shortReference?: string | null;
         };
         /** ScheduleMatchesDTO */
         ScheduleMatchesDTO: {
@@ -7484,6 +7727,8 @@ export interface components {
             venueName?: string | null;
             /** Date */
             date?: string | null;
+            /** Enddate */
+            endDate?: string | null;
             /** Eventcount */
             eventCount: number;
             /** Status */
@@ -10264,6 +10509,41 @@ export interface operations {
             };
         };
     };
+    clear_bracket_court_tournaments__tournament_id__bracket_clear_court_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BracketClearCourtIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     import_tournament_json_tournaments__tournament_id__bracket_import_post: {
         parameters: {
             query?: never;
@@ -12235,6 +12515,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntryPageDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entry_page_public_site_tournaments__tournament_id__entry_page_public_site_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryPagePublicSiteDTO"];
                 };
             };
             /** @description Validation Error */

@@ -104,11 +104,10 @@ export function DisplayConfig({
 
   return (
     <div className="space-y-2">
-      <div className="pb-2">
-        <h2 className="type-display text-2xl text-foreground">Venue board</h2>
-      </div>
-
-      <div className="max-w-2xl space-y-2">
+      {/* No second width bound here: the `form` PageBody above already sets
+          the column, and a narrower inner cap left the controls' right edge
+          10rem short of the heading and the save row they belong to. */}
+      <div className="space-y-2">
         <Section title="Board">
           <Row
             label="Show this board"

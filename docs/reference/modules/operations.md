@@ -56,15 +56,15 @@ schedule XLSX export lives in `exports/scheduleXlsx.ts`.
 | **Backend routes** | `/tournaments/{id}/match-states*` (get/put with `ETag`/`If-Match`, reset, export/import) and `/tournaments/{id}/commands` |
 | **`apiClient` methods** | `getMatchStates`, `getMatchState`, `getMatchVersion`, `updateMatchState`, `resetMatchStates`, `submitCommand`, `exportMatchStates`, `importMatchStates`, `importMatchStatesBulk` |
 | **Store slice** | `matchStateStore` (match states, optimistic command state, conflict records, canonical versions) |
-| **Frontend code** | `modules/operations/` — `opsBlock.ts` (the uniform block), `run/` + `runtime/` (the Run surface + its machine), `UnifiedOpsBoard.tsx` / `UnifiedOpsList.tsx` (the Plan board), `OpsDetailRail.tsx`, and `operationalWriteback.ts`. The shared `SourceChip.tsx` provenance badge lives in `components/` (used by 3 products), not here. |
+| **Frontend code** | `modules/operations/` — `opsBlock.ts` (the uniform block), `run/` + `runtime/` (the Run surface + its machine), `UnifiedOpsBoard.tsx` / `UnifiedOpsList.tsx` (the Plan board), `OpsDetailRail.tsx`, and `operationalWriteback.ts`. |
 | **Backend** | `apps/api/src/operations/match_state.py`; tables `match_states`, `commands` |
 
 ## The uniform block
 
 `modules/operations/opsBlock.ts` defines `OpsBlock` — the engine-agnostic
 interactive row both surfaces speak — with `meetToOpsBlocks` /
-`bracketToOpsBlocks` adapters folding each engine's native shape. `SourceChip`
-renders an engine-tinted provenance badge (Meet vs Bracket). See
+`bracketToOpsBlocks` adapters folding each engine's native shape. The block's
+`source` field preserves Meet/Bracket provenance. See
 [Unified Operations view](/explanation/architecture/unified-operations-view) for the full
 view-model.
 

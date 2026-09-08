@@ -30,12 +30,13 @@ import json
 import unicodedata
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Dict, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import String, and_, cast, or_, select
 
 from entries.entries import roster_id
 from entries.entries_public import (
@@ -52,14 +53,21 @@ from db.models import (
     EntryPage,
     EntryPlayer,
     Match,
+    BracketEvent,
     BracketMatch,
+    BracketParticipant,
     BracketResult,
     MeetEvent,
     Tournament,
 )
 from repositories import LocalRepository, get_repository
 from shared.court_occupancy import CourtState, derive_court_states
-from shared.schedule_slots import add_minutes_wrapping, slot_time_from_start
+from shared.schedule_slots import (
+    add_minutes_wrapping,
+    slot_day_offset,
+    slot_time_from_start,
+)
+from shared.match_reference import bracket_identity, format_match_identity, meet_identity
 from shared.sides import is_pair_discipline
 
 router = APIRouter(prefix="/e/api/page/{slug}", tags=["entries-site"])
@@ -149,14 +157,12 @@ def _bracket_roster_names(tournament: Tournament) -> Dict[str, str]:
     or unnamed blob rows stay absent and are counted by the Players projection
     instead of leaking an id as though it were a name.
     """
-    out: Dict[str, str] = {}
-    for row in (tournament.data or {}).get("bracketPlayers") or []:
-        if not isinstance(row, dict):
-            continue
-        key, name = row.get("id"), row.get("name")
-        if isinstance(key, str) and key and isinstance(name, str) and name.strip():
-            out[key] = name.strip()
-    return out
+    return _roster_names(tournament.data)
+
+
+def _roster_names(data) -> Dict[str, str]:
+    """``_bracket_roster_names`` over a bare ``tournaments.data`` blob."""
+    return {row["id"]: row["name"].strip() for row in _roster_rows(data)}
 
 
 @dataclass(frozen=True)
@@ -174,6 +180,14 @@ class PublicPersonDirectory:
     hidden: frozenset[str]
     clubs: Dict[str, Optional[str]]
     visible_events: Dict[str, frozenset[str]]
+    #: Roster ids published because the DRAW they appear in is published —
+    #: the imported/demo half of the directory (P6, 2026-09-08). They carry
+    #: no Entries row, so they have no per-event entry gate: their whole
+    #: publication is "this draw is public", which ``draws_published``
+    #: already decided for every name on it. Empty for an entries-only
+    #: workspace, which is why every gate below reads it explicitly rather
+    #: than inferring membership from the absence of ``visible_events``.
+    draw_people: frozenset[str] = frozenset()
 
 
 def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDirectory:
@@ -187,9 +201,34 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
     historical references degrade to a generic dead token instead of
     falling back to a copied bracket name.
     """
+    return _public_identities_many(repo, [tournament_id]).get(
+        str(tournament_id), _EMPTY_DIRECTORY
+    )
+
+
+_EMPTY_DIRECTORY = PublicPersonDirectory(
+    identities={}, hidden=frozenset(), clubs={}, visible_events={}
+)
+
+
+def _public_identities_many(
+    repo: LocalRepository, tournament_ids
+) -> Dict[str, PublicPersonDirectory]:
+    """``_public_identities`` for MANY workspaces in one query.
+
+    The cross-tournament participation index needs one directory per
+    workspace in a person's history, and a career is thirty of them. Issuing
+    the query above thirty times is the same N+1 this module refuses inside
+    one document; the ``IN`` is the same query with a wider WHERE, so the
+    single-workspace spelling stays a call to this one.
+    """
+    ids = list(tournament_ids)
+    if not ids:
+        return {}
     rows = repo.execute_query(
         _all_rows,
         select(
+            EntryPlayer.tournament_id,
             EntryPlayer.id,
             EntryPlayer.full_name,
             EntryPlayer.club,
@@ -211,13 +250,14 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
             (EntryEvent.tournament_id == Entry.tournament_id)
             & (EntryEvent.id == Entry.entry_event_id),
         )
-        .where(EntryPlayer.tournament_id == tournament_id),
+        .where(EntryPlayer.tournament_id.in_(ids)),
     )
-    identities: Dict[str, PublicPersonIdentityDTO] = {}
-    hidden: set[str] = set()
-    clubs: Dict[str, Optional[str]] = {}
-    visible_events: Dict[str, set[str]] = {}
+    identities: Dict[str, Dict[str, PublicPersonIdentityDTO]] = {}
+    hidden: Dict[str, set[str]] = {}
+    clubs: Dict[str, Dict[str, Optional[str]]] = {}
+    visible_events: Dict[str, Dict[str, set[str]]] = {}
     for (
+        tournament_key,
         player_id,
         name,
         club,
@@ -228,6 +268,11 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
         opted_out,
         erased_at,
     ) in rows:
+        scope = str(tournament_key)
+        identities.setdefault(scope, {})
+        hidden.setdefault(scope, set())
+        clubs.setdefault(scope, {})
+        visible_events.setdefault(scope, {})
         key = roster_id(player_id)
         visible = (
             erased_at is None
@@ -237,27 +282,133 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
             and bool(name.strip())
         )
         if visible:
-            identities.setdefault(
+            identities[scope].setdefault(
                 key, PublicPersonIdentityDTO(id=str(player_id), name=name.strip())
             )
             if isinstance(event_code, str):
-                visible_events.setdefault(key, set()).add(event_code)
+                visible_events[scope].setdefault(key, set()).add(event_code)
             if isinstance(bracket_event_id, str) and bracket_event_id:
-                visible_events.setdefault(key, set()).add(bracket_event_id)
+                visible_events[scope].setdefault(key, set()).add(bracket_event_id)
             if isinstance(meet_event_id, str) and meet_event_id:
-                visible_events.setdefault(key, set()).add(meet_event_id)
+                visible_events[scope].setdefault(key, set()).add(meet_event_id)
             # A club is an expressly public field, but only on a visible
             # event.  Keep the first stable non-empty value if events differ.
-            if key not in clubs or clubs[key] is None:
-                clubs[key] = club.strip() if isinstance(club, str) and club.strip() else None
+            if key not in clubs[scope] or clubs[scope][key] is None:
+                clubs[scope][key] = (
+                    club.strip() if isinstance(club, str) and club.strip() else None
+                )
         else:
-            hidden.add(key)
-    hidden.difference_update(identities)
+            hidden[scope].add(key)
+    out: Dict[str, PublicPersonDirectory] = {}
+    for scope, people in identities.items():
+        hidden[scope].difference_update(people)
+        out[scope] = PublicPersonDirectory(
+            identities=people,
+            hidden=frozenset(hidden[scope]),
+            clubs=clubs[scope],
+            visible_events={
+                key: frozenset(values)
+                for key, values in visible_events[scope].items()
+            },
+        )
+    return out
+
+
+#: Roster-row keys that are ENTRY-BACKED and therefore already answer to the
+#: Entries gates above. ``entries/entries.py::roster_id`` is the one place the
+#: prefix is minted, so the read side DERIVES it rather than re-spelling it —
+#: F-DM-05's deletion gate (`test_the_roster_id_prefix_has_exactly_one_definition`)
+#: is what keeps that single definition honest.
+_ENTRY_ROSTER_PREFIX = roster_id("")
+
+
+def _bracket_roster_rows(tournament: Tournament) -> List[dict]:
+    """The workspace's draw-roster rows, validated but not yet gated.
+
+    Twin of ``_bracket_roster_names``, which answers the display question.
+    This one answers the IDENTITY question, so it keeps the whole row —
+    ``personId``/``personSource`` included where the importer wrote them.
+    """
+    return _roster_rows(tournament.data)
+
+
+def _roster_rows(data) -> List[dict]:
+    """``_bracket_roster_rows`` over a bare ``tournaments.data`` blob.
+
+    The cross-tournament participation index (``_expand_history_rows``) reads
+    thirty workspaces' blobs in ONE query and never materialises their
+    ``Tournament`` rows, so the validation rule has to be reachable without
+    one. Both public spellings above are this function.
+    """
+    out: List[dict] = []
+    for row in (data or {}).get("bracketPlayers") or []:
+        if not isinstance(row, dict):
+            continue
+        key, name = row.get("id"), row.get("name")
+        if isinstance(key, str) and key and isinstance(name, str) and name.strip():
+            out.append(row)
+    return out
+
+
+def _with_draw_roster(
+    directory: PublicPersonDirectory,
+    roster_rows: List[dict],
+    draws_published: bool,
+) -> PublicPersonDirectory:
+    """Add the published draw's own roster people to the person directory.
+
+    **This is the P6 fix for the identifier-space split.** The public players
+    list has always MERGED roster-only people into the directory ("imported
+    tournaments do not need a second, competing player list"), but it emitted
+    them with ``identity.id = None`` — a published name with no address —
+    while ``/players/{person_key}`` parsed an ``entry_players`` UUID. A
+    bracket-seeded person therefore had a public name, a public draw, a public
+    result and NO resolvable profile, and every person slot in an imported
+    tournament rendered as a dead reference. One key space, decided here: a
+    person's public key is their roster id, which is what every projection in
+    this module already joins on, and which is ``entry-{uuid}`` exactly when
+    the person came through Entries.
+
+    Nothing new is disclosed. These names, clubs and results are already on
+    the published draw; what changes is that the name can now be addressed.
+    Entry-backed rows are untouched — a hidden, erased or opted-out person
+    stays in ``hidden`` and keeps resolving to the generic dead token, which
+    is why the roster tier explicitly skips every key the Entries pass
+    already classified either way.
+    """
+    if not draws_published:
+        return directory
+    extra: Dict[str, PublicPersonIdentityDTO] = {}
+    for row in roster_rows:
+        key = row["id"]
+        if key.startswith(_ENTRY_ROSTER_PREFIX):
+            # An entries-backed roster id answers to the Entries gates, full
+            # stop. Publishing it here would route around an opt-out.
+            continue
+        if key in directory.identities or key in directory.hidden:
+            continue
+        extra[key] = PublicPersonIdentityDTO(id=key, name=row["name"].strip())
+    if not extra:
+        return directory
+    merged = dict(directory.identities)
+    merged.update(extra)
     return PublicPersonDirectory(
-        identities=identities,
-        hidden=frozenset(hidden),
-        clubs=clubs,
-        visible_events={key: frozenset(values) for key, values in visible_events.items()},
+        identities=merged,
+        hidden=directory.hidden,
+        clubs=directory.clubs,
+        visible_events=directory.visible_events,
+        draw_people=frozenset(extra),
+    )
+
+
+def _directory(
+    repo: LocalRepository, tournament: Tournament, page: EntryPage
+) -> PublicPersonDirectory:
+    """The one person directory every public projection of a page shares."""
+    return _with_draw_roster(
+        _public_identities(repo, tournament.id),
+        _roster_rows(tournament.data),
+        bool(page.draws_published),
     )
 
 
@@ -294,12 +445,27 @@ def _person_ref(
     identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
     label: Optional[str] = None,
     event_code: Optional[str] = None,
+    event_alias: Optional[str] = None,
 ) -> PersonReferenceDTO:
+    """Project one person reference, applying the per-event visibility gate.
+
+    ``event_code`` and ``event_alias`` are the SAME event named two ways: a
+    bracket event's raw id (``T029-MS``) and its public code (``MS``). An
+    entry-backed person's ``visible_events`` may hold either spelling —
+    ``entry_events.code`` on one side, ``bracket_event_id`` on the other —
+    so a caller that passes only the raw id silently turns every eligible
+    name in a namespaced draw into "Player not published", i.e. into an
+    unlinkable name. ``_event_public_for_person`` and ``_event_public_club``
+    already took both; this is the same rule, applied to the person.
+    """
     if isinstance(identities, PublicPersonDirectory):
         visible = roster_key is not None and roster_key in identities.identities
         if visible and event_code is not None:
             event_events = identities.visible_events.get(roster_key, frozenset())
-            visible = not event_events or event_code in event_events
+            visible = not event_events or (
+                event_code in event_events
+                or (event_alias is not None and event_alias in event_events)
+            )
         if visible:
             return PersonReferenceDTO(identity=identities.identities[roster_key], resolution="resolved")
         if roster_key is not None and (
@@ -326,6 +492,7 @@ def _participant_people(
     roster_names: Dict[str, str],
     identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
     event_code: Optional[str] = None,
+    event_alias: Optional[str] = None,
 ) -> List[PersonReferenceDTO]:
     """Resolve participant people without inventing or leaking identities.
 
@@ -344,7 +511,9 @@ def _participant_people(
             if isinstance(identities, PublicPersonDirectory):
                 visible_identity = member in identities.identities and (
                     event_code is None
-                    or _event_public_for_person(identities, member, event_code)
+                    or _event_public_for_person(
+                        identities, member, event_code, event_alias
+                    )
                 )
                 privacy_protected = privacy_protected or (
                     member in identities.hidden
@@ -368,12 +537,21 @@ def _participant_people(
                 name=roster_names.get(member),
                 identities=identities,
                 event_code=event_code,
+                event_alias=event_alias,
             )
             for member in person_keys
         ]
     name = roster_names.get(participant.id) or getattr(participant, "name", None)
     roster_key = person_keys[0]
-    return [_person_ref(roster_key, name=name, identities=identities, event_code=event_code)]
+    return [
+        _person_ref(
+            roster_key,
+            name=name,
+            identities=identities,
+            event_code=event_code,
+            event_alias=event_alias,
+        )
+    ]
 
 
 def _event_public_for_person(
@@ -390,6 +568,12 @@ def _event_public_for_person(
     if not isinstance(identities, PublicPersonDirectory):
         return True
     if roster_key not in identities.identities and roster_key not in identities.hidden:
+        return True
+    if roster_key in identities.draw_people:
+        # A draw-roster person has no Entries row and therefore no per-event
+        # entry gate; their publication IS the published draw (see
+        # ``_with_draw_roster``). Falling through to ``visible_events`` would
+        # read an empty set and unpublish every imported name.
         return True
     allowed = identities.visible_events.get(roster_key, frozenset())
     return bool(
@@ -434,6 +618,33 @@ def _hhmm_plus(day_start: str, minutes: int) -> str:
 # ---- DTOs -----------------------------------------------------------------
 
 
+class DrawProgressDTO(BaseModel):
+    """How far a published draw has actually got — the Draws index's one
+    progress fact (public-visual-fixes P6).
+
+    The index used to describe a draw by its topology (format, size, round
+    count, "Draw published · rounds to be scheduled"), which is derivable
+    from the draw page and says nothing a reader wants to know. What they
+    want is where play has reached, so this states exactly that and nothing
+    else: ``complete``, or the earliest unfinished round plus how it stands
+    (``in_play`` once one of its matches has a result, ``scheduled`` with a
+    venue-local ``startTime`` when the grid places it, ``to_play``
+    otherwise).
+
+    Derived from RESULTS, so it is published only under
+    ``results_published`` — the same gate the champions and
+    ``remainingMatchCount`` on this card already sit behind.
+    """
+
+    state: str  # 'complete' | 'in_play' | 'scheduled' | 'to_play'
+    #: Compact round vocabulary — ``R16``/``QF``/``SF``/``Final`` for a
+    #: knockout, ``Round 3`` otherwise. Null only for ``complete``.
+    roundLabel: Optional[str] = None
+    #: Venue-local ``HH:MM`` of the earliest unplayed match of that round,
+    #: when the schedule grid places one.
+    startTime: Optional[str] = None
+
+
 class DrawCardDTO(BaseModel):
     drawKey: str
     eventCode: str
@@ -450,6 +661,7 @@ class DrawCardDTO(BaseModel):
     champions: List[PersonReferenceDTO] = Field(default_factory=list)
     finalists: List["HonorDTO"] = Field(default_factory=list)
     remainingMatchCount: Optional[int] = None
+    progress: Optional[DrawProgressDTO] = None
     historical: bool = False
     sourceUrl: Optional[str] = None
 
@@ -596,10 +808,28 @@ class NodeResultDTO(BaseModel):
 class MatchNodeDTO(BaseModel):
     nodeKey: str
     position: int  # 1-based within its round
+    # The SHARED human match reference (state-and-formatting §6.1, "One
+    # reference, both tiers") — the identical string the operator's match
+    # list shows for this match, spelled by ``shared/match_reference.py``
+    # from the coordinates the console formats from. ``shortReference``
+    # drops the event code for a view whose event is already unambiguous
+    # (a single draw: "R16·2 · 10:00 · Court 3"). Both are ``None`` when the
+    # coordinates cannot name a match; a renderer then shows nothing rather
+    # than falling back to a row number.
+    reference: Optional[str] = None
+    shortReference: Optional[str] = None
     sides: List[SideDTO]
     result: Optional[NodeResultDTO] = None
     # Venue-local naive strings; None until scheduled.
     scheduledTime: Optional[str] = None
+    # The approved slot's venue-local CALENDAR DAY — the twin of
+    # ``scheduledTime`` and the same value the schedule projection publishes
+    # for this match (P7). ``playedOn`` below is the imported SOURCE record's
+    # date, which is provenance, not the published schedule: a rescheduled or
+    # live match keeps its source date while the approved slot moves, and a
+    # card that shows the source date states a day the desk does not agree
+    # with. ``None`` when the unit has no assignment.
+    scheduledDate: Optional[str] = None
     court: Optional[int] = None
     playedOn: Optional[str] = None
     localTime: Optional[str] = None
@@ -673,10 +903,27 @@ class PlayerEventDTO(BaseModel):
 
 
 class PlayerDrawPathDTO(BaseModel):
-    """One round in a person's public draw path."""
+    """One ROUND STEP in a person's public draw path.
+
+    A step, not a sentence: the entrant tier used to join these into
+    "R32 → R16 → QF" prose with an arrow separator, which said nothing about
+    who was played or how it went and read as a single unlabelled run-on to a
+    screen reader. Each step now carries its own result, so the renderer can
+    lay them out as structured rows (P6, 2026-09-08).
+
+    ``outcome`` is ``None`` while the step is undecided OR while results are
+    unpublished — the same gate ``score`` answers to, never inferred from the
+    presence of a later round.
+    """
 
     roundLabel: str
     opponents: List[PersonReferenceDTO] = Field(default_factory=list)
+    outcome: Optional[Literal["won", "lost"]] = None
+    #: Sets as ``[mine, theirs]`` pairs, in this person's side order — not the
+    #: wire's A/B order, which is the draw's, not the reader's.
+    score: Optional[List[List[int]]] = None
+    #: The shared human match reference for this step, e.g. ``MS R32·11``.
+    reference: Optional[str] = None
 
 
 class PlayerMatchSideDTO(BaseModel):
@@ -699,10 +946,24 @@ class PlayerMatchDTO(BaseModel):
     score: Optional[List[List[int]]] = None
     decided: bool = False
     scheduledTime: Optional[str] = None
+    # The approved slot's venue-local calendar day (P7) — see the identical
+    # field on ``MatchNodeDTO``. ``playedOn`` is the source record's date and
+    # must not be presented as the published schedule when this differs.
+    scheduledDate: Optional[str] = None
     court: Optional[int] = None
     playedOn: Optional[str] = None
     localTime: Optional[str] = None
     courtLabel: Optional[str] = None
+    # The SHARED human match reference (state-and-formatting §6.1, "One
+    # reference, both tiers") — the identical string the operator's match
+    # list shows for this match, spelled by ``shared/match_reference.py``
+    # from the coordinates the console formats from. ``shortReference``
+    # drops the event code for a view whose event is already unambiguous
+    # (a single draw: "R16·2 · 10:00 · Court 3"). Both are ``None`` when the
+    # coordinates cannot name a match; a renderer then shows nothing rather
+    # than falling back to a row number.
+    reference: Optional[str] = None
+    shortReference: Optional[str] = None
     # ``None`` means the persisted status is unrecognised (contract §2.2);
     # never coerced to "scheduled" (D7).
     status: Optional[str] = None
@@ -718,11 +979,52 @@ class PlayerMatchDTO(BaseModel):
     scoresPublished: bool = True
 
 
+class PlayerHistoryEntryDTO(BaseModel):
+    """One workspace in a person's public tournament history (profile v1).
+
+    A history row is a LINK TARGET, not a summary: ``slug`` + ``playerKey``
+    address that workspace's own person page, and ``eventCodes`` address its
+    published draws. Every value here is copied from the other workspace's
+    OWN public projection gates, so a row can never say more about a
+    tournament than that tournament says about itself.
+    """
+
+    slug: str
+    tournamentName: Optional[str] = None
+    date: Optional[str] = None
+    endDate: Optional[str] = None
+    # ``entry_players.id`` in THAT workspace — a different row for the same
+    # human, which is exactly what a tournament-scoped person key is.
+    playerKey: str
+    # True for the workspace whose page is being rendered. The current row is
+    # kept in the list (so a person with no linked history still reads as a
+    # history of one) and is never a link back to itself.
+    current: bool = False
+    eventCodes: List[str] = Field(default_factory=list)
+    drawsPublished: bool = False
+    resultsPublished: bool = False
+    #: Per-event participation in THAT workspace, projected through that
+    #: workspace's own gates (P6). Every readable row carries it since
+    #: OPR-0908-7 — the expansion cap is gone, because the detail no longer
+    #: costs one hydrated bracket per workspace (``_expand_history_rows``).
+    #: A row still reads as a pure link target when its workspace published
+    #: no draw, or published no draw this person is on.
+    events: List[PlayerEventDTO] = Field(default_factory=list)
+    #: True when this row was expanded and the events above are complete for
+    #: it. False means "open the link to see the detail", never "no matches".
+    expanded: bool = False
+
+
 class PlayerPageDTO(BaseModel):
     person: PersonReferenceDTO
     club: Optional[str] = None
     events: List[PlayerEventDTO]
     matches: List[PlayerMatchDTO]
+    # Profile v1 (public-visual-fixes P2): identity + tournament history.
+    # Cross-tournament rows are joined on VERIFIED CANONICAL IDENTITY — the
+    # entrant account that owns the ``entry_players`` row — never on a name
+    # match across the estate. See ``_person_history``.
+    history: List[PlayerHistoryEntryDTO] = Field(default_factory=list)
 
 
 class ScheduleSideDTO(BaseModel):
@@ -754,7 +1056,22 @@ class ScheduleMatchDTO(BaseModel):
     sides: List[ScheduleSideDTO] = Field(default_factory=list)
     score: Optional[List[List[int]]] = None
     walkover: bool = False
+    # The AUTHORITATIVE outcome (contract §3.5/§5.1 rule 3): which side won,
+    # from the recorded result — never inferred from the ledger downstream.
+    # The entrant schedule used to count games won and call the higher total
+    # the winner, which retirement and walkover contradict outright.
+    winnerSide: Optional[Literal["A", "B"]] = None
     updatedAt: Optional[str] = None
+    # The SHARED human match reference (state-and-formatting §6.1, "One
+    # reference, both tiers") — the identical string the operator's match
+    # list shows for this match, spelled by ``shared/match_reference.py``
+    # from the coordinates the console formats from. ``shortReference``
+    # drops the event code for a view whose event is already unambiguous
+    # (a single draw: "R16·2 · 10:00 · Court 3"). Both are ``None`` when the
+    # coordinates cannot name a match; a renderer then shows nothing rather
+    # than falling back to a row number.
+    reference: Optional[str] = None
+    shortReference: Optional[str] = None
 
 
 class ScheduleDayFacetDTO(BaseModel):
@@ -853,16 +1170,61 @@ def _event_segments(event) -> List:
     return [_Main()]
 
 
-def _unit_locator(event, knockout: bool) -> Dict[str, Tuple[str, str, int]]:
-    """unit id → (segment label, short round label, 1-based position) — what
-    a "Winner of QF 3" placeholder is made of."""
-    out: Dict[str, Tuple[str, str, int]] = {}
+@dataclass(frozen=True)
+class _UnitRef:
+    """One play unit's public coordinates, resolved once per event.
+
+    ``reference``/``short_reference`` are the SHARED human match reference
+    (state-and-formatting §6.1) — the identical string the operator's match
+    list shows for this match, spelled by ``shared/match_reference.py`` off
+    the same coordinates the console formats from. They are the only match
+    label this tier publishes: ``Match {position}`` is deleted, and the
+    per-surface ``"SF 1"`` speller that used to live in ``_feeder_reference``
+    is gone with it.
+    """
+
+    segment_label: str
+    short_round: str
+    position: int
+    reference: Optional[str]
+    short_reference: Optional[str]
+
+
+def _unit_locator(event, knockout: bool) -> Dict[str, _UnitRef]:
+    """unit id → its public coordinates, including the shared reference.
+
+    The ``segment`` coordinate handed to the identity authority is the
+    segment's **id** (``W``/``L``/``GF``/``P5_8``), not its label: that is
+    the value ``bracketLabels.ts`` formats from (``play_unit.segment``), and
+    a label would spell a different string for the same match. A
+    single-segment draw has no segment at all — ``_event_segments``'s
+    synthetic ``MAIN`` shim stands for "no segment", exactly as the console's
+    ``null`` does.
+    """
+    out: Dict[str, _UnitRef] = {}
+    event_code = _event_public_code(event)
+    draw_format = event.format
     for segment in _event_segments(event):
         total = len(segment.rounds)
+        segment_id = None if segment.id == "MAIN" and not event.segments else segment.id
         for r_index, round_ids in enumerate(segment.rounds):
             short = _short_round(total, r_index, knockout)
             for position, unit_id in enumerate(round_ids, start=1):
-                out[unit_id] = (segment.label, short, position)
+                identity = bracket_identity(
+                    event_code=event_code,
+                    draw_format=draw_format,
+                    round_index=r_index,
+                    stage=short,
+                    sequence=position,
+                    segment=segment_id,
+                )
+                out[unit_id] = _UnitRef(
+                    segment_label=segment.label,
+                    short_round=short,
+                    position=position,
+                    reference=format_match_identity(identity),
+                    short_reference=format_match_identity(identity, include_event=False),
+                )
     return out
 
 
@@ -882,9 +1244,11 @@ def _feeder_reference(slot, locator, *, feeder_id=None, take: Optional[str] = No
     where = locator.get(feeder_id)
     if where is None:
         return kind, "an earlier match"
-    segment_label, short, position = where
-    prefix = f"{segment_label} " if segment_label else ""
-    return kind, f"{prefix}{short} {position}"
+    # §6.1: the SHARED reference, not a locally spelled "QF 3". The draw page
+    # this reaches has one event, so the event code is dropped (§6.1's
+    # single-event rule) and the feeder reads "from QF2" beside a node
+    # labelled "QF2".
+    return kind, where.short_reference or f"{where.short_round}{where.position}"
 
 
 def _pending_pair_keys(event) -> frozenset:
@@ -1044,7 +1408,9 @@ def _teams(
     out = []
     event_alias = _event_public_code(event)
     for participant in event.participants:
-        people = _participant_people(participant, roster_names, identities, event_code)
+        people = _participant_people(
+            participant, roster_names, identities, event_code, event_alias
+        )
         person_keys = _participant_person_keys(participant)
         club = _event_public_club(
             person_keys[0],
@@ -1136,6 +1502,22 @@ def _slot_time(payload, slot_id: Optional[int]) -> Optional[str]:
         return None
     base = payload.start_time
     return slot_time_from_start(base.hour, base.minute, slot_id, payload.interval_minutes)
+
+
+def _slot_date(payload, slot_id: Optional[int], fallback: Optional[str]) -> Optional[str]:
+    """Venue-local CALENDAR DAY for a bracket slot.
+
+    ``_slot_time`` above wraps at midnight, so on its own it publishes a
+    day-four semi-final as "13:00" on the tournament's start date. The plan's
+    ``start_time`` names both the first slot's day and its time of day, so the
+    day offset is derivable — and must be, or every match in a six-day
+    tournament groups under one heading on the public schedule.
+    """
+    if payload.start_time is None or slot_id is None:
+        return fallback
+    base = payload.start_time
+    offset = slot_day_offset(base.hour, base.minute, slot_id, payload.interval_minutes)
+    return (base.date() + timedelta(days=offset)).isoformat()
 
 
 def _event_or_404(payload, draw_key: str):
@@ -1255,8 +1637,8 @@ def draws_index(
     payload = _bracket(repo, tournament.id)
     draws = []
     if payload is not None:
-        identities = _public_identities(repo, tournament.id)
-        units, results, _ = _bracket_indexes(payload)
+        identities = _directory(repo, tournament, page)
+        units, results, assignments = _bracket_indexes(payload)
         roster_names = _bracket_roster_names(tournament)
         for event in payload.events:
             champions: List[PersonReferenceDTO] = []
@@ -1294,6 +1676,11 @@ def draws_index(
                     remainingMatchCount=(
                         _remaining_match_count(event, units, results)
                         if page.results_published and not winner_key
+                        else None
+                    ),
+                    progress=(
+                        _draw_progress(event, units, results, assignments, payload)
+                        if page.results_published
                         else None
                     ),
                     **_event_projection_meta(event),
@@ -1352,10 +1739,13 @@ def draw_detail(
                     continue
                 assignment = assignments.get(unit_id)
                 result = results.get(unit_id) if results_on else None
+                unit_ref = locator.get(unit_id)
                 matches.append(
                     MatchNodeDTO(
                         nodeKey=unit.id,
                         position=position,
+                        reference=unit_ref.reference if unit_ref else None,
+                        shortReference=unit_ref.short_reference if unit_ref else None,
                         sides=[
                             _side(
                                 unit,
@@ -1391,6 +1781,11 @@ def draw_detail(
                         ),
                         scheduledTime=_slot_time(
                             payload, assignment.slot_id if assignment else None
+                        ),
+                        scheduledDate=(
+                            _slot_date(payload, assignment.slot_id, None)
+                            if assignment is not None
+                            else None
                         ),
                         court=operational_courts.get(unit.id),
                         playedOn=unit.played_on,
@@ -1480,7 +1875,7 @@ def players_index(
         return PlayersDTO(published=False)
 
     entrant_rows = list(_entrants(repo, tournament.id)) if page.entrants_published else []
-    identities = _public_identities(repo, tournament.id)
+    identities = _directory(repo, tournament, page)
     entrants_by_roster_id = {
         roster_id(person_id): {
             "personKey": str(person_id),
@@ -1522,7 +1917,16 @@ def players_index(
                 or roster_names.get(player_id),
                 identities=identities,
             ),
-            club=(entrants_by_roster_id.get(player_id) or {}).get("club"),
+            # ONE authority for both public fields on this row. The club is
+            # the second field the public search box matches on, so it is
+            # published under exactly the gate the NAME is published under —
+            # ``_public_identities``, which keeps only confirmed,
+            # non-opted-out, non-erased people, per visible event. Reading
+            # it instead off ``_entrants`` (a separate, wider desk query
+            # that exists to COUNT the field) made the same row's two public
+            # values answer to two different gates, which is the shape a
+            # disclosure defect arrives in even when today's two gates agree.
+            club=identities.clubs.get(player_id),
             eventCodes=sorted(event_codes),
         )
         for player_id, event_codes in events_by_player.items()
@@ -1587,6 +1991,65 @@ def _remaining_match_count(event, units, results) -> int:
             or _BYE in (units[unit_id].side_b or [])
         )
     )
+
+
+def _progress_round_label(total_rounds: int, index: int, knockout: bool) -> str:
+    """The compact round word the Draws index shows: ``R16``/``QF``/``SF`` as
+    on a match reference, but the full ``Final`` — "F in play" is not a
+    sentence, and the index is prose, not a coordinate."""
+    if not knockout:
+        return _round_label(total_rounds, index, knockout)
+    short = _short_round(total_rounds, index, knockout)
+    return "Final" if short == "F" else short
+
+
+def _draw_progress(event, units, results, assignments, payload) -> DrawProgressDTO:
+    """Where play has actually reached in one published draw.
+
+    Walks segments and rounds in order and stops at the first round holding
+    an undecided, non-BYE match: that round IS the front of the draw. A round
+    with some results is ``in_play``; one with none is ``scheduled`` when the
+    grid gives its earliest unplayed match a start, and ``to_play``
+    otherwise. Nothing undecided anywhere means the draw is ``complete``.
+    """
+    knockout = event.format in _KNOCKOUT_FORMATS
+    for segment in _event_segments(event):
+        total = len(segment.rounds)
+        for index, round_ids in enumerate(segment.rounds):
+            playable = [
+                unit_id
+                for unit_id in round_ids
+                if unit_id in units
+                and not (
+                    _BYE in (units[unit_id].side_a or [])
+                    or _BYE in (units[unit_id].side_b or [])
+                )
+            ]
+            if not playable:
+                continue
+            undecided = [unit_id for unit_id in playable if unit_id not in results]
+            if not undecided:
+                continue
+            label = _progress_round_label(total, index, knockout)
+            if len(undecided) < len(playable):
+                return DrawProgressDTO(state="in_play", roundLabel=label)
+            starts = sorted(
+                start
+                for start in (
+                    _slot_time(
+                        payload,
+                        assignments[unit_id].slot_id if unit_id in assignments else None,
+                    )
+                    for unit_id in undecided
+                )
+                if start
+            )
+            if starts:
+                return DrawProgressDTO(
+                    state="scheduled", roundLabel=label, startTime=starts[0]
+                )
+            return DrawProgressDTO(state="to_play", roundLabel=label)
+    return DrawProgressDTO(state="complete")
 
 
 def _decided_sides(unit, result) -> Optional[Tuple[str, str]]:
@@ -1682,44 +2145,933 @@ def _event_final_unit(event, units):
 # ---- the player page (§3.3) ----------------------------------------------
 
 
+def _canonical_person_key(account_id, full_name: Optional[str]) -> Optional[str]:
+    """The one canonical identity a public profile may be joined on.
+
+    An ``entry_players`` row is tournament-scoped by design, so a person's
+    history has to be assembled from several rows. The join is the ENTRANT
+    ACCOUNT — a verified credential someone actually holds — narrowed by the
+    stored name, because one account legitimately owns several different
+    people (a parent's two children, a club manager's eight players; the
+    canonical fixture has both shapes deliberately). Account alone would
+    merge a club's whole roster into one profile; a name alone would merge
+    two strangers who share one. Neither half is sufficient and the pair is
+    never derived from anything a reader typed.
+
+    Returns ``None`` when there is nothing verified to join on, which
+    collapses the history to the current tournament rather than guessing.
+    """
+    if account_id is None or not isinstance(full_name, str):
+        return None
+    name = _alphabetic_name_key(" ".join(full_name.split()))
+    if not name:
+        return None
+    return f"{account_id}:{name}"
+
+
+def _imported_person_correlation(row: dict) -> Optional[str]:
+    """The cross-tournament identity of ONE imported draw-roster row.
+
+    An ``entry_players`` row is tournament-scoped by design and an imported
+    draw has no account behind it, so an imported person's identity is
+    whatever the IMPORT declared it to be. Two declarations are honoured, in
+    order:
+
+    * ``personId`` — a real, dataset-issued player id written by the importer
+      (the BWF fixture's ``P|player_id|player_name`` table, whose provenance
+      is recorded in the seed manifest). Preferred whenever present.
+    * the canonical stored NAME — the importer's own reviewed identity map,
+      already applied on the way in (the fixture's ``playerAliases`` table
+      resolves "Aaron CHIA" and "Aaron Chia" to one spelling before anything
+      is stored), which is exactly the ``identityScope: source_local_name``
+      the draw already publishes about itself.
+
+    This is deliberately NOT a name-similarity match and never crosses into
+    the entries spine: an entry-backed person keeps the account-verified join
+    in ``_canonical_person_key`` and can never be merged into an imported
+    one. Its limit is the import's own: two different humans who share one
+    canonical name in one dataset are one person to that dataset, and the
+    coverage report says so rather than the profile guessing otherwise.
+    """
+    person_id = row.get("personId")
+    if isinstance(person_id, str) and person_id.strip():
+        return f"id:{person_id.strip()}"
+    name = row.get("name")
+    if isinstance(name, str):
+        key = _alphabetic_name_key(" ".join(name.split()))
+        if key:
+            return f"name:{key}"
+    return None
+
+
+def _entry_person_history_rows(
+    repo: LocalRepository,
+    person: EntryPlayer,
+    tournament: Tournament,
+) -> Dict[str, Tuple[PlayerHistoryEntryDTO, set]]:
+    """Workspaces reachable from an ENTRY-BACKED person's verified account."""
+    canonical = _canonical_person_key(person.account_id, person.full_name)
+    if canonical is None:
+        return {}
+    rows = repo.execute_query(
+        _all_rows,
+        select(
+            EntryPlayer.tournament_id,
+            EntryPlayer.id,
+            EntryPlayer.full_name,
+            EntryEvent.code,
+            EntryPage.slug,
+            EntryPage.audience,
+            EntryPage.draws_published,
+            EntryPage.results_published,
+            Tournament.name,
+            Tournament.tournament_date,
+            Tournament.tournament_end_date,
+        )
+        .select_from(EntryPlayer)
+        .join(
+            Entry,
+            (Entry.tournament_id == EntryPlayer.tournament_id)
+            & (Entry.entry_player_id == EntryPlayer.id),
+        )
+        .outerjoin(
+            EntryEvent,
+            (EntryEvent.tournament_id == Entry.tournament_id)
+            & (EntryEvent.id == Entry.entry_event_id),
+        )
+        .join(EntryPage, EntryPage.tournament_id == EntryPlayer.tournament_id)
+        .join(Tournament, Tournament.id == EntryPlayer.tournament_id)
+        .where(
+            EntryPlayer.account_id == person.account_id,
+            EntryPlayer.erased_at.is_(None),
+            Entry.state == "confirmed",
+            Entry.list_opt_out.is_(False),
+            EntryPage.is_open.is_(True),
+            EntryPage.entrants_published.is_(True),
+        ),
+    )
+    out: Dict[str, Tuple[PlayerHistoryEntryDTO, set]] = {}
+    for (
+        tournament_id,
+        player_id,
+        full_name,
+        event_code,
+        slug,
+        audience,
+        draws_published,
+        results_published,
+        name,
+        start_date,
+        end_date,
+    ) in rows:
+        if _canonical_person_key(person.account_id, full_name) != canonical:
+            continue
+        current = tournament_id == tournament.id
+        if not current and audience != "public":
+            continue
+        if not isinstance(slug, str) or not slug:
+            continue
+        key = str(tournament_id)
+        row = out.get(key)
+        if row is None:
+            row = (
+                PlayerHistoryEntryDTO(
+                    slug=slug,
+                    tournamentName=name,
+                    date=start_date,
+                    endDate=end_date,
+                    playerKey=str(player_id),
+                    current=current,
+                    eventCodes=[],
+                    drawsPublished=bool(draws_published),
+                    resultsPublished=bool(results_published),
+                ),
+                set(),
+            )
+            out[key] = row
+        if isinstance(event_code, str) and event_code:
+            row[1].add(event_code)
+    return out
+
+
+def _imported_person_history_rows(
+    repo: LocalRepository,
+    tournament: Tournament,
+    correlation: str,
+) -> Dict[str, Tuple[PlayerHistoryEntryDTO, set]]:
+    """Workspaces whose PUBLISHED DRAW roster carries the same person.
+
+    One query, not one per workspace: every candidate page's gates are in the
+    WHERE clause and the roster comparison happens in memory over the blobs
+    that query already returned. A workspace whose draws are unpublished is
+    absent — its roster is not public, so neither is the fact that this
+    person is on it.
+    """
+    rows = repo.execute_query(
+        _all_rows,
+        select(
+            Tournament.id,
+            Tournament.name,
+            Tournament.tournament_date,
+            Tournament.tournament_end_date,
+            Tournament.data,
+            EntryPage.slug,
+            EntryPage.audience,
+            EntryPage.draws_published,
+            EntryPage.results_published,
+        )
+        .select_from(Tournament)
+        .join(EntryPage, EntryPage.tournament_id == Tournament.id)
+        .where(
+            # ``draws_published`` alone, deliberately: a draw-roster person's
+            # publication IS the published draw (``_with_draw_roster``), and
+            # that is also the flag ``player_page`` checks before serving
+            # them. Requiring ``entrants_published`` here would hide a
+            # workspace whose profile is nonetheless readable, which is the
+            # opposite of the gate's purpose.
+            EntryPage.is_open.is_(True),
+            EntryPage.draws_published.is_(True),
+        ),
+    )
+    out: Dict[str, Tuple[PlayerHistoryEntryDTO, set]] = {}
+    for (
+        tournament_id,
+        name,
+        start_date,
+        end_date,
+        data,
+        slug,
+        audience,
+        draws_published,
+        results_published,
+    ) in rows:
+        current = tournament_id == tournament.id
+        if not current and audience != "public":
+            continue
+        if not isinstance(slug, str) or not slug:
+            continue
+        match_key: Optional[str] = None
+        for roster_row in (data or {}).get("bracketPlayers") or []:
+            if not isinstance(roster_row, dict):
+                continue
+            key = roster_row.get("id")
+            if not isinstance(key, str) or key.startswith(_ENTRY_ROSTER_PREFIX):
+                continue
+            if _imported_person_correlation(roster_row) == correlation:
+                match_key = key
+                break
+        if match_key is None:
+            continue
+        out[str(tournament_id)] = (
+            PlayerHistoryEntryDTO(
+                slug=slug,
+                tournamentName=name,
+                date=start_date,
+                endDate=end_date,
+                playerKey=match_key,
+                current=current,
+                eventCodes=[],
+                drawsPublished=bool(draws_published),
+                resultsPublished=bool(results_published),
+            ),
+            set(),
+        )
+    return out
+
+
+# ---- the cross-tournament participation index (OPR-0908-7) ---------------
+#
+# A career is thirty workspaces. Filling each row's detail used to hydrate
+# that workspace's WHOLE bracket session — every event, every participant,
+# every match, reconciled and serialized — to read the handful of rows one
+# person appears in, which is why the profile carried a cap of five and the
+# other twenty-five read as bare links.
+#
+# What replaces it is a per-person index: five queries for the whole history,
+# each scoped by ``IN`` over the workspaces already in it and then narrowed
+# to the EVENTS this person is entered in. Nothing outside those events is
+# read, and no bracket is serialized at all. The projection itself is
+# unchanged — the rows are assembled into the same shape
+# ``_person_draw_events`` already walks, so an expanded history row and the
+# page's own events block are still one piece of code and cannot drift.
+#
+# The one thing this path does NOT do that hydration did is
+# ``reconcile_recorded_results`` — the repair pass that derives resolved
+# successor slots for imports that recorded results without them. Those
+# workspaces show a placeholder where hydration would have shown an
+# advanced name; the fix belongs in the draw, not in a read of it, and the
+# workspace's own draw page (which still hydrates) says the same thing.
+
+
+@dataclass(frozen=True)
+class _IndexSlot:
+    """``BracketSlotOut``, from the stored slot dict (``_dict_to_slot``)."""
+
+    participant_id: Optional[str] = None
+    feeder_play_unit_id: Optional[str] = None
+    feeder_take: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class _IndexUnit:
+    id: str
+    side_a: Optional[List[str]]
+    side_b: Optional[List[str]]
+    slot_a: _IndexSlot
+    slot_b: _IndexSlot
+    dependencies: List[str]
+
+
+@dataclass(frozen=True)
+class _IndexResult:
+    play_unit_id: str
+    winner_side: str
+    score: Optional[dict]
+
+
+@dataclass(frozen=True)
+class _IndexParticipant:
+    id: str
+    name: str
+    members: Optional[List[str]]
+    seed: Optional[int]
+    entryPlayerId: Optional[str]
+    sourceEntryId: Optional[str]
+
+
+@dataclass(frozen=True)
+class _IndexSegment:
+    id: str
+    label: str
+    order: int
+    rounds: List[List[str]]
+
+
+@dataclass(frozen=True)
+class _IndexEvent:
+    id: str
+    discipline: str
+    format: str
+    config: dict
+    participants: List[_IndexParticipant]
+    rounds: List[List[str]]
+    segments: Optional[List[_IndexSegment]]
+
+
+@dataclass(frozen=True)
+class _IndexDraws:
+    """The narrow stand-in for ``TournamentOut`` — one person's events only."""
+
+    events: List[_IndexEvent]
+    play_units: List[_IndexUnit]
+    results: List[_IndexResult]
+    assignments: Tuple = ()
+
+
+def _index_slot(raw) -> _IndexSlot:
+    if not isinstance(raw, dict):
+        return _IndexSlot()
+    return _IndexSlot(
+        participant_id=raw.get("participant_id"),
+        feeder_play_unit_id=raw.get("feeder_play_unit_id"),
+        feeder_take=raw.get("feeder_take") or "winner",
+    )
+
+
+def _index_participant(row) -> _IndexParticipant:
+    meta = row.meta if isinstance(row.meta, dict) else {}
+    return _IndexParticipant(
+        id=row.id,
+        name=row.name,
+        # ``members`` is the pair composition and is a TEAM fact — the same
+        # rule ``_participant_out`` applies, so a singles participant reads
+        # as ``None`` here too and ``_participant_people`` takes its
+        # single-person branch.
+        members=list(row.member_ids) if row.type == "TEAM" and row.member_ids else None,
+        seed=row.seed if row.seed is not None else meta.get("seed"),
+        entryPlayerId=str(row.entry_player_id) if row.entry_player_id else None,
+        sourceEntryId=meta.get("sourceEntryId"),
+    )
+
+
+def _index_rounds(match_rows) -> List[List[str]]:
+    """The event's global round axis — ``_hydrate_draw``'s ``rounds``."""
+    buckets: Dict[int, List[Tuple[int, str]]] = {}
+    for row in match_rows:
+        buckets.setdefault(row.round_index, []).append((row.match_index, row.id))
+    return [
+        [unit_id for _, unit_id in sorted(buckets[index])] for index in sorted(buckets)
+    ]
+
+
+def _index_segments(match_rows) -> Optional[List[_IndexSegment]]:
+    """Segments back out of per-match meta — ``_segments_from_match_meta``.
+
+    Labels are not rebuilt: the only thing the person projection reads off a
+    segment is its ID (which spells the shared match reference) and its round
+    count (which spells "Semifinals"). ``segment_label`` lives in the bracket
+    domain and is not imported for a string nothing here prints.
+    """
+    buckets: Dict[str, dict] = {}
+    for row in match_rows:
+        meta = row.meta or {}
+        segment_id = meta.get("segment")
+        if segment_id is None:
+            continue
+        bucket = buckets.setdefault(
+            segment_id, {"order": int(meta.get("segment_order", 0)), "rounds": {}}
+        )
+        bucket["rounds"].setdefault(int(meta.get("round", 0)), []).append(
+            (int(meta.get("match_index", 0)), row.id)
+        )
+    if not buckets:
+        return None
+    return [
+        _IndexSegment(
+            id=segment_id,
+            label="",
+            order=bucket["order"],
+            rounds=[
+                [unit_id for _, unit_id in sorted(bucket["rounds"][index])]
+                for index in sorted(bucket["rounds"])
+            ],
+        )
+        for segment_id, bucket in sorted(
+            buckets.items(), key=lambda kv: (kv[1]["order"], kv[0])
+        )
+    ]
+
+
+def _history_roster_key(player_key: str) -> str:
+    """A history row's link key, as the OTHER workspace's directory spells it.
+
+    An entry-backed row carries the bare ``entry_players.id`` (that is the
+    URL segment ``/players/{key}``), while every directory and every draw
+    joins on the roster id. Reading the raw value against the directory is
+    how entry-backed rows silently failed to expand at all before
+    OPR-0908-7 — an account-linked career of ten workspaces produced ten
+    bare links.
+    """
+    try:
+        return roster_id(uuid.UUID(player_key))
+    except (ValueError, AttributeError, TypeError):
+        return player_key
+
+
+def _expand_history_rows(
+    repo: LocalRepository,
+    rows: Dict[str, PlayerHistoryEntryDTO],
+) -> None:
+    """Fill every readable history row's per-event detail, in five queries.
+
+    Every gate stays the row's OWN workspace's: it is expanded only while
+    that workspace publishes its draws, only while that workspace's
+    directory publishes this person, and its scores appear only under that
+    workspace's ``results_published``. Nothing from the workspace being read
+    crosses into another.
+    """
+    targets = {
+        tid: _history_roster_key(row.playerKey)
+        for tid, row in rows.items()
+        if row.drawsPublished
+    }
+    if not targets:
+        return
+    scope_ids = [uuid.UUID(tid) for tid in targets]
+
+    blobs = {
+        str(key): data
+        for key, data in repo.execute_query(
+            _all_rows,
+            select(Tournament.id, Tournament.data).where(Tournament.id.in_(scope_ids)),
+        )
+    }
+    directories = _public_identities_many(repo, scope_ids)
+    people: Dict[str, PublicPersonDirectory] = {
+        tid: _with_draw_roster(
+            directories.get(tid, _EMPTY_DIRECTORY), _roster_rows(blobs.get(tid)), True
+        )
+        for tid in targets
+    }
+    targets = {
+        tid: key for tid, key in targets.items() if key in people[tid].identities
+    }
+    if not targets:
+        return
+
+    # WHICH EVENTS, first — and only this person's rows, not every
+    # participant in thirty workspaces. A pair's member ids live in a JSON
+    # column, so the pair half is a substring PREFILTER over that column's
+    # text (the key is matched quoted, so it cannot half-match a longer id,
+    # and both dialects spell the array with quoted elements). It is only
+    # ever a prefilter: the exact membership test below decides.
+    mine: Dict[str, set] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketParticipant.tournament_id,
+            BracketParticipant.bracket_event_id,
+            BracketParticipant.id,
+            BracketParticipant.member_ids,
+        ).where(
+            or_(
+                *[
+                    and_(
+                        BracketParticipant.tournament_id == uuid.UUID(tid),
+                        or_(
+                            BracketParticipant.id == key,
+                            cast(BracketParticipant.member_ids, String).like(
+                                f'%"{key}"%'
+                            ),
+                        ),
+                    )
+                    for tid, key in targets.items()
+                ]
+            )
+        ),
+    ):
+        tid = str(row.tournament_id)
+        key = targets.get(tid)
+        if key is not None and (row.id == key or key in (row.member_ids or [])):
+            mine.setdefault(tid, set()).add(row.bracket_event_id)
+    if not mine:
+        return
+
+    scopes = {(tid, event_id) for tid, events in mine.items() for event_id in events}
+    scope_tids = [uuid.UUID(tid) for tid in mine]
+    scope_events = sorted({event_id for _tid, event_id in scopes})
+
+    participants: Dict[Tuple[str, str], List[_IndexParticipant]] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketParticipant.tournament_id,
+            BracketParticipant.bracket_event_id,
+            BracketParticipant.id,
+            BracketParticipant.name,
+            BracketParticipant.type,
+            BracketParticipant.member_ids,
+            BracketParticipant.seed,
+            BracketParticipant.entry_player_id,
+            BracketParticipant.meta,
+        ).where(
+            BracketParticipant.tournament_id.in_(scope_tids),
+            BracketParticipant.bracket_event_id.in_(scope_events),
+        ),
+    ):
+        scope = (str(row.tournament_id), row.bracket_event_id)
+        if scope in scopes:
+            participants.setdefault(scope, []).append(_index_participant(row))
+
+    matches: Dict[Tuple[str, str], List] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketMatch.tournament_id,
+            BracketMatch.bracket_event_id,
+            BracketMatch.id,
+            BracketMatch.round_index,
+            BracketMatch.match_index,
+            BracketMatch.slot_a,
+            BracketMatch.slot_b,
+            BracketMatch.side_a,
+            BracketMatch.side_b,
+            BracketMatch.dependencies,
+            BracketMatch.meta,
+        ).where(
+            BracketMatch.tournament_id.in_(scope_tids),
+            BracketMatch.bracket_event_id.in_(scope_events),
+        ),
+    ):
+        scope = (str(row.tournament_id), row.bracket_event_id)
+        if scope in scopes:
+            matches.setdefault(scope, []).append(row)
+
+    results: Dict[str, List[_IndexResult]] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketResult.tournament_id,
+            BracketResult.bracket_event_id,
+            BracketResult.bracket_match_id,
+            BracketResult.winner_side,
+            BracketResult.score,
+        ).where(
+            BracketResult.tournament_id.in_(scope_tids),
+            BracketResult.bracket_event_id.in_(scope_events),
+        ),
+    ):
+        scope = (str(row.tournament_id), row.bracket_event_id)
+        if scope in scopes:
+            results.setdefault(scope[0], []).append(
+                _IndexResult(
+                    play_unit_id=row.bracket_match_id,
+                    winner_side=row.winner_side,
+                    score=row.score,
+                )
+            )
+
+    events_by_tid: Dict[str, List[_IndexEvent]] = {}
+    units_by_tid: Dict[str, List[_IndexUnit]] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketEvent.tournament_id,
+            BracketEvent.id,
+            BracketEvent.discipline,
+            BracketEvent.format,
+            BracketEvent.config,
+        ).where(
+            BracketEvent.tournament_id.in_(scope_tids),
+            BracketEvent.id.in_(scope_events),
+        ),
+    ):
+        tid = str(row.tournament_id)
+        scope = (tid, row.id)
+        if scope not in scopes:
+            continue
+        match_rows = matches.get(scope, [])
+        events_by_tid.setdefault(tid, []).append(
+            _IndexEvent(
+                id=row.id,
+                discipline=row.discipline,
+                format=row.format,
+                config=dict(row.config or {}),
+                participants=participants.get(scope, []),
+                rounds=_index_rounds(match_rows),
+                segments=_index_segments(match_rows),
+            )
+        )
+        units_by_tid.setdefault(tid, []).extend(
+            _IndexUnit(
+                id=match.id,
+                side_a=list(match.side_a) if match.side_a else None,
+                side_b=list(match.side_b) if match.side_b else None,
+                slot_a=_index_slot(match.slot_a),
+                slot_b=_index_slot(match.slot_b),
+                dependencies=list(match.dependencies or []),
+            )
+            for match in match_rows
+        )
+
+    for tid, key in targets.items():
+        if tid not in events_by_tid:
+            continue
+        row = rows[tid]
+        events = _person_draw_events(
+            _IndexDraws(
+                events=events_by_tid[tid],
+                play_units=units_by_tid.get(tid, []),
+                results=results.get(tid, []),
+            ),
+            _roster_names(blobs.get(tid)),
+            people[tid],
+            key,
+            bool(row.resultsPublished),
+        )
+        row.events = events
+        row.eventCodes = sorted({event.code for event in events} | set(row.eventCodes))
+        row.expanded = True
+
+
+def _person_history(
+    repo: LocalRepository,
+    tournament: Tournament,
+    page: EntryPage,
+    *,
+    identity_key: str,
+    person: Optional[EntryPlayer],
+    identity: PublicPersonIdentityDTO,
+) -> List[PlayerHistoryEntryDTO]:
+    """This person's public tournament history, newest first.
+
+    **Published and permitted only.** Every other workspace has to clear its
+    own public gates before it appears here — an open, non-private entry page
+    with ``entrants_published`` on, and either a confirmed, non-opted-out
+    entry (the account-verified join) or a PUBLISHED DRAW carrying the same
+    imported identity. Anything else is absent, not summarised: a row saying
+    "played somewhere private" would leak the same fact the gate exists to
+    withhold. Other workspaces must additionally be ``audience == "public"``;
+    an *unlisted* page is reachable by its URL but is deliberately not
+    discoverable, and a public profile linking to it would publish it.
+
+    Two identity joins, never mixed (P6, 2026-09-08): an entry-backed person
+    joins on the verified entrant ACCOUNT plus stored name
+    (``_canonical_person_key``), and an imported draw-roster person joins on
+    the import's own declared identity (``_imported_person_correlation``).
+    Neither can pull in a row belonging to the other spine, so an anonymous
+    imported name can never attach itself to somebody's account.
+
+    The current workspace is always included (it is the page being read) and
+    marked ``current``, so a person with no linked history still gets a
+    complete, honest section rather than an empty one.
+    """
+    if person is not None:
+        by_tournament = _entry_person_history_rows(repo, person, tournament)
+    else:
+        correlation = _imported_person_correlation(
+            {"id": identity_key, "name": identity.name}
+        )
+        by_tournament = (
+            _imported_person_history_rows(repo, tournament, correlation)
+            if correlation
+            else {}
+        )
+        for roster_row in _bracket_roster_rows(tournament):
+            if roster_row["id"] != identity_key:
+                continue
+            better = _imported_person_correlation(roster_row)
+            if better and better != correlation:
+                by_tournament = _imported_person_history_rows(repo, tournament, better)
+            break
+    if str(tournament.id) not in by_tournament:
+        # The page being read is always its own history entry, whatever the
+        # join found — otherwise a person with one tournament reads as a
+        # person with none.
+        by_tournament[str(tournament.id)] = (
+            PlayerHistoryEntryDTO(
+                slug=page.slug,
+                tournamentName=tournament.name,
+                date=tournament.tournament_date,
+                endDate=tournament.tournament_end_date,
+                playerKey=identity_key if person is None else str(person.id),
+                current=True,
+                eventCodes=[],
+                drawsPublished=bool(page.draws_published),
+                resultsPublished=bool(page.results_published),
+            ),
+            set(),
+        )
+    for row, codes in by_tournament.values():
+        row.eventCodes = sorted(codes)
+    # Newest first, undated last, then a stable tiebreaker so two
+    # same-day tournaments never swap between reads. Two passes rather than
+    # an inverted sort key: the date descends while the name ascends.
+    ordered = sorted(
+        (row for row, _codes in by_tournament.values()),
+        key=lambda row: (row.tournamentName or "", row.slug),
+    )
+    # ``reverse=True`` keeps equal keys in their existing (name) order, so
+    # the date descends while the tiebreaker still ascends. An empty date
+    # sorts last, which is where an undated workspace belongs.
+    ordered.sort(key=lambda row: row.date or "", reverse=True)
+    # Every non-current row, in one batch — no cap. See
+    # ``_expand_history_rows``: the detail costs a handful of queries for the
+    # whole career rather than one hydrated bracket per workspace.
+    _expand_history_rows(
+        repo,
+        {tid: row for tid, (row, _codes) in by_tournament.items() if not row.current},
+    )
+    return ordered
+
+
+def _draw_partner(
+    participant,
+    identity_key: str,
+    roster_names: Dict[str, str],
+    identities: PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO],
+    event_code: Optional[str],
+    event_alias: Optional[str],
+) -> Optional[PersonReferenceDTO]:
+    """The other member of this person's pair, from the draw itself.
+
+    ``member_ids`` is the authoritative pair composition (``shared/sides.py``)
+    — never a split of the composite team label, which corrupts real names.
+    Returns ``None`` for singles, for a pair one member short, and for a pair
+    of more than two, all of which are honestly "no partner to name here".
+    """
+    members = [m for m in (participant.members or []) if m != identity_key]
+    if len(members) != 1:
+        return None
+    return _person_ref(
+        members[0],
+        name=roster_names.get(members[0]),
+        identities=identities,
+        event_code=event_code,
+        event_alias=event_alias,
+    )
+
+
+def _person_draw_events(
+    payload,
+    roster_names: Dict[str, str],
+    identities: PublicPersonDirectory,
+    identity_key: str,
+    results_on: bool,
+) -> List[PlayerEventDTO]:
+    """One person's events, seeds, partners and ROUND STEPS in one bracket.
+
+    Walks the already-hydrated payload in memory — no per-round and no
+    per-opponent query (the draw N+1 trap this module has avoided since it
+    was written). Every visibility decision is delegated: the per-event gate
+    to ``_event_public_for_person``, each opponent name to ``_teams`` /
+    ``_person_ref``, and the result to ``results_on``.
+
+    Shared by the player page and by each expanded cross-tournament history
+    row, so a person's record reads identically whichever tournament's page
+    you are standing on.
+    """
+    out: List[PlayerEventDTO] = []
+    units, results, _ = _bracket_indexes(payload)
+    for event in payload.events:
+        public_event_code = _event_public_code(event)
+        if not _event_public_for_person(
+            identities, identity_key, public_event_code, event.id
+        ):
+            continue
+        mine_participants = [
+            p
+            for p in event.participants
+            if p.id == identity_key or identity_key in (p.members or [])
+        ]
+        if not mine_participants:
+            continue
+        mine = {p.id for p in mine_participants}
+        knockout = event.format in _KNOCKOUT_FORMATS
+        locator = _unit_locator(event, knockout)
+        teams = {
+            t.participantKey: t
+            for t in _teams(
+                event, identities.clubs, roster_names, identities, event.id
+            )
+        }
+        path: List[PlayerDrawPathDTO] = []
+        for segment in _event_segments(event):
+            total = len(segment.rounds)
+            for r_index, round_ids in enumerate(segment.rounds):
+                opponents: List[PersonReferenceDTO] = []
+                outcome: Optional[str] = None
+                score: Optional[List[List[int]]] = None
+                reference: Optional[str] = None
+                for unit_id in round_ids:
+                    unit = units.get(unit_id)
+                    if unit is None:
+                        continue
+                    projected_sides = [
+                        _side(
+                            unit,
+                            unit.side_a,
+                            unit.slot_a,
+                            locator,
+                            units,
+                            results,
+                            results_on,
+                        ),
+                        _side(
+                            unit,
+                            unit.side_b,
+                            unit.slot_b,
+                            locator,
+                            units,
+                            results,
+                            results_on,
+                        ),
+                    ]
+                    projected_keys = [
+                        side.participantKey
+                        for side in projected_sides
+                        if side.participantKey
+                    ]
+                    if not set(projected_keys) & mine:
+                        continue
+                    mine_side = 0 if projected_sides[0].participantKey in mine else 1
+                    unit_ref = locator.get(unit_id)
+                    reference = unit_ref.reference if unit_ref else reference
+                    result = results.get(unit_id) if results_on else None
+                    if result is not None and result.winner_side in ("A", "B"):
+                        won = (result.winner_side == "A") == (mine_side == 0)
+                        outcome = "won" if won else "lost"
+                        rows = _score_rows(result.score)
+                        if rows is not None:
+                            # Reader order, not draw order: a step reads
+                            # "21-18, 21-15" from THIS person's side.
+                            score = (
+                                rows
+                                if mine_side == 0
+                                else [list(reversed(pair)) for pair in rows]
+                            )
+                    opponent_side = projected_sides[1 - mine_side]
+                    opponent_key = opponent_side.participantKey
+                    if opponent_key is None:
+                        if opponent_side.placeholder:
+                            opponents.append(
+                                PersonReferenceDTO(
+                                    identity=None,
+                                    resolution="dead",
+                                    label=opponent_side.placeholder,
+                                )
+                            )
+                        continue
+                    team = teams.get(opponent_key)
+                    if team is not None:
+                        opponents.extend(team.persons)
+                    else:
+                        opponents.append(
+                            PersonReferenceDTO(
+                                identity=None, resolution="dead", label="Opponent TBD"
+                            )
+                        )
+                if opponents:
+                    path.append(
+                        PlayerDrawPathDTO(
+                            roundLabel=_round_label(total, r_index, knockout),
+                            opponents=opponents,
+                            outcome=outcome,
+                            score=score,
+                            reference=reference,
+                        )
+                    )
+        out.append(
+            PlayerEventDTO(
+                code=public_event_code,
+                discipline=event.discipline,
+                partner=_draw_partner(
+                    mine_participants[0],
+                    identity_key,
+                    roster_names,
+                    identities,
+                    public_event_code,
+                    event.id,
+                ),
+                seed=next((p.seed for p in mine_participants), None),
+                drawPath=path,
+            )
+        )
+    out.sort(key=lambda row: (row.code, row.discipline))
+    return out
+
+
 @router.get("/players/{person_key}", response_model=PlayerPageDTO)
 def player_page(
     response: Response,
     slug: str = Path(..., max_length=100),
-    person_key: str = Path(..., max_length=64),
+    # 100, not 64: the key space is the ROSTER id (``_with_draw_roster``),
+    # which is ``entry-{uuid}`` for an entrant and the importer's own
+    # ``player-{sha256}`` for a draw-roster person — 71 characters, which
+    # this route used to reject with a 422 before it could even look.
+    person_key: str = Path(..., max_length=100),
     repo: LocalRepository = Depends(get_repository),
 ) -> PlayerPageDTO:
     """One person's tournament: events, draw paths, and matches.
 
     Discoverability rides ``entrants_published`` (§4) — with the list
     unpublished, a person page answers the uniform 404 like everything
-    else unpublished. The person must hold a CONFIRMED entry: pending
-    submissions never appear publicly (§3.2), on their page-of-one no less
-    than on the list.
+    else unpublished. An ENTRY-BACKED person must additionally hold a
+    CONFIRMED entry: pending submissions never appear publicly (§3.2), on
+    their page-of-one no less than on the list.
+
+    Two key spellings reach here and both are the SAME key space (P6):
+    ``entry_players.id`` — the bare UUID the entrant tier has always used —
+    and a draw-roster id, which is what the players list emits for an
+    imported tournament. Whichever arrives, it resolves to one roster key
+    and every projection below joins on that.
     """
     page, tournament = _page(repo, slug)
-    if not page.entrants_published:
-        raise _not_found()
-    try:
-        person_id = uuid.UUID(person_key)
-    except (ValueError, AttributeError, TypeError):
-        raise _not_found()
-
-    person = repo.execute_query(
-        _get_record, EntryPlayer, (tournament.id, person_id)
-    )
-    if person is None or person.erased_at is not None:
-        raise _not_found()
-    entries = repo.execute_query(
-        _scalar_rows,
-        select(Entry).where(
-            Entry.tournament_id == tournament.id,
-            Entry.entry_player_id == person_id,
-            Entry.state == "confirmed",
-            Entry.list_opt_out.is_(False),
-        ),
-    )
-    if not entries:
+    if not page.entrants_published and not page.draws_published:
+        # The person DIRECTORY is published by either flag (``players_index``
+        # says so), and a profile is one row of it. Which flag applies to
+        # THIS person is decided below, per spine: an entrant needs
+        # ``entrants_published``, a draw-roster person needs the draw.
         raise _not_found()
     response.headers["Cache-Control"] = _CACHE
     payload = _bracket(repo, tournament.id) if page.draws_published else None
@@ -1730,9 +3082,48 @@ def player_page(
         bracket_payload=payload,
     )
     identities = runtime.directory
-    identity_key = roster_id(person_id)
+
+    person: Optional[EntryPlayer] = None
+    person_id: Optional[uuid.UUID] = None
+    entries: List[Entry] = []
+    try:
+        person_id = uuid.UUID(person_key)
+    except (ValueError, AttributeError, TypeError):
+        person_id = None
+
+    if person_id is not None:
+        if not page.entrants_published:
+            raise _not_found()
+        person = repo.execute_query(
+            _get_record, EntryPlayer, (tournament.id, person_id)
+        )
+        if person is None or person.erased_at is not None:
+            raise _not_found()
+        entries = list(
+            repo.execute_query(
+                _scalar_rows,
+                select(Entry).where(
+                    Entry.tournament_id == tournament.id,
+                    Entry.entry_player_id == person_id,
+                    Entry.state == "confirmed",
+                    Entry.list_opt_out.is_(False),
+                ),
+            )
+        )
+        if not entries:
+            raise _not_found()
+        identity_key = roster_id(person_id)
+    else:
+        identity_key = person_key
+        if identity_key not in identities.draw_people:
+            # Not a UUID and not a published draw-roster key: the same
+            # uniform 404 an unknown entrant gets. No spelling of an
+            # unpublished person is ever confirmed here.
+            raise _not_found()
+
     if identity_key not in identities.identities:
         raise _not_found()
+    identity = identities.identities[identity_key]
     page_updated_at = tournament.updated_at.isoformat() if tournament.updated_at else None
 
     events_by_id = {
@@ -1802,7 +3193,10 @@ def player_page(
     player_events = sorted(player_events_by_code.values(), key=lambda row: (row[0], row[1]))
 
     results_on = bool(page.results_published)
-    roster_id_str = roster_id(person_id)
+    # ONE join key for every projection below. It is ``entry-{uuid}`` for an
+    # entrant and the importer's roster id for a draw-roster person; the
+    # bracket, the draw path and the meet blob all store this same value.
+    roster_id_str = identity_key
     matches: List[PlayerMatchDTO] = []
 
     # ---- bracket-origin matches --------------------------------------
@@ -1812,8 +3206,9 @@ def player_page(
         units, results, assignments = _bracket_indexes(payload)
         for event in payload.events:
             public_event_code = _event_public_code(event)
-            visible_event_keys = identities.visible_events.get(identity_key, frozenset())
-            if event.id not in visible_event_keys and public_event_code not in visible_event_keys:
+            if not _event_public_for_person(
+                identities, identity_key, public_event_code, event.id
+            ):
                 continue
             mine = {
                 p.id
@@ -1893,16 +3288,26 @@ def player_page(
                             else "live" if assignment is not None and assignment.actual_start_slot is not None
                             else "scheduled"
                         )
+                        unit_ref = locator.get(unit_id)
                         matches.append(
                             PlayerMatchDTO(
                                 eventCode=_event_public_code(event),
                                 roundLabel=_round_label(total, r_index, knockout),
+                                reference=unit_ref.reference if unit_ref else None,
+                                shortReference=(
+                                    unit_ref.short_reference if unit_ref else None
+                                ),
                                 sides=sides,
                                 score=_score_rows(result.score) if result else None,
                                 decided=decided,
                                 scheduledTime=_slot_time(
                                     payload,
                                     assignment.slot_id if assignment else None,
+                                ),
+                                scheduledDate=(
+                                    _slot_date(payload, assignment.slot_id, None)
+                                    if assignment is not None
+                                    else None
                                 ),
                                 court=operational_courts.get(unit_id),
                                 playedOn=unit.played_on,
@@ -1919,103 +3324,21 @@ def player_page(
                             )
                         )
 
-    # Build the person's draw path from the already-hydrated bracket. This
-    # walks in-memory units (no per-round or per-opponent queries) and keeps
-    # the same results gate as the match projection.
-    event_details: Dict[str, Tuple[Optional[int], List[PlayerDrawPathDTO]]] = {}
-    if payload is not None and page.draws_published:
-        path_units, path_results, _ = _bracket_indexes(payload)
-        path_roster_names = _bracket_roster_names(tournament)
-        for event in payload.events:
-            public_event_code = _event_public_code(event)
-            visible_event_keys = identities.visible_events.get(identity_key, frozenset())
-            if event.id not in visible_event_keys and public_event_code not in visible_event_keys:
-                continue
-            mine = {
-                p.id
-                for p in event.participants
-                if p.id == roster_id_str or roster_id_str in (p.members or [])
-            }
-            if not mine:
-                continue
-            knockout = event.format in _KNOCKOUT_FORMATS
-            locator = _unit_locator(event, knockout)
-            teams = {
-                t.participantKey: t
-                for t in _teams(
-                    event,
-                    identities.clubs,
-                    path_roster_names,
-                    identities,
-                    event.id,
-                )
-            }
-            seed = next(
-                (p.seed for p in event.participants if p.id in mine or roster_id_str in (p.members or [])),
-                None,
-            )
-            path: List[PlayerDrawPathDTO] = []
-            for segment in _event_segments(event):
-                total = len(segment.rounds)
-                for r_index, round_ids in enumerate(segment.rounds):
-                    opponents: List[PersonReferenceDTO] = []
-                    for unit_id in round_ids:
-                        unit = path_units.get(unit_id)
-                        if unit is None:
-                            continue
-                        projected_sides = [
-                            _side(
-                                unit,
-                                unit.side_a,
-                                unit.slot_a,
-                                locator,
-                                path_units,
-                                path_results,
-                                results_on,
-                            ),
-                            _side(
-                                unit,
-                                unit.side_b,
-                                unit.slot_b,
-                                locator,
-                                path_units,
-                                path_results,
-                                results_on,
-                            ),
-                        ]
-                        projected_keys = [
-                            side.participantKey for side in projected_sides if side.participantKey
-                        ]
-                        if not set(projected_keys) & mine:
-                            continue
-                        mine_side = 0 if projected_sides[0].participantKey in mine else 1
-                        opponent_side = projected_sides[1 - mine_side]
-                        opponent_key = opponent_side.participantKey
-                        if opponent_key is None:
-                            if opponent_side.placeholder:
-                                opponents.append(
-                                    PersonReferenceDTO(
-                                        identity=None,
-                                        resolution="dead",
-                                        label=opponent_side.placeholder,
-                                    )
-                                )
-                            continue
-                        team = teams.get(opponent_key)
-                        if team is not None:
-                            opponents.extend(team.persons)
-                        else:
-                            opponents.append(
-                                PersonReferenceDTO(identity=None, resolution="dead", label="Opponent TBD")
-                            )
-                    if opponents:
-                        path.append(
-                            PlayerDrawPathDTO(
-                                roundLabel=_round_label(total, r_index, knockout),
-                                opponents=opponents,
-                            )
-                        )
-            event_details[public_event_code] = (seed, path)
+    # The person's events, seeds and structured draw path, from the
+    # already-hydrated bracket. One helper because the SAME projection now
+    # serves this page and every expanded cross-tournament history row.
+    draw_events = (
+        _person_draw_events(
+            payload,
+            _bracket_roster_names(tournament),
+            identities,
+            identity_key,
+            results_on,
+        )
+        if payload is not None and page.draws_published
+        else []
+    )
+    draw_events_by_code = {row.code: row for row in draw_events}
 
     # ---- meet-origin matches -----------------------------------------
     meet = _meet_matches(
@@ -2030,24 +3353,55 @@ def player_page(
     )
     matches.extend(meet.matches)
 
+    # An entry-backed person's events come from what they ENTERED (the desk
+    # is the authority on that, and it knows about an event with no draw
+    # yet); a draw-roster person has no entry, so the draw is the only
+    # record there is. Either way the seed, the path and — where the desk
+    # has no accepted partner — the pair composition come from the draw.
+    if player_events:
+        events = [
+            PlayerEventDTO(
+                code=code,
+                discipline=discipline,
+                partner=partner or (
+                    draw_events_by_code[code].partner if code in draw_events_by_code else None
+                ),
+                seed=draw_events_by_code[code].seed if code in draw_events_by_code else None,
+                drawPath=(
+                    draw_events_by_code[code].drawPath if code in draw_events_by_code else []
+                ),
+            )
+            for code, discipline, partner in player_events
+        ]
+    else:
+        events = draw_events
+
+    history = _person_history(
+        repo,
+        tournament,
+        page,
+        identity_key=identity_key,
+        person=person,
+        identity=identity,
+    )
+    for row in history:
+        if not row.current:
+            continue
+        # The current row is not expanded (its detail IS the page above), but
+        # it must still name the events it covers, or the one row a reader
+        # can check against what they are looking at reads as the emptiest.
+        row.eventCodes = sorted({event.code for event in events} | set(row.eventCodes))
+
     return PlayerPageDTO(
         person=PersonReferenceDTO(
-            identity=PublicPersonIdentityDTO(id=str(person.id), name=person.full_name),
+            identity=identity,
             resolution="resolved",
             label=None,
         ),
         club=identities.clubs.get(identity_key),
-        events=[
-            PlayerEventDTO(
-                code=code,
-                discipline=discipline,
-                partner=partner,
-                seed=event_details.get(code, (None, []))[0],
-                drawPath=event_details.get(code, (None, []))[1],
-            )
-            for code, discipline, partner in player_events
-        ],
+        events=events,
         matches=matches,
+        history=history,
     )
 
 
@@ -2143,10 +3497,15 @@ def _meet_matches(
             and isinstance(assignment.get("slotId"), int)
         ):
             scheduled = _hhmm_plus(day_start, assignment["slotId"] * interval)
+        # See ``_meet_schedule_matches``: the stored rank IS the console's
+        # meet identity, handed to the shared authority whole (§6.1).
+        meet_ref = meet_identity(event_code=event_rank)
         out.matches.append(
             PlayerMatchDTO(
                 eventCode=event_rank,
                 roundLabel=None,
+                reference=format_match_identity(meet_ref),
+                shortReference=format_match_identity(meet_ref, include_event=False),
                 sides=[
                     PlayerMatchSideDTO(
                         persons=people_for(side_a, event_key, event_rank),
@@ -2262,7 +3621,7 @@ def _schedule_runtime_snapshot(
     therefore changes the revision immediately instead of being hidden behind
     a stale 304 response.
     """
-    directory = _public_identities(repo, tournament.id)
+    directory = _directory(repo, tournament, page)
     courts: Dict[str, int] = {}
     states: Dict[str, object] = {}
     bracket_revisions: List[Tuple[str, int, str]] = []
@@ -2491,20 +3850,31 @@ def _bracket_schedule_matches(
                                 unresolved=projected.unresolved,
                             )
                         )
-                    scheduled = _slot_time(payload, assignment.slot_id if assignment else None)
+                    slot_id = assignment.slot_id if assignment else None
+                    scheduled = _slot_time(payload, slot_id)
+                    unit_ref = locator.get(unit_id)
                     out.append(ScheduleMatchDTO(
                         matchKey=f"{event.id}:{unit.id}",
+                        reference=unit_ref.reference if unit_ref else None,
+                        shortReference=unit_ref.short_reference if unit_ref else None,
                         source="bracket",
                         eventCode=_event_public_code(event),
                         discipline=event.discipline,
                         roundLabel=label,
                         status=state,
-                        scheduledDate=tournament_date if scheduled else None,
+                        scheduledDate=(
+                            _slot_date(payload, slot_id, tournament_date) if scheduled else None
+                        ),
                         scheduledTime=scheduled,
                         court=operational_courts.get(unit_id),
                         sides=sides,
                         score=_score_rows(result.score) if result is not None and results_on else None,
                         walkover=bool(result.walkover) if result is not None and results_on else False,
+                        winnerSide=(
+                            result.winner_side
+                            if result is not None and result.winner_side in ("A", "B")
+                            else None
+                        ),
                         updatedAt=updated_at,
                     ))
     return out
@@ -2609,12 +3979,32 @@ def _meet_schedule_matches(
         score = None
         if results_on and state_row is not None and state_row.score_side_a is not None and state_row.score_side_b is not None:
             score = [[state_row.score_side_a, state_row.score_side_b]]
+        # Meet's authoritative outcome IS the recorded final score on a
+        # FINISHED match — there is no separate winner column (``MatchState``)
+        # — so it is decided here, once, rather than by every renderer
+        # counting games (§5.1 rule 3). An unfinished match has no winner,
+        # whatever the running score says.
+        winner_side = None
+        if state == "completed" and score:
+            if score[0][0] > score[0][1]:
+                winner_side = "A"
+            elif score[0][1] > score[0][0]:
+                winner_side = "B"
+        # Meet's stored ``eventRank`` ("MS1") already IS the console's meet
+        # identity — ``formatMatchIdentity`` reassembles exactly
+        # ``{event_code}{position}`` — so it is handed to the authority whole
+        # rather than decomposed and rebuilt. A meet match never appears in a
+        # single-event draw view, so it publishes no short spelling.
+        identity = meet_identity(event_code=event_code)
         event_discipline = labels.get(event_code)
         out.append(
             ScheduleMatchDTO(
                 matchKey=f"meet:{match_id}",
                 source="meet",
                 eventCode=event_code,
+                reference=format_match_identity(identity),
+                shortReference=format_match_identity(identity, include_event=False),
+                winnerSide=winner_side,
                 discipline=event_discipline,
                 status=state,
                 scheduledDate=tournament_date if scheduled else None,

@@ -301,3 +301,77 @@ def test_unresolved_planned_match_cannot_start_or_record_result(bracket_client):
     assert result.status_code == 409
     assert started.json()["detail"]["error"] == "unresolved_participants"
     assert result.json()["detail"]["error"] == "unresolved_participants"
+
+
+def test_clear_court_keeps_the_plan_slot_and_is_idempotent(
+    bracket_client, seeded_bracket
+):
+    """OPR-0908-8: withdraw the published court, keep the planned slot.
+
+    ``/bracket/unassign`` removes the assignment altogether, so an operator
+    who changed their mind about a court could not get back to "planned at
+    this slot, no approved court" — the public tier kept publishing the
+    court. ``/bracket/clear-court`` is that third verb.
+
+    The Operations ``Match`` row is the public projection's court source
+    (``_schedule_runtime_snapshot`` builds its ``courts`` map from the rows
+    whose ``court_id`` is not NULL), so a NULL court there IS "no court" on
+    the public page, while ``time_slot`` and the session assignment keep the
+    plan intact.
+    """
+    tid, sf0, sf1 = seeded_bracket
+    bracket_client.post(
+        f"/tournaments/{tid}/bracket/assign",
+        json={"play_unit_id": sf0, "court_id": 1, "slot_id": 3},
+    )
+    bracket_client.post(
+        f"/tournaments/{tid}/bracket/assign",
+        json={"play_unit_id": sf1, "court_id": 2, "slot_id": 3},
+    )
+
+    command_id = str(uuid.uuid4())
+    first = bracket_client.post(
+        f"/tournaments/{tid}/bracket/clear-court",
+        json={"play_unit_id": sf0, "command_id": command_id},
+    )
+    assert first.status_code == 200, first.text
+    # Same command twice: replayed, never applied a second time.
+    second = bracket_client.post(
+        f"/tournaments/{tid}/bracket/clear-court",
+        json={"play_unit_id": sf0, "command_id": command_id},
+    )
+    assert second.status_code == 200, second.text
+
+    state = bracket_client.get(f"/tournaments/{tid}/bracket").json()
+    sf0_a = next((a for a in state["assignments"] if a["play_unit_id"] == sf0), None)
+    sf1_a = next((a for a in state["assignments"] if a["play_unit_id"] == sf1), None)
+    # The PLAN is untouched — this is the whole point of the verb.
+    assert sf0_a is not None, "clear-court must not remove the plan assignment"
+    assert sf0_a["slot_id"] == 3
+    assert sf0_a["court_id"] == 1
+    assert sf1_a is not None and sf1_a["court_id"] == 2
+
+    from db.models import Match
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        sf0_operational = session.get(Match, (uuid.UUID(tid), sf0))
+        sf1_operational = session.get(Match, (uuid.UUID(tid), sf1))
+        assert sf0_operational is not None
+        assert sf0_operational.court_id is None, "the published court must be gone"
+        assert sf0_operational.time_slot == 3, "the approved slot must survive"
+        assert sf1_operational is not None and sf1_operational.court_id == 2
+    finally:
+        session.close()
+
+
+def test_clear_court_without_an_assignment_is_a_noop(bracket_client, seeded_bracket):
+    """No plan, nothing published — still 200, still nothing invented."""
+    tid, sf0, _sf1 = seeded_bracket
+    r = bracket_client.post(
+        f"/tournaments/{tid}/bracket/clear-court",
+        json={"play_unit_id": sf0},
+    )
+    assert r.status_code == 200, r.text
+    assert not any(a["play_unit_id"] == sf0 for a in r.json()["assignments"])

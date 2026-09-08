@@ -36,6 +36,12 @@ import type {
 } from './dto';
 
 export interface BracketApi {
+  /** The workspace this client is bound to. Exposed so a Bracket surface can
+   *  build an in-app LINK to another Bracket surface of the same workspace
+   *  without reaching for router params it may not have (the roster tab
+   *  renders provider-less in tests). Never used to build a request — every
+   *  call below already closes over it. */
+  tournamentId: string;
   /** Resolves to ``null`` when no bracket is configured (404). */
   get: () => Promise<BracketTournamentDTO | null>;
   create: (body: BracketCreateIn) => Promise<BracketTournamentDTO>;
@@ -100,6 +106,9 @@ export interface BracketApi {
    *  court assignment — no solver, no result change.  No-op when already
    *  unassigned. */
   unassign: (body: { command_id?: string; play_unit_id: string }) => Promise<BracketTournamentDTO>;
+  /** OPR-0908-8: withdraw the published court, keep the plan slot. The verb
+   *  `unassign` could not express — it also drops the assignment. */
+  clearCourt: (body: { command_id?: string; play_unit_id: string }) => Promise<BracketTournamentDTO>;
 }
 
 const BracketApiContext = createContext<BracketApi | null>(null);
@@ -126,6 +135,7 @@ export function BracketApiProvider({
   // able to see and export the draw. `validateMove` is a preview, not a write.
   const value = useMemo<BracketApi>(
     () => ({
+      tournamentId,
       get: () => apiClient.getBracket(tournamentId),
       create: guardMutation((body) => apiClient.createBracket(tournamentId, body)),
       remove: guardMutation(() => apiClient.deleteBracket(tournamentId)),
@@ -178,6 +188,7 @@ export function BracketApiProvider({
       ),
       assignCourt: guardMutation((body) => apiClient.assignBracketCourt(tournamentId, body)),
       unassign: guardMutation((body) => apiClient.unassignBracketCourt(tournamentId, body)),
+      clearCourt: guardMutation((body) => apiClient.clearBracketCourt(tournamentId, body)),
     }),
     [tournamentId],
   );

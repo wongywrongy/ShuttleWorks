@@ -362,6 +362,36 @@ class PolicyDTO(BaseModel):
     waiverRequired: bool = False
 
 
+def _public_title(tournament) -> Optional[str]:
+    """The workspace's PUBLIC title: Setup ``general.publicName``, else the
+    workspace name.
+
+    The Setup form's field is labelled "Name shown to players" and promises
+    "Appears on the public site and entry forms. Defaults to the tournament
+    name if left blank." Until OPR-0908-3 nothing read it: the field was
+    written and dead, so the promise was false on every surface. This is the
+    ONE place it is honoured — the entrant tier's page projection, which is
+    the "public site" the label names and the only document the entry form
+    is rendered from. The operator console, the Display board and the
+    workspace list keep reading ``tournaments.name``: an override of the
+    public title is not a rename of the workspace, and a director who saw
+    one name in the Hub and another in Setup would have no way to tell which
+    one is the record.
+
+    Blank, whitespace or absent is "no override" — the label says the field
+    DEFAULTS to the tournament name, so an empty box must never publish an
+    empty title.
+    """
+    data = tournament.data if isinstance(getattr(tournament, "data", None), dict) else {}
+    setup = data.get("setup")
+    general = setup.get("general") if isinstance(setup, dict) else None
+    stored = general.get("data") if isinstance(general, dict) else None
+    override = stored.get("publicName") if isinstance(stored, dict) else None
+    if isinstance(override, str) and override.strip():
+        return override.strip()
+    return tournament.name
+
+
 class TournamentDTO(BaseModel):
     name: Optional[str] = None
     # ``tournaments.tournament_date`` verbatim — a nullable ``String(32)``
@@ -502,7 +532,9 @@ def entry_page_projection(
     )
     return EntryPageProjection(
         tournament=TournamentDTO(
-            name=tournament.name,
+            # OPR-0908-3: the PUBLIC title — Setup's ``publicName`` when the
+            # director set one, the workspace name otherwise.
+            name=_public_title(tournament),
             date=(
                 str(tournament.tournament_date)
                 if tournament.tournament_date
@@ -677,6 +709,7 @@ class SeasonRowDTO(BaseModel):
     organizer: Optional[str] = None
     venueName: Optional[str] = None
     date: Optional[str] = None
+    endDate: Optional[str] = None
     eventCount: int
     status: str
     closesInDays: Optional[int] = None
@@ -774,6 +807,11 @@ def entry_page_list(
                 if tournament.tournament_date
                 else None
             ),
+            tournament_end_date=(
+                str(getattr(tournament, "tournament_end_date", None))
+                if getattr(tournament, "tournament_end_date", None)
+                else None
+            ),
             events=events,
             draws_published=bool(page.draws_published),
             results_published=bool(page.results_published),
@@ -803,6 +841,11 @@ def entry_page_list(
             date=(
                 str(tournament.tournament_date)
                 if tournament.tournament_date
+                else None
+            ),
+            endDate=(
+                str(getattr(tournament, "tournament_end_date", None))
+                if getattr(tournament, "tournament_end_date", None)
                 else None
             ),
             eventCount=len(events),

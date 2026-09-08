@@ -141,7 +141,7 @@ describe('MeetDisplayPage — the Next lane is an opt-in board setting', () => {
 
     expect(screen.getByTestId('court-number-2')).toBeInTheDocument();
     expect(screen.queryByText(/court assignment unavailable/i)).toBeNull();
-    expect(screen.queryByTestId('court-score-2')).toBeNull();
+    expect(screen.queryByTestId('court-score-2-a')).toBeNull();
     expect(screen.queryByText('C4')).toBeNull();
     expect(screen.queryByText('C5')).toBeNull();
   });

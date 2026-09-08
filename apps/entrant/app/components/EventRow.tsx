@@ -1,33 +1,33 @@
 /**
- * One row of the Draws panel (ADR 0028, formerly the Events tab): discipline
- * · code · facts · one count in one unit ("N players"/"N pairs" — G2 caps
- * declined, so no "of M") · state as text+tone · up to two outline buttons —
- * **Entrants** into the Players directory and **View draw** into the
- * event's draw page once one is published. The facts line prefers the draw
- * card's own description (format · size · rounds) and falls back to the
- * entry-page constraints before a draw exists. A decided draw adds a
- * "Champion" line from the card.
+ * One row of the Draws index (ADR 0028; reduced by public-visual-fixes P6).
  *
- * V3-PE04.2: the count column shows exactly ONE source — the draw's own
- * participant count once a draw exists, the registration count otherwise —
- * never both side by side. V3-PE04.3: once the View draw button already
- * states availability, the state column does not also say "Draw published".
+ * **Four cells, no more: event name · entrants · progress · Open.** The row
+ * used to carry a facts line assembled from the draw card — format, "Open to
+ * all", a pair count that repeated the count column, a round count derivable
+ * from the draw itself, and "Draw published · rounds to be scheduled" beside
+ * a button that already said the draw existed. None of it answered the
+ * question a reader brings to an index ("where has this got to?"), and all of
+ * it is on the draw page. What replaced it is one true progress phrase from
+ * the projection's own `progress` (`R16 in play`, `Final 14:00`, `Complete`)
+ * and nothing when the server published none.
+ *
+ * **The whole row is ONE native link** to the draw, so the target is the row
+ * a finger or a pointer aims at and the keyboard gets one stop per event with
+ * a visible focus ring. Everything inside it is therefore inert markup —
+ * there is no nested anchor, which is why the champion's name renders as text
+ * through the identity seam rather than as a PersonRef link, and why the
+ * Entrants button is gone (the Players tab is one click away in the tab bar
+ * and was the only reason this row ever held two links).
+ *
+ * Before a draw is published there is nothing to open, so the row is a plain
+ * container and the progress cell states the entry state instead — the one
+ * fact that IS live at that point.
  */
-import { Button } from '@scheduler/design-system/components';
-
+import { personRefModel } from '../../public/assets/person-ref.js';
 import type { DrawCardDTO } from '../lib/draws.types';
-import { entryCountLabel, eventCodeLabel, kindLabel } from '../lib/draws.types';
+import { drawProgressLabel, entryCountLabel, eventCodeLabel, kindLabel } from '../lib/draws.types';
 import type { EntryEventDTO } from '../lib/entryPage.types';
 import { eventLabel, isStandardEventCode } from '../lib/eventLabels';
-import { PersonGroup } from './PersonGroup';
-
-function genderLabel(constraint: string | null): string {
-  if (constraint === null) return 'Open to all';
-  const folded = constraint.toLowerCase();
-  if (folded === 'm') return 'Men';
-  if (folded === 'f') return 'Women';
-  return constraint;
-}
 
 /**
  * Legacy imports occasionally contain a storage slug where the public event
@@ -60,69 +60,78 @@ function displayEventName(name: string, code: string): string {
     .join(' ');
 }
 
+/** The row's grid, shared with the index's column header. */
+export const EVENT_ROW_COLUMNS = 'sm:grid-cols-[minmax(0,1fr)_7rem_9rem_4rem]';
+
 export function EventRow({
   event,
-  entrantsHref,
   draw = null,
   drawHref = null,
   slug = '',
+  showFormat = false,
 }: {
   event: EntryEventDTO;
-  /** Null when the Players tab is not visible — no link to a hidden panel. */
-  entrantsHref: string | null;
   /** The published draw card for this event, when there is one. */
   draw?: DrawCardDTO | null;
   drawHref?: string | null;
   slug?: string;
+  /** Set by the index only when formats DIFFER between rows — a column of
+   *  five identical "Elimination" tags distinguishes nothing. */
+  showFormat?: boolean;
 }) {
-  const publicFields = event as EntryEventDTO & { format?: string | null; eligibility?: string | null; capacity?: number | null; drawPublished?: boolean; resultsPublished?: boolean };
-  const eligibility = publicFields.eligibility ?? genderLabel(event.genderConstraint);
-  const facts = draw
-    ? [
-        kindLabel(draw.kind),
-        eligibility,
-        entryCountLabel(draw.eventCode, draw.size),
-        draw.roundCount === 0
-          ? 'Draw published · rounds to be scheduled'
-          : `${draw.roundCount} ${draw.roundCount === 1 ? 'round' : 'rounds'}`,
-        draw.hasConsolation ? 'with consolation' : null,
-      ]
-    : [publicFields.format, eligibility];
+  const name = displayEventName(event.discipline, event.code) || 'Tournament event';
   const registrationCount = event.registrationCount ?? event.entryCount;
-  // V3-PE04.2: exactly ONE count, in ONE unit. A published draw's own
-  // participant count supersedes the registration count for this row — the
-  // two can legitimately differ (imported rosters, opt-outs) and showing
-  // both ("0 confirmed registrations · 32 draw participants") read as a
-  // contradiction rather than two distinct, gated sources.
+  // Exactly ONE count, in ONE unit. A published draw's own participant count
+  // supersedes the registration count for this row — the two can legitimately
+  // differ (imported rosters, opt-outs) and showing both read as a
+  // contradiction rather than two distinct, gated sources (V3-PE04.2).
   const countLabel = draw
     ? entryCountLabel(draw.eventCode, draw.drawParticipantCount ?? draw.size)
     : entryCountLabel(event.code, registrationCount);
-  // V3-PE04.3: once a Draw button already states availability, the state
-  // column repeating "Draw published" is a duplicated publication message —
-  // leave it blank rather than say the same thing twice.
-  const state = event.isOpen
-    ? { label: 'Open', tone: 'text-status-live' }
-    : publicFields.resultsPublished
-      ? { label: 'Results published', tone: 'text-muted-foreground' }
-      : publicFields.drawPublished || draw
-        ? null
-        : { label: 'Closed', tone: 'text-status-done' };
-  const entrants = entrantsHref !== null && registrationCount > 0 ? entrantsHref : null;
-  return (
-    <li className="grid gap-3 px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_7rem_6rem_auto] sm:items-center">
+  // Progress is the draw's when the server published one, and the entry state
+  // otherwise — never both, and never a publication message repeating what the
+  // link already says.
+  const progress =
+    drawProgressLabel(draw?.progress) ?? (event.isOpen ? 'Entries open' : draw ? null : 'Entries closed');
+  const progressTone =
+    draw?.progress?.state === 'in_play'
+      ? 'text-status-live'
+      : event.isOpen && !draw?.progress
+        ? 'text-status-live'
+        : 'text-muted-foreground';
+  const champions = (draw?.champions ?? []).map((person, index) =>
+    // The identity seam owns the display string; only its `text` is used
+    // here, because a link inside this row's link is not a link.
+    personRefModel({
+      slug,
+      identity: person.identity,
+      state: person.resolution,
+      label: person.label,
+    }).text || `Champion ${index + 1}`,
+  );
+
+  const cells = (
+    <>
       <div className="min-w-0">
         <p className="font-medium text-foreground">
-          {displayEventName(event.discipline, event.code) || "Tournament event"}{' '}
+          {name}{' '}
           <span className="text-xs font-semibold tracking-wide text-muted-foreground">
             ({displayEventCode(event.code)})
           </span>
         </p>
-        <p className="text-xs text-muted-foreground">
-          {facts.filter(Boolean).join(' · ')}{event.ageBracketed ? ' · Age-restricted' : ''}
-        </p>
-        {draw && draw.champions?.length ? (
+        {showFormat && draw ? (
+          <p className="text-xs text-muted-foreground">{kindLabel(draw.kind)}</p>
+        ) : null}
+        {champions.length > 0 ? (
           <p className="mt-1 text-xs text-muted-foreground">
-            Champion · <PersonGroup slug={slug} persons={draw.champions} state="winner" className="font-medium text-foreground" />
+            Champion{' '}
+            {champions.map((champion) => (
+              // Stacked, never slash-joined (contract §3.1): a doubles pair is
+              // two names, not one string with a glyph in the middle.
+              <span key={champion} className="block font-medium text-foreground">
+                {champion}
+              </span>
+            ))}
           </p>
         ) : null}
       </div>
@@ -130,21 +139,31 @@ export function EventRow({
           stream separates those with comment nodes, breaking text-level
           assertions and, worse, screen-reader continuity of the phrase. */}
       <p className="text-sm tabular-nums text-muted-foreground">{countLabel}</p>
-      {state ? <p className={`text-sm font-medium ${state.tone}`}>{state.label}</p> : <p />}
-      {entrants !== null || drawHref !== null ? (
-        <div className="flex gap-2">
-          {entrants !== null ? (
-            <Button asChild variant="outline" size="sm">
-              <a href={entrants}>Entrants</a>
-            </Button>
-          ) : null}
-          {drawHref !== null ? (
-            <Button asChild variant="outline" size="sm">
-              <a href={drawHref} aria-label={`${displayEventName(event.discipline, event.code)} draw`}>View draw</a>
-            </Button>
-          ) : null}
+      <p className={`text-sm font-medium ${progressTone}`}>{progress ?? ''}</p>
+    </>
+  );
+
+  const grid = `grid gap-3 px-4 py-3.5 sm:items-center ${EVENT_ROW_COLUMNS}`;
+  if (drawHref === null) {
+    return (
+      <li>
+        <div className={grid}>
+          {cells}
+          <p />
         </div>
-      ) : null}
+      </li>
+    );
+  }
+  return (
+    <li>
+      <a
+        href={drawHref}
+        aria-label={`${name} draw`}
+        className={`${grid} hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent`}
+      >
+        {cells}
+        <span className="text-sm font-semibold text-accent sm:text-right">Open</span>
+      </a>
     </li>
   );
 }

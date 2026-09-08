@@ -46,7 +46,8 @@ test.describe("canonical console browser contracts", () => {
     const liveCards = page.locator('[data-testid^="run-card-"]');
     await expect(liveCards).toHaveCount(6);
     await expect(page.locator('[data-testid^="run-queue-row-"]')).toHaveCount(
-      24,
+      // The varied-progress fixture has 155 units, 133 with plan assignments.
+      22,
     );
     await expect(page.getByTestId("run-court-grid")).not.toContainText(
       /winner of/i,
@@ -90,13 +91,18 @@ test.describe("canonical console browser contracts", () => {
   test("Korea is upcoming, fully configured, and has no playing court", async ({
     page,
   }) => {
-    // The readiness checklist lives on Overview, once. The consolidated
-    // route is canonical; retired section aliases are not part of the flow.
+    // The fixture includes confirmed entrants and an open mixed-doubles
+    // window. Entry intake precedes the ready phase even with a built draw.
     await page.goto(`/tournaments/${KOREA_TID}/overview`);
-    await expect(page.getByTestId("overview-ready-summary")).toContainText(
-      /setup complete/i,
-      { timeout: 15_000 },
-    );
+    await expect(page.getByText('Entries are open.', { exact: false })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Open the entries desk' })).toBeVisible();
+    const summary = await page.request.get(`/api/tournaments/${KOREA_TID}`);
+    expect(summary.ok()).toBeTruthy();
+    expect((await summary.json()).signals).toMatchObject({
+      phase: 'entries_open',
+      setup: { events: true, bracketBuilt: true },
+      matches: { total: 155, played: 0, playing: 0 },
+    });
     await expect(page.getByTestId("overview-checklist")).toHaveCount(0);
     await page.goto(`/tournaments/${KOREA_TID}/setup/details`);
     await expect(page.getByLabel("Tournament name")).toBeVisible({

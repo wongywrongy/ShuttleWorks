@@ -1,34 +1,34 @@
 /**
- * §2.4: the season calendar — one card, one row per tournament, month
- * headers between them.
+ * P5: ONE season calendar — one card, one row per tournament, month headers
+ * between them, and no lifecycle segments to switch between.
  *
- * The three views are three SHAPES of the same rows, all decided in
- * `lib/phase.ts`: `season` is ascending month sections with completed and
- * undated tournaments trailing; `completed` is month sections most-recent
- * first; `open` is one ungrouped list already ordered by closing deadline.
- * Nothing is grouped or sorted here — `groupByMonth` walks CONSECUTIVE rows,
- * so the caller's order is the answer and re-sorting would overrule it.
+ * The page reads top to bottom as time does: what is still to come, ascending,
+ * in full visual weight; then "Earlier this season", where the same season's
+ * finished tournaments sit descending, muted, with a Results action and no
+ * venue line. There is no archive elsewhere and no "looking for past results?"
+ * detour, because the past is already on this page.
  *
- * **An undated tournament is always listed.** "Date to be confirmed" is a
- * real state a director is in, not missing data to hide, and the month
- * groupers necessarily drop rows they cannot place — so both dated views
- * carry a trailing undated section built from the rows the grouper skipped.
- * Rendering `monthGroupsDesc` alone silently lost an undated completed
- * tournament, which is the gap this file's ruling closes.
+ * Nothing is grouped, ordered or decided here — `seasonModel` (`lib/phase.ts`)
+ * hands over the sections already built, and `groupByMonth` walks CONSECUTIVE
+ * rows, so re-sorting anything in this file would silently overrule it.
  *
- * Whole-row navigation is the `TournamentCard` stretched-link idiom: the name
- * carries an `::after` overlay covering the row, and the status cell's own
- * links sit above it (`relative z-10`, `SeasonStatusCell`).
+ * **An undated tournament is always listed.** "Date to be confirmed" is a real
+ * state a director is in, not missing data to hide, and the month grouper
+ * necessarily drops rows it cannot place — so each half of the page carries
+ * the rows the grouper skipped rather than losing them. Nothing here invents a
+ * date to put a tournament in a month.
+ *
+ * Whole-row navigation is the stretched-link idiom: the name carries an
+ * `::after` overlay covering the row, and the action slot's own links sit
+ * above it (`relative z-10`, `SeasonStatusCell`).
  */
 import { formatDateLong } from '../lib/format';
 import {
-  monthGroupsDesc,
-  parseIsoDate,
-  seasonSections,
-  statusCell,
+  actionCell,
+  displayTitle,
   type MonthGroup,
+  type SeasonModel,
   type SeasonRow,
-  type View,
 } from '../lib/phase';
 import { DateBadge } from './DateBadge';
 import { SeasonStatusCell } from './SeasonStatusCell';
@@ -42,13 +42,19 @@ function SectionHeader({ label }: { label: string }) {
     // to the corner radius: this tier bans that class outright
     // (`noTruncation.test.ts`), and a header that is only type does not need
     // it. The rows' own top rules are what separate the header from its list.
-    <h2 className="px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+    <h3 className="px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
       {label}
-    </h2>
+    </h3>
   );
 }
 
-function CalendarRow({ row }: { row: SeasonRow }) {
+/**
+ * One row. `past` is the whole difference between the two halves of the page:
+ * a muted title, no venue line (a finished tournament's hall is not what a
+ * reader is here for), and the results-only action `actionCell` already
+ * decided.
+ */
+function CalendarRow({ row, past }: { row: SeasonRow; past: boolean }) {
   // `DateBadge` is `aria-hidden` decoration, so the long date is spelled out
   // for assistive tech — and only when there is one to spell (an empty
   // `sr-only` element is an announcement of nothing).
@@ -56,17 +62,19 @@ function CalendarRow({ row }: { row: SeasonRow }) {
   // V3-PE01.3: locality leads the venue so a reader deciding whether to
   // enter can place the tournament without opening it — a venue name alone
   // ("Kingsway Centre") names no place a stranger to the club recognizes.
-  const meta = [row.venueName, row.locality, row.organizer === 'Local Workspace' ? null : row.organizer]
-    .filter((part) => part !== null && part !== '');
+  const meta = past
+    ? []
+    : [row.venueName, row.locality, row.organizer === 'Local Workspace' ? null : row.organizer]
+        .filter((part) => part !== null && part !== '');
   return (
     <li className="relative flex items-center gap-4 border-t border-rule-soft px-4 py-3 transition-colors duration-fast ease-brand hover:bg-surface-sunken">
       <DateBadge date={row.date} />
-      {/* Task 11 QA, 380px: the status cell used to be a sibling of the date
+      {/* Task 11 QA, 380px: the action cell used to be a sibling of the date
           badge with an unconditional `min-w-[8rem] shrink-0`. That set the
           card's min-content width to ~364px against a 348px content box, so
           the page scrolled sideways and the control row could not wrap —
           against R11. Below `sm:` the badge keeps its line with the name and
-          the status drops UNDER the name block (this column), where it has
+          the action drops UNDER the name block (this column), where it has
           the full remaining width; from `sm:` up the column is a row again
           and the original one-line anatomy is unchanged. Same shape as
           `TournamentCard`'s breakpoint-scoped float: the defect was the
@@ -75,9 +83,16 @@ function CalendarRow({ row }: { row: SeasonRow }) {
         <div className="min-w-0 flex-1">
           <a
             href={`/e/${encodeURIComponent(row.slug)}`}
-            className="font-medium text-foreground after:absolute after:inset-0 hover:underline"
+            /* P7: a completed tournament's NAME is still the row's primary
+               text, so it reads in normal ink; what makes the past section
+               quieter is that its rows carry no venue/organizer line and no
+               entry action, not that the name itself was greyed to the
+               muted register. */
+            className={`after:absolute after:inset-0 hover:underline ${
+              past ? 'text-foreground' : 'font-medium text-foreground'
+            }`}
           >
-            {row.name ?? row.slug}
+            {displayTitle(row)}
           </a>
           {dateText === '' ? null : <span className="sr-only">{dateText}</span>}
           {meta.length === 0 ? null : (
@@ -89,85 +104,87 @@ function CalendarRow({ row }: { row: SeasonRow }) {
             `sm:`-prefixed utilities are inert here), so its one child — a
             plain `<span>`, promoted to a flex item's block layout by
             becoming a flex child — took its unwrapped preferred width
-            instead of wrapping at its own spaces. An exact-instant status
-            line ("Closes 1 Jan 2035, 09:00 GMT+9 · 3076d") is long enough
-            that this alone accounted for the LAST few pixels of the
-            Discovery 320px horizontal-scroll defect (plan §6
-            "Responsive/signage") once the grid-track and search-box causes
-            above it were fixed. `min-w-0` lets it shrink to the column's
-            width and wrap like the sibling `<p>` already does. */}
+            instead of wrapping at its own spaces. `min-w-0` lets it shrink
+            to the column's width and wrap like the sibling `<p>` already
+            does. */}
         <div className="flex min-w-0 sm:min-w-[8rem] sm:shrink-0 sm:justify-end">
-          <SeasonStatusCell cell={statusCell(row)} />
+          <SeasonStatusCell cell={actionCell(row, past)} />
         </div>
       </div>
     </li>
   );
 }
 
-function Section({ label, rows }: { label: string | null; rows: readonly SeasonRow[] }) {
+function Section({ label, rows, past }: {
+  label: string | null;
+  rows: readonly SeasonRow[];
+  past: boolean;
+}) {
   if (rows.length === 0) return null;
   return (
     <>
       {label === null ? null : <SectionHeader label={label} />}
       <ul>
         {rows.map((row) => (
-          <CalendarRow key={row.slug} row={row} />
+          <CalendarRow key={row.slug} row={row} past={past} />
         ))}
       </ul>
     </>
   );
 }
 
-function Months({ groups }: { groups: readonly MonthGroup[] }) {
+function Months({ groups, past }: { groups: readonly MonthGroup[]; past: boolean }) {
   return (
     <>
       {groups.map((group) => (
-        <Section key={`${group.key}:${group.rows[0]?.slug}`} label={group.label} rows={group.rows} />
+        <Section
+          key={`${group.key}:${group.rows[0]?.slug}`}
+          label={group.label}
+          rows={group.rows}
+          past={past}
+        />
       ))}
     </>
   );
 }
 
-export function SeasonCalendar({ rows, view }: { rows: SeasonRow[]; view: View }) {
-  const undated = rows.filter((row) => parseIsoDate(row.date) === null);
-  const sections = view === 'season' ? seasonSections(rows) : null;
+export function SeasonCalendar({ model }: { model: SeasonModel }) {
+  const hasPast = model.past.length > 0 || model.pastUndated.length > 0;
   return (
     // `id`: the NOW strip's "+N more" lands here, so the band's second link
     // is a jump down this page rather than a second listing.
     <section
       id="calendar"
       aria-label="Season calendar"
-      // v3-consolidated work package 26b: `min-w-0`. This section is a
-      // CSS Grid item of `discovery.tsx`'s implicit-track wrapper
-      // (`<div className="mt-6 grid ...">`) alongside `SeasonControls`.
-      // `min-w-0` on THAT wrapper (also added in this package) fixes how
-      // far it can shrink as a grid item of `<main>`, but it does nothing
-      // for the track-sizing contribution of ITS OWN children — a grid
-      // item's default `min-width: auto` is what was measured, directly,
-      // forcing the shared column (and this card) to ~330px wide at a
-      // 320px viewport, driven by one calendar row's longest unbroken
-      // text run. `min-w-0` here is the one that actually caps this
-      // card — and with it, the shared column — at the grid's real
-      // available width.
+      // v3-consolidated work package 26b: `min-w-0`. This section is a CSS
+      // Grid item of `discovery.tsx`'s implicit-track wrapper, and a grid
+      // item's default `min-width: auto` was measured forcing the shared
+      // column to ~330px at a 320px viewport, driven by one calendar row's
+      // longest unbroken text run. `min-w-0` is what caps this card — and
+      // with it, the shared column — at the grid's real available width.
       className="min-w-0 rounded-lg border border-rule-soft bg-surface-raised pb-2 shadow-sm"
     >
-      {sections === null ? (
-        view === 'completed' ? (
-          <>
-            <Months groups={monthGroupsDesc(rows)} />
-            <Section label={UNDATED_LABEL} rows={undated} />
-          </>
-        ) : (
-          <Section label={null} rows={rows} />
-        )
-      ) : (
+      {/* The upcoming half has no visible heading — it is the top of the page
+          and the month headers name it — but the month headers are still
+          subordinate to something, so the outline says what they are under. */}
+      <h2 className="sr-only">Upcoming tournaments</h2>
+      <Months groups={model.upcoming} past={false} />
+      <Section label={UNDATED_LABEL} rows={model.upcomingUndated} past={false} />
+      {hasPast ? (
         <>
-          <Section label={UNDATED_LABEL} rows={sections.undatedLive} />
-          <Months groups={sections.months} />
-          <Section label={UNDATED_LABEL} rows={sections.undated} />
-          <Section label="Completed" rows={sections.completed} />
+          {/* `id`: the retired `?view=completed` deep link lands here, so an
+              old shared URL still reaches the results it named — without a
+              lifecycle segment existing to select. */}
+          <h2
+            id="past"
+            className="scroll-mt-4 border-t border-rule-soft px-4 pb-1 pt-6 text-sm font-semibold text-foreground"
+          >
+            {model.season === null ? 'Earlier tournaments' : 'Earlier this season'}
+          </h2>
+          <Months groups={model.past} past />
+          <Section label={UNDATED_LABEL} rows={model.pastUndated} past />
         </>
-      )}
+      ) : null}
     </section>
   );
 }

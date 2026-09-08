@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import re
 
 import pytest
@@ -10,15 +11,29 @@ from tournament_sim.seed import (
     DatasetError,
     Tournament,
     _HistoricalIdentityRegistry,
+    _demo_setup_sections,
+    _demo_dates,
+    _demo_entry_window,
     _historical_event_payload,
+    _demo_operational_event,
+    _demo_plan,
     _write_manifest,
+    SYNTHETIC_BYE,
+    SYNTHETIC_OUTCOMES,
     apply,
+    apply_synthetic_bye,
+    apply_synthetic_outcomes,
+    synthetic_bye_import_body,
+    synthetic_bye_participants,
+    canonical_tournament_name,
+    person_map,
     attach_historical_sources,
     complete_demo_historical_draws,
     parse_notes_text,
     parse_score,
     parse_text,
     preview,
+    repair_names,
     reset,
     select_tournaments,
     status,
@@ -40,6 +55,43 @@ P|P0004|Dave
 P|P0005|Eve
 P|P0006|Nur Izzuddin
 """
+
+
+def test_demo_setup_keeps_real_public_slug_without_dead_regulations_link():
+    source = parse_text(
+        Path("simulator/fixtures/bwf-recent-completed.txt").read_text(encoding="utf-8")
+    )
+    tournament = next(item for item in source.tournaments if item.id == "T029")
+    setup = _demo_setup_sections(tournament, [], slug="2026-taipei-open-t029")
+    assert setup["public-info"]["publicSlug"] == "2026-taipei-open-t029"
+    assert "regulationsUrl" not in setup["public-info"]
+
+
+def test_demo_setup_dates_are_offset_aware_and_match_entry_window():
+    source = parse_text(
+        Path("simulator/fixtures/bwf-recent-completed.txt").read_text(encoding="utf-8")
+    )
+    tournament = next(item for item in source.tournaments if item.id == "T029")
+    setup = _demo_setup_sections(tournament, [], slug="2026-taipei-open-t029")
+    start, end = _demo_dates(tournament, [])
+    dates = setup["dates"]
+
+    opening, deadline = _demo_entry_window(
+        tournament, "MS", start, demo_seed=True
+    )
+    assert dates["entryOpening"] == opening
+    assert dates["entryDeadline"] == deadline
+    for key in (
+        "entryOpening",
+        "entryDeadline",
+        "withdrawalDeadline",
+        "drawPublication",
+        "tournamentStart",
+        "tournamentEnd",
+    ):
+        assert "+" in dates[key] or dates[key].endswith("Z"), key
+    assert dates["tournamentStart"].startswith(start.isoformat())
+    assert dates["tournamentEnd"].startswith(end.isoformat())
 
 NOTES = """# companion test fixture
 TNOTE|T001|Demo Open|2025
@@ -130,7 +182,8 @@ def test_manifest_write_keeps_the_previous_file_if_atomic_replace_fails(
 
 
 class FakeClient:
-    def __init__(self):
+    def __init__(self, base_url="fake://seed"):
+        self.base_url = base_url
         self.created = []
         self.imported = []
         self.commands = []
@@ -138,6 +191,10 @@ class FakeClient:
         self.events = []
         self.publications = []
         self.deleted = []
+        # The published-entrant layer: a tiny in-memory entries desk, enough
+        # for the demo seed's register/confirm/withdraw sequence.
+        self.signups = []
+        self.entries = {}
 
     def create_tournament(
         self,
@@ -188,7 +245,57 @@ class FakeClient:
 
     def create_entry_event(self, tid, body):
         self.events.append((tid, body))
+        return {"id": f"entry-event-{len(self.events)}"}
+
+    # ---- entrant accounts and the entries desk ---------------------------
+
+    def entrant_signup(self, body, *, expect=(202,)):
+        self.signups.append(body["email"])
+
+        class Response:
+            status_code = 202
+
+        return Response()
+
+    def entrant_login(self, email, password):
+        self._email = email
+        return None
+
+    def entrant_me(self):
+        return {"id": f"account-{self._email}"}
+
+    def import_entries(self, tid, body):
+        rows = self.entries.setdefault(tid, [])
+        for submission in body["submissions"]:
+            for player in submission["players"]:
+                rows.append(
+                    {
+                        "id": f"entry-{tid}-{len(rows)}",
+                        "state": "pending",
+                        "playerName": player["fullName"],
+                        "entryPlayerId": f"player-{tid}-{player['sourceKey']}",
+                    }
+                )
+        return {"submissions": []}
+
+    def list_entries(self, tid, state=None):
+        rows = self.entries.get(tid, [])
+        return [row for row in rows if state is None or row["state"] == state]
+
+    def confirm_entry(self, tid, entry_id):
+        for row in self.entries.get(tid, []):
+            if row["id"] == entry_id:
+                row["state"] = "confirmed"
         return {}
+
+    def withdraw_entry(self, tid, entry_id):
+        for row in self.entries.get(tid, []):
+            if row["id"] == entry_id:
+                row["state"] = "withdrawn"
+        return {}
+
+    def close(self):
+        return None
 
     def patch_entry_page_publication(self, tid, body):
         self.publications.append((tid, body))
@@ -304,7 +411,17 @@ def test_apply_checkpoints_and_same_hash_noop(tmp_path: Path):
     assert first["topologyEdgeCount"] == 0
     assert len(client.imported[0][1]["roster"]) == 5
     assert client.publications == [
-        ("workspace-1", {"drawsPublished": True, "resultsPublished": True})
+        (
+            "workspace-1",
+            {
+                "audience": "public",
+                # The public person directory is gated on this: without it
+                # every ``/e/{slug}/players/{key}`` request 404s.
+                "entrantsPublished": True,
+                "drawsPublished": True,
+                "resultsPublished": True,
+            },
+        )
     ]
     second = apply(dataset, client, seed_key="bwf-demo", run_dir=tmp_path)
     assert second["noop"] is True
@@ -387,11 +504,19 @@ def test_notes_enrich_manifest_and_label_import_as_finals_only(tmp_path: Path):
     assert source["recordScope"] == "finals_only"
     assert source["drawDescription"] == "five 32-entry draws"
     assert output["notesSha256"] == "notes-hash"
-    assert "complete published draws and results" in client.pages[0][1]["introText"]
-    assert "unavailable" not in client.pages[0][1]["introText"]
-    assert "not inferred" not in client.pages[0][1]["introText"]
-    assert "BWF Tour development event" in client.pages[0][1]["introText"]
+    # Reader-facing copy is organizer prose (public-visual-fixes.md P0). The
+    # NOTES file's provenance — the level description and the semicolon draw
+    # inventory — is still parsed and still reconciled into the manifest
+    # ``source`` block above; it is simply no longer a sentence a spectator
+    # reads.
+    intro = client.pages[0][1]["introText"]
+    assert "Demo Open" in intro
+    assert "unavailable" not in intro
+    assert "not inferred" not in intro
+    assert "BWF Tour development event" not in intro
+    assert ";" not in intro
     assert "only five finals are supplied" not in client.pages[0][1]["regulationsText"]
+    assert "Source" not in client.pages[0][1]["regulationsText"]
 
 
 def test_historical_archive_embeds_results_and_disables_scheduling_commands(tmp_path: Path):
@@ -420,6 +545,42 @@ def test_historical_archive_embeds_results_and_disables_scheduling_commands(tmp_
     assert output["tournaments"]["T001"]["matchCount"] == 5
     assert output["tournaments"]["T001"]["playerCount"] == 5
     assert output["tournaments"]["T001"]["topologyEdgeCount"] == 0
+
+
+def test_live_demo_results_precede_live_wave_and_respect_sessions_and_feeders():
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures"
+    dataset = parse_text((fixtures / "bwf-recent-completed.txt").read_text(encoding="utf-8"))
+    attach_historical_sources(dataset, source_map_path=fixtures / "bwf-full-match-sources.json")
+    dataset = select_tournaments(dataset, ["T029"])
+    complete_demo_historical_draws(dataset)
+    tournament = dataset.tournaments[0]
+    rows = dataset.historical_by_tournament["T029"]
+    events = [
+        _demo_operational_event(
+            _historical_event_payload(tournament, event, [row for row in rows if row.event == event], dataset.historical_coverage["T029"]),
+            "T029",
+        )
+        for event in _EVENTS
+    ]
+    _, _, assignments, live = _demo_plan(tournament, rows, events)
+    assigned = {item["play_unit_id"]: item for item in assignments}
+    units = {unit["id"]: unit for event in events for round_units in event["rounds"] for unit in round_units}
+    completed = [unit for unit in units.values() if unit.get("result") is not None]
+    assert len(completed) == 103
+    assert len(live) == 6
+    assert len({assigned[key]["court_id"] for key in live}) == 6
+    for unit in completed:
+        placement = assigned[unit["id"]]
+        start = placement["slot_id"]
+        end = start + placement["duration_slots"]
+        assert end < min(assigned[key]["slot_id"] for key in live)
+        assert start % 48 + placement["duration_slots"] <= 20  # 09:00–19:00
+        for feeder in (unit.get("feeder_a"), unit.get("feeder_b")):
+            if feeder:
+                assert assigned[feeder]["slot_id"] + assigned[feeder]["duration_slots"] < start
+    for court in range(1, 7):
+        court_rows = sorted((row for row in assignments if row["court_id"] == court), key=lambda row: row["slot_id"])
+        assert all(a["slot_id"] + a["duration_slots"] <= b["slot_id"] for a, b in zip(court_rows, court_rows[1:]))
 
 
 def test_complete_demo_draws_fills_all_events_and_marks_generated_rows(tmp_path: Path):
@@ -656,6 +817,42 @@ def test_historical_ids_remove_source_member_ids_and_case_formatting():
     assert registry.player_id("Arisa IGARASHI") == registry.player_id("Arisa Igarashi")
 
 
+def test_roster_rows_carry_the_dataset_person_id_with_its_provenance():
+    """P6: the cross-tournament identity is the DATASET's own player id.
+
+    Two workspaces, one human: the tournament-scoped roster id differs (a
+    re-key of a live bracket is not something a fixture may do), and the
+    ``personId`` is identical. That equality is what a public profile joins
+    on, so it is asserted here rather than inferred from a name.
+    """
+    people = {"Aaron Chia": "P0001", "Soh Wooi Yik": "P0002"}
+    source = "bwf-recent:abcdef123456"
+
+    def registry_for(tid):
+        registry = _HistoricalIdentityRegistry(tid)
+        registry.person_ids = people
+        registry.person_source = source
+        return registry
+
+    first, second = registry_for("T029"), registry_for("T030")
+    a29, a30 = first.player_id("Aaron CHIA"), second.player_id("Aaron Chia")
+    assert a29 != a30
+    row29 = first.players[a29]
+    row30 = second.players[a30]
+    assert row29["personId"] == row30["personId"] == "P0001"
+    assert row29["personSource"] == source
+
+    # Re-running the same registry is a no-op: the record is set once and
+    # keeps its identity, so a second seed pass duplicates nobody.
+    assert first.player_id("Aaron Chia") == a29
+    assert first.players[a29] == row29
+
+    # A name the dataset does not issue an id for carries NO personId. No
+    # identifier is invented to make coverage look complete.
+    unknown = first.player_id("Nobody In The Table")
+    assert "personId" not in first.players[unknown]
+
+
 def test_historical_identity_hash_collision_fails_closed(monkeypatch):
     class ConstantHash:
         def hexdigest(self):
@@ -748,3 +945,548 @@ def test_historical_source_rejects_conflicting_normalized_aliases(tmp_path: Path
     )
     with pytest.raises(DatasetError, match="normalizes to both"):
         attach_historical_sources(dataset, source_map_path=source_map)
+
+
+# --- P5: canonical tournament names ------------------------------------
+#
+# One rule: the tournament display name carries no year or date suffix.
+# The year stays structured (Setup ``general.season``, the ``dates`` block,
+# the workspace date fields, the slug and the manifest's ``source.year``).
+
+
+def test_canonical_name_strips_only_a_trailing_parenthesised_year():
+    assert canonical_tournament_name("Taipei Open (2026)") == "Taipei Open"
+    assert canonical_tournament_name("Korea Masters (2026)") == "Korea Masters"
+    assert canonical_tournament_name("Taipei Open") == "Taipei Open"
+    # A number that carries meaning is not a suffix and is left alone.
+    assert canonical_tournament_name("Super 300 Finals") == "Super 300 Finals"
+    assert canonical_tournament_name("U.S. Open (2026) Qualifying") == (
+        "U.S. Open (2026) Qualifying"
+    )
+    assert canonical_tournament_name("Yunavero Club Open 2026") == (
+        "Yunavero Club Open 2026"
+    )
+
+
+def test_seeded_workspace_and_setup_names_carry_no_year(tmp_path: Path):
+    client = FakeClient()
+    dataset = parse_text(SOURCE)
+    output = apply(dataset, client, seed_key="bwf-demo", run_dir=tmp_path)
+
+    assert client.created[0][1] == "Demo Open"
+    # The year is still structured data on the same fixture.
+    assert output["tournaments"]["T001"]["source"]["year"] == 2025
+    assert output["tournaments"]["T001"]["slug"].startswith("2025-demo-open")
+
+    sections = _demo_setup_sections(
+        dataset.tournaments[0], [], slug="2025-demo-open-t001"
+    )
+    assert sections["general"]["name"] == "Demo Open"
+    assert sections["general"]["publicName"] == "Demo Open"
+    assert sections["general"]["season"] == "2025"
+
+
+class RenameClient:
+    """Just enough workspace surface for :func:`repair_names`."""
+
+    def __init__(self, workspaces):
+        self.workspaces = workspaces
+        self.patched = []
+        self.setup_patched = []
+
+    def get_tournament(self, tid):
+        return self.workspaces.get(tid)
+
+    def update_tournament(self, tid, body):
+        self.workspaces[tid].update(body)
+        self.patched.append((tid, body))
+        return self.workspaces[tid]
+
+    def get_setup(self, tid):
+        return {
+            "sections": [
+                {"key": "general", "data": self.workspaces[tid]["setupGeneral"]}
+            ]
+        }
+
+    def seed_setup_sections(self, tid, sections):
+        self.workspaces[tid]["setupGeneral"] = sections["general"]
+        self.setup_patched.append((tid, sections))
+        return {}
+
+
+def _rename_fixture(tmp_path: Path):
+    (tmp_path / "bwf-demo.json").write_text(
+        json.dumps(
+            {
+                "seedKey": "bwf-demo",
+                "seedFormatVersion": 3,
+                "status": "complete",
+                "tournaments": {
+                    "T001": {
+                        "workspaceId": "ws-1",
+                        "slug": "2025-demo-open-t001",
+                        "source": {"name": "Demo Open", "year": 2025},
+                    },
+                    "T002": {
+                        "workspaceId": "ws-gone",
+                        "source": {"name": "Deleted Open", "year": 2025},
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = RenameClient(
+        {
+            "ws-1": {
+                "id": "ws-1",
+                "name": "Demo Open (2025)",
+                "setupGeneral": {
+                    "name": "Demo Open (2025)",
+                    "publicName": "Demo Open 2025",
+                    "season": "2025",
+                },
+            }
+        }
+    )
+    return client
+
+
+def test_repair_names_rewrites_seeded_rows_and_is_idempotent(tmp_path: Path):
+    client = _rename_fixture(tmp_path)
+
+    first = repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert [row["to"] for row in first["renamed"]] == ["Demo Open"]
+    assert first["setupRepaired"] == ["T001"]
+    # A workspace the manifest names but the deployment no longer holds is
+    # reported, not an error.
+    assert first["missingWorkspaces"] == ["T002"]
+    assert client.workspaces["ws-1"]["name"] == "Demo Open"
+    assert client.workspaces["ws-1"]["setupGeneral"] == {
+        "name": "Demo Open",
+        "publicName": "Demo Open",
+        "season": "2025",
+    }
+
+    second = repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert second["renamed"] == []
+    assert second["setupRepaired"] == []
+    assert second["unchanged"] == ["T001"]
+    # No further writes on the second pass — the repair is idempotent.
+    assert len(client.patched) == 1
+    assert len(client.setup_patched) == 1
+    # Ids and slugs are untouched by the repair.
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    assert manifest["tournaments"]["T001"]["workspaceId"] == "ws-1"
+    assert manifest["tournaments"]["T001"]["slug"] == "2025-demo-open-t001"
+
+
+def test_repair_names_ignores_workspaces_the_manifest_does_not_own(tmp_path: Path):
+    client = _rename_fixture(tmp_path)
+    # A director-authored workspace living in the same deployment.
+    client.workspaces["ws-user"] = {
+        "id": "ws-user",
+        "name": "Yunavero Club Open (2026)",
+        "setupGeneral": {"name": "Yunavero Club Open (2026)"},
+    }
+
+    repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert client.workspaces["ws-user"]["name"] == "Yunavero Club Open (2026)"
+    assert [tid for tid, _ in client.patched] == ["ws-1"]
+
+
+def test_repair_names_records_a_frozen_setup_section_instead_of_failing(tmp_path: Path):
+    """A checked-out tournament freezes Setup; the title still gets fixed.
+
+    ``CONFIG_LOCKED`` is the product's preparation fence, not a repair
+    failure — and the workspace ``name`` the fence does not cover is what
+    the Hub, the workspace header, the public tier and the venue board all
+    render.
+    """
+    client = _rename_fixture(tmp_path)
+
+    class Locked(Exception):
+        status = 409
+
+    def refuse(tid, sections):
+        raise Locked()
+
+    client.seed_setup_sections = refuse
+
+    output = repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert [row["to"] for row in output["renamed"]] == ["Demo Open"]
+    assert output["setupLocked"] == ["T001"]
+    assert output["setupRepaired"] == []
+    assert client.workspaces["ws-1"]["name"] == "Demo Open"
+
+    # Re-running renames nothing further; the frozen section stays reported.
+    again = repair_names(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+    assert again["renamed"] == []
+    assert again["setupLocked"] == ["T001"]
+
+
+class OutcomeClient:
+    """Just enough bracket surface for :func:`apply_synthetic_outcomes`."""
+
+    def __init__(self, results: list[str] | None = None):
+        self.results = list(results or [])
+        self.commands: list[tuple[str, dict]] = []
+
+    def get_bracket(self, tid):
+        return {"results": [{"play_unit_id": pid} for pid in self.results]}
+
+    def bracket_command(self, tid, body):
+        # The product replays a repeated command id without re-advancing; the
+        # fake mirrors that so a double-apply cannot look like a fresh write.
+        if body["play_unit_id"] not in self.results:
+            self.results.append(body["play_unit_id"])
+        self.commands.append((tid, body))
+        return None
+
+
+def _outcome_manifest(tmp_path: Path) -> None:
+    (tmp_path / "bwf-demo.json").write_text(
+        json.dumps(
+            {
+                "seedKey": "bwf-demo",
+                "seedFormatVersion": 3,
+                "status": "complete",
+                "tournaments": {
+                    "T029": {
+                        "workspaceId": "ws-taipei",
+                        "source": {"name": "Taipei Open", "year": 2026},
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_the_synthetic_outcomes_declare_their_provenance_and_cover_three_kinds():
+    assert {row["kind"] for row in SYNTHETIC_OUTCOMES} == {"walkover", "retired", "forfeit"}
+    assert {row["tournamentId"] for row in SYNTHETIC_OUTCOMES} == {"T029"}
+    # Every declared outcome names a distinct match and says, in the note,
+    # that it is fixture scaffolding rather than a sourced result.
+    assert len({row["playUnitId"] for row in SYNTHETIC_OUTCOMES}) == len(SYNTHETIC_OUTCOMES)
+    assert all(row["note"].startswith("synthetic:") for row in SYNTHETIC_OUTCOMES)
+    # The retirement is the one that keeps the games that were played.
+    retired = next(row for row in SYNTHETIC_OUTCOMES if row["kind"] == "retired")
+    assert len(retired["score"]["sets"]) == 2
+
+
+def test_apply_synthetic_outcomes_writes_once_and_then_reports_no_change(tmp_path: Path):
+    _outcome_manifest(tmp_path)
+    client = OutcomeClient()
+
+    first = apply_synthetic_outcomes(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert len(first["applied"]) == len(SYNTHETIC_OUTCOMES)
+    assert first["unchanged"] == []
+    assert all(row["syntheticOutcome"] is True for row in first["applied"])
+    assert [tid for tid, _ in client.commands] == ["ws-taipei"] * len(SYNTHETIC_OUTCOMES)
+    # Deterministic idempotency keys: the same fixture always carries the same
+    # command id, so a replay is the product's replay and not a second result.
+    ids = [body["id"] for _, body in client.commands]
+
+    second = apply_synthetic_outcomes(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert second["applied"] == []
+    assert len(second["unchanged"]) == len(SYNTHETIC_OUTCOMES)
+    assert len(client.commands) == len(SYNTHETIC_OUTCOMES)
+
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    assert len(manifest["syntheticOutcomes"]["applied"]) == 0
+    assert len(manifest["syntheticOutcomes"]["unchanged"]) == len(SYNTHETIC_OUTCOMES)
+    assert all(row["syntheticOutcome"] for row in manifest["syntheticOutcomes"]["declared"])
+    assert len(set(ids)) == len(ids)
+
+
+def test_apply_synthetic_outcomes_skips_a_tournament_this_run_does_not_own(tmp_path: Path):
+    (tmp_path / "bwf-demo.json").write_text(
+        json.dumps(
+            {
+                "seedKey": "bwf-demo",
+                "seedFormatVersion": 3,
+                "status": "complete",
+                "tournaments": {"T029": {"workspaceId": None, "source": {"name": "Taipei Open"}}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = OutcomeClient()
+
+    output = apply_synthetic_outcomes(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert output["applied"] == []
+    assert len(output["missing"]) == len(SYNTHETIC_OUTCOMES)
+    assert client.commands == []
+
+
+def _session_from_import(body: dict) -> dict:
+    """The bracket session an import produces, as the API would serialize it.
+
+    Mirrors ``bracket.io.import_matches``: round-0 sides become concrete
+    participant slots (an absent side becomes the ``__BYE__`` sentinel), later
+    rounds become feeder slots, and declared results come back as result rows.
+    """
+    event = body["events"][0]
+    units: list[dict] = []
+    results: list[dict] = []
+    for round_index, round_units in enumerate(event["rounds"]):
+        for unit in round_units:
+            if round_index == 0:
+                slots = {
+                    "slot_a": {"participant_id": (unit.get("side_a") or ["__BYE__"])[0]},
+                    "slot_b": {"participant_id": (unit.get("side_b") or ["__BYE__"])[0]},
+                }
+            else:
+                slots = {
+                    "slot_a": {"feeder_play_unit_id": unit["feeder_a"]},
+                    "slot_b": {"feeder_play_unit_id": unit["feeder_b"]},
+                }
+            units.append({"id": unit["id"], "event_id": event["id"], **slots})
+            if unit.get("result"):
+                results.append({"play_unit_id": unit["id"], **unit["result"]})
+    return {
+        "events": [{"id": event["id"], "status": "started"}],
+        "play_units": units,
+        "results": results,
+    }
+
+
+class ByeClient:
+    """Just enough workspace + bracket surface for :func:`apply_synthetic_bye`."""
+
+    def __init__(self, brackets: dict[str, dict] | None = None, workspaces: set[str] | None = None):
+        self.brackets: dict[str, dict] = dict(brackets or {})
+        self.workspaces: set[str] = set(workspaces or set())
+        self.created: list[tuple[str, str]] = []
+        self.imports: list[tuple[str, dict]] = []
+        self.deleted: list[tuple[str, str]] = []
+        self.commands: list[tuple[str, dict]] = []
+
+    def get_tournament(self, tid, *, expect=(200,)):
+        return {"id": tid} if tid in self.workspaces else None
+
+    def list_tournaments(self):
+        return [{"id": tid, "name": name} for tid, name in self.created]
+
+    def create_tournament(self, name, kind="meet", modules=None, **kw):
+        tid = f"ws-synthetic-{len(self.created) + 1}"
+        self.workspaces.add(tid)
+        self.created.append((tid, name))
+        return {"id": tid}
+
+    def get_bracket_or_none(self, tid):
+        return self.brackets.get(tid)
+
+    def delete_event(self, tid, event_id):
+        session = self.brackets.get(tid) or {}
+        session["events"] = [
+            event for event in session.get("events") or [] if event.get("id") != event_id
+        ]
+        self.deleted.append((tid, event_id))
+        return True
+
+    def import_bracket(self, tid, body):
+        self.imports.append((tid, body))
+        self.brackets[tid] = _session_from_import(body)
+        return self.brackets[tid]
+
+    def bracket_command(self, tid, body):
+        self.commands.append((tid, body))
+        session = self.brackets.setdefault(tid, {"events": [], "play_units": [], "results": []})
+        session.setdefault("results", []).append({"play_unit_id": body["play_unit_id"]})
+        return session
+
+
+def test_the_synthetic_bye_draw_carries_exactly_one_empty_slot():
+    participants = synthetic_bye_participants()
+    body = synthetic_bye_import_body()
+    event = body["events"][0]
+    rounds = event["rounds"]
+
+    assert len(participants) == SYNTHETIC_BYE["entrantCount"] == 15
+    # One entrant short of the bracket, so the draw holds exactly one bye.
+    assert SYNTHETIC_BYE["bracketSize"] - len(participants) == 1
+    assert [len(one_round) for one_round in rounds] == [8, 4, 2, 1]
+    byes = [unit for unit in rounds[0] if not unit.get("side_b")]
+    assert [unit["id"] for unit in byes] == [SYNTHETIC_BYE["byePlayUnitId"]]
+    # The bye's walkover is declared, not inferred.
+    assert byes[0]["result"] == {"winner_side": "A", "walkover": True, "reason": "walkover"}
+    # Later rounds are feeder references only — the same shape a generated SE
+    # draw has, so nothing here pre-decides an unplayed match.
+    for one_round in rounds[1:]:
+        assert all(unit["feeder_a"] and unit["feeder_b"] for unit in one_round)
+        assert all("side_a" not in unit and "side_b" not in unit for unit in one_round)
+    # Seven plan cells: every playable first-round match, and never the bye.
+    assert len(body["assignments"]) == 7
+    assigned = {cell["play_unit_id"] for cell in body["assignments"]}
+    assert SYNTHETIC_BYE["byePlayUnitId"] not in assigned
+    assert all(1 <= cell["court_id"] <= body["courts"] for cell in body["assignments"])
+    assert all(
+        cell["slot_id"] + cell["duration_slots"] <= body["total_slots"]
+        for cell in body["assignments"]
+    )
+    # Clearly synthetic wherever it surfaces.
+    assert all(row["name"].startswith("Synthetic ") for row in participants)
+    assert all(row["id"].startswith("synthetic-bye-") for row in participants)
+    assert SYNTHETIC_BYE["note"].startswith("synthetic:")
+    assert "test only" in SYNTHETIC_BYE["workspaceName"]
+
+
+def test_apply_synthetic_bye_imports_the_draw_once_and_then_writes_nothing(tmp_path: Path):
+    _outcome_manifest(tmp_path)
+    client = ByeClient()
+
+    first = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert first["created"] is True and first["unchanged"] is False
+    assert first["workspaceCreated"] is True
+    # Everything lands in the fixture's OWN workspace — the import route
+    # replaces a whole bracket, so it must never be aimed at a seeded one.
+    assert [tid for tid, _ in client.imports] == [first["workspaceId"]]
+    assert first["workspaceId"] not in {"ws-taipei"}
+    # The bye appears once.
+    assert first["byePlayUnitIds"] == [SYNTHETIC_BYE["byePlayUnitId"]]
+    # The import already carries the walkover, so no command is needed.
+    assert first["walkoverCommandId"] is None and client.commands == []
+
+    second = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert second["created"] is False and second["unchanged"] is True
+    assert second["workspaceId"] == first["workspaceId"]
+    assert second["workspaceCreated"] is False
+    # A re-run must not re-import: that would replace a draw that exists.
+    assert len(client.imports) == 1
+    assert len(client.created) == 1
+
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    assert manifest["syntheticBye"]["state"] == "unchanged"
+    assert manifest["syntheticBye"]["syntheticOutcome"] is True
+    assert manifest["syntheticBye"]["unitCount"] == 15
+    assert manifest["syntheticBye"]["byePlayUnitIds"] == [SYNTHETIC_BYE["byePlayUnitId"]]
+
+
+def test_apply_synthetic_bye_completes_a_drawless_event_and_clears_a_stranded_one(
+    tmp_path: Path,
+):
+    _outcome_manifest(tmp_path)
+    # The state a failed run leaves behind: an empty SYNBYE event on a seeded
+    # workspace, and a fixture workspace whose event has no play units.
+    client = ByeClient(
+        brackets={
+            "ws-taipei": {
+                "events": [{"id": "MS", "status": "started"}, {"id": "SYNBYE", "status": "draft"}],
+                "play_units": [{"id": "MS-R0-0", "event_id": "MS"}],
+                "results": [],
+            },
+            "ws-synthetic-0": {
+                "events": [{"id": "SYNBYE", "status": "draft"}],
+                "play_units": [],
+                "results": [],
+            },
+        },
+        workspaces={"ws-taipei", "ws-synthetic-0"},
+    )
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    manifest["syntheticBye"] = {"workspaceId": "ws-synthetic-0", "state": "created"}
+    _write_manifest(tmp_path / "bwf-demo.json", manifest)
+
+    output = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    # The stranded, drawless event is removed from the seeded workspace…
+    assert client.deleted == [("ws-taipei", "SYNBYE")]
+    assert output["strandedEvents"] == [{
+        "id": "SYNBYE", "tournamentId": "T029",
+        "workspaceId": "ws-taipei", "status": "removed",
+    }]
+    # …and the fixture workspace is reused, not recreated, with its draw
+    # completed on this run.
+    assert client.created == []
+    assert output["workspaceId"] == "ws-synthetic-0"
+    assert output["created"] is True
+    assert [tid for tid, _ in client.imports] == ["ws-synthetic-0"]
+    assert output["byePlayUnitIds"] == [SYNTHETIC_BYE["byePlayUnitId"]]
+
+
+def test_apply_synthetic_bye_records_the_walkover_when_the_import_did_not(tmp_path: Path):
+    _outcome_manifest(tmp_path)
+    client = ByeClient()
+    # An import that installs the draw without the bye's result — the walkover
+    # then goes through the same idempotent command path the other synthetic
+    # outcomes use.
+    real_import = client.import_bracket
+
+    def import_without_results(tid, body):
+        session = real_import(tid, body)
+        session["results"] = []
+        return session
+
+    client.import_bracket = import_without_results  # type: ignore[method-assign]
+
+    output = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert len(client.commands) == 1
+    workspace_id, command = client.commands[0]
+    assert workspace_id == output["workspaceId"]
+    assert command["kind"] == "record_result"
+    assert command["play_unit_id"] == SYNTHETIC_BYE["byePlayUnitId"]
+    assert command["reason"] == "walkover"
+    # Deterministic idempotency key: a replay is the product's replay.
+    assert command["id"] == output["walkoverCommandId"]
+
+
+
+def test_person_map_publishes_the_datasets_own_player_table():
+    dataset = parse_text(SOURCE)
+
+    output = person_map(dataset, seed_key="bwf-demo")
+
+    assert output["source"] == f"bwf-demo:{dataset.source_sha256[:12]}"
+    assert output["scope"] == "dataset_player_table"
+    # Keyed by the canonical name a roster row stores, valued by the dataset's
+    # own reviewed id — never a name heuristic.
+    assert output["people"]["Alice"] == next(p.id for p in dataset.players if p.name == "Alice")
+    assert len(output["people"]) == len(dataset.players)
+
+
+@pytest.mark.parametrize("locked", [False, True])
+def test_bye_recovers_a_seeded_manifest_id(tmp_path, locked):
+    _outcome_manifest(tmp_path)
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    manifest["syntheticBye"] = {"workspaceId": "ws-taipei"}
+    _write_manifest(tmp_path / "bwf-demo.json", manifest)
+    client = ByeClient(brackets={"ws-taipei": {
+        "events": [{"id": "SYNBYE", "status": "draft"}], "play_units": [],
+    }}, workspaces={"ws-taipei"})
+    if locked:
+        client.delete_event = lambda *_: False
+    output = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+    assert output["workspaceId"] != "ws-taipei"
+    assert all(tid != "ws-taipei" for tid, _ in client.imports + client.commands)
+    assert output["strandedEvents"][0]["status"] == ("locked" if locked else "removed")
+
+
+def test_bye_adopts_existing_fixture_after_manifest_loss(tmp_path):
+    _outcome_manifest(tmp_path)
+    client = ByeClient()
+    workspace = client.create_tournament(SYNTHETIC_BYE["workspaceName"])
+    output = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+    assert output["workspaceId"] == workspace["id"]
+    assert output["workspaceCreated"] is False
+    assert len(client.created) == 1
+
+
+@pytest.mark.parametrize("workspace_id", [None, "ws-taipei"])
+def test_fixture_write_guard_rejects_missing_or_seeded_workspace(workspace_id):
+    from tournament_sim.seed import _fixture_workspace_guard
+
+    with pytest.raises(ValueError, match="refusing"):
+        _fixture_workspace_guard(workspace_id, {"ws-taipei"}, "POST /bracket/import")

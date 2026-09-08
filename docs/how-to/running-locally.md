@@ -129,6 +129,9 @@ layout is for the private tech demo only; production deployments must keep
 the operator and entrant surfaces on distinct hostnames as documented in the
 self-host deployment guide.
 
+For the repeatable source-update, review, and download workflow, use
+[Update the private demo and publish surface books](publish-demo-review.md).
+
 ### Serve generated surface books privately
 
 Generated surface-book PDFs, HTML captures, and manifests can be served for a
@@ -136,10 +139,10 @@ review session from one exact artifact directory over the host's Tailscale
 IPv4 address:
 
 ```bash
-tools/serve-surface-books.sh up docs/screenshots/ui-review/remediation-2026-09-06/tailscale-release
-tools/serve-surface-books.sh url docs/screenshots/ui-review/remediation-2026-09-06/tailscale-release
-tools/serve-surface-books.sh status docs/screenshots/ui-review/remediation-2026-09-06/tailscale-release
-tools/serve-surface-books.sh down docs/screenshots/ui-review/remediation-2026-09-06/tailscale-release
+tools/serve-surface-books.sh up docs/screenshots/ui-review
+tools/serve-surface-books.sh url docs/screenshots/ui-review
+tools/serve-surface-books.sh status docs/screenshots/ui-review
+tools/serve-surface-books.sh down docs/screenshots/ui-review
 ```
 
 The helper uses a dedicated non-root `nginx-unprivileged` container named

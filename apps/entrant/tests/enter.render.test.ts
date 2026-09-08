@@ -314,7 +314,12 @@ describe('the entry form, unhydrated', () => {
     // not become the countdown.
     const html = await render();
 
-    expect(html).toContain('14 Aug 2026, 23:59 UTC');
+    // P7: the moment is converted into the tournament's own zone (the
+    // fixture declares none, so UTC) and printed WITHOUT a zone spelling —
+    // the page states "All times local to the venue" once instead.
+    expect(html).toContain('14 Aug 2026, 23:59');
+    expect(html).not.toContain('23:59 UTC');
+    expect(html).toContain('All times local to the venue');
     expect(html).not.toContain('1 Aug 2026');
   });
 
@@ -338,6 +343,19 @@ describe('the entry form, unhydrated', () => {
 
   it('renders no discipline line when the director set no caps', async () => {
     expect(await render()).not.toContain('Per discipline');
+  });
+
+  it('speaks the frame\'s breadcrumb grammar, not its own back arrow (P7)', async () => {
+    const html = await render();
+    // The last tournament-scoped page carrying a floating "← Tournament
+    // name" link now uses the same trail as every other one: ancestors as
+    // links, the current page as plain text, no text arrow anywhere.
+    const trail = html.match(/<nav aria-label="Breadcrumb"[\s\S]*?<\/nav>/)?.[0] ?? '';
+    expect(trail).not.toBe('');
+    expect(trail).toContain('href="/e/"');
+    expect(trail).toContain('href="/e/spring-open"');
+    expect(trail).toMatch(/aria-current="page"[^>]*>Enter</);
+    expect(html).not.toContain('←');
   });
 
   it('says entries are closed — with a way back — when none is open', async () => {

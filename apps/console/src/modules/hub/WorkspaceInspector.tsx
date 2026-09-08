@@ -36,6 +36,8 @@ import { DetailPanel } from '../../components/control-plane/DetailPanel';
 import { NextUpList } from '../../components/control-plane/NextUpList';
 import { SetupChecklist } from '../../components/control-plane/SetupChecklist';
 import { buildChecklist, STEP_REASON_CODE } from '../../platform/domain/setupChecklist';
+import { demoNow } from '../../lib/demoClock';
+import { NAV_LINK_ROW, NavCaret } from '../../components/NavCaret';
 
 /** One metric tile in the "This workspace" triplet. */
 function MetricTile({
@@ -100,7 +102,7 @@ export function WorkspaceInspector({
   const metrics = tournament.signals?.matches;
   const toDo = metrics ? metrics.toDo : todos.length;
 
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = demoNow().toISOString().slice(0, 10);
   const action = rowActionFor(tournament, temporalGroupOf(tournament, todayKey));
 
   // Status pill (only meaningful with signals): the shared lifecycle
@@ -147,7 +149,14 @@ export function WorkspaceInspector({
           className="flex-1"
           onClick={() => (action.kind === 'set-date' ? onSetDate(tournament.id) : onOpen(tournament.id, action.segment))}
         >
-          {action.label === 'Open workspace' ? 'Open workspace →' : action.label}
+          {action.label === 'Open workspace' ? (
+            <span className={NAV_LINK_ROW}>
+              <span>Open workspace</span>
+              <NavCaret />
+            </span>
+          ) : (
+            action.label
+          )}
         </Button>
         {/* Named, not a naked gear (INS-2). The console already shows two
             gears at once — the rail's Account gear and the workspace header's
@@ -318,9 +327,10 @@ export function WorkspaceInspector({
           <button
             type="button"
             onClick={() => onOpen(tournament.id, 'operations/live')}
-            className="mt-2 text-sm text-accent underline underline-offset-2 hover:no-underline"
+            className={`mt-2 text-sm text-accent underline underline-offset-2 hover:no-underline ${NAV_LINK_ROW}`}
           >
-            View all matches →
+            <span>View all matches</span>
+            <NavCaret />
           </button>
         </DetailPanel.Section>
       ) : null}

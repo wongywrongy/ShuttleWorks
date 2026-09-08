@@ -4,8 +4,20 @@ import path from 'path'
 import { visualizer } from 'rollup-plugin-visualizer'
 import brand from '../../packages/brand/brand.json'
 
+// The fixture runner exports the same server-side variables used by the API.
+// Translate them at build time for this static tier, but never bake a demo
+// instant into a non-local build.
+const buildEnvironment = (process.env.VITE_ENVIRONMENT ?? process.env.ENVIRONMENT ?? 'production').trim().toLowerCase();
+const buildDemoNow = buildEnvironment === 'local'
+  ? (process.env.VITE_DEMO_NOW ?? process.env.SHUTTLEWORKS_DEMO_NOW ?? '')
+  : '';
+
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    'import.meta.env.VITE_ENVIRONMENT': JSON.stringify(buildEnvironment),
+    'import.meta.env.VITE_DEMO_NOW': JSON.stringify(buildDemoNow),
+  },
   plugins: [
     {
       name: 'brand-html',

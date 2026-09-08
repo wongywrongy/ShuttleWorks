@@ -12,7 +12,7 @@ from tests.backend._helpers import isolate_test_database
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
 
 ROW_KEYS = {
-    "slug", "name", "organizer", "venueName", "date", "eventCount",
+    "slug", "name", "organizer", "venueName", "date", "endDate", "eventCount",
     "status", "closesInDays", "closesAt", "timeZone", "locality",
     "drawsPublished", "winnersPublished",
 }

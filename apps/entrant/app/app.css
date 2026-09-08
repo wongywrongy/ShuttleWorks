@@ -60,6 +60,47 @@
   transition: opacity 120ms ease, color 120ms ease;
 }
 
+/* Node separation and node height (match-card §4.3, public-visual-fixes P4).
+ *
+ * Every slot is an equal `flex-1` share of its column, so the node inside it
+ * is centred and the connector braces (the same equal shares, one column
+ * over) keep meeting the right node edges however tall the nodes become.
+ * The separation is therefore PADDING, not a gap or a fixed slot height: the
+ * flex minimum of a slot becomes `node height + 10px`, which puts adjacent
+ * first-round nodes 10px apart (the requested 8-12px start) and grows with
+ * the node rather than squeezing a doubles pair into a constant. No
+ * per-node height is set anywhere: the tallest rendered side decides. */
+.bracket-slot {
+  padding-block: 5px;
+}
+
+/* The bracket scroll region (§4.3: "the canvas scrolls natively, in its own
+ * region"). Bounded to the available viewport so the round headers below
+ * have something to stick to and the Finals column is reachable without the
+ * PAGE growing; scroll chaining is left at its default so reaching an edge
+ * hands the scroll back to the document rather than trapping it. */
+.bracket-scroll {
+  max-height: min(78vh, 46rem);
+}
+
+/* Round headers stay in view while the reader scrolls the tree. The opaque
+ * ground is load-bearing: nodes pass underneath. */
+.bracket-round-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: hsl(var(--surface-raised));
+}
+
+/* The selected player's path, painted server-side (`?player=`/`?view=path`,
+ * the no-JavaScript fallback) and kept in sync in place by
+ * `bracket-path.js`. */
+.bracket-slot.is-person-path {
+  outline: 2px solid hsl(var(--action-primary));
+  outline-offset: -2px;
+  border-radius: 2px;
+}
+
 [data-bracket-grid].has-person-path .bracket-slot:not(.is-person-path),
 [data-bracket-grid].has-person-path .bracket-link-slot:not(.is-person-path) {
   opacity: 0.32;

@@ -346,8 +346,14 @@ export function UnitSlot({ children }: { children?: ReactNode }) {
   );
 }
 
-const INPUT_CLASS =
-  'h-7 rounded-sm border border-border bg-bg-elev px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring';
+/**
+ * The value controls below are `TextField`s, not bare `<input>`s (OPR-0908-5):
+ * the border token, radius, focus ring and disabled treatment come from the
+ * design system rather than from a class string re-derived per surface. Their
+ * label is `labelHidden` because the enclosing `Row` already renders it — the
+ * hidden <label for> is still a real one, so the accessible name is now owned
+ * by the component instead of a hand-written `aria-label`.
+ */
 
 export function TimeInput({
   value,
@@ -359,14 +365,20 @@ export function TimeInput({
   ariaLabel?: string;
 }) {
   return (
-    <input
-      type="time"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label={ariaLabel}
-      className={INPUT_CLASS}
-      style={{ width: '132px' }}
-    />
+    // The width lives on the wrapper, not the input: `TextField`'s input is
+    // `w-full` of its own block, so a width set on the input alone would be
+    // overridden by the box it sits in.
+    <span className="inline-block shrink-0" style={{ width: '132px' }}>
+      <TextField
+        label={ariaLabel ?? 'Time'}
+        labelHidden
+        size="sm"
+        type="time"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+      />
+    </span>
   );
 }
 
@@ -386,16 +398,20 @@ export function NumberInput({
   ariaLabel?: string;
 }) {
   return (
-    <input
-      type="number"
-      value={value}
-      min={min}
-      max={max}
-      onChange={(e) => onChange(Number(e.target.value))}
-      aria-label={ariaLabel}
-      className={`${INPUT_CLASS} tabular-nums`}
-      style={{ width: `${width}px` }}
-    />
+    <span className="inline-block shrink-0" style={{ width: `${width}px` }}>
+      <TextField
+        label={ariaLabel ?? 'Value'}
+        labelHidden
+        size="sm"
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label={ariaLabel}
+        inputClassName="tabular-nums"
+      />
+    </span>
   );
 }
 

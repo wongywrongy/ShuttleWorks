@@ -20,9 +20,35 @@ const PAGE = {
 
 const ref = (id: string, name: string) => ({ identity: { id, name }, resolution: 'resolved', label: null });
 
+const HISTORY = [
+  {
+    slug: 'spring-open',
+    tournamentName: 'Spring Open',
+    date: '2026-09-19',
+    endDate: '2026-09-20',
+    playerKey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    current: true,
+    eventCodes: ['MS'],
+    drawsPublished: true,
+    resultsPublished: true,
+  },
+  {
+    slug: 'winter-classic',
+    tournamentName: 'Winter Classic',
+    date: '2026-01-10',
+    endDate: null,
+    playerKey: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    current: false,
+    eventCodes: ['MS', 'XD'],
+    drawsPublished: true,
+    resultsPublished: true,
+  },
+];
+
 const PLAYER = {
   person: ref('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Ada Lovelace'),
   club: 'Analytical BC',
+  history: HISTORY,
   events: [{ code: 'MS', discipline: "Men's Singles", partner: null, seed: 1, drawPath: [] }],
   matches: [
     {
@@ -98,11 +124,14 @@ async function render(path: string): Promise<Response> {
 const URL_PATH = '/e/spring-open/players/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 describe('the header card', () => {
-  it('renders the linked name, club, events and no cross-tournament profile chrome', async () => {
+  it('renders the linked name, club and events', async () => {
     stubApi(PLAYER);
     const html = await (await render(URL_PATH)).text();
 
-    expect(html).toMatch(/<h1[^>]*>[\s\S]*href="\/e\/spring-open\/players\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"[\s\S]*Ada Lovelace[\s\S]*<\/h1>/);
+    // Contract §11.1: the document's one `h1` is the TOURNAMENT, rendered by
+    // the shared frame; the person's name is this page's section heading.
+    expect(html).toMatch(/<h1[^>]*id="tournament-title"[^>]*>Spring Open<\/h1>/);
+    expect(html).toMatch(/<h2[^>]*>[\s\S]*href="\/e\/spring-open\/players\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"[\s\S]*Ada Lovelace[\s\S]*<\/h2>/);
     expect(html).toContain('Analytical BC');
     expect(html).toContain('Men&#x27;s Singles');
     expect(html).not.toContain('2-0');
@@ -144,6 +173,106 @@ describe('the match groups', () => {
     stubApi({ ...PLAYER, matches: [] });
     const html = await (await render(URL_PATH)).text();
     expect(html).toContain('No matches to show yet.');
+  });
+});
+
+describe('the draw path (P6 structured round steps)', () => {
+  const WITH_PATH = {
+    ...PLAYER,
+    events: [
+      {
+        code: 'MD',
+        discipline: "Men's Doubles",
+        partner: ref('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'Kim Park'),
+        seed: 3,
+        drawPath: [
+          {
+            roundLabel: 'Round of 32',
+            opponents: [ref('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'Rin Sato')],
+            outcome: 'won',
+            score: [
+              [21, 15],
+              [21, 12],
+            ],
+            reference: 'MD R32\u00b79',
+          },
+          {
+            roundLabel: 'Round of 16',
+            opponents: [ref('ffffffff-ffff-4fff-8fff-ffffffffffff', 'Lee Chen')],
+            outcome: null,
+            score: null,
+            reference: 'MD R16\u00b75',
+          },
+        ],
+      },
+    ],
+  };
+
+  it('renders each round as its own step, never an arrow-joined sentence', async () => {
+    stubApi(WITH_PATH);
+    const html = await (await render(URL_PATH)).text();
+
+    expect(html).toContain('Round of 32');
+    expect(html).toContain('Round of 16');
+    // The arrow separator the old progression used is gone from the path.
+    expect(html).not.toContain('\u2192');
+    // Opponent, outcome and score all read on the step itself.
+    expect(html).toContain('Rin Sato');
+    expect(html).toContain('Won');
+    expect(html).toContain('21\u201315, 21\u201312');
+    // An undecided step claims no outcome.
+    expect(html).not.toContain('Lost');
+  });
+
+  it('names the partner and links the event draw pinned on this person', async () => {
+    stubApi(WITH_PATH);
+    const html = await (await render(URL_PATH)).text();
+
+    expect(html).toContain('Kim Park');
+    expect(html).toContain(
+      'href="/e/spring-open/draws/MD?view=path&amp;player=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"',
+    );
+    // The visible label is a name, never the identity value in the URL.
+    expect(html).toContain('View MD draw');
+  });
+});
+
+describe('tournament history (profile v1)', () => {
+  it('links each past tournament to THAT tournament page for the same person', async () => {
+    stubApi(PLAYER);
+    const html = await (await render(URL_PATH)).text();
+
+    expect(html).toContain('Tournament history');
+    // The link is built from slug + that workspace's own player key — the
+    // one shared link-target resolver, never a name.
+    expect(html).toContain(
+      'href="/e/winter-classic/players/cccccccc-cccc-4ccc-8ccc-cccccccccccc"',
+    );
+    expect(html).toContain('Winter Classic');
+    expect(html).not.toContain('/players/Ada');
+  });
+
+  it('names the current tournament without linking back to itself', async () => {
+    stubApi(PLAYER);
+    const html = await (await render(URL_PATH)).text();
+
+    // Scoped to the history section: "Spring Open" is also the breadcrumb
+    // and the hero title, and neither is what this claim is about.
+    const section = html.slice(html.indexOf('Tournament history'));
+    const row = section.match(/<li[^>]*>(?:(?!<\/li>)[\s\S])*Spring Open(?:(?!<\/li>)[\s\S])*<\/li>/)?.[0] ?? '';
+    expect(row).not.toBe('');
+    expect(row).toContain('aria-current="page"');
+    expect(row).not.toContain('href="/e/spring-open/players/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"');
+  });
+
+  it('renders no history section at all on a payload minted before profile v1', async () => {
+    const legacy: Record<string, unknown> = { ...PLAYER };
+    delete legacy.history;
+    stubApi(legacy);
+    const html = await (await render(URL_PATH)).text();
+    expect(html).not.toContain('Tournament history');
+    // ...and the rest of the page is unaffected.
+    expect(html).toContain('Ada Lovelace');
   });
 });
 

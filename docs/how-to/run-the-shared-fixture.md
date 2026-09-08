@@ -11,6 +11,9 @@ against two different databases (a disposable console-only fixture and the
 live Tailscale demo), so a finding on one tier had no guaranteed counterpart
 on the other.
 
+For capture, review, Tailscale downloads, and deployment steps, use
+[Publish a demo review](publish-demo-review.md).
+
 ## Start it
 
 ```bash
@@ -42,10 +45,80 @@ one, though nothing else in this repo expects that).
 
 `fixture.json` carries (at minimum): `taipeiTid`, `taipeiSlug`, `koreaTid`,
 `koreaSlug`, `displayToken`, `viewerEmail`/`viewerPassword` (a real
-viewer-role membership on Taipei), `apiBaseUrl`, `consoleBaseUrl`,
-`entrantBaseUrl`, a `defects` object naming what the HTTP post-seed pass
-changed, and a `dbDefects` object naming what the direct-ORM pass changed
-(both below).
+viewer-role membership on Taipei), the four public-person handles below,
+`apiBaseUrl`, `consoleBaseUrl`, `entrantBaseUrl`, a `defects` object naming
+what the HTTP post-seed pass changed, and a `dbDefects` object naming what
+the direct-ORM pass changed (both below).
+
+| Key | What it is |
+| --- | --- |
+| `playerKey` / `playerName` | A published person on **Korea**. `/e/{koreaSlug}/players/{playerKey}` is a real profile page with events, seeds, a draw path and matches. |
+| `linkedPlayerKey` | The **same human** on Taipei — same entrant account, same stored name, a different `entry_players` row. This is the cross-tournament identity a profile history is built from. |
+| `withheldPlayerKey` | A person who was registered and then withdrawn. Present in the draw, renders `Player not published`, and their profile URL is a real 404. |
+| `missingPlayerKey` | A well-formed UUID belonging to nobody — the other 404 branch. |
+
+`tests/e2e/prepare-console-fixture.py` **proves** all four against the running
+API before it writes the file: a fixture that merely claims a working profile
+URL is how the missing-player finding survived a review cycle.
+
+## The published-entrant layer
+
+The bracket import alone produces people who are *display-only*. The public
+person directory is built from **confirmed entries**
+(`entries_site.py::_public_identities`), so a draw whose roster never went
+through the entries desk has no resolvable identity, no linkable name and no
+profile page — every `/e/{slug}/players/{key}` request 404s at the
+`entrants_published` gate.
+
+So the demo seed registers its whole draw through the operator entries import
+seam (`POST /tournaments/{id}/entries/import`) **before** the bracket is
+imported, confirms every entry, and then uses the resulting
+`entry_players.id` as each person's bracket roster id (`entry-{uuid}` — the
+same key `entries/entries.py::roster_id` mints). One id, one person, one
+profile URL, on both tiers. It has to happen before the bracket import for two
+reasons: the ids are an input to it, and a workspace with live matches is
+checked out to an event node, which freezes every entries write.
+
+Six entrant accounts carry all of it, because `POST /e/account/signup` is
+throttled to eight per hour per IP and that limit is a real protection rather
+than a test artefact:
+
+- four **club/association managers** (`Northgate Badminton Club`,
+  `Harbourline Shuttlers`, `Riverside Racquet Academy`,
+  `Summit Badminton Centre`), each entering the players their club sends;
+- two **personal accounts** for the featured players — one men's-singles and
+  one women's-doubles entrant who appear in **both** tournaments, so a single
+  human is verifiably the same account across Taipei and Korea.
+
+`(account_id, full_name)` is the fixture's canonical person link. A club
+account deliberately owns many differently-named players, so a consumer that
+treats `account_id` alone as a person key is demonstrably wrong against this
+fixture rather than accidentally right.
+
+## What each Taipei discipline is doing
+
+Taipei's disciplines sit at deliberately different depths
+(`simulator/tournament_sim/seed.py::_DEMO_LIVE_PROGRESS`) so that one fixture
+contains a first round, a resolved-but-unplayed round, a mid-draw, and a
+finished draw at the same time:
+
+| Event | State at the frozen clock |
+| --- | --- |
+| MS | opening round, 10 of 16 played, the rest live or queued (one walkover) |
+| WS | opening round complete, R16 half played (one retirement) |
+| MD | into the quarter-finals |
+| WD | **complete** — played out to its final, champion decided |
+| XD | R32 complete; R16 fully resolved and entirely unplayed |
+
+Six matches are live, one per court. Korea has no results at all: it is
+upcoming, which is also the fixture's **withheld-scores** case
+(`resultsPublished: false`).
+
+Entry windows are written in **venue-local time with the venue's real UTC
+offset**. Taipei's five events closed on 14 July; Korea's four main events
+closed on 21 July and its **mixed doubles stays open until 1 August**, which
+is what gives the fixture one genuinely open entry window next to four closed
+ones at the frozen clock.
 
 ## The reconstructed operational states
 
@@ -62,7 +135,9 @@ canonical counts are seeded and verified, two post-seed passes run:
   the recorded winner lost the middle game.
 - **A publication boundary.** Korea has `entrantsPublished: true` while
   `resultsPublished` stays `false` (results simply don't exist yet for an
-  upcoming tournament) — a partially-open publication state.
+  upcoming tournament) — a partially-open publication state. Since the
+  published-entrant layer above, the seed itself already leaves the fixture
+  in exactly this state, so this pass now only verifies it.
 
 **`tools/fixture-defects-db.py`** (work package 01b) — idempotent, directly
 through the SQLAlchemy models in `apps/api/src/db/models.py`, run against
@@ -160,6 +235,20 @@ failure-mode capture.
 
 The mode is written into `fixture.json` as `fixtureMode`, and `tools/surface-capture.mjs` records
 it in the capture manifest, so no review book is ambiguous about which dataset it shows.
+
+## What a capture records about its baseline
+
+`tools/surface-capture.mjs` writes a `captureContext` block into the manifest
+and prints it on the review book's cover. It answers the five questions a
+reader needs before a single sheet means anything:
+
+| Field | Answers |
+| --- | --- |
+| `checkoutSha` | which build — resolved from `git rev-parse HEAD`, overridable with `CHECKOUT_SHA` when the capture host is not a checkout |
+| `fixtureMode` | which dataset (`normal` / `failure`) |
+| `eventTimeZone` | which clock — auto-resolved from the public page projection unless `EVENT_TIMEZONE` is supplied |
+| `viewports` | which window — desktop 1440 × 900 and mobile 390 × 844 CSS px, 2× |
+| `baselineRoute` + per-sheet `path` / `finalUrl` | which route — the run's entry point, plus the requested and reached URL of every sheet |
 
 ## Keeping the capture dataset clean
 

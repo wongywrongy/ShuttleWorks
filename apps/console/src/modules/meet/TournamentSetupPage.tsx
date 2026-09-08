@@ -30,6 +30,7 @@ import { EngineConfigForm } from '../../platform/engine-config/EngineConfigForm'
 import { ConfigSurface, LockedFieldset } from '../../platform/engine-config/ConfigSurface';
 import { IconDone } from '@scheduler/design-system';
 import { ACCENT_PRESS } from '../../lib/utils';
+import { NAV_LINK_ROW, NavCaret } from '../../components/NavCaret';
 
 const FORM_ID = 'meet-config-form';
 
@@ -96,9 +97,10 @@ export function TournamentSetupPage() {
               action={
                 <Link
                   to={`/tournaments/${tid}/meet/matches`}
-                  className="ml-1 font-medium text-accent hover:underline"
+                  className={`ml-1 font-medium text-accent hover:underline ${NAV_LINK_ROW}`}
                 >
-                  View matches →
+                  <span>View matches</span>
+                  <NavCaret />
                 </Link>
               }
             />

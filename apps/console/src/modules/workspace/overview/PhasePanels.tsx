@@ -21,6 +21,7 @@ import { checklistProgress } from '../../../platform/domain/setupChecklist';
 import { SetupChecklist } from '../../../components/control-plane/SetupChecklist';
 import { NextUpList } from '../../../components/control-plane/NextUpList';
 import { EYEBROW_CLASS, TEXT_MUTED_SM } from '../../../lib/utils';
+import { NAV_LINK_ROW, NavCaret } from '../../../components/NavCaret';
 
 interface PanelProps {
   summary: TournamentSummaryDTO;
@@ -275,9 +276,10 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
           <button
             type="button"
             onClick={() => onNavigate(seg.matches)}
-            className="mt-2 text-sm text-accent underline underline-offset-2 hover:no-underline"
+            className={`mt-2 text-sm text-accent underline underline-offset-2 hover:no-underline ${NAV_LINK_ROW}`}
           >
-            View all matches →
+            <span>View all matches</span>
+            <NavCaret />
           </button>
         </div>
       ) : null}

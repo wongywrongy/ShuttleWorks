@@ -230,3 +230,63 @@ def test_invalid_audience_is_rejected_and_content_flags_stay_independent(client,
     assert client.patch(path, json={"audience": "everyone"}, headers=CSRF).status_code == 422
     saved = client.patch(path, json={"audience": "public"}, headers=CSRF).json()
     assert all(saved[flag] is False for flag in FLAG_FIELDS)
+
+
+# ---------------------------------------------------------------------------
+# OPR-0908-6 — the public address, composed by the only party that knows it.
+# ---------------------------------------------------------------------------
+
+
+def test_the_public_site_read_composes_the_play_origin_and_the_slug(
+    client, workspace, monkeypatch
+):
+    """The console runs on the operator origin and cannot invent the other one.
+
+    SP-HOST-1 puts the entrant tier on its own host, so a console link to a
+    public page has to come from the server. This read is the entry page's
+    twin of ``GET /tournaments/{id}/display-token``.
+    """
+    from core.config import settings
+
+    monkeypatch.setattr(
+        type(settings), "play_origin", property(lambda self: "https://play.example.test")
+    )
+    body = client.get(f"/tournaments/{workspace}/entry-page/public-site").json()
+    assert body["origin"] == "https://play.example.test"
+    assert body["slug"] == "autumn-open"
+    assert body["url"] == "https://play.example.test/e/autumn-open"
+
+
+def test_the_public_site_read_carries_the_publication_state(client, workspace):
+    """So a caller can tell a live public page from one that publishes nothing —
+    the same columns ``GET /entry-page`` returns, not a second source."""
+    before = client.get(f"/tournaments/{workspace}/entry-page/public-site").json()
+    assert before["entrantsPublished"] is False
+    assert before["drawsPublished"] is False
+    assert before["audience"] == "private"
+
+    client.patch(
+        f"/tournaments/{workspace}/entry-page/publication",
+        json={"drawsPublished": True},
+        headers=CSRF,
+    )
+    after = client.get(f"/tournaments/{workspace}/entry-page/public-site").json()
+    assert after["drawsPublished"] is True
+
+
+def test_the_public_site_read_404s_when_the_workspace_has_no_page(client):
+    """Same honest operator-facing 404 as every other entry-page read."""
+    tid = client.post(
+        "/tournaments", json={"name": "No Page"}, headers=CSRF
+    ).json()["id"]
+    r = client.get(f"/tournaments/{tid}/entry-page/public-site")
+    assert r.status_code == 404
+
+
+def test_the_public_site_url_is_relative_when_no_origin_is_configured(
+    client, workspace
+):
+    """Local mode serves both tiers from one host; a relative link is correct."""
+    body = client.get(f"/tournaments/{workspace}/entry-page/public-site").json()
+    assert body["origin"] == ""
+    assert body["url"] == "/e/autumn-open"

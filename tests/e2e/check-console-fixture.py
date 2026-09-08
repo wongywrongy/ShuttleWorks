@@ -36,11 +36,20 @@ def assert_fixture(connection: sqlite3.Connection, manifest: dict) -> None:
     ) != 2:
         raise AssertionError("fixture database tournament ids differ from the manifest")
 
+    # Exact counts, deliberately: this is the structural gate that says the
+    # canonical seed produced the canonical fixture and nothing drifted.
+    # ``bracket_results`` follows the per-discipline progress plan in
+    # ``simulator/tournament_sim/seed.py::_DEMO_LIVE_PROGRESS`` (Taipei only —
+    # Korea is upcoming). The entries tables are the published-entrant layer
+    # every public person identity is built from: without rows here the public
+    # tier has no linkable names and no profile pages at all.
     expected = {
         "bracket_events": 10,
         "bracket_matches": 310,
-        "bracket_results": 50,
+        "bracket_results": 103,
         "entry_pages": 2,
+        "entry_events": 10,
+        "entrant_accounts": 6,
         "display_tokens": 2,
         "tournament_members": 3,
     }
@@ -48,6 +57,37 @@ def assert_fixture(connection: sqlite3.Connection, manifest: dict) -> None:
         actual = scalar(connection, f"SELECT COUNT(*) FROM {table}")
         if actual != count:
             raise AssertionError(f"{table}: expected {count}, got {actual}")
+
+    # The published-entrant layer, checked by property rather than by an exact
+    # count so that adding or removing a draw participant upstream does not
+    # need this file edited — what must hold is that every workspace publishes
+    # its entrants, that essentially every entry is confirmed, and that the
+    # bracket really is joined to the people spine.
+    if scalar(connection, "SELECT COUNT(*) FROM entry_pages WHERE entrants_published = 1") != 2:
+        raise AssertionError("both entry pages must publish their entrants")
+    confirmed = scalar(
+        connection, "SELECT COUNT(*) FROM entries WHERE state = 'confirmed'"
+    )
+    if confirmed < 400:
+        raise AssertionError(f"expected a confirmed entry per draw person, got {confirmed}")
+    withdrawn = scalar(
+        connection, "SELECT COUNT(*) FROM entries WHERE state = 'withdrawn'"
+    )
+    if withdrawn != 2:
+        raise AssertionError(
+            f"expected exactly one withheld person per workspace, got {withdrawn}"
+        )
+    linked = scalar(
+        connection,
+        "SELECT COUNT(*) FROM bracket_participants WHERE entry_player_id IS NOT NULL",
+    )
+    if linked < 100:
+        raise AssertionError(f"bracket participants are not joined to entries: {linked}")
+    seeded = scalar(
+        connection, "SELECT COUNT(*) FROM bracket_participants WHERE seed IS NOT NULL"
+    )
+    if seeded != 80:
+        raise AssertionError(f"expected eight seeds in each of ten draws, got {seeded}")
 
 
 def main() -> int:

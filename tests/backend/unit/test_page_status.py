@@ -91,6 +91,23 @@ def test_in_window_with_draws_published_is_follow_live():
     assert status == "in_progress_live"
 
 
+def test_multiday_tournament_stays_in_progress_after_start_date():
+    status, _ = page_status(
+        tournament_date="2026-09-10", tournament_end_date="2026-09-12",
+        events=[], draws_published=True, results_published=False, now=NOW,
+    )
+    assert status == "in_progress_live"
+
+
+def test_multiday_tournament_is_completed_after_end_date():
+    status, _ = page_status(
+        tournament_date="2026-09-10", tournament_end_date="2026-09-12",
+        events=[], draws_published=True, results_published=True,
+        now=NOW + timedelta(days=1),
+    )
+    assert status == "completed_winners"
+
+
 def test_ended_yesterday_is_completed():
     status, _ = page_status(
         tournament_date="2026-09-11", events=[ev()],

@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef } from 'react';
 import { UNSAFE_LocationContext } from 'react-router-dom';
 import { useDenseDataState } from './useDenseDataState';
 import { useStableInventory } from './useStableInventory';
+import { OPERATOR_INVENTORY_PAGE_SIZE } from '../components/control-plane/denseData';
 
 /** Pagination for existing non-table inventory layouts. Input is already filtered and ordered. */
 export function useInventoryPage<T>(
@@ -12,7 +13,10 @@ export function useInventoryPage<T>(
   scope: string,
   ready = true,
 ) {
-  const [state, actions] = useDenseDataState({ pageSize: 100 }, prefix);
+  const [state, actions] = useDenseDataState(
+    { pageSize: OPERATOR_INVENTORY_PAGE_SIZE },
+    prefix,
+  );
   const previousScope = useRef(scope);
   const route = useContext(UNSAFE_LocationContext);
   // Scope tracking is local to the mounted list; URL page is respected on entry.

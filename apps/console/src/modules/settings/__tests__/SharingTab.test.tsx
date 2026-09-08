@@ -166,10 +166,11 @@ describe('SharingTab', () => {
     expect(screen.queryByText(/deliberately/i)).toBeNull();
   });
 
-  // Package 16 (V3-OC22.2): scope="links" is composed directly under
-  // `DisplayConfig`'s own "Venue board" heading on `/publish/displays` — it
-  // must not render a second page heading for the same board.
-  it('scope="links" renders no page heading of its own (DisplayConfig owns it)', async () => {
+  // Package 16 (V3-OC22.2) / OPR-0908-4: scope="links" is composed into the
+  // Display · Board page, whose `ActionsBar` is the single owner of the
+  // "Venue board" title — it must not render a page heading of its own.
+  // (`DisplayBoardSettings.test.tsx` pins the page side of this contract.)
+  it('scope="links" renders no page heading of its own (the page owns the title)', async () => {
     render(<SharingTab tid="t1" scope="links" />);
     await screen.findByTestId('display-link-label');
     expect(screen.queryByRole('heading', { level: 2 })).toBeNull();

@@ -540,6 +540,28 @@ def test_an_event_is_created_with_its_optional_fields(client, workspace):
     assert row.opens_at is not None and row.closes_at is not None
 
 
+def test_entry_windows_preserve_offset_instants_after_database_roundtrip(client, workspace):
+    from datetime import datetime, timezone
+    from entries.entries_public import _moment_iso
+
+    response = _post_event(
+        client,
+        workspace,
+        opensAt="2026-07-01T09:00:00+09:00",
+        closesAt="2026-08-01T23:59:00+09:00",
+        withdrawsUntil="2026-08-02T00:30:00+09:00",
+    )
+    assert response.status_code == 201, response.text
+    (row,) = _events(workspace)
+    for stored, expected in (
+        (row.opens_at, "2026-07-01T00:00:00+00:00"),
+        (row.closes_at, "2026-08-01T14:59:00+00:00"),
+        (row.withdraws_until, "2026-08-01T15:30:00+00:00"),
+    ):
+        assert stored is not None
+        assert datetime.fromisoformat(_moment_iso(stored)).astimezone(timezone.utc) == datetime.fromisoformat(expected)
+
+
 def _declare_division(tid, code):
     """Declare one Meet division on the workspace.
 
