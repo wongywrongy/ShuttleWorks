@@ -18,9 +18,12 @@ from tournament_sim.seed import (
     _demo_operational_event,
     _demo_plan,
     _write_manifest,
+    SYNTHETIC_BYE,
     SYNTHETIC_OUTCOMES,
     apply,
+    apply_synthetic_bye,
     apply_synthetic_outcomes,
+    synthetic_bye_participants,
     canonical_tournament_name,
     person_map,
     attach_historical_sources,
@@ -1222,6 +1225,130 @@ def test_apply_synthetic_outcomes_skips_a_tournament_this_run_does_not_own(tmp_p
     assert output["applied"] == []
     assert len(output["missing"]) == len(SYNTHETIC_OUTCOMES)
     assert client.commands == []
+
+
+class ByeClient:
+    """Just enough bracket surface for :func:`apply_synthetic_bye`.
+
+    ``generate_event`` answers the shape the real route returns for a
+    15-entrant SE draw: eight round-0 units, the first of which carries the
+    engine's ``__BYE__`` sentinel in slot B (the generator pads 15 up to 16
+    and places the pad opposite the top seed).
+    """
+
+    def __init__(self, events: list[str] | None = None):
+        self.events = list(events or ["MS", "WS"])
+        self.upserts: list[tuple[str, str, dict]] = []
+        self.generates: list[tuple[str, str]] = []
+
+    def _session(self) -> dict:
+        play_units = [
+            {
+                "id": f"SYNBYE-R0-{index}",
+                "event_id": "SYNBYE",
+                "slot_a": {"participant_id": f"synthetic-bye-{index * 2 + 1:02d}"},
+                "slot_b": (
+                    {"participant_id": "__BYE__"}
+                    if index == 0
+                    else {"participant_id": f"synthetic-bye-{index * 2 + 2:02d}"}
+                ),
+            }
+            for index in range(8)
+        ]
+        play_units.append(
+            {
+                "id": "MS-R0-0",
+                "event_id": "MS",
+                "slot_a": {"participant_id": "__BYE__"},
+                "slot_b": {"participant_id": "someone"},
+            }
+        )
+        return {
+            "events": [{"id": event} for event in self.events],
+            "play_units": play_units,
+        }
+
+    def get_bracket(self, tid):
+        return self._session()
+
+    def upsert_event(self, tid, event_id, body):
+        self.upserts.append((tid, event_id, body))
+        self.events.append(event_id)
+        return self._session()
+
+    def generate_event(self, tid, event_id, wipe=False):
+        self.generates.append((tid, event_id))
+        return self._session()
+
+
+def test_the_synthetic_bye_is_one_short_draw_with_exactly_one_empty_slot():
+    participants = synthetic_bye_participants()
+
+    assert len(participants) == SYNTHETIC_BYE["entrantCount"] == 15
+    # One entrant short of the bracket, so the generator pads exactly once.
+    assert SYNTHETIC_BYE["bracketSize"] - len(participants) == 1
+    assert len({row["id"] for row in participants}) == len(participants)
+    # Clearly synthetic wherever it surfaces: id, discipline and every name.
+    assert all(row["name"].startswith("Synthetic ") for row in participants)
+    assert all(row["id"].startswith("synthetic-bye-") for row in participants)
+    assert SYNTHETIC_BYE["note"].startswith("synthetic:")
+    assert SYNTHETIC_BYE["tournamentId"] == "T029"
+    # The engine's play-unit ids are ``{event}-R{round}-{match}`` and the pad
+    # lands opposite seed 1, so the bye is always round 0 match 0.
+    assert SYNTHETIC_BYE["byePlayUnitId"] == f"{SYNTHETIC_BYE['eventId']}-R0-0"
+
+
+def test_apply_synthetic_bye_creates_the_draw_once_and_then_writes_nothing(tmp_path: Path):
+    _outcome_manifest(tmp_path)
+    client = ByeClient()
+
+    first = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert first["created"] is True
+    assert first["unchanged"] is False
+    assert first["entrants"] == 15
+    # The bye appears once — one unit of this event holds the sentinel, and
+    # another event's bye is not counted as ours.
+    assert first["byePlayUnitIds"] == [SYNTHETIC_BYE["byePlayUnitId"]]
+    assert [event_id for _, event_id, _ in client.upserts] == ["SYNBYE"]
+    assert client.generates == [("ws-taipei", "SYNBYE")]
+    body = client.upserts[0][2]
+    assert body["bracket_size"] == 16 and len(body["participants"]) == 15
+
+    second = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert second["created"] is False
+    assert second["unchanged"] is True
+    # A re-run must not re-generate: the generate route rebuilds its own
+    # event, and the demo may already be running matches in this draw.
+    assert len(client.upserts) == 1
+    assert len(client.generates) == 1
+
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    assert manifest["syntheticBye"]["state"] == "unchanged"
+    assert manifest["syntheticBye"]["syntheticOutcome"] is True
+    assert manifest["syntheticBye"]["byePlayUnitIds"] == [SYNTHETIC_BYE["byePlayUnitId"]]
+
+
+def test_apply_synthetic_bye_skips_a_tournament_this_run_does_not_own(tmp_path: Path):
+    (tmp_path / "bwf-demo.json").write_text(
+        json.dumps(
+            {
+                "seedKey": "bwf-demo",
+                "seedFormatVersion": 3,
+                "status": "complete",
+                "tournaments": {"T029": {"workspaceId": None, "source": {"name": "Taipei Open"}}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = ByeClient()
+
+    output = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert output["created"] is False
+    assert output["missing"] == [SYNTHETIC_BYE["eventId"]]
+    assert client.upserts == [] and client.generates == []
 
 
 def test_person_map_publishes_the_datasets_own_player_table():

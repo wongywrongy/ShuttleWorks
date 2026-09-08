@@ -464,6 +464,17 @@ class SimClient:
     def get_bracket(self, tid: str) -> dict:
         return self._json("GET", f"/tournaments/{tid}/bracket")
 
+    def upsert_event(self, tid: str, event_id: str, body: dict) -> dict:
+        """``POST /tournaments/{tid}/bracket/events/{event_id}`` — create or
+        replace ONE event of an existing bracket session, leaving the others
+        alone (unlike ``import_bracket``, which wipes the whole bracket)."""
+        return self._json(
+            "POST",
+            f"/tournaments/{tid}/bracket/events/{event_id}",
+            json=body,
+            expect=OK_OR_CREATED,
+        )
+
     def generate_event(self, tid: str, event_id: str, wipe: bool = False) -> dict:
         return self._json(
             "POST", f"/tournaments/{tid}/bracket/events/{event_id}/generate", json={"wipe": wipe}

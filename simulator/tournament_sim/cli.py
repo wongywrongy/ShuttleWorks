@@ -9,6 +9,7 @@ Examples:
     python -m tournament_sim seed apply data/bwf-finals.txt --seed-key bwf-recent
     python -m tournament_sim seed repair-names --seed-key bwf-recent
     python -m tournament_sim seed apply-outcomes --seed-key bwf-recent
+    python -m tournament_sim seed apply-bye --seed-key bwf-recent
     python -m tournament_sim seed person-map data/bwf-finals.txt --seed-key bwf-recent --out map.json
 """
 
@@ -81,6 +82,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "resume",
         "repair-names",
         "apply-outcomes",
+        "apply-bye",
         "person-map",
     ):
         command_parser = seed_sub.add_parser(command)
@@ -120,6 +122,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "reset",
             "repair-names",
             "apply-outcomes",
+            "apply-bye",
             "person-map",
         }:
             command_parser.add_argument("--seed-key", required=True)
@@ -127,9 +130,9 @@ def _build_parser() -> argparse.ArgumentParser:
             command_parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
             command_parser.add_argument("--run-dir", default=".local-testing/demo/data/import-runs")
             command_parser.add_argument("--replace", action="store_true")
-        if command in {"status", "reset", "repair-names", "apply-outcomes"}:
+        if command in {"status", "reset", "repair-names", "apply-outcomes", "apply-bye"}:
             command_parser.add_argument("--run-dir", default=".local-testing/demo/data/import-runs")
-        if command in {"repair-names", "apply-outcomes"}:
+        if command in {"repair-names", "apply-outcomes", "apply-bye"}:
             command_parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
         if command == "person-map":
             command_parser.add_argument(
@@ -170,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         from .seed import (
             attach_historical_sources,
             apply,
+            apply_synthetic_bye,
             apply_synthetic_outcomes,
             complete_demo_historical_draws,
             load_file,
@@ -238,6 +242,12 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 elif args.seed_cmd == "apply-outcomes":
                     output = apply_synthetic_outcomes(
+                        seed_key=args.seed_key,
+                        client=client,
+                        run_dir=Path(args.run_dir),
+                    )
+                elif args.seed_cmd == "apply-bye":
+                    output = apply_synthetic_bye(
                         seed_key=args.seed_key,
                         client=client,
                         run_dir=Path(args.run_dir),

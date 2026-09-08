@@ -4,6 +4,7 @@
         demo-backup demo-backup-verify demo-restore-drill demo-restore demo-backup-install \
         demo-seed-preview demo-seed-apply demo-seed-resume demo-seed-status demo-seed-reset \
         demo-seed-repair-names demo-seed-repair-names-locked demo-seed-apply-outcomes \
+        demo-seed-apply-bye \
         demo-seed-person-map demo-seed-backfill-person-ids demo-seed-drop-stray-match \
         surface-books surface-books-status surface-books-serve surface-books-url \
         entrant-dev full-dev local-dev \
@@ -89,6 +90,7 @@ help:
 	@echo "  make demo-seed-repair-names  Re-apply canonical tournament names to this seed run"
 	@echo "  make demo-seed-repair-names-locked  Repair the frozen Setup copy of the title (in-container)"
 	@echo "  make demo-seed-apply-outcomes      Apply the synthetic walkover/retired/forfeit fixtures"
+	@echo "  make demo-seed-apply-bye           Create the synthetic 15-entrant draw with one bye"
 	@echo "  make demo-seed-drop-stray-match    Delete one stray Operations matches row by id"
 	@echo "  make demo-seed-backfill-person-ids Write personId onto pre-P6 roster rows"
 	@echo "  make surface-books      Capture numbered operator + entrant UI review PDFs"
@@ -225,6 +227,14 @@ demo-seed-repair-names-locked:
 # product's own idempotent bracket command path. Safe to run twice.
 demo-seed-apply-outcomes:
 	@$(DEMO_SEED_LOCKED) apply-outcomes --seed-key $(DEMO_SEED_KEY) \
+		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
+
+# The synthetic bye fixture (OPR-0908-11): one test-only 15-entrant SE draw
+# added to the live demo workspace through the product's own draw path, so its
+# sixteenth slot is a real generator bye. Creates nothing if the event already
+# exists, so it is safe to run twice; no reseed, no other draw is touched.
+demo-seed-apply-bye:
+	@$(DEMO_SEED_LOCKED) apply-bye --seed-key $(DEMO_SEED_KEY) \
 		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
 
 demo-seed-drop-stray-match:
