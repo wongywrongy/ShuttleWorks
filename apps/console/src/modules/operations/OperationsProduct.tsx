@@ -25,7 +25,7 @@ import { useMatchStateStore } from '../../store/matchStateStore';
 import { useUiStore } from '../../store/uiStore';
 import { useCurrentSlot } from '../../hooks/useCurrentSlot';
 import { useActivityLog } from '../../hooks/useActivityLog';
-import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../lib/utils';
+import { INTERACTIVE_BASE } from '../../lib/utils';
 import { slotToTime } from '../../lib/time';
 import { bracketOccupiedWindows } from '../../lib/bracketOccupancy';
 import type { Advisory } from '../../api/dto';
@@ -35,7 +35,7 @@ import { meetToOpsBlocks, bracketToOpsBlocks } from './opsBlock';
 import { UnifiedOpsBoard } from './UnifiedOpsBoard';
 import { PlanCourtQueues } from './plan/PlanCourtQueues';
 import { UnifiedOpsList } from './UnifiedOpsList';
-import { DetailDock, MatchInspector } from '../../components/control-plane';
+import { ActionsBar, DetailDock, MatchInspector } from '../../components/control-plane';
 import { RunSurface } from './run/RunSurface';
 import { useMeetRunOps } from './run/useMeetRunOps';
 import { isLiveSegment } from './operationsSegments';
@@ -281,10 +281,12 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
   // (UnifiedOpsBoard).
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-card">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <span className={`${EYEBROW_CLASS} text-muted-foreground`}>{title}</span>
-        </div>
+      {/* `ActionsBar`, not a hand-rolled twin of it. This header repeated the
+          bar's structure (eyebrow title + right-aligned page controls) with
+          its own geometry — `py-2.5` and no `min-h-11` — so Plan and Live sat
+          6px lower than Draws, Matches, Configuration and Setup on the same
+          screen. */}
+      <ActionsBar title={title}>
         {/* Plan is the planning surface: build / adjust the plan. Run runs
             what Plan produced — no scheduling actions there. */}
         {!isLive ? (
@@ -321,7 +323,7 @@ function OperationsBody({ engines }: { engines: OperationsEngines }) {
             )}
           </div>
         )}
-      </header>
+      </ActionsBar>
 
       {/* Plan-side banners (B1): the pending-decision advisory routes into the
           same dialogs the toolbar opens; stale + suggestions self-hide. */}

@@ -29,6 +29,19 @@ export interface DenseDataState {
   groupBy: string | null;
 }
 
+/**
+ * The approved page size for operator INVENTORY surfaces — the bracket roster,
+ * the bracket matches sheet and the paged non-table inventories.
+ *
+ * 100, not the 50 below: a director scanning a 128-entry draw for one name
+ * should not have to remember which page they were on. It is a deliberate
+ * per-surface override of the default, ruled in the 2026-09-08 remediation
+ * plan ("Preserve … 100 rows per page by default for the operator roster and
+ * matches"), and it is named here so the three surfaces that carry it read
+ * one value instead of three literals that can drift apart.
+ */
+export const OPERATOR_INVENTORY_PAGE_SIZE = 100 as const satisfies DenseDataPageSize;
+
 export const DEFAULT_DENSE_DATA_STATE: DenseDataState = {
   search: '',
   sort: null,

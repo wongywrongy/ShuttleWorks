@@ -28,7 +28,11 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { PageBody, PAGE_BODY_WIDTH } from '../../../components/control-plane';
+import {
+  PageBody,
+  PAGE_BODY_WIDTH,
+  PAGE_BODY_GUTTER,
+} from '../../../components/control-plane';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '../../..');
@@ -45,8 +49,6 @@ const ALLOWED: Record<string, string> = {
   // this scan does not walk (the DS is not a console page surface).
   'apps/console/src/modules/hub/NewWorkspacePage.tsx':
     'stands outside the workspace shell — no sidebar, no ActionsBar, so it owns its own page geometry',
-  'apps/console/src/modules/workspace/WorkspaceOverview.tsx':
-    'a dashboard of panels, not a form; keeps its wider column pending the LAY-4 proportion audit',
   'apps/console/src/modules/display/publicDisplay/ScheduleView.tsx':
     'public projection surface (TV/board), not console chrome',
   'apps/console/src/modules/display/publicDisplay/StandingsView.tsx':
@@ -81,22 +83,38 @@ function classNameValues(src: string): string[] {
 }
 
 describe('LAY-1 — PageBody renders the bound it declares', () => {
-  it.each(['data', 'form', 'prose'] as const)('%s carries its width class', (variant) => {
-    const { container } = render(<PageBody variant={variant}>x</PageBody>);
-    const el = container.querySelector(`[data-page-body="${variant}"]`);
-    expect(el).not.toBeNull();
-    for (const cls of PAGE_BODY_WIDTH[variant].split(' ')) {
-      expect(el!.className).toContain(cls);
-    }
-  });
+  it.each(['data', 'form', 'canvas', 'prose'] as const)(
+    '%s carries its width class',
+    (variant) => {
+      const { container } = render(<PageBody variant={variant}>x</PageBody>);
+      const el = container.querySelector(`[data-page-body="${variant}"]`);
+      expect(el).not.toBeNull();
+      for (const cls of PAGE_BODY_WIDTH[variant].split(' ')) {
+        expect(el!.className).toContain(cls);
+      }
+    },
+  );
 
-  it('form is one centred column and prose is bounded in characters', () => {
+  it('form and canvas are centred columns and prose is bounded in characters', () => {
     // `ch`, not px: the readable band (45-75 characters, WCAG 1.4.8 caps at
     // 80) is a property of the text. A px bound leaves that band silently the
     // moment the type scale moves.
     expect(PAGE_BODY_WIDTH.form).toContain('mx-auto');
+    // `canvas` is wider than `form`, but it is placed by the same rule — one
+    // centred column paying the one gutter. A dashboard is allowed a
+    // different WIDTH, never a different ANCHOR.
+    expect(PAGE_BODY_WIDTH.canvas).toContain('mx-auto');
     expect(PAGE_BODY_WIDTH.prose).toMatch(/max-w-\[\d+ch\]/);
     expect(PAGE_BODY_WIDTH.data).not.toContain('max-w-');
+  });
+
+  it('every page-owning variant pays the same gutter', () => {
+    // The 2026-09-08 surface books showed Overview starting 8px right of
+    // every other workspace route: it paid `px-8` where the rest paid
+    // `px-6`. Widths are a design choice per variant; the gutter is not.
+    const page = (['data', 'form', 'canvas'] as const).map((v) => PAGE_BODY_GUTTER[v]);
+    expect(new Set(page).size).toBe(1);
+    expect(PAGE_BODY_GUTTER.prose).toBe('');
   });
 });
 

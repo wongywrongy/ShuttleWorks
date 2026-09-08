@@ -6,12 +6,14 @@
  * and shared across the readiness Overview + the admin tabs that need it.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import type { AppTab } from '../../store/uiStore';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
+import { SHELL_SEGMENT_TITLE } from '../../platform/product-shell/workspaceNav';
 import type { TournamentSummaryDTO } from '../../api/dto';
 import { apiClient } from '../../api/client';
 import { ActionsBar, PageBody } from '../../components/control-plane';
+import { ActiveChoice } from '../../components/ActiveChoice';
 import { useTournamentId } from '../../hooks/useTournamentId';
 import { WorkspaceOverview } from './WorkspaceOverview';
 import { DisplayConfig } from './DisplayConfig';
@@ -54,11 +56,13 @@ export function WorkspaceShellSurface({
   }
 
   // Overview is the one shell segment that is NOT a form: it is a dashboard of
-  // panels and keeps its own wider column. Every other segment here is a
-  // settings form, so the container is applied ONCE at the host (LAY-1) rather
-  // than hand-rolled eight times — which is how the anchors drifted apart in
-  // the first place. The tabs below own their vertical rhythm and nothing else.
-  if (segment === 'overview') return <WorkspaceOverview summary={summary} />;
+  // panels, so it takes the `canvas` container rather than `form`. Every other
+  // segment here is a settings form, so the container is applied ONCE at the
+  // host (LAY-1) rather than hand-rolled eight times — which is how the
+  // anchors drifted apart in the first place. The tabs below own their
+  // vertical rhythm and nothing else.
+  const body =
+    segment === 'overview' ? <WorkspaceOverview summary={summary} /> : null;
 
   const surface = (() => {
     switch (segment) {
@@ -85,7 +89,20 @@ export function WorkspaceShellSurface({
     }
   })();
 
-  return surface ? <PageBody variant="form">{surface}</PageBody> : null;
+  if (!body && !surface) return null;
+
+  // One shell-surface root, identical to every module surface: a pinned
+  // `ActionsBar` over a single scrolling region that owns nothing but
+  // scrolling. Administration used to render bare — no title bar — so the
+  // page title baseline vanished the moment the director left a module.
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <ActionsBar title={SHELL_SEGMENT_TITLE[segment] ?? 'Workspace'} />
+      <div className="min-h-0 flex-1 overflow-auto">
+        {body ?? <PageBody variant="form">{surface}</PageBody>}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -157,21 +174,23 @@ export function WorkspaceAdminPage({
 
   return (
     <div className="space-y-6" data-testid="workspace-admin">
-      <nav aria-label="Workspace administration" className="flex gap-1 border-b border-border">
+      {/* `ActiveChoice`, not a hand-rolled underline. It was the only
+          selection treatment in the console that did not go through the
+          single visual owner, so the administration tabs carried a lighter
+          "selected" weight than the identical act of selection anywhere
+          else — the rail, the segmented controls, the filter chips. */}
+      <nav aria-label="Workspace administration" className="flex gap-1">
         {WORKSPACE_ADMIN_TABS.map((tab) => (
-          <Link
+          <ActiveChoice
             key={tab.path}
+            active={tab.path === current}
+            geometry="segment"
+            semantics="page"
             to={`/tournaments/${encodeURIComponent(tid)}/administration/${tab.path}`}
-            aria-current={tab.path === current ? 'page' : undefined}
-            className={[
-              '-mb-px border-b-2 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-              tab.path === current
-                ? 'border-accent font-medium text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
-            ].join(' ')}
+            className="px-3 py-1.5 text-sm"
           >
             {tab.label}
-          </Link>
+          </ActiveChoice>
         ))}
       </nav>
 

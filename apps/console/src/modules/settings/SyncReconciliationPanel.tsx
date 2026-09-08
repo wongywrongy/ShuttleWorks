@@ -154,7 +154,7 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
                 </div>
                 {expanded ? (
                   <div className="mt-3 border-t border-border pt-3">
-                    <label className="block text-xs uppercase tracking-wide text-muted-foreground">
+                    <label className="block text-xs font-medium text-foreground">
                       Operator reason
                       <textarea
                         aria-label="Operator reason"
@@ -164,7 +164,7 @@ export function SyncReconciliationPanel({ authority }: { authority: AuthoritySta
                         placeholder="Why is this correction safe?"
                       />
                     </label>
-                    <label className="mt-2 block text-xs uppercase tracking-wide text-muted-foreground">
+                    <label className="mt-2 block text-xs font-medium text-foreground">
                       Acknowledged correction operation
                       <select
                         aria-label="Acknowledged correction operation"

@@ -6,7 +6,7 @@ export { SectionCard } from './SectionCard';
 export { OverflowMenu, type OverflowItem } from './OverflowMenu';
 export { PickerPopover } from './PickerPopover';
 export { ActionsBar } from './ActionsBar';
-export { PageBody, PAGE_BODY_WIDTH, type PageBodyVariant } from './PageBody';
+export { PageBody, PAGE_BODY_WIDTH, PAGE_BODY_GUTTER, type PageBodyVariant } from './PageBody';
 export {
   ColumnHeaderRow,
   GroupBandHeader,
@@ -39,6 +39,7 @@ export {
 } from './DenseDataTable';
 export {
   DEFAULT_DENSE_DATA_STATE,
+  OPERATOR_INVENTORY_PAGE_SIZE,
   getDenseDataPage,
   getDenseDataFacetOptions,
   getDefaultHiddenColumns,

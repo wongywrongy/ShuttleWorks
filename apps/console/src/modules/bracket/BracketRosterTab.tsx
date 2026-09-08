@@ -19,6 +19,7 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { INTERACTIVE_BASE, ACCENT_PRESS, UTILITY_BUTTON } from '../../lib/utils';
 import {
   ActionsBar,
+  OPERATOR_INVENTORY_PAGE_SIZE,
   DenseDataTable,
   DenseDataToolbar,
   DenseDataColumnVisibility,
@@ -126,7 +127,7 @@ function BracketRosterTabCore({
   // from the start — DenseDataTable already exposes it via aria-sort + the
   // header's sort icon, and its own header button already changes it.
   const [denseState, denseActions] = useDenseDataState(
-    { pageSize: 100, sort: { id: 'player', direction: 'asc' } },
+    { pageSize: OPERATOR_INVENTORY_PAGE_SIZE, sort: { id: 'player', direction: 'asc' } },
     'bracket-roster',
   );
   const setDenseState = denseActions.setState;

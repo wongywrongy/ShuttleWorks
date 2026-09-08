@@ -30,6 +30,7 @@ import { apiClient } from '../../api/client';
 import { buildChecklist } from '../../platform/domain/setupChecklist';
 import { resolvePhase, visiblePhases } from '../../platform/domain/overviewPhase';
 import { PhaseStepper } from '../../components/control-plane/PhaseStepper';
+import { PageBody } from '../../components/control-plane';
 import { OverviewHeader } from './overview/OverviewHeader';
 import { OverviewRail } from './overview/OverviewRail';
 import { PhasePanels } from './overview/PhasePanels';
@@ -94,10 +95,7 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
     ) : null;
 
   return (
-    <div
-      data-testid="workspace-overview"
-      className="mx-auto w-full max-w-[1180px] px-8 py-6"
-    >
+    <PageBody variant="canvas" data-testid="workspace-overview">
       <OverviewHeader summary={summary} action={headerAction} />
 
       {/* The spine: only the phases that exist for this workspace. */}
@@ -117,6 +115,6 @@ export function WorkspaceOverview({ summary }: { summary: TournamentSummaryDTO |
         <PhasePanels phase={phase} summary={summary} steps={steps} onNavigate={go} />
         <OverviewRail rows={railRows} tid={summary.id} />
       </div>
-    </div>
+    </PageBody>
   );
 }
