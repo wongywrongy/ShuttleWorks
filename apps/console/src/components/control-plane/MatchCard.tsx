@@ -1,17 +1,24 @@
 /**
  * MatchCard — the shared BWF-style match-presentation atom (SP-CONSOLE-REFINE
- * G6). One anatomy reused everywhere a match is shown as a card: sides
- * stacked vertically, a winner marker on the winning side, the recorded games
- * as ONE CENTRED PAIRED LANE BETWEEN the two sides ("18–21, 21–15, 21–13" —
- * match-card contract §3.4 as amended by the P0 operator-visual-fixes pass),
- * inline RET/W.O. badges next to the affected side, and an optional footer
- * meta strip (round · event · court · time).
+ * G6). One match INTERPRETATION — one score authority, one canonical A/B side
+ * order, one outcome vocabulary — rendered through TWO EXPLICIT LAYOUTS
+ * (operator/public remediation P1; match-card contract, "Amended 2026-09-08"):
  *
- * List rows stay table rows; they adopt the SAME `ScoreLane` in their own
- * centred score column between Side A and Side B, so a game reads identically
- * on a row, a card, a bracket node and a court card. No game score carries
- * emphasis anywhere: the winning side's NAME does, from the recorded outcome
- * (`recordedWinner` / the engine's `winner_side`), never from counting games.
+ *  - **stacked** (`SideScores`): two opponent sides one above the other, each
+ *    with its own aligned game-score column beside it. Bracket nodes, result
+ *    and history cards, venue-board court cards. The centred paired lane that
+ *    used to sit BETWEEN the two sides is withdrawn here: it asked the reader
+ *    to map a number to a name by position across a name line.
+ *  - **row** (`ScoreLane`): one horizontal record whose paired games live in
+ *    one dedicated, consistently aligned cell — operator row sheets and
+ *    compact schedule/list rows, where a per-side column has no second row to
+ *    align with.
+ *
+ * Both carry inline RET/W.O. badges next to the affected side (an outcome
+ * appears exactly once) and an optional footer meta strip (round · event ·
+ * court · time). No game score carries emphasis in either layout: the winning
+ * side's NAME does, from the recorded outcome (`recordedWinner` / the
+ * engine's `winner_side`), never from counting games.
  *
  * Presentation-only: both engines' set shapes are `{sideA, sideB}` (ADR 0006
  * keeps the score JSON shared), so this file needs no per-engine adapter.
@@ -76,17 +83,18 @@ export function formatGamePairs(sets: SetPair[] | null | undefined): string {
 }
 
 /**
- * ScoreLane — the ONE centred lane of paired games that sits BETWEEN the two
- * opponents on every match surface (match-card contract §3.4, as amended by
- * the P0 operator-visual-fixes pass).
+ * ScoreLane — the paired-game lane for the `row` layout: one dedicated,
+ * consistently aligned cell holding every recorded game (match-card contract
+ * §3.4, scoped to horizontal rows by the 2026-09-08 amendment). Stacked
+ * surfaces use `SideScores` instead.
  *
  *   18–21, 21–15, 21–13
  *
  * Three rules it enforces structurally, so no caller can reintroduce them:
  *
- *  1. **Paired, not per-side.** A game is one cell holding both numbers, so
- *     the reader never has to align two distant columns to read a game. The
- *     first number is the first-listed side's, always.
+ *  1. **Paired, in one cell.** On a horizontal row there is no second row to
+ *     align a per-side column against, so a game is one cell holding both
+ *     numbers. The first number is the first-listed side's, always.
  *  2. **No emphasis of any kind.** Not for a completed game, not for a live
  *     one. `game.winner` drives no ink; the winning side's NAME carries the
  *     match outcome (§3.0), and only from the recorded outcome.
@@ -152,21 +160,99 @@ export function ScoreLane({
   );
 }
 
-/** One stacked side inside a MatchCard: chip slot · names · winner dot.
- *  The SCORES are not here — they live once, in the centred lane between the
- *  two sides (match-card §3.4). */
+/**
+ * The layout a match renderer uses (operator/public remediation P1, the
+ * match-card contract's "Amended 2026-09-08" table).
+ *
+ *  - `stacked` — two opponent sides one above the other, each with its OWN
+ *    aligned game-score column beside it. Bracket nodes, result/history
+ *    cards and venue-board court cards. This is the BWF reading: a game is
+ *    one COLUMN, and the number beside a name belongs to that name.
+ *  - `row` — one horizontal record: the paired lane (`21–18, 19–21`) stays a
+ *    single dedicated, consistently aligned cell. Operator row sheets and
+ *    compact schedule/list rows.
+ *
+ * The centred lane BETWEEN two stacked sides — the universal treatment the
+ * 2026-09-07 passes shipped — is withdrawn: it made the reader map a number
+ * to a name by position across a name line, and it fabricated a third row
+ * inside a two-row object.
+ */
+export type MatchLayout = 'stacked' | 'row';
+
+/**
+ * SideScores — ONE side's game scores as aligned, equal-width columns
+ * (contract rule 2). One cell per recorded game, in canonical game order,
+ * carrying that side's number only; the sibling side renders the same number
+ * of cells at the same widths, so game N sits in the same column on both
+ * rows without the reader aligning anything.
+ *
+ * Widths are `em`-based, so a venue board that scales `size` up scales the
+ * columns with it and the two rows still line up.
+ *
+ * Zero is a score and prints as `0`; a MISSING number in a recorded game
+ * prints nothing (an empty cell of the same width, so the column survives);
+ * a match with no games renders no container at all — not-yet-started is the
+ * absence of the ledger, not an empty one (rule 7).
+ */
+export function SideScores({
+  sets,
+  side,
+  sideLabel,
+  size = 'text-2sm',
+  className = '',
+  'data-testid': testId,
+}: {
+  sets: SetPair[];
+  side: 'A' | 'B';
+  /** This side's name, for the per-game accessible label rule 2 requires. */
+  sideLabel?: string;
+  size?: string;
+  className?: string;
+  'data-testid'?: string;
+}) {
+  if (sets.length === 0) return null;
+  return (
+    <span
+      data-testid={testId}
+      data-side-scores={side}
+      className={`inline-flex shrink-0 items-baseline gap-[0.3em] whitespace-nowrap ${size} tabular-nums text-foreground ${className}`}
+    >
+      {sets.map((s, i) => {
+        const value = side === 'A' ? s.sideA : s.sideB;
+        return (
+          <span
+            key={i}
+            className="inline-block min-w-[1.6em] text-right"
+            aria-label={
+              sideLabel ? `Game ${i + 1}, ${sideLabel} ${value}` : undefined
+            }
+          >
+            {typeof value === 'number' ? value : ''}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/** One stacked side inside a MatchCard: chip slot · names · this side's own
+ *  aligned score column · winner dot (contract rules 1–2, 5). */
 function CardSide({
   side,
   names,
   chip,
   won,
   reason,
+  sets = [],
+  sideLabel,
 }: {
   side: 'A' | 'B';
   names: ReactNode;
   chip?: ReactNode;
   won: boolean;
   reason?: MatchReason | null;
+  sets?: SetPair[];
+  sideLabel?: string;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 py-0.5" data-side={side}>
@@ -184,6 +270,7 @@ function CardSide({
           </span>
         ) : null}
       </span>
+      <SideScores sets={sets} side={side} sideLabel={sideLabel} />
       <span className="w-3 shrink-0 text-center">{won ? <WinnerDot /> : null}</span>
     </div>
   );
@@ -199,16 +286,19 @@ function CardSide({
  *  interactive player rows beside the side RAIL — the side's identity
  *  chip (once per side, never per player row) and the contingency badge.
  *
- *  The SCORE is not a per-side element any more: it renders once, in the
- *  centred paired lane between the two blocks (match-card §3.4). Winner
- *  reads by weight on the caller's NAME rows plus the mark — never by ink on
- *  a game score. */
+ *  P1: the SCORE is a per-side element again — this block carries its own
+ *  `SideScores` column, and the sibling block carries the matching one at
+ *  the same widths, so game N reads down one column. Winner reads by weight
+ *  on the caller's NAME rows plus the mark — never by ink on a game
+ *  score. */
 function ResultSideBlock({
   side,
   rows,
   rail,
   won,
   reason,
+  sets = [],
+  sideLabel,
 }: {
   side: 'A' | 'B';
   rows: ReactNode;
@@ -216,10 +306,13 @@ function ResultSideBlock({
   rail?: ReactNode;
   won: boolean;
   reason?: MatchReason | null;
+  sets?: SetPair[];
+  sideLabel?: string;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 py-1.5" data-side={side}>
       <div className="min-w-0 flex-1">{rows}</div>
+      <SideScores sets={sets} side={side} sideLabel={sideLabel} />
       {won ? <WinnerDot className="shrink-0" /> : null}
       {rail ? <span className="shrink-0">{rail}</span> : null}
       {reason ? (
@@ -233,9 +326,10 @@ function ResultSideBlock({
 
 /**
  * ResultSides — the FINISHED match's sole roster surface in the detail
- * panels (INS-N1), rendered as TWO SIDE BLOCKS (RES-1): score is a
- * per-side fact, so each block owns a rail (identity chip once per side +
- * the side's score, vertically centered) with the caller's INTERACTIVE
+ * panels (INS-N1), rendered as TWO SIDE BLOCKS (RES-1) in the STACKED
+ * layout: score is a per-side fact, so each block owns its own aligned
+ * `SideScores` column plus a rail (identity chip once per side) with the
+ * caller's INTERACTIVE
  * player rows (per-player expand) nested inside. A hairline separates the
  * blocks so they read as two units; the court · time caption stays below.
  * Winner reads by weight — bolder score here, bolder names via the
@@ -250,6 +344,8 @@ export function ResultSides({
   winner,
   reasonSide = null,
   reason = null,
+  sideALabel,
+  sideBLabel,
   meta,
   'data-testid': testId,
 }: {
@@ -269,12 +365,19 @@ export function ResultSides({
   winner: 'A' | 'B' | null;
   reasonSide?: 'A' | 'B' | null;
   reason?: MatchReason | null;
+  /** Side names for the per-game accessible labels (contract rule 2). */
+  sideALabel?: string;
+  sideBLabel?: string;
   meta?: ReactNode;
   'data-testid'?: string;
 }) {
   const won = winner;
   return (
     <div data-testid={testId} className="min-w-0">
+      {/* P1: the centred lane that used to sit BETWEEN these two blocks is
+          gone. A result card is a STACKED layout, so each side carries its
+          own aligned score column (contract rule 4) and the two columns line
+          up game-for-game because `SideScores` fixes the cell width. */}
       <div className="flex flex-col divide-y divide-border/60">
         <ResultSideBlock
           side="A"
@@ -282,18 +385,17 @@ export function ResultSides({
           rail={railA}
           won={won === 'A'}
           reason={reasonSide === 'A' ? reason : null}
+          sets={sets}
+          sideLabel={sideALabel}
         />
-        {sets.length > 0 ? (
-          <div className="flex justify-center py-1">
-            <ScoreLane sets={sets} data-testid="result-score-lane" />
-          </div>
-        ) : null}
         <ResultSideBlock
           side="B"
           rows={sideB}
           rail={railB}
           won={won === 'B'}
           reason={reasonSide === 'B' ? reason : null}
+          sets={sets}
+          sideLabel={sideBLabel}
         />
       </div>
       {meta ? (
@@ -314,6 +416,9 @@ export function MatchCard({
   winner,
   reasonSide = null,
   reason = null,
+  layout = 'stacked',
+  sideALabel,
+  sideBLabel,
   meta,
   className = '',
   'data-testid': testId,
@@ -324,6 +429,12 @@ export function MatchCard({
   chipA?: ReactNode;
   chipB?: ReactNode;
   sets?: SetPair[];
+  /** Explicit layout variant (P1). `stacked` gives each side its own
+   *  aligned score column; `row` keeps the paired lane in one dedicated
+   *  cell between the two sides. */
+  layout?: MatchLayout;
+  sideALabel?: string;
+  sideBLabel?: string;
   /** The authoritative match winner (match-card contract §3.5): comes from
    *  `outcome.winner`, NEVER from counting `sets` (`winner ?? setsWinner(sets)`
    *  is deleted — a retirement or walkover can contradict the point totals
@@ -337,18 +448,26 @@ export function MatchCard({
   'data-testid'?: string;
 }) {
   const won = winner;
+  const stacked = layout === 'stacked';
   return (
-    <div data-testid={testId} className={`min-w-0 ${className}`}>
+    <div data-testid={testId} data-match-layout={layout} className={`min-w-0 ${className}`}>
       <CardSide
         side="A"
         names={sideA}
         chip={chipA}
         won={won === 'A'}
         reason={reasonSide === 'A' ? reason : null}
+        sets={stacked ? sets : []}
+        sideLabel={sideALabel}
       />
-      {sets.length > 0 ? (
+      {!stacked && sets.length > 0 ? (
         <div className="flex justify-center py-0.5">
-          <ScoreLane sets={sets} data-testid="match-card-score-lane" />
+          <ScoreLane
+            sets={sets}
+            sideALabel={sideALabel}
+            sideBLabel={sideBLabel}
+            data-testid="match-card-score-lane"
+          />
         </div>
       ) : null}
       <CardSide
@@ -357,6 +476,8 @@ export function MatchCard({
         chip={chipB}
         won={won === 'B'}
         reason={reasonSide === 'B' ? reason : null}
+        sets={stacked ? sets : []}
+        sideLabel={sideBLabel}
       />
       {meta ? (
         <div className="mt-1 border-t border-border pt-1 text-xs text-muted-foreground">

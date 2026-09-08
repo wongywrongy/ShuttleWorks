@@ -16,6 +16,7 @@ import { EYEBROW_CLASS, INTERACTIVE_BASE } from '../../../lib/utils';
 import type { RunMatch } from '../runtime/runModel';
 import type { MeetRunOps } from './useMeetRunOps';
 import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
+import { formatGamePairs } from '../../../components/control-plane';
 
 export interface RunFinishedProps {
   /** The full Run match list — this component filters to `done` itself. */
@@ -56,11 +57,16 @@ function FinishedRow({ match, meetOps }: { match: RunMatch; meetOps?: MeetRunOps
   // matches on a finished bracket day.
   const score = match.score ?? (undoable ? meetOps!.matchStates[match.id]?.score : undefined);
   const sets = match.score?.sets;
+  // P1: one score speller per tier. This row used to build its own en-dash
+  // join — a fourth spelling of `18–21, 21–15` in the console — so it now
+  // goes through the shared `formatGamePairs`, in canonical A-then-B order.
+  // A finished row with no per-game detail falls back to the recorded
+  // aggregate, exactly as the match rows do; nothing is fabricated.
   const scoreLine =
     sets && sets.length > 0
-      ? sets.map((set) => `${set.sideA}–${set.sideB}`).join(', ')
+      ? formatGamePairs(sets)
       : score
-        ? `${score.sideA}–${score.sideB}`
+        ? formatGamePairs([score])
         : null;
 
   const handleUndo = async () => {

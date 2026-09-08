@@ -79,6 +79,14 @@ export const BRACKET_EVENT_COL = 'w-28';
 //     read one game. The lane holds the pair itself, centred, first number =
 //     first-listed side, so a game is one glance and the sides frame it.
 //
+// **P1 (operator/public remediation, 2026-09-08) keeps this column as it
+// is.** The amended match-card contract scopes the paired lane to HORIZONTAL
+// rows — "Operator row sheet: paired game scores may remain in a dedicated,
+// consistently aligned column" — and moves the STACKED surfaces (bracket
+// nodes, result cards, court cards) to a per-side aligned column instead. A
+// row has no second row to align a per-side column against, so the pair in
+// one fixed-width, centred cell is still the reading that costs least here.
+//
 // The lane is `w-40` (160px): three pairs of two-digit numbers with their
 // separators ("18–21, 21–15, 21–13") measure ~140px at `text-2sm` tabular,
 // and a walkover badge leads the lane on a contingency row. It has no

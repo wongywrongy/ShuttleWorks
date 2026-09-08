@@ -118,12 +118,29 @@ describe('match-card contract — bracket node (§4.3)', () => {
     expect(html).toMatch(/Walkover<\/span>[\s\S]{0,80}MS R16·9|Walkover MS R16·9/);
   });
 
-  it('the paired score sits on the node trailing edge, first-listed-side order', () => {
-    // §4.3: one right-aligned lane, `21–16, 22–20` — not a column per side
-    // per game, which a node cannot hold beside two doubles pairs.
-    expect(renderNode(MC.completedLoserWonAGame)).toContain('21–15, 18–21, 21–19');
-    // §5.1 rule 6: an absent score renders nothing. Never 0–0, never a dash.
-    expect(renderNode(MC.walkover)).not.toContain('–');
+  it('each side carries its OWN aligned game column, not one shared lane (P1)', () => {
+    // **Operator/public remediation P1 supersedes public-visual-fixes P4.**
+    // A node is a stacked layout, so the number beside a name belongs to
+    // that name: three games x two sides = six cells, and the trailing
+    // paired lane (`21–15, 18–21, 21–19` on the node's header line) is gone.
+    const html = renderNode(MC.completedLoserWonAGame);
+    expect((html.match(/place-items-center/g) ?? []).length).toBe(6);
+    // The visible lane is withdrawn; the paired spelling survives ONLY in
+    // the card's one accessible summary, which is an `aria-label`.
+    expect(html).not.toMatch(/<span class="tabular-nums">21–15, 18–21, 21–19<\/span>/);
+    expect(html).toContain('Score 21–15, 18–21, 21–19');
+  });
+
+  it('a walkover fabricates no numeric game on the node (rule 6)', () => {
+    const html = renderNode(MC.walkover);
+    // §5.1 rule 6 / P1 rule 6: an absent score renders nothing. Never 0–0,
+    // never a dash, and no score column on either side.
+    expect(html).not.toContain('–');
+    expect(html).not.toContain('place-items-center');
+  });
+
+  it('a not-yet-started node renders no score column at all (P1 rule 7)', () => {
+    expect(renderNode(MC.singlesScheduled)).not.toContain('place-items-center');
   });
 
   it('an unresolved predecessor is an EMPTY slot with a muted feeder line', () => {

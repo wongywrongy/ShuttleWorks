@@ -19,6 +19,7 @@ import { INTERACTIVE_BASE } from "../../lib/utils";
 import {
   REASON_BADGE,
   ScoreLane,
+  SideScores,
   WinnerDot,
 } from "../../components/control-plane";
 import { BracketEmptyState } from "./BracketEmptyState";
@@ -251,7 +252,7 @@ function BracketView({
       nameById,
       resultByPu,
     );
-    return bracketCardHeight(m.maxNameLines, m.hasScoreLane, m.hasControl);
+    return bracketCardHeight(m.maxNameLines, m.hasControl);
   }, [event.rounds, idMap, nameById, resultByPu]);
 
   const layout = useMemo(
@@ -569,10 +570,18 @@ function MobileRoundFocus({
                     >
                       {formatMobileSide(unit.sides?.[0], unit.side_a, nameById)}
                     </span>
+                    {/* P1: a horizontal row takes the `row` layout — ONE
+                        paired lane through the shared `ScoreLane`, in
+                        canonical A-then-B order. The two hand-rolled
+                        half-grammars this replaced ("21 18" · "–" · "18 21")
+                        were a third score spelling in the console. */}
                     <span className="sw-num text-xs text-muted-foreground">
-                      {mobileScore(result, "A")}
-                      <span className="px-1">–</span>
-                      {mobileScore(result, "B")}
+                      <ScoreLane
+                        sets={validBracketSets(result)}
+                        size="text-xs"
+                        sideALabel={formatMobileSide(unit.sides?.[0], unit.side_a, nameById)}
+                        sideBLabel={formatMobileSide(unit.sides?.[1], unit.side_b, nameById)}
+                      />
                     </span>
                     <span
                       className={`text-right ${result?.winner_side === "B" ? "font-semibold text-foreground" : "text-foreground"}`}
@@ -627,12 +636,22 @@ function formatMobileSide(
   return side.map((id) => nameById[id] ?? id).join(" / ");
 }
 
-function mobileScore(result: ResultDTO | undefined, side: "A" | "B"): string {
-  if (!result?.score?.sets?.length)
-    return result?.winner_side === side ? "W" : "";
-  return result.score.sets
-    .map((set) => String(side === "A" ? set.sideA : set.sideB))
-    .join(" ");
+/**
+ * The recorded games of a bracket result, guarded.
+ *
+ * The score blob is opaque server-side (`RecordResultIn.score: dict`), so a
+ * non-frontend writer (import, sync restore, API client) can hand us any
+ * shape — every level is checked so a malformed blob renders NO games rather
+ * than `undefined–undefined`. One helper, so the node, the mobile row and
+ * every future caller read the same games.
+ */
+function validBracketSets(result: ResultDTO | undefined): BracketSetScore[] {
+  return Array.isArray(result?.score?.sets)
+    ? result.score.sets.filter(
+        (s): s is BracketSetScore =>
+          !!s && typeof s.sideA === "number" && typeof s.sideB === "number",
+      )
+    : [];
 }
 
 // ── Bracket geometry ────────────────────────────────────────────────────
@@ -672,12 +691,11 @@ const BRACKET_LABEL_HEIGHT = 28; // room for the round label above the cards.
 // components below are the card's own box model, one per rendered element,
 // so a change to the card's padding or type scale has exactly one place to
 // be reflected.
-const CARD_PAD_Y = 24; // Card `p-3`, top + bottom.
+const CARD_PAD_Y = 16; // Card `p-2`, top + bottom.
 const CARD_CAPTION = 18; // identity + time/court caption line.
-const CARD_GAP = 8; // one `space-y-2` gap.
-const SIDE_PAD_Y = 14; // a side row's `py-1.5` plus its hairline.
+const CARD_GAP = 6; // one `space-y-1.5` gap.
+const SIDE_PAD_Y = 10; // a side row's `py-1` plus its 1px border, both edges.
 const NAME_LINE = 20; // one name at `text-2sm leading-snug`.
-const SCORE_LANE = 20; // the centred paired-game lane between the sides.
 const CARD_CONTROL = 34; // the single score-entry control.
 
 /**
@@ -685,21 +703,24 @@ const CARD_CONTROL = 34; // the single score-entry control.
  *
  * `maxNameLines` is the largest number of NAME LINES any single side in the
  * draw renders (1 for singles, 2 for a doubles pair, 2 for a pair one member
- * short — the "partner to be confirmed" line is a line). `hasScoreLane` and
- * `hasControl` are draw-wide: every node is the same height, because uneven
- * node heights inside one round are exactly what makes a bracket read as
- * broken, and because the feeder-midpoint recursion assumes a uniform pitch.
+ * short — the "partner to be confirmed" line is a line). `hasControl` is
+ * draw-wide: every node is the same height, because uneven node heights
+ * inside one round are exactly what makes a bracket read as broken, and
+ * because the feeder-midpoint recursion assumes a uniform pitch.
+ *
+ * P1: the SCORE no longer contributes a term. It used to be a centred lane —
+ * a third row inside a two-row object, costing every node in a scored draw
+ * 26px of height it did not need. The games now sit in each side's own
+ * trailing column, inside the side row that was already budgeted.
  */
 export function bracketCardHeight(
   maxNameLines: number,
-  hasScoreLane: boolean,
   hasControl: boolean,
 ): number {
   const lines = Math.max(1, maxNameLines);
   const sides = 2 * (SIDE_PAD_Y + lines * NAME_LINE);
-  const lane = hasScoreLane ? SCORE_LANE + CARD_GAP : 0;
   const control = hasControl ? CARD_CONTROL + CARD_GAP : 0;
-  return CARD_PAD_Y + CARD_CAPTION + CARD_GAP * 2 + sides + lane + control;
+  return CARD_PAD_Y + CARD_CAPTION + CARD_GAP * 2 + sides + control;
 }
 
 /**
@@ -734,9 +755,8 @@ export function measureBracketNodes(
   units: PlayUnitDTO[],
   nameById: Record<string, string>,
   resultByPu: Record<string, ResultDTO>,
-): { maxNameLines: number; hasScoreLane: boolean; hasControl: boolean } {
+): { maxNameLines: number; hasControl: boolean } {
   let maxNameLines = 1;
-  let hasScoreLane = false;
   let hasControl = false;
   for (const pu of units) {
     for (const [wire, ids] of [
@@ -747,18 +767,15 @@ export function measureBracketNodes(
       if (lines) maxNameLines = Math.max(maxNameLines, lines.length);
     }
     const result = resultByPu[pu.id];
-    if (Array.isArray(result?.score?.sets) && result.score.sets.length > 0) {
-      hasScoreLane = true;
-    }
     if (!result && !!pu.side_a && !!pu.side_b) hasControl = true;
   }
-  return { maxNameLines, hasScoreLane, hasControl };
+  return { maxNameLines, hasControl };
 }
 
 /** The height a draw with nothing loaded yet would use — also the default
  *  every exported layout helper falls back to, so a caller that has no
  *  content to measure still gets a coherent (if generous) canvas. */
-const BRACKET_CARD_HEIGHT = bracketCardHeight(2, true, true);
+const BRACKET_CARD_HEIGHT = bracketCardHeight(2, true);
 
 interface BracketColumnMatch {
   puId: string;
@@ -1286,7 +1303,7 @@ function SegmentedBracketView({
   // comparable (match-card §4.3).
   const cardHeight = useMemo(() => {
     const m = measureBracketNodes(Object.values(idMap), nameById, resultByPu);
-    return bracketCardHeight(m.maxNameLines, m.hasScoreLane, m.hasControl);
+    return bracketCardHeight(m.maxNameLines, m.hasControl);
   }, [idMap, nameById, resultByPu]);
 
   const layout = useMemo(
@@ -1511,22 +1528,16 @@ function BracketCell({
   const posB = posA + 1;
   const setsMode = scoringFormat === "badminton";
   const [recording, setRecording] = useState(false);
-  // The score blob is opaque server-side (RecordResultIn.score: dict), so a
-  // non-frontend writer (import, sync restore, API client) can hand us any
-  // shape — guard every level and fall back to winner-only rather than
-  // rendering "undefined-undefined" or throwing on `.map` of a non-array.
-  const validSets = Array.isArray(result?.score?.sets)
-    ? result.score.sets.filter(
-        (s): s is BracketSetScore =>
-          !!s && typeof s.sideA === "number" && typeof s.sideB === "number",
-      )
-    : [];
-  const reason = result?.walkover ? ("walkover" as const) : null;
+  const validSets = validBracketSets(result);
 
   return (
     <Card
       variant="frame"
-      className={`p-3 space-y-2${final ? " border-accent/40 ring-1 ring-accent/30 shadow-glow" : ""}`}
+      // P1: `p-2 space-y-1.5`, down from `p-3 space-y-2`. The node's own box
+      // is the padding a bracket pays per match, twice per round, and the
+      // withdrawn centred lane already freed the vertical room the score
+      // needed. `bracketCardHeight`'s constants mirror these exactly.
+      className={`p-2 space-y-1.5${final ? " border-accent/40 ring-1 ring-accent/30 shadow-glow" : ""}`}
     >
       {/* One step darker than the muted tier: this caption is the ONLY
           schedule information in the whole tree, and at muted-on-white it
@@ -1555,10 +1566,17 @@ function BracketCell({
             : "Not scheduled"}
         </span>
       </div>
+      {/* P1 (contract rules 1-4): the node is a STACKED layout, so each side
+          carries its OWN aligned game-score column and the centred lane
+          between the two sides is gone. `SideScores` fixes every cell's
+          width in `em`, so game N sits in the same column on both rows and
+          the reader never maps a number to a name across a name line. */}
       <Side
         side="A"
         label={aName}
         members={aMembers}
+        sets={validSets}
+        scoreTestId={`bracket-node-score-${pu.id}-a`}
         winning={winner === "A"}
         bye={pu.side_a === null}
         walkover={result?.walkover ?? false}
@@ -1566,26 +1584,12 @@ function BracketCell({
         selected={seeding && selectedPos === posA}
         onSlotClick={seeding ? () => onSlotClick?.(posA) : undefined}
       />
-      {/* The shared grammar's ONE centred paired lane, between the two sides
-          (match-card §3.4). It replaces the per-side score rails the node
-          used to carry — two columns of single numbers the reader had to
-          align across a name to read one game — and it carries no emphasis:
-          the winning side's NAME does, from `winner_side`. */}
-      {validSets.length > 0 || reason ? (
-        <div className="flex justify-center">
-          <ScoreLane
-            sets={validSets}
-            reason={reason}
-            sideALabel={aName}
-            sideBLabel={bName}
-            data-testid={`bracket-node-score-${pu.id}`}
-          />
-        </div>
-      ) : null}
       <Side
         side="B"
         label={bName}
         members={bMembers}
+        sets={validSets}
+        scoreTestId={`bracket-node-score-${pu.id}-b`}
         winning={winner === "B"}
         bye={pu.side_b === null}
         walkover={result?.walkover ?? false}
@@ -1677,6 +1681,8 @@ function Side({
   side,
   label,
   members = null,
+  sets = [],
+  scoreTestId,
   winning,
   bye,
   walkover = false,
@@ -1686,6 +1692,11 @@ function Side({
 }: {
   side: "A" | "B";
   label: string;
+  /** The match's recorded games. This row prints THIS side's numbers, in
+   *  one aligned column per game (P1) — the sibling row prints the other
+   *  half at the same widths. Empty while nothing is recorded: not-started
+   *  is the absence of the column, not an empty one. */
+  sets?: BracketSetScore[];
   /** Resolved member names — rendered one per line, WITHOUT the " / " join
    *  (the line break already separates the pair). Null for feeder/bye
    *  placeholders, which render `label` as one string. */
@@ -1712,12 +1723,20 @@ function Side({
     </span>
   );
   const trailing = (
-    <span className="flex shrink-0 items-center gap-1">
+    <span className="flex shrink-0 items-center gap-1.5">
+      {/* The outcome appears ONCE, on the side it settled for, and no
+          numeric game is fabricated beside it (contract rule 6). */}
       {winning && walkover ? (
         <span className="rounded-sm bg-muted px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {REASON_BADGE.walkover}
         </span>
       ) : null}
+      <SideScores
+        sets={sets}
+        side={side}
+        sideLabel={label}
+        data-testid={scoreTestId}
+      />
       {winning ? <WinnerDot /> : null}
     </span>
   );
@@ -1730,7 +1749,7 @@ function Side({
         disabled={!!bye}
         data-side={side}
         className={
-          "w-full flex items-center justify-between gap-1.5 rounded-sm border px-2 py-1.5 text-2sm transition-colors duration-standard ease-brand " +
+          "w-full flex items-center justify-between gap-1.5 rounded-sm border px-2 py-1 text-2sm transition-colors duration-standard ease-brand " +
           (selected
             ? "bg-accent/10 border-2 border-accent text-foreground font-medium"
             : bye
@@ -1748,7 +1767,7 @@ function Side({
     <div
       data-side={side}
       className={
-        "w-full flex items-center justify-between gap-1.5 rounded-sm border border-border px-2 py-1.5 text-2sm " +
+        "w-full flex items-center justify-between gap-1.5 rounded-sm border border-border px-2 py-1 text-2sm " +
         (bye
           ? "bg-muted text-muted-foreground italic"
           : winning

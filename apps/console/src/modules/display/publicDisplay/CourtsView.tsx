@@ -21,7 +21,7 @@
  * column count). The retired 'strip' mode maps to 'auto' before it gets here.
  */
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
-import { ScoreLane, type SetPair } from '../../../components/control-plane/MatchCard';
+import { ScoreLane, SideScores, type SetPair } from '../../../components/control-plane/MatchCard';
 import { formatPlayers, sideLines, isCourtClosedNow, hasResolvedSides } from './helpers';
 import {
   resolveSignageCourtSize,
@@ -74,7 +74,8 @@ interface CourtsViewProps {
 }
 
 /**
- * The games to print in the shared `ScoreLane`, or none.
+ * The games to print — in the row layout's shared `ScoreLane`, or in the
+ * card layout's per-side `SideScores` columns — or none.
  *
  * Per-game detail when the state carries it, else the recorded aggregate as
  * a single pair — the same rule the operator's match rows use, so a score
@@ -270,18 +271,37 @@ function CourtCard({
       </span>
 
       {current ? (
-        <>
+        /* P1 (contract rules 2-3): a court card is a STACKED layout, so each
+           side owns its own aligned score column and the centred lane
+           between the two sides is gone — at hall distance a number between
+           two names belongs to neither. `SideScores` sizes its cells in
+           `em`, so the columns stay aligned as the board scales the type.
+           The hairline between the rows is the side boundary, stated
+           without colour; the partner lines inside a side sit tighter than
+           the gap that separates the two sides. */
+        <div
+          data-testid={`court-match-${courtId}`}
+          className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3"
+        >
           <SignageSide lines={linesA} nameSize={nameSize} />
-          <ScoreLane
+          <SideScores
             sets={sets}
+            side="A"
             size={scoreSize}
             className="font-bold"
-            sideALabel={linesA.join(' / ')}
-            sideBLabel={linesB.join(' / ')}
-            data-testid={`court-score-${courtId}`}
+            sideLabel={linesA.join(' and ')}
+            data-testid={`court-score-${courtId}-a`}
           />
-          <SignageSide lines={linesB} nameSize={nameSize} />
-        </>
+          <SignageSide lines={linesB} nameSize={nameSize} className="mt-1 border-t border-border pt-1" />
+          <SideScores
+            sets={sets}
+            side="B"
+            size={scoreSize}
+            className="mt-1 border-t border-transparent pt-1 font-bold"
+            sideLabel={linesB.join(' and ')}
+            data-testid={`court-score-${courtId}-b`}
+          />
+        </div>
       ) : null}
 
       {preview ? (
@@ -314,9 +334,17 @@ function CourtCard({
  * is NOT here; it lives once, in the centred lane between the two sides
  * (§3.4), which is the same lane every other match surface renders.
  */
-function SignageSide({ lines, nameSize }: { lines: string[]; nameSize: string }) {
+function SignageSide({
+  lines,
+  nameSize,
+  className = '',
+}: {
+  lines: string[];
+  nameSize: string;
+  className?: string;
+}) {
   return (
-    <span className={`${nameSize} w-full text-center font-semibold leading-tight text-foreground`}>
+    <span className={`${nameSize} w-full text-center font-semibold leading-tight text-foreground ${className}`}>
       {lines.map((line, i) => (
         <span key={i} className="block break-words">
           {line}

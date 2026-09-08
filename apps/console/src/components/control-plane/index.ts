@@ -86,12 +86,14 @@ export {
   MatchCard,
   ResultSides,
   ScoreLane,
+  SideScores,
   WinnerDot,
   recordedWinner,
   formatGamePairs,
   REASON_BADGE,
   type SetPair,
   type MatchReason,
+  type MatchLayout,
 } from './MatchCard';
 export {
   MatchStatusFilter,

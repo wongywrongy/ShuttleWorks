@@ -39,6 +39,7 @@ import type { PersonReferenceDTO } from '../lib/person.types';
 import type { PlayerMatchDTO, PlayerMatchSideDTO } from '../lib/player.types';
 import { eventCodeLabel, roundLabel } from '../lib/draws.types';
 import { schedulePublicState, schedulePublicStateLabel, scheduleStateLabel } from '../lib/schedule.types';
+import { gameScore, pairedScoreLine } from '../lib/score';
 import { sideSummaryPhrase } from '../lib/side';
 import { LIST_CARD } from '../lib/ui';
 import { PersonGroup } from './PersonGroup';
@@ -71,16 +72,6 @@ function isExceptionalState(status: MatchCardData['status']): boolean {
 
 function references(side: PlayerMatchSideDTO): PersonReferenceDTO[] {
   return side.persons;
-}
-
-/**
- * The paired game sequence, `21–16, 22–20` — first number always the
- * first-listed side (§5.1 rule 6). Used where the surface has one lane
- * rather than a column per side: the bracket node's trailing edge.
- */
-export function pairedScoreLine(score: number[][] | null | undefined): string | null {
-  if (!score?.length) return null;
-  return score.map((game) => `${game[0] ?? ''}–${game[1] ?? ''}`).join(', ');
 }
 
 function SidePeople({ side, slug, compact = false, highlightPersonId, highlightPersonName }: { side: PlayerMatchSideDTO; slug?: string; compact?: boolean; highlightPersonId?: string | null; highlightPersonName?: string | null }) {
@@ -137,7 +128,11 @@ function Side({ side, score, index, slug, compact = false, live = false, first =
               // drives no ink anywhere on this tier.
               className="grid place-items-center border-s border-rule-soft tabular-nums text-foreground"
             >
-              {score?.[set]?.[index] ?? ''}
+              {/* Zero, missing and not-started are three different facts
+                  (P1 rule 7): `0` prints as `0`, a game the wire left blank
+                  prints nothing in a cell that keeps its width, and a match
+                  with no games renders no cells at all. */}
+              {gameScore(score, set, index) ?? ''}
             </span>
           ))
         : null}
@@ -175,7 +170,7 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
   // V3-11-3) every future match on the calendar was announced as withheld.
   // Withheld says so; not-yet-played omits the term entirely (§2.4).
   const scoreLabel = match.score?.length
-    ? `Score ${match.score.map((game) => game.join('-')).join(', ')}`
+    ? `Score ${pairedScoreLine(match.score)}`
     : match.scoresPublished === false
       ? 'Score not published'
       : null;
@@ -211,24 +206,25 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
     // and a doubles side is two person lines at the 14px floor. Height comes
     // from the tallest rendered side; the column owns the width, so the node
     // fills it rather than carrying a second, conflicting `w-72`.
-    // §4.3: seeds and the paired score render RIGHT-ALIGNED against the
-    // node's trailing edge — one lane, first-listed-side order, no
-    // per-game emphasis — rather than a column per side per game, which a
-    // 288px node cannot hold beside two doubles pairs.
-    const paired = pairedScoreLine(match.score);
+    // **Operator/public remediation P1 supersedes public-visual-fixes P4
+    // here.** The node's one right-aligned paired lane is withdrawn: a
+    // bracket node is a STACKED layout, so each side carries its own
+    // aligned game-score column and the number beside a name belongs to
+    // that name. The compact columns are 1.8rem each, so even a
+    // best-of-three beside two doubles pairs costs 5.4rem of a node that
+    // takes its width from the column.
     const header = [cue, reference].filter(Boolean).join(' ');
     return (
       <article data-testid="public-bracket-node" data-match-variant="bracket-node" className={`grid w-full min-w-0 grid-rows-[auto_auto_auto] rounded-sm border border-rule-soft bg-surface-raised ${live ? 'border-s-2 border-s-status-live' : ''}`} aria-label={[title, competitors, scoreLabel, stateWord].filter(Boolean).join(' · ')}>
-        {header || paired ? (
+        {header ? (
           <p className="flex items-baseline justify-between gap-2 border-b border-rule-soft px-2 py-0.5 text-xs text-muted-foreground">
             <span className="font-semibold uppercase tracking-[0.04em]">{header}</span>
-            {paired ? <span className="tabular-nums">{paired}</span> : null}
           </p>
         ) : (
           <p aria-hidden className="h-0" />
         )}
-        <Side side={match.sides[0]} score={match.score} index={0} slug={slug} compact live={live} first showGames={false} highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
-        <Side side={match.sides[1]} score={match.score} index={1} slug={slug} compact live={live} showGames={false} highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
+        <Side side={match.sides[0]} score={match.score} index={0} slug={slug} compact live={live} first highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
+        <Side side={match.sides[1]} score={match.score} index={1} slug={slug} compact live={live} highlightPersonId={highlightPersonId} highlightPersonName={highlightPersonName} />
       </article>
     );
   }

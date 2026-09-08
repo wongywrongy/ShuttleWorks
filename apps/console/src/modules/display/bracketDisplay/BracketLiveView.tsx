@@ -1,6 +1,6 @@
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import { liveMatches, type LiveRow } from './bracketDisplayData';
-import { ScoreLane } from '../../../components/control-plane/MatchCard';
+import { SideScores } from '../../../components/control-plane/MatchCard';
 
 /**
  * Read-only "what's playing now" view for the bracket TV — the bracket analog
@@ -84,9 +84,11 @@ export function BracketLiveView({
   );
 }
 
-/** Names stacked one participant per line (match-card §3.1) with the shared
- *  centred score lane between the two sides (§3.4) — the same grammar the
- *  meet board and every operator surface render. */
+/** Names stacked one participant per line (match-card §3.1), each side with
+ *  its OWN aligned game-score column beside it (P1, contract rules 2-3) —
+ *  the same stacked grammar the meet board and the bracket node render. The
+ *  centred lane between the two sides is withdrawn: on a wall, a number
+ *  sitting between two names belongs visibly to neither. */
 function MatchNames({
   row,
   nameSize,
@@ -107,18 +109,32 @@ function MatchNames({
         {name}
       </span>
     ));
+  const sets = showScores ? row.sets : [];
   return (
-    <>
+    <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3">
       <span className={`${nameSize} font-semibold leading-tight ${ink}`}>{lines(row.sideA)}</span>
-      <ScoreLane
-        sets={showScores ? row.sets : []}
+      <SideScores
+        sets={sets}
+        side="A"
         size={scoreSize}
         className="font-bold"
-        sideALabel={row.sideA}
-        sideBLabel={row.sideB}
-        data-testid={`bracket-court-score-${row.court}`}
+        sideLabel={row.sideA}
+        data-testid={`bracket-court-score-${row.court}-a`}
       />
-      <span className={`${nameSize} font-semibold leading-tight ${ink}`}>{lines(row.sideB)}</span>
-    </>
+      {/* The hairline is the side boundary — stated without colour, so the
+          two partners of a doubles pair group tighter inside a side than the
+          sides do against each other (contract rule 3). */}
+      <span className={`${nameSize} mt-1 border-t border-border pt-1 font-semibold leading-tight ${ink}`}>
+        {lines(row.sideB)}
+      </span>
+      <SideScores
+        sets={sets}
+        side="B"
+        size={scoreSize}
+        className="mt-1 pt-1 font-bold"
+        sideLabel={row.sideB}
+        data-testid={`bracket-court-score-${row.court}-b`}
+      />
+    </div>
   );
 }

@@ -13,7 +13,7 @@
  * `?id=`/`?token=` so `useLiveTracking`/`useDisplaySync` never attempt a
  * network call.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MeetDisplayPage } from '../MeetDisplayPage';
@@ -132,13 +132,14 @@ describe('MeetDisplayPage — venue signage', () => {
 
     const { container } = renderBoard();
 
-    // Contract §3.4: the lane collapses to nothing — no cell, no reserved
-    // width, and no "0–0" anywhere on the board.
-    expect(container.querySelector('[data-testid="court-score-1"]')).toBeNull();
+    // Contract rule 7 (P1): not-started is the ABSENCE of the ledger — no
+    // score column on either side, no reserved width, no "0–0" on the wall.
+    expect(container.querySelector('[data-testid="court-score-1-a"]')).toBeNull();
+    expect(container.querySelector('[data-testid="court-score-1-b"]')).toBeNull();
     expect(container.textContent).not.toMatch(/0\s*[–-]\s*0/);
   });
 
-  it('prints the recorded score once, in the lane between the two sides', () => {
+  it('prints each side\'s score in its own aligned column beside that side (P1)', () => {
     seed({
       m1: {
         matchId: 'm1',
@@ -149,8 +150,11 @@ describe('MeetDisplayPage — venue signage', () => {
     });
 
     renderBoard();
-    expect(screen.getByTestId('court-score-1').textContent).toContain('21');
-    expect(screen.getByTestId('court-score-1').textContent).toContain('18');
+    // P1 rules 1-2: the number beside a name belongs to that name — side A's
+    // column carries 21 and ONLY 21, side B's carries 18. The centred lane
+    // between the two sides, where a number belonged to neither, is gone.
+    expect(screen.getByTestId('court-score-1-a').textContent).toBe('21');
+    expect(screen.getByTestId('court-score-1-b').textContent).toBe('18');
   });
 
   it('hides every score when the board setting is off', () => {
@@ -164,7 +168,8 @@ describe('MeetDisplayPage — venue signage', () => {
     });
 
     const { container } = renderBoard({ board: { ...BOARD, showScores: false } });
-    expect(container.querySelector('[data-testid="court-score-1"]')).toBeNull();
+    expect(container.querySelector('[data-testid="court-score-1-a"]')).toBeNull();
+    expect(container.querySelector('[data-testid="court-score-1-b"]')).toBeNull();
   });
 
   it('makes the court number the largest element on the card', () => {
@@ -237,6 +242,21 @@ describe('MeetDisplayPage — venue signage', () => {
         minute: '2-digit',
       }).format(new Date(clock.getAttribute('dateTime')!)),
     );
+  });
+
+  it('shows the fixed demo instant in venue time without freezing the real clock', () => {
+    vi.stubEnv('VITE_ENVIRONMENT', 'local');
+    vi.stubEnv('VITE_DEMO_NOW', '2026-07-31T05:15:00Z');
+    try {
+      seed();
+      const realBefore = Date.now();
+      renderBoard({ timeZone: 'Asia/Taipei' });
+      expect(screen.getByTestId('board-clock')).toHaveAttribute('dateTime', '2026-07-31T05:15:00.000Z');
+      expect(screen.getByTestId('board-clock')).toHaveTextContent('1:15 PM');
+      expect(Date.now()).toBeGreaterThanOrEqual(realBefore);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('keeps freshness diagnostics off the wall and in the operator preview', () => {

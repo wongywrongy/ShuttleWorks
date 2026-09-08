@@ -139,6 +139,11 @@ export function BracketMatchPlayerControls({
         railB={railBadge(pu.side_b, pu.slot_b)}
         sets={validSets}
         winner={winner}
+        // P1 rule 2: each side's aligned score column names its own side in
+        // the per-game accessible label, so a screen reader hears
+        // "Game 2, <side> 21" instead of a bare number in a column.
+        sideALabel={sideLabel(pu.side_a, pu.slot_a, {}, labelById)}
+        sideBLabel={sideLabel(pu.side_b, pu.slot_b, {}, labelById)}
         reason={reason}
         reasonSide={reason && winner ? (winner === 'A' ? 'B' : 'A') : null}
         meta={meta}

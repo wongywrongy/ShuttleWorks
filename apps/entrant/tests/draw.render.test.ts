@@ -625,13 +625,18 @@ describe("the elimination draw page", () => {
     expect(bracket).toContain(">F<");
   });
 
-  it("renders the paired score once, right-aligned on the node trailing edge", async () => {
-    // §4.3/§5.1 rule 6: one lane, first-listed-side order, no per-game
-    // emphasis and no per-side score column inside a 288px node.
+  it("gives each side its own aligned game column on the node (P1)", async () => {
+    // **Operator/public remediation P1 supersedes public-visual-fixes P4.**
+    // A bracket node is a stacked layout, so the number beside a name
+    // belongs to that name: two games x two sides = four cells on the one
+    // decided node, and no per-game emphasis on any of them. The paired
+    // spelling survives only in the node's accessible summary.
     stubApi({ "/draws/MS": SE_DRAW });
     const bracket = await render("/e/spring-open/draws/MS?view=bracket");
-    expect(bracket).toContain("21–15, 21–12");
-    expect(bracket).not.toMatch(/place-items-center/);
+    expect((bracket.match(/place-items-center/g) ?? []).length).toBe(4);
+    expect(bracket).toContain("Score 21–15, 21–12");
+    // The node's own metadata line carries the reference alone now.
+    expect(bracket).not.toContain('<span class="tabular-nums">21–15, 21–12</span>');
   });
 
   it("leaves an unreached slot empty with a muted feeder line", async () => {
