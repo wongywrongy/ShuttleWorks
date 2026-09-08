@@ -139,6 +139,8 @@ export interface SeasonRow {
   venueName: string | null;
   /** Raw `tournament_date` string — nullable, ISO by convention only. */
   date: string | null;
+  /** Calendar end date for multi-day tournaments; legacy rows may omit it. */
+  endDate?: string | null;
   eventCount: number;
   status: PageStatus;
   /** Whole days until entries close; server-computed, never 0 (ceil ≥ 1). */
@@ -534,7 +536,8 @@ export function resolveSeason(
 function isPast(row: SeasonRow, now: Date): boolean {
   if (COMPLETED_STATUSES.includes(row.status)) return true;
   const date = parseIsoDate(row.date);
-  return date !== null && date.getTime() < utcDayStart(now);
+  const endDate = parseIsoDate(row.endDate ?? null) ?? date;
+  return endDate !== null && endDate.getTime() < utcDayStart(now);
 }
 
 /**

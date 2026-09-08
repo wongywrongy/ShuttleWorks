@@ -36,7 +36,6 @@ components/
 ├── ErrorBoundary.tsx
 ├── InlineSearch.tsx      # search input wired to useSearchParamState
 ├── SchoolChip.tsx        # per-school accent chip (uses lib/schoolAccent.ts)
-├── SourceChip.tsx        # the three-module promotion precedent (ADR 0013)
 ├── SolverHud.tsx         # docked solver HUD shown above schedule + live tabs
 ├── StatusPill.tsx        # pure re-export of the design-system StatusPill
 ├── Toast.tsx             # ToastStack rendered once at the app shell level

@@ -90,4 +90,49 @@ describe('rowActionFor — entries attention (V3-OC02.2)', () => {
   it('leaves non-entries reasons alone (View draws still applies)', () => {
     expect(rowActionFor(complete('NO_ROSTER'), 'past').label).toBe('View draws');
   });
+
+  it('never links to entries when the catalog disables the cloud-only module', () => {
+    const disabled = {
+      ...complete('ENTRIES_NOT_COMMITTED'),
+      modules: [
+        { moduleId: 'bracket' as const, status: 'enabled' as const, config: null },
+        { moduleId: 'entries' as const, status: 'disabled' as const, config: null },
+      ],
+    };
+    expect(rowActionFor(disabled, 'upcoming').segment).not.toBe('participants/entries');
+  });
+
+  it('lets real playing metrics outrank a stale entries review phase', () => {
+    const stale = {
+      ...complete('ENTRIES_NOT_COMMITTED'),
+      modules: [{ moduleId: 'entries' as const, status: 'disabled' as const, config: null }],
+      signals: {
+        ...complete('ENTRIES_NOT_COMMITTED').signals!,
+        phase: 'entries_review' as const,
+        matches: { total: 10, scheduled: 2, toDo: 0, played: 6, playing: 2 },
+      },
+    };
+    expect(rowActionFor(stale, 'upcoming')).toMatchObject({ label: 'Open live day', segment: 'operations/live' });
+  });
+
+  it('does not call a partially played workspace complete', () => {
+    const partial = {
+      ...complete('ENTRIES_NOT_COMMITTED'),
+      modules: [{ moduleId: 'bracket' as const, status: 'enabled' as const, config: null }],
+      signals: {
+        ...complete('ENTRIES_NOT_COMMITTED').signals!,
+        phase: 'entries_review' as const,
+        matches: { total: 10, scheduled: 2, toDo: 0, played: 6, playing: 0 },
+      },
+    };
+    expect(rowActionFor(partial, 'upcoming')).toMatchObject({ label: 'Open workspace' });
+  });
+
+  it('treats a catalog without an entries row as entries-disabled', () => {
+    const local = {
+      ...complete('ENTRIES_NOT_COMMITTED'),
+      modules: [{ moduleId: 'bracket' as const, status: 'enabled' as const, config: null }],
+    };
+    expect(rowActionFor(local, 'upcoming').segment).not.toBe('participants/entries');
+  });
 });

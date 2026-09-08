@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from workspaces.workspace_signals import RowCounts, build_signals
+from workspaces.entries_facts import EntriesFacts
 from core.schemas import WorkspaceModuleDTO
 
 
@@ -341,6 +342,18 @@ def test_phase_meet_unscheduled_matches_block_complete():
     counts = RowCounts(match_status_by_id={"m1": "finished", "m2": "finished"})
     sig = build_signals(_row(data=data), _meet_mods(), counts)
     assert sig.phase == "live"  # not complete — m3 unplayed
+
+
+def test_active_play_outranks_stale_entries_review():
+    """An uncommitted entry must not hide a match currently on court."""
+    data = _played_meet_data()
+    entries = EntriesFacts(
+        page_open=True, entries_closed=True, total=2, confirmed=2,
+        uncommitted_confirmed=1,
+    )
+    counts = RowCounts(match_status_by_id={"m1": "playing"}, entries=entries)
+    sig = build_signals(_row(data=data), _meet_mods(), counts)
+    assert sig.phase == "live"
 
 
 def test_phase_bracket_swiss_pending_blocks_complete():

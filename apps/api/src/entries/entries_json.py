@@ -677,6 +677,7 @@ class SeasonRowDTO(BaseModel):
     organizer: Optional[str] = None
     venueName: Optional[str] = None
     date: Optional[str] = None
+    endDate: Optional[str] = None
     eventCount: int
     status: str
     closesInDays: Optional[int] = None
@@ -774,6 +775,11 @@ def entry_page_list(
                 if tournament.tournament_date
                 else None
             ),
+            tournament_end_date=(
+                str(getattr(tournament, "tournament_end_date", None))
+                if getattr(tournament, "tournament_end_date", None)
+                else None
+            ),
             events=events,
             draws_published=bool(page.draws_published),
             results_published=bool(page.results_published),
@@ -803,6 +809,11 @@ def entry_page_list(
             date=(
                 str(tournament.tournament_date)
                 if tournament.tournament_date
+                else None
+            ),
+            endDate=(
+                str(getattr(tournament, "tournament_end_date", None))
+                if getattr(tournament, "tournament_end_date", None)
                 else None
             ),
             eventCount=len(events),

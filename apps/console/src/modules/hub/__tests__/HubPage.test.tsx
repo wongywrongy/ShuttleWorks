@@ -19,6 +19,10 @@ vi.mock('../../../api/client', () => ({
   },
 }));
 
+vi.mock('../../../lib/demoClock', () => ({
+  demoNow: () => new Date('2026-07-31T05:15:00Z'),
+}));
+
 vi.mock('../../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1', email: 'op@example.com' } }),
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -98,6 +102,24 @@ describe('HubPage navigation', () => {
 });
 
 describe('HubPage time-oriented control plane', () => {
+  it('uses one demo instant for both facet counts and visible rows', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      { id: 'live', name: 'Taipei Open', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: '2026-07-31', tournamentEndDate: '2026-08-01', timeZone: 'Asia/Taipei', status: 'active' as const },
+      { id: 'up', name: 'Korea Masters', kind: 'bracket' as const, role: 'owner' as const,
+        tournamentDate: '2026-08-02', timeZone: 'Asia/Seoul', status: 'draft' as const },
+      { id: 'past', name: 'Old Cup', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: '2026-07-20', timeZone: 'UTC', status: 'complete' as const },
+    ] as never);
+    mount({ current: '' });
+    await waitFor(() => expect(screen.getByText('Taipei Open')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /^Live\b/ })).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: /^Upcoming\b/ })).toHaveTextContent('1');
+    expect(screen.getByText('Taipei Open')).toBeInTheDocument();
+    expect(screen.getByText('Korea Masters')).toBeInTheDocument();
+    expect(screen.queryByText('Old Cup')).not.toBeInTheDocument();
+  });
+
   it('keeps the chosen view in the URL and returns to the default on a second click', async () => {
     const loc = { current: '' };
     const search = { current: '' };

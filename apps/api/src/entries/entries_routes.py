@@ -823,7 +823,11 @@ def _parse_moment(value: Optional[str], field: str) -> Optional[datetime]:
     if value is None or not value.strip():
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        # SQLite drops tzinfo on persistence. Normalize before that happens,
+        # so 23:59 in Seoul cannot become 23:59 UTC (the next local day).
+        # Preserve the existing convention that a naive input means UTC.
+        return moment.replace(tzinfo=moment.tzinfo or timezone.utc).astimezone(timezone.utc)
     except ValueError:
         raise http_error(
             400,

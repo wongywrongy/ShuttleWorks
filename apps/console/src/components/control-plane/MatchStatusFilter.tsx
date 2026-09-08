@@ -33,7 +33,7 @@ export function MatchStatusFilter({
     <div
       role="group"
       aria-label="Filter matches by status"
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-rule-soft px-5 py-1.5"
+      className="flex shrink-0 flex-wrap items-center gap-1 overflow-x-hidden border-b border-rule-soft px-5 py-1.5"
     >
       {CHIP_ORDER.map((value) => {
         const count = value === 'all' ? total : counts[value];

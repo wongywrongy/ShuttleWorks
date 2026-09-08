@@ -442,6 +442,26 @@ describe('seasonModel (P5: one season, upcoming ascending then past descending)'
     expect(model.past.flatMap((m) => m.rows).map((r) => r.slug)).toEqual(['done']);
   });
 
+  it('keeps a multi-day live tournament in the upcoming/live half through its end date', () => {
+    const model = seasonModel(
+      [row({ slug: 'live-multi', status: 'in_progress_live', date: '2026-08-10', endDate: '2026-08-12' })],
+      { year: 2026, q: '' },
+      new Date(Date.UTC(2026, 7, 11, 12, 0)),
+    );
+    expect(model.past).toEqual([]);
+    expect(model.upcoming.flatMap((month) => month.rows).map((item) => item.slug)).toEqual(['live-multi']);
+  });
+
+  it('moves a multi-day tournament to past only after its end date', () => {
+    const model = seasonModel(
+      [row({ slug: 'done-multi', status: 'in_progress', date: '2026-08-10', endDate: '2026-08-12' })],
+      { year: 2026, q: '' },
+      new Date(Date.UTC(2026, 7, 13, 12, 0)),
+    );
+    expect(model.upcoming).toEqual([]);
+    expect(model.past.flatMap((month) => month.rows).map((item) => item.slug)).toEqual(['done-multi']);
+  });
+
   it('bounds the page to one season, and says how much it left out', () => {
     const model = seasonModel(rows, NO_FILTERS, NOW);
     expect(model.publishedCount).toBe(7);

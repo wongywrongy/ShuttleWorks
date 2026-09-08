@@ -10,7 +10,7 @@ const REASON_DESTINATION: Record<string, string> = {
   NO_ROSTER: 'participants/people',
   NO_BRACKET: 'bracket/draws',
   NOT_SCHEDULED: 'operations/plan',
-  NO_DATE: 'setup/dates',
+  NO_DATE: 'setup/details',
   NO_VENUE: 'setup/details',
   ENTRIES_CLOSING_SOON: 'participants/entries',
   UNRESOLVED_PAIRS: 'participants/entries',
@@ -29,6 +29,13 @@ const ENTRIES_ATTENTION_CODES = new Set(Object.keys(REASON_DESTINATION).filter((
   REASON_DESTINATION[code] === 'participants/entries',
 ));
 
+/** Entries is cloud-only. When the catalog is present, never send an operator
+ * to an entries surface unless that module is actually enabled. Older summary
+ * payloads omit the catalog, so retain their historical behaviour. */
+function entriesModuleEnabled(t: TournamentSummaryDTO): boolean {
+  return t.modules ? t.modules.some((module) => module.moduleId === 'entries' && module.status === 'enabled') : true;
+}
+
 /** "Review entries" when the leading attention reason concerns entries —
  *  V3-OC02.2: the row used to offer "View draws" for a completed bracket
  *  with an unresolved entries reason ("Confirmed entries not on the
@@ -36,6 +43,7 @@ const ENTRIES_ATTENTION_CODES = new Set(Object.keys(REASON_DESTINATION).filter((
  *  reason (if any) is not entries-shaped, so callers fall through to their
  *  ordinary phase/group action. */
 function entriesReviewAction(t: TournamentSummaryDTO): RowAction | null {
+  if (!entriesModuleEnabled(t)) return null;
   const first = attentionReasons(t)[0];
   if (first && ENTRIES_ATTENTION_CODES.has(first.code)) {
     return { label: 'Review entries', kind: 'open', segment: 'participants/entries' };
@@ -46,7 +54,9 @@ function entriesReviewAction(t: TournamentSummaryDTO): RowAction | null {
 /** The primary next action for a workspace — the first mapped attention reason,
  *  else "Open". Pure; degrades to Open when signals are absent. */
 export function nextActionFor(t: TournamentSummaryDTO): { label: string; reasonCode: string | null } {
-  const first = attentionReasons(t)[0];
+  const first = attentionReasons(t).find((reason) =>
+    entriesModuleEnabled(t) || !ENTRIES_ATTENTION_CODES.has(reason.code),
+  );
   if (first && REASON_ACTION[first.code]) {
     return { label: REASON_ACTION[first.code], reasonCode: first.code };
   }
@@ -74,7 +84,16 @@ export function rowActionFor(t: TournamentSummaryDTO, group: HubGroupId): RowAct
   // the phase (shared precedence — platform/domain/lifecycle.ts): match rows
   // persist, so an archived tournament keeps phase 'live'/'complete' forever
   // and must not be offered "Open live day".
-  const phase = t.signals?.phase;
+  // A stale entries review signal must not mask real play state when the
+  // optional entries module is disabled. The match counters are the same
+  // source used by the live-day surface, so they provide a safe fallback.
+  const phase = !entriesModuleEnabled(t) && t.signals?.phase === 'entries_review'
+    ? (t.signals.matches?.playing && t.signals.matches.playing > 0
+      ? 'live'
+      : t.signals.matches?.played && t.signals.matches.total > 0 && t.signals.matches.played >= t.signals.matches.total
+        ? 'complete'
+        : 'ready')
+    : t.signals?.phase;
   const br = t.kind === 'bracket';
   if (t.status !== 'archived') {
     if (phase === 'live')

@@ -863,6 +863,17 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
             data_blob, to_do, counts.match_status_by_id
         )
 
+    play_phase = _derive_phase(data_blob, counts)
+    entry_phase = _entries_phase(counts.entries)
+    # Active play is the operator's strongest lifecycle signal. A stale
+    # uncommitted entry must not hide courts currently in play; once play is
+    # over, entries_review still correctly remains the actionable state.
+    phase = (
+        "live"
+        if entry_phase is not None and (matches_metrics.playing or 0) > 0
+        else entry_phase or play_phase
+    )
+
     return WorkspaceSignalsDTO(
         health=health,
         attention=attention,
@@ -874,7 +885,7 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
         # E4: the entries phases are a PREFIX on the existing four, so the
         # play-state derivation is untouched and is what answers once the
         # desk is clear.
-        phase=_entries_phase(counts.entries) or _derive_phase(data_blob, counts),
+        phase=phase,
         planFinalized=bool(data_blob.get("planFinalized")),
         entries=_entries_metrics(counts.entries),
     )
