@@ -10,6 +10,9 @@ import {
   resolveCardHeightPx,
   resolveCardSizeClasses,
   resolveGridColsClass,
+  resolveSignageNameSize,
+  stepDownSignageNameSize,
+  longestWordChars,
 } from '../tvSizing';
 
 describe('resolveTvAccent', () => {
@@ -72,5 +75,27 @@ describe('resolveGridColsClass', () => {
     expect(resolveGridColsClass(2)).toContain('md:grid-cols-2');
     expect(resolveGridColsClass(3)).toContain('lg:grid-cols-3');
     expect(resolveGridColsClass(4)).toContain('xl:grid-cols-4');
+  });
+});
+
+// ── OPR-0908-10 ───────────────────────────────────────────────────────────
+describe('signage name wrapping', () => {
+  it('measures the longest WORD, not the longest line', () => {
+    expect(longestWordChars(['Koki Watanabe', 'Anders Christiansen'])).toBe(12);
+    expect(longestWordChars([])).toBe(0);
+  });
+
+  it('keeps the tier for ordinary names', () => {
+    expect(resolveSignageNameSize(176, ['Koki Watanabe'])).toBe('text-5xl');
+    expect(resolveSignageNameSize(96, ['Kunlavut Vitidsarn'])).toBe('text-3xl');
+  });
+
+  it('steps down exactly one tier when a word is too long to fit', () => {
+    expect(resolveSignageNameSize(176, ['Anders Christiansen'])).toBe('text-4xl');
+    expect(stepDownSignageNameSize('text-4xl', ['Anders Christiansen'])).toBe('text-3xl');
+  });
+
+  it('never steps below the floor tier', () => {
+    expect(stepDownSignageNameSize('text-2xl', ['Anders Christiansen'])).toBe('text-2xl');
   });
 });

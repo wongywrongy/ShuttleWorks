@@ -27,6 +27,7 @@ import {
   resolveSignageCourtSize,
   resolveSignageNameSize,
   resolveSignageScoreSize,
+  SIGNAGE_NAME_WRAP,
 } from './tvSizing';
 
 type CourtStatus = 'active' | 'called' | 'empty';
@@ -147,7 +148,18 @@ function CourtsListMode({
                  belonging visibly to neither side. */
               <div
                 data-testid={`court-match-${courtId}`}
-                className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3"
+                // The score column EXISTS only when there is a score:
+                // `SideScores` renders nothing for an empty ledger, and a
+                // two-column track with nothing in its second column used to
+                // drop side B into it — the two sides sat abreast, each name
+                // in half a card, and the name column narrowed below its own
+                // longest word (OPR-0908-10). `min-content` is the floor when
+                // the column does exist.
+                className={`grid min-w-0 items-center gap-x-3 ${
+                  sets.length
+                    ? 'grid-cols-[minmax(min-content,1fr)_auto]'
+                    : 'grid-cols-[minmax(min-content,1fr)]'
+                }`}
               >
                 <ListSide lines={linesA} />
                 <SideScores
@@ -169,7 +181,7 @@ function CourtsListMode({
                 />
               </div>
             ) : preview ? (
-              <span className="min-w-0 break-words text-muted-foreground">
+              <span className="min-w-0 text-muted-foreground" style={SIGNAGE_NAME_WRAP}>
                 <span className="font-semibold uppercase tracking-wide text-foreground">Next</span>{' '}
                 {formatPlayers(preview.sideA, playerNames)} vs{' '}
                 {formatPlayers(preview.sideB, playerNames)}
@@ -188,9 +200,9 @@ function CourtsListMode({
  *  reads as two names inside one group rather than a slash-joined string. */
 function ListSide({ lines, className = '' }: { lines: string[]; className?: string }) {
   return (
-    <span className={`min-w-0 break-words font-medium leading-tight ${className}`}>
+    <span className={`min-w-0 font-medium leading-tight ${className}`} style={SIGNAGE_NAME_WRAP}>
       {lines.map((line, i) => (
-        <span key={i} className="block break-words">
+        <span key={i} className="block" style={SIGNAGE_NAME_WRAP}>
           {line}
         </span>
       ))}
@@ -267,7 +279,6 @@ function CourtCard({
 }: CourtCardProps) {
   const { courtId, match, state, conflictMatches, nextMatch } = row;
   const courtSize = resolveSignageCourtSize(cardHeightPx);
-  const nameSize = resolveSignageNameSize(cardHeightPx);
   const scoreSize = resolveSignageScoreSize(cardHeightPx);
   // Disputed courts are suppressed, never arbitrated: picking one of two
   // claims would put a wrong match on the wall with full confidence.
@@ -276,6 +287,11 @@ function CourtCard({
   const sets = laneSets(suppressed ? null : state, tvShowScores);
   const linesA = current ? sideLines(current.sideA, playerNames) : [];
   const linesB = current ? sideLines(current.sideB, playerNames) : [];
+  // The tier is derived from the card AND from the names on it: a word too
+  // long for the column steps the whole card's names down one tier rather
+  // than breaking (OPR-0908-10). Both sides step together — two name rows at
+  // two sizes would read as a hierarchy the match does not have.
+  const nameSize = resolveSignageNameSize(cardHeightPx, [...linesA, ...linesB]);
   // The Next preview rides an idle court AND an occupied one: "what does
   // this court play next" is the question the setting is for, and a hall in
   // full flow has no idle courts to put it on.
@@ -316,7 +332,14 @@ function CourtCard({
            the gap that separates the two sides. */
         <div
           data-testid={`court-match-${courtId}`}
-          className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3"
+          // Two columns only while there IS a score to put in the second one
+          // — see the list-mode note: an empty score column used to swallow
+          // side B and halve the name column (OPR-0908-10).
+          className={`grid w-full items-center gap-x-3 ${
+            sets.length
+              ? 'grid-cols-[minmax(min-content,1fr)_auto]'
+              : 'grid-cols-[minmax(min-content,1fr)]'
+          }`}
         >
           <SignageSide lines={linesA} nameSize={nameSize} />
           <SideScores
@@ -379,9 +402,12 @@ function SignageSide({
   className?: string;
 }) {
   return (
-    <span className={`${nameSize} w-full text-center font-semibold leading-tight text-foreground ${className}`}>
+    <span
+      className={`${nameSize} w-full text-center font-semibold leading-tight text-foreground ${className}`}
+      style={SIGNAGE_NAME_WRAP}
+    >
       {lines.map((line, i) => (
-        <span key={i} className="block break-words">
+        <span key={i} className="block" style={SIGNAGE_NAME_WRAP}>
           {line}
         </span>
       ))}

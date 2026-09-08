@@ -20,6 +20,7 @@ import { MeetDisplayPage } from '../MeetDisplayPage';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { ScheduleDTO, MatchDTO, TournamentConfig, MatchStateDTO, PlayerDTO } from '../../../api/dto';
+import { resolveSignageNameSize } from '../publicDisplay/tvSizing';
 
 const DOUBLES_MATCHES: MatchDTO[] = [
   {
@@ -365,6 +366,52 @@ describe('MeetDisplayPage — venue signage', () => {
       expect(screen.getByText('Alice Anderson')).toBeInTheDocument();
       off.unmount();
     }
+  });
+
+  // ── OPR-0908-10 ─────────────────────────────────────────
+  it('wraps a long name between words only — never mid-word, never hyphenated', () => {
+    // The reported case: a long single name sharing a card with a long
+    // opponent name. The board used to render "Koki Watanab / e" once the
+    // side column narrowed below the longest word.
+    useTournamentStore.setState({
+      players: [
+        { id: 'a1', name: 'Koki Watanabe', groupId: 'g1', availability: [] },
+        { id: 'a2', name: 'Kunlavut Vitidsarn', groupId: 'g1', availability: [] },
+        { id: 'b1', name: 'Anders Christiansen', groupId: 'g2', availability: [] },
+        { id: 'b2', name: 'Mia Blichfeldt', groupId: 'g2', availability: [] },
+      ] as PlayerDTO[],
+    });
+    seedNames({
+      m1: {
+        matchId: 'm1',
+        status: 'started',
+        actualStartTime: new Date().toISOString(),
+        sets: [{ sideA: 21, sideB: 18 }],
+      } as MatchStateDTO,
+    });
+
+    renderBoard();
+
+    // The RESOLVED style on each rendered name line, not a class list
+    // mirroring itself: a class name proves nothing about how the text wraps.
+    for (const name of ['Koki Watanabe', 'Kunlavut Vitidsarn', 'Anders Christiansen', 'Mia Blichfeldt']) {
+      const line = screen.getByText(name);
+      const style = getComputedStyle(line);
+      expect(style.overflowWrap).toBe('normal');
+      expect(style.wordBreak).toBe('normal');
+      expect(line.className).not.toMatch(/break-(words|all)/);
+    }
+
+    // "Christiansen" (12) is past the tier's character budget, so the card's
+    // names step DOWN one tier rather than split — a smaller true name beats
+    // a larger false one. Both sides step together.
+    const sizes = ['Koki Watanabe', 'Anders Christiansen'].map(
+      (name) => /text-(\d)xl/.exec(screen.getByText(name).parentElement!.className)?.[1],
+    );
+    expect(sizes[0]).toBe(sizes[1]);
+    expect(Number(sizes[0])).toBe(
+      Number(/text-(\d)xl/.exec(resolveSignageNameSize(96))![1]) - 1,
+    );
   });
 
   it('shows the operator board branding', () => {
