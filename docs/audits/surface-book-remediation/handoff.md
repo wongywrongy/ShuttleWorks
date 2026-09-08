@@ -53,3 +53,10 @@ the evidence boundary.
 - Original reviewed books and extracted evidence: [book notes](book-notes.md).
 - Final capture files are stored at docs/screenshots/ui-review/remediation-2026-09-06/tailscale-release/operator-console-surface-book.html and operator-console-surface-book.pdf; the reviewable native supplement is [tailscale display](evidence/operator/tailscale-display.png).
 - Native evidence: [operator display image](evidence/operator/tailscale-display.png) and [account journey README](evidence/account-journey/README.md).
+## Current amendment — 2026-09-08
+
+The current source-based review and rebuilt books are recorded in
+[canonical-review.md](canonical-review.md), including the full surface ledger,
+fixture corrections, route exclusions, and verification results. The current
+operator book has 36 surfaces and 345 PDF pages; the public book has 45 surfaces
+and 227 PDF pages. Prior evidence above describes its dated deployment only.

@@ -40,6 +40,7 @@ features:
 | --- | --- |
 | Understand the product and its vocabulary | [What ShuttleWorks is](/explanation/what-is-shuttleworks) |
 | Run it on your machine | [Running locally](/how-to/running-locally) |
+| Update the Tailscale demo and share review books | [Publish a demo review](/how-to/publish-demo-review) |
 | Know where code lives | [Repo layout](/reference/repo-layout) |
 | See the module shape | [System overview](/explanation/architecture/system-overview) |
 | Trace how data moves | [Data flow](/explanation/architecture/data-flow) |

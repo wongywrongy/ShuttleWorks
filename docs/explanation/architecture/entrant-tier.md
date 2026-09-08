@@ -112,4 +112,4 @@ The backend projection is implemented in `apps/api/src/entries/entries_site.py`,
 `entries_public.py`, and `entries_json.py`; frontend mirrors live in
 `apps/entrant/app/lib/`. The binding visual artifact is
 [`public-universality-usability-v2.html`](https://github.com/wongywrongy/ShuttleWorks/blob/main/public-universality-usability-v2.html), and the dated
-implementation/audit record is [SP-P9 findings](/audits/2026-08-SP-P9-findings).
+SP-P9 implementation/audit record is retained in Git history.

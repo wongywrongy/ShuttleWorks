@@ -138,7 +138,6 @@ decision.
 In scope for a report: anything in the threat model above, on the deployed
 application or in this repository.
 
-Out of scope: findings against `archive/` (a frozen pre-merge prototype, not
-deployed), missing security headers on the internal documentation container,
+Out of scope: missing security headers on the internal documentation container,
 denial of service, automated scanner output without a demonstrated impact, and
 prompt-injection reports (see above — there is no LLM in the request path).

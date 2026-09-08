@@ -117,7 +117,7 @@ Documented in `apps/console/src/components/README.md`. Highlights:
 + `DetailPanel`, `control-plane/SectionCard` (panel section + eyebrow
 label), `control-plane/EmptyState`, `control-plane/Eyebrow`,
 `DialogFooter` (`align: between | end`), `ActiveChoice` (the one
-selected-state treatment), chips (`SourceChip`, `SchoolChip`,
+selected-state treatment), chips (`SchoolChip`,
 `MatchChip`, `PendingBadge`), `StatusPill` (re-export of the shared one).
 
 ### Shared class constants

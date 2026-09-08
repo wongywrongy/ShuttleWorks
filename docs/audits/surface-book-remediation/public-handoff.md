@@ -145,3 +145,11 @@ touch-device interaction, external email and payment delivery, cloud reconnect,
 and a full assistive-technology audit. Touch specifically was not exercised —
 no touch device was available; the 390×844 viewport is captured and asserted
 instead.
+## Current amendment — 2026-09-08
+
+The current public book and source-based review are recorded in
+[canonical-review.md](canonical-review.md). The 45 included surfaces exclude
+compatibility, fabricated, disabled, and duplicate routes; real token-backed
+entry states and meaningful recovery states remain. Desktop/mobile captures
+and browser touch emulation cover the current fixture. Prior evidence above
+describes its dated deployment only.

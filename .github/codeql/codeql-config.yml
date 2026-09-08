@@ -1,18 +1,6 @@
-# CodeQL scope for ShuttleWorks (2026-09-07).
-#
-# Two trees are excluded from analysis because no fix can ever land in them,
-# so every alert they raise is permanent noise on top of the alerts that are
-# actionable:
-#
-#   .github/skills/**  vendored third-party skill content, carried verbatim
-#                      and never edited here; upstream owns its code.
-#   archive/**         the FROZEN pre-merge tournament product. CLAUDE.md:
-#                      "Never edit." It ships in no image and runs nowhere.
-#
-# Nothing else is excluded. Every path that reaches a running deployment —
-# apps/, packages/, tools/, infra/, tests/ — stays in scope.
+# Vendored third-party skill content is maintained upstream.
+# All application, package, tooling, infrastructure, and test code stays in scope.
 name: "ShuttleWorks CodeQL config"
 
 paths-ignore:
   - ".github/skills/**"
-  - "archive/**"

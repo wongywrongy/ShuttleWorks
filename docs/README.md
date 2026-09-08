@@ -35,7 +35,9 @@ product.
 
 **Historical records are not rewritten.** A dated record silently edited to
 describe a layout it never saw is worth less than no record. Recover it from the
-commit that created it when provenance is needed.
+commit that created it when provenance is needed. Use `git log --all -- <path>`
+to find the record and `git show <commit>:<path>` to read it without restoring
+obsolete files to the working tree.
 
 Two things that look like history and are not, and so live in `reference/`:
 

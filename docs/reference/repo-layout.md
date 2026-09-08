@@ -47,9 +47,6 @@ tests/
 
 simulator/                     internal full-workflow HTTP simulator (not in CI)
 tools/                         OpenAPI, documentation, and audit tooling
-legacy/                        sealed pre-merge deployment files (never edited)
-archive/
-└── tournament-pre-merge/      frozen snapshot of the legacy tournament product
 examples/                      engine usage examples (product-agnostic)
 docs/                          current VitePress documentation
 Makefile                       every target (the former product Makefile folded in)
@@ -93,8 +90,7 @@ Each major directory under `apps/console/src/` (`apps/console/src/store/`,
 - **`main`** is the default integration branch; short-lived `<type>/<slug>`
   branches target it through PRs.
 - The legacy two-product layout (a separate scheduler and a separate bracket app) was folded into
-  one product during the **backend-merge arc**; the old bracket product is frozen under
-  `archive/tournament-pre-merge/`.
+  one product during the **backend-merge arc**; Git history retains the retired bracket product.
 
 ## How this docs site is organised
 
