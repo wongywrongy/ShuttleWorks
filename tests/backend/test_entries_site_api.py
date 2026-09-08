@@ -751,6 +751,62 @@ def test_an_imported_person_is_one_person_across_workspaces(client):
     assert [row["slug"] for row in kim["history"]] == ["alpha-open"]
 
 
+def test_a_career_expands_every_published_workspace_and_no_unpublished_one(client):
+    """OPR-0908-7: the whole career, not the first five of it.
+
+    A profile used to hydrate one COMPLETE bracket per other workspace, so it
+    carried a cap of five and everything past it read as a bare link — on a
+    fixture where every player appears in thirty workspaces, that is a career
+    with five entries. The per-person index replaced the hydration, so the cap
+    went with it. The publication gate did not: the workspace that has not
+    published its draws is still absent, not summarised.
+    """
+    published = []
+    for index in range(7):
+        tid = _make_workspace(
+            client,
+            name=f"Open {index}",
+            slug=f"career-{index}",
+            draws_published=True,
+            results_published=True,
+        )
+        published.append((tid, f"career-{index}"))
+    quiet = _make_workspace(client, name="Quiet Open", slug="career-quiet")
+    for tid, _slug in [*published, (quiet, "career-quiet")]:
+        _set_bracket_players(
+            tid,
+            [
+                {"id": "R-1", "name": "Rin Sato", "personId": "P0001"},
+                {"id": "R-2", "name": "Kim Park", "personId": "P0002"},
+            ],
+        )
+        _import_singles_draw(
+            client,
+            tid,
+            "MS",
+            [{"id": "R-1", "name": "Rin Sato"}, {"id": "R-2", "name": "Kim Park"}],
+            [[{"id": "R-F", "side_a": ["R-1"], "side_b": ["R-2"]}]],
+        )
+
+    body = client.get("/e/api/page/career-0/players/R-1").json()
+    history = {row["slug"]: row for row in body["history"]}
+    assert set(history) == {slug for _tid, slug in published}
+    assert "career-quiet" not in history
+    # Every OTHER workspace carries its detail — the sixth and seventh no
+    # less than the first, which is the whole point of the row.
+    others = [row for row in history.values() if not row["current"]]
+    assert len(others) == 6
+    assert all(row["expanded"] for row in others)
+    for row in others:
+        (event,) = row["events"]
+        assert event["code"] == "MS"
+        (step,) = event["drawPath"]
+        assert step["roundLabel"] == "Final"
+        assert [
+            person["identity"]["name"] for person in step["opponents"]
+        ] == ["Kim Park"]
+
+
 def test_an_unpublished_draw_keeps_a_person_out_of_the_history(client):
     """A workspace that has not published its draws is absent, not summarised."""
     first = _make_workspace(client, name="Alpha Open", slug="alpha-2", draws_published=True)

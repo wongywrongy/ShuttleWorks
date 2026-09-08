@@ -34,9 +34,9 @@ from datetime import timedelta
 from typing import Dict, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import String, and_, cast, or_, select
 
 from entries.entries import roster_id
 from entries.entries_public import (
@@ -53,7 +53,9 @@ from db.models import (
     EntryPage,
     EntryPlayer,
     Match,
+    BracketEvent,
     BracketMatch,
+    BracketParticipant,
     BracketResult,
     MeetEvent,
     Tournament,
@@ -155,14 +157,12 @@ def _bracket_roster_names(tournament: Tournament) -> Dict[str, str]:
     or unnamed blob rows stay absent and are counted by the Players projection
     instead of leaking an id as though it were a name.
     """
-    out: Dict[str, str] = {}
-    for row in (tournament.data or {}).get("bracketPlayers") or []:
-        if not isinstance(row, dict):
-            continue
-        key, name = row.get("id"), row.get("name")
-        if isinstance(key, str) and key and isinstance(name, str) and name.strip():
-            out[key] = name.strip()
-    return out
+    return _roster_names(tournament.data)
+
+
+def _roster_names(data) -> Dict[str, str]:
+    """``_bracket_roster_names`` over a bare ``tournaments.data`` blob."""
+    return {row["id"]: row["name"].strip() for row in _roster_rows(data)}
 
 
 @dataclass(frozen=True)
@@ -201,9 +201,34 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
     historical references degrade to a generic dead token instead of
     falling back to a copied bracket name.
     """
+    return _public_identities_many(repo, [tournament_id]).get(
+        str(tournament_id), _EMPTY_DIRECTORY
+    )
+
+
+_EMPTY_DIRECTORY = PublicPersonDirectory(
+    identities={}, hidden=frozenset(), clubs={}, visible_events={}
+)
+
+
+def _public_identities_many(
+    repo: LocalRepository, tournament_ids
+) -> Dict[str, PublicPersonDirectory]:
+    """``_public_identities`` for MANY workspaces in one query.
+
+    The cross-tournament participation index needs one directory per
+    workspace in a person's history, and a career is thirty of them. Issuing
+    the query above thirty times is the same N+1 this module refuses inside
+    one document; the ``IN`` is the same query with a wider WHERE, so the
+    single-workspace spelling stays a call to this one.
+    """
+    ids = list(tournament_ids)
+    if not ids:
+        return {}
     rows = repo.execute_query(
         _all_rows,
         select(
+            EntryPlayer.tournament_id,
             EntryPlayer.id,
             EntryPlayer.full_name,
             EntryPlayer.club,
@@ -225,13 +250,14 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
             (EntryEvent.tournament_id == Entry.tournament_id)
             & (EntryEvent.id == Entry.entry_event_id),
         )
-        .where(EntryPlayer.tournament_id == tournament_id),
+        .where(EntryPlayer.tournament_id.in_(ids)),
     )
-    identities: Dict[str, PublicPersonIdentityDTO] = {}
-    hidden: set[str] = set()
-    clubs: Dict[str, Optional[str]] = {}
-    visible_events: Dict[str, set[str]] = {}
+    identities: Dict[str, Dict[str, PublicPersonIdentityDTO]] = {}
+    hidden: Dict[str, set[str]] = {}
+    clubs: Dict[str, Dict[str, Optional[str]]] = {}
+    visible_events: Dict[str, Dict[str, set[str]]] = {}
     for (
+        tournament_key,
         player_id,
         name,
         club,
@@ -242,6 +268,11 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
         opted_out,
         erased_at,
     ) in rows:
+        scope = str(tournament_key)
+        identities.setdefault(scope, {})
+        hidden.setdefault(scope, set())
+        clubs.setdefault(scope, {})
+        visible_events.setdefault(scope, {})
         key = roster_id(player_id)
         visible = (
             erased_at is None
@@ -251,28 +282,36 @@ def _public_identities(repo: LocalRepository, tournament_id) -> PublicPersonDire
             and bool(name.strip())
         )
         if visible:
-            identities.setdefault(
+            identities[scope].setdefault(
                 key, PublicPersonIdentityDTO(id=str(player_id), name=name.strip())
             )
             if isinstance(event_code, str):
-                visible_events.setdefault(key, set()).add(event_code)
+                visible_events[scope].setdefault(key, set()).add(event_code)
             if isinstance(bracket_event_id, str) and bracket_event_id:
-                visible_events.setdefault(key, set()).add(bracket_event_id)
+                visible_events[scope].setdefault(key, set()).add(bracket_event_id)
             if isinstance(meet_event_id, str) and meet_event_id:
-                visible_events.setdefault(key, set()).add(meet_event_id)
+                visible_events[scope].setdefault(key, set()).add(meet_event_id)
             # A club is an expressly public field, but only on a visible
             # event.  Keep the first stable non-empty value if events differ.
-            if key not in clubs or clubs[key] is None:
-                clubs[key] = club.strip() if isinstance(club, str) and club.strip() else None
+            if key not in clubs[scope] or clubs[scope][key] is None:
+                clubs[scope][key] = (
+                    club.strip() if isinstance(club, str) and club.strip() else None
+                )
         else:
-            hidden.add(key)
-    hidden.difference_update(identities)
-    return PublicPersonDirectory(
-        identities=identities,
-        hidden=frozenset(hidden),
-        clubs=clubs,
-        visible_events={key: frozenset(values) for key, values in visible_events.items()},
-    )
+            hidden[scope].add(key)
+    out: Dict[str, PublicPersonDirectory] = {}
+    for scope, people in identities.items():
+        hidden[scope].difference_update(people)
+        out[scope] = PublicPersonDirectory(
+            identities=people,
+            hidden=frozenset(hidden[scope]),
+            clubs=clubs[scope],
+            visible_events={
+                key: frozenset(values)
+                for key, values in visible_events[scope].items()
+            },
+        )
+    return out
 
 
 #: Roster-row keys that are ENTRY-BACKED and therefore already answer to the
@@ -290,8 +329,19 @@ def _bracket_roster_rows(tournament: Tournament) -> List[dict]:
     This one answers the IDENTITY question, so it keeps the whole row —
     ``personId``/``personSource`` included where the importer wrote them.
     """
+    return _roster_rows(tournament.data)
+
+
+def _roster_rows(data) -> List[dict]:
+    """``_bracket_roster_rows`` over a bare ``tournaments.data`` blob.
+
+    The cross-tournament participation index (``_expand_history_rows``) reads
+    thirty workspaces' blobs in ONE query and never materialises their
+    ``Tournament`` rows, so the validation rule has to be reachable without
+    one. Both public spellings above are this function.
+    """
     out: List[dict] = []
-    for row in (tournament.data or {}).get("bracketPlayers") or []:
+    for row in (data or {}).get("bracketPlayers") or []:
         if not isinstance(row, dict):
             continue
         key, name = row.get("id"), row.get("name")
@@ -302,7 +352,7 @@ def _bracket_roster_rows(tournament: Tournament) -> List[dict]:
 
 def _with_draw_roster(
     directory: PublicPersonDirectory,
-    tournament: Tournament,
+    roster_rows: List[dict],
     draws_published: bool,
 ) -> PublicPersonDirectory:
     """Add the published draw's own roster people to the person directory.
@@ -329,7 +379,7 @@ def _with_draw_roster(
     if not draws_published:
         return directory
     extra: Dict[str, PublicPersonIdentityDTO] = {}
-    for row in _bracket_roster_rows(tournament):
+    for row in roster_rows:
         key = row["id"]
         if key.startswith(_ENTRY_ROSTER_PREFIX):
             # An entries-backed roster id answers to the Entries gates, full
@@ -356,7 +406,9 @@ def _directory(
 ) -> PublicPersonDirectory:
     """The one person directory every public projection of a page shares."""
     return _with_draw_roster(
-        _public_identities(repo, tournament.id), tournament, bool(page.draws_published)
+        _public_identities(repo, tournament.id),
+        _roster_rows(tournament.data),
+        bool(page.draws_published),
     )
 
 
@@ -952,9 +1004,11 @@ class PlayerHistoryEntryDTO(BaseModel):
     drawsPublished: bool = False
     resultsPublished: bool = False
     #: Per-event participation in THAT workspace, projected through that
-    #: workspace's own gates (P6). Present only for the expanded rows — see
-    #: ``_HISTORY_EXPANSION_LIMIT`` in ``_person_history``; the remaining
-    #: rows stay pure link targets, which is what they always were.
+    #: workspace's own gates (P6). Every readable row carries it since
+    #: OPR-0908-7 — the expansion cap is gone, because the detail no longer
+    #: costs one hydrated bracket per workspace (``_expand_history_rows``).
+    #: A row still reads as a pure link target when its workspace published
+    #: no draw, or published no draw this person is on.
     events: List[PlayerEventDTO] = Field(default_factory=list)
     #: True when this row was expanded and the events above are complete for
     #: it. False means "open the link to see the detail", never "no matches".
@@ -2115,15 +2169,6 @@ def _canonical_person_key(account_id, full_name: Optional[str]) -> Optional[str]
     return f"{account_id}:{name}"
 
 
-#: How many OTHER workspaces a profile expands into full per-event detail.
-#: The rest stay link targets. Expansion costs one hydrated bracket per
-#: workspace (served through ``bracket.response_cache``), so this is the line
-#: between "a profile that shows a career" and "a public page that rebuilds
-#: the estate on every read". Rows beyond it carry ``expanded=False``, which
-#: the renderer must state as "open it", never as "nothing there".
-_HISTORY_EXPANSION_LIMIT = 5
-
-
 def _imported_person_correlation(row: dict) -> Optional[str]:
     """The cross-tournament identity of ONE imported draw-roster row.
 
@@ -2334,40 +2379,399 @@ def _imported_person_history_rows(
     return out
 
 
-def _expand_history_row(
-    repo: LocalRepository,
-    row: PlayerHistoryEntryDTO,
-) -> None:
-    """Fill one history row's per-event detail from ITS OWN workspace.
+# ---- the cross-tournament participation index (OPR-0908-7) ---------------
+#
+# A career is thirty workspaces. Filling each row's detail used to hydrate
+# that workspace's WHOLE bracket session — every event, every participant,
+# every match, reconciled and serialized — to read the handful of rows one
+# person appears in, which is why the profile carried a cap of five and the
+# other twenty-five read as bare links.
+#
+# What replaces it is a per-person index: five queries for the whole history,
+# each scoped by ``IN`` over the workspaces already in it and then narrowed
+# to the EVENTS this person is entered in. Nothing outside those events is
+# read, and no bracket is serialized at all. The projection itself is
+# unchanged — the rows are assembled into the same shape
+# ``_person_draw_events`` already walks, so an expanded history row and the
+# page's own events block are still one piece of code and cannot drift.
+#
+# The one thing this path does NOT do that hydration did is
+# ``reconcile_recorded_results`` — the repair pass that derives resolved
+# successor slots for imports that recorded results without them. Those
+# workspaces show a placeholder where hydration would have shown an
+# advanced name; the fix belongs in the draw, not in a read of it, and the
+# workspace's own draw page (which still hydrates) says the same thing.
 
-    Every gate is that workspace's: its page must still be open and
-    published, its directory decides whether this person is linkable there,
-    and its ``results_published`` decides whether any score appears. Nothing
-    from the workspace being read leaks across.
+
+@dataclass(frozen=True)
+class _IndexSlot:
+    """``BracketSlotOut``, from the stored slot dict (``_dict_to_slot``)."""
+
+    participant_id: Optional[str] = None
+    feeder_play_unit_id: Optional[str] = None
+    feeder_take: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class _IndexUnit:
+    id: str
+    side_a: Optional[List[str]]
+    side_b: Optional[List[str]]
+    slot_a: _IndexSlot
+    slot_b: _IndexSlot
+    dependencies: List[str]
+
+
+@dataclass(frozen=True)
+class _IndexResult:
+    play_unit_id: str
+    winner_side: str
+    score: Optional[dict]
+
+
+@dataclass(frozen=True)
+class _IndexParticipant:
+    id: str
+    name: str
+    members: Optional[List[str]]
+    seed: Optional[int]
+    entryPlayerId: Optional[str]
+    sourceEntryId: Optional[str]
+
+
+@dataclass(frozen=True)
+class _IndexSegment:
+    id: str
+    label: str
+    order: int
+    rounds: List[List[str]]
+
+
+@dataclass(frozen=True)
+class _IndexEvent:
+    id: str
+    discipline: str
+    format: str
+    config: dict
+    participants: List[_IndexParticipant]
+    rounds: List[List[str]]
+    segments: Optional[List[_IndexSegment]]
+
+
+@dataclass(frozen=True)
+class _IndexDraws:
+    """The narrow stand-in for ``TournamentOut`` — one person's events only."""
+
+    events: List[_IndexEvent]
+    play_units: List[_IndexUnit]
+    results: List[_IndexResult]
+    assignments: Tuple = ()
+
+
+def _index_slot(raw) -> _IndexSlot:
+    if not isinstance(raw, dict):
+        return _IndexSlot()
+    return _IndexSlot(
+        participant_id=raw.get("participant_id"),
+        feeder_play_unit_id=raw.get("feeder_play_unit_id"),
+        feeder_take=raw.get("feeder_take") or "winner",
+    )
+
+
+def _index_participant(row) -> _IndexParticipant:
+    meta = row.meta if isinstance(row.meta, dict) else {}
+    return _IndexParticipant(
+        id=row.id,
+        name=row.name,
+        # ``members`` is the pair composition and is a TEAM fact — the same
+        # rule ``_participant_out`` applies, so a singles participant reads
+        # as ``None`` here too and ``_participant_people`` takes its
+        # single-person branch.
+        members=list(row.member_ids) if row.type == "TEAM" and row.member_ids else None,
+        seed=row.seed if row.seed is not None else meta.get("seed"),
+        entryPlayerId=str(row.entry_player_id) if row.entry_player_id else None,
+        sourceEntryId=meta.get("sourceEntryId"),
+    )
+
+
+def _index_rounds(match_rows) -> List[List[str]]:
+    """The event's global round axis — ``_hydrate_draw``'s ``rounds``."""
+    buckets: Dict[int, List[Tuple[int, str]]] = {}
+    for row in match_rows:
+        buckets.setdefault(row.round_index, []).append((row.match_index, row.id))
+    return [
+        [unit_id for _, unit_id in sorted(buckets[index])] for index in sorted(buckets)
+    ]
+
+
+def _index_segments(match_rows) -> Optional[List[_IndexSegment]]:
+    """Segments back out of per-match meta — ``_segments_from_match_meta``.
+
+    Labels are not rebuilt: the only thing the person projection reads off a
+    segment is its ID (which spells the shared match reference) and its round
+    count (which spells "Semifinals"). ``segment_label`` lives in the bracket
+    domain and is not imported for a string nothing here prints.
+    """
+    buckets: Dict[str, dict] = {}
+    for row in match_rows:
+        meta = row.meta or {}
+        segment_id = meta.get("segment")
+        if segment_id is None:
+            continue
+        bucket = buckets.setdefault(
+            segment_id, {"order": int(meta.get("segment_order", 0)), "rounds": {}}
+        )
+        bucket["rounds"].setdefault(int(meta.get("round", 0)), []).append(
+            (int(meta.get("match_index", 0)), row.id)
+        )
+    if not buckets:
+        return None
+    return [
+        _IndexSegment(
+            id=segment_id,
+            label="",
+            order=bucket["order"],
+            rounds=[
+                [unit_id for _, unit_id in sorted(bucket["rounds"][index])]
+                for index in sorted(bucket["rounds"])
+            ],
+        )
+        for segment_id, bucket in sorted(
+            buckets.items(), key=lambda kv: (kv[1]["order"], kv[0])
+        )
+    ]
+
+
+def _history_roster_key(player_key: str) -> str:
+    """A history row's link key, as the OTHER workspace's directory spells it.
+
+    An entry-backed row carries the bare ``entry_players.id`` (that is the
+    URL segment ``/players/{key}``), while every directory and every draw
+    joins on the roster id. Reading the raw value against the directory is
+    how entry-backed rows silently failed to expand at all before
+    OPR-0908-7 — an account-linked career of ten workspaces produced ten
+    bare links.
     """
     try:
-        page, other = _page(repo, row.slug)
-    except HTTPException:
-        # The page closed or went private between the listing query and now.
-        # A row that can no longer be read is simply not expanded.
+        return roster_id(uuid.UUID(player_key))
+    except (ValueError, AttributeError, TypeError):
+        return player_key
+
+
+def _expand_history_rows(
+    repo: LocalRepository,
+    rows: Dict[str, PlayerHistoryEntryDTO],
+) -> None:
+    """Fill every readable history row's per-event detail, in five queries.
+
+    Every gate stays the row's OWN workspace's: it is expanded only while
+    that workspace publishes its draws, only while that workspace's
+    directory publishes this person, and its scores appear only under that
+    workspace's ``results_published``. Nothing from the workspace being read
+    crosses into another.
+    """
+    targets = {
+        tid: _history_roster_key(row.playerKey)
+        for tid, row in rows.items()
+        if row.drawsPublished
+    }
+    if not targets:
         return
-    if not page.draws_published:
-        # Everything expanded below is the DRAW's own record, so the draw's
-        # own flag is the gate. Publication of the entrant list is a
-        # different question and is answered where that list is served.
+    scope_ids = [uuid.UUID(tid) for tid in targets]
+
+    blobs = {
+        str(key): data
+        for key, data in repo.execute_query(
+            _all_rows,
+            select(Tournament.id, Tournament.data).where(Tournament.id.in_(scope_ids)),
+        )
+    }
+    directories = _public_identities_many(repo, scope_ids)
+    people: Dict[str, PublicPersonDirectory] = {
+        tid: _with_draw_roster(
+            directories.get(tid, _EMPTY_DIRECTORY), _roster_rows(blobs.get(tid)), True
+        )
+        for tid in targets
+    }
+    targets = {
+        tid: key for tid, key in targets.items() if key in people[tid].identities
+    }
+    if not targets:
         return
-    payload = _bracket(repo, other.id)
-    if payload is None:
+
+    # WHICH EVENTS, first — and only this person's rows, not every
+    # participant in thirty workspaces. A pair's member ids live in a JSON
+    # column, so the pair half is a substring PREFILTER over that column's
+    # text (the key is matched quoted, so it cannot half-match a longer id,
+    # and both dialects spell the array with quoted elements). It is only
+    # ever a prefilter: the exact membership test below decides.
+    mine: Dict[str, set] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketParticipant.tournament_id,
+            BracketParticipant.bracket_event_id,
+            BracketParticipant.id,
+            BracketParticipant.member_ids,
+        ).where(
+            or_(
+                *[
+                    and_(
+                        BracketParticipant.tournament_id == uuid.UUID(tid),
+                        or_(
+                            BracketParticipant.id == key,
+                            cast(BracketParticipant.member_ids, String).like(
+                                f'%"{key}"%'
+                            ),
+                        ),
+                    )
+                    for tid, key in targets.items()
+                ]
+            )
+        ),
+    ):
+        tid = str(row.tournament_id)
+        key = targets.get(tid)
+        if key is not None and (row.id == key or key in (row.member_ids or [])):
+            mine.setdefault(tid, set()).add(row.bracket_event_id)
+    if not mine:
         return
-    identities = _directory(repo, other, page)
-    if row.playerKey not in identities.identities:
-        return
-    events = _person_draw_events(
-        payload, other, identities, row.playerKey, bool(page.results_published)
-    )
-    row.events = events
-    row.eventCodes = sorted({event.code for event in events} | set(row.eventCodes))
-    row.expanded = True
+
+    scopes = {(tid, event_id) for tid, events in mine.items() for event_id in events}
+    scope_tids = [uuid.UUID(tid) for tid in mine]
+    scope_events = sorted({event_id for _tid, event_id in scopes})
+
+    participants: Dict[Tuple[str, str], List[_IndexParticipant]] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketParticipant.tournament_id,
+            BracketParticipant.bracket_event_id,
+            BracketParticipant.id,
+            BracketParticipant.name,
+            BracketParticipant.type,
+            BracketParticipant.member_ids,
+            BracketParticipant.seed,
+            BracketParticipant.entry_player_id,
+            BracketParticipant.meta,
+        ).where(
+            BracketParticipant.tournament_id.in_(scope_tids),
+            BracketParticipant.bracket_event_id.in_(scope_events),
+        ),
+    ):
+        scope = (str(row.tournament_id), row.bracket_event_id)
+        if scope in scopes:
+            participants.setdefault(scope, []).append(_index_participant(row))
+
+    matches: Dict[Tuple[str, str], List] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketMatch.tournament_id,
+            BracketMatch.bracket_event_id,
+            BracketMatch.id,
+            BracketMatch.round_index,
+            BracketMatch.match_index,
+            BracketMatch.slot_a,
+            BracketMatch.slot_b,
+            BracketMatch.side_a,
+            BracketMatch.side_b,
+            BracketMatch.dependencies,
+            BracketMatch.meta,
+        ).where(
+            BracketMatch.tournament_id.in_(scope_tids),
+            BracketMatch.bracket_event_id.in_(scope_events),
+        ),
+    ):
+        scope = (str(row.tournament_id), row.bracket_event_id)
+        if scope in scopes:
+            matches.setdefault(scope, []).append(row)
+
+    results: Dict[str, List[_IndexResult]] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketResult.tournament_id,
+            BracketResult.bracket_event_id,
+            BracketResult.bracket_match_id,
+            BracketResult.winner_side,
+            BracketResult.score,
+        ).where(
+            BracketResult.tournament_id.in_(scope_tids),
+            BracketResult.bracket_event_id.in_(scope_events),
+        ),
+    ):
+        scope = (str(row.tournament_id), row.bracket_event_id)
+        if scope in scopes:
+            results.setdefault(scope[0], []).append(
+                _IndexResult(
+                    play_unit_id=row.bracket_match_id,
+                    winner_side=row.winner_side,
+                    score=row.score,
+                )
+            )
+
+    events_by_tid: Dict[str, List[_IndexEvent]] = {}
+    units_by_tid: Dict[str, List[_IndexUnit]] = {}
+    for row in repo.execute_query(
+        _all_rows,
+        select(
+            BracketEvent.tournament_id,
+            BracketEvent.id,
+            BracketEvent.discipline,
+            BracketEvent.format,
+            BracketEvent.config,
+        ).where(
+            BracketEvent.tournament_id.in_(scope_tids),
+            BracketEvent.id.in_(scope_events),
+        ),
+    ):
+        tid = str(row.tournament_id)
+        scope = (tid, row.id)
+        if scope not in scopes:
+            continue
+        match_rows = matches.get(scope, [])
+        events_by_tid.setdefault(tid, []).append(
+            _IndexEvent(
+                id=row.id,
+                discipline=row.discipline,
+                format=row.format,
+                config=dict(row.config or {}),
+                participants=participants.get(scope, []),
+                rounds=_index_rounds(match_rows),
+                segments=_index_segments(match_rows),
+            )
+        )
+        units_by_tid.setdefault(tid, []).extend(
+            _IndexUnit(
+                id=match.id,
+                side_a=list(match.side_a) if match.side_a else None,
+                side_b=list(match.side_b) if match.side_b else None,
+                slot_a=_index_slot(match.slot_a),
+                slot_b=_index_slot(match.slot_b),
+                dependencies=list(match.dependencies or []),
+            )
+            for match in match_rows
+        )
+
+    for tid, key in targets.items():
+        if tid not in events_by_tid:
+            continue
+        row = rows[tid]
+        events = _person_draw_events(
+            _IndexDraws(
+                events=events_by_tid[tid],
+                play_units=units_by_tid.get(tid, []),
+                results=results.get(tid, []),
+            ),
+            _roster_names(blobs.get(tid)),
+            people[tid],
+            key,
+            bool(row.resultsPublished),
+        )
+        row.events = events
+        row.eventCodes = sorted({event.code for event in events} | set(row.eventCodes))
+        row.expanded = True
 
 
 def _person_history(
@@ -2451,12 +2855,13 @@ def _person_history(
     # the date descends while the tiebreaker still ascends. An empty date
     # sorts last, which is where an undated workspace belongs.
     ordered.sort(key=lambda row: row.date or "", reverse=True)
-    expanded = 0
-    for row in ordered:
-        if row.current or expanded >= _HISTORY_EXPANSION_LIMIT:
-            continue
-        _expand_history_row(repo, row)
-        expanded += 1
+    # Every non-current row, in one batch — no cap. See
+    # ``_expand_history_rows``: the detail costs a handful of queries for the
+    # whole career rather than one hydrated bracket per workspace.
+    _expand_history_rows(
+        repo,
+        {tid: row for tid, (row, _codes) in by_tournament.items() if not row.current},
+    )
     return ordered
 
 
@@ -2489,7 +2894,7 @@ def _draw_partner(
 
 def _person_draw_events(
     payload,
-    tournament: Tournament,
+    roster_names: Dict[str, str],
     identities: PublicPersonDirectory,
     identity_key: str,
     results_on: bool,
@@ -2508,7 +2913,6 @@ def _person_draw_events(
     """
     out: List[PlayerEventDTO] = []
     units, results, _ = _bracket_indexes(payload)
-    roster_names = _bracket_roster_names(tournament)
     for event in payload.events:
         public_event_code = _event_public_code(event)
         if not _event_public_for_person(
@@ -2924,7 +3328,13 @@ def player_page(
     # already-hydrated bracket. One helper because the SAME projection now
     # serves this page and every expanded cross-tournament history row.
     draw_events = (
-        _person_draw_events(payload, tournament, identities, identity_key, results_on)
+        _person_draw_events(
+            payload,
+            _bracket_roster_names(tournament),
+            identities,
+            identity_key,
+            results_on,
+        )
         if payload is not None and page.draws_published
         else []
     )
