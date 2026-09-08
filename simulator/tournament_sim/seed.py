@@ -3150,59 +3150,175 @@ def apply_synthetic_outcomes(
     }
 
 
-
 # ---------------------------------------------------------------------------
 # The synthetic bye fixture (debt-log OPR-0908-11).
 # ---------------------------------------------------------------------------
 #
 # All five seeded Taipei draws are full SE-32s, so the fixture contains no
 # structural bye and the surfaces that render one ("Bye" side labels, the
-# auto-recorded walkover, an advancement with nothing played) had nothing to
-# be checked against. Regenerating a real draw to make room for one would be
-# destructive, so the fixture gains ONE extra event instead: a test-only
-# 15-entrant SE draw whose sixteenth slot is a bye.
+# auto-recorded walkover, an advancement with nothing played) had nothing to be
+# checked against. Regenerating a sourced draw to make room for one would be
+# destructive, so the fixture gains a short, obviously synthetic draw of its
+# own instead: fifteen entrants in a sixteen bracket, whose sixteenth slot is a
+# bye.
 #
-# It is deliberately obvious. The event id, its discipline and every one of
-# its fifteen participants say "synthetic" in the name, so nobody reading a
-# console, board or entrant surface can mistake it for sourced BWF data, and
-# the manifest records it with the same ``syntheticOutcome``-style provenance
-# the walkover/retirement/forfeit fixtures carry.
+# WHY ITS OWN WORKSPACE. The first attempt added the event to the live demo
+# workspace with ``POST /bracket/events/SYNBYE`` + ``/generate``. The event was
+# created and the generate answered 409:
 #
-# The draw is built by the PRODUCT: ``POST /bracket/events/{id}`` then
-# ``POST /bracket/events/{id}/generate``. The bye is therefore the generator's
-# own bye — ``single_elimination`` pads 15 up to 16 and places the pad opposite
-# the top seed, and ``register_draw`` auto-records its walkover — not a shape
-# this module invented. Neither call touches another event, so no reseed and
-# no draw regeneration is needed.
+#     play unit 'T029-MS-R16-79c24db8...' has unresolved sides; cannot schedule
 #
-# Participants are synthetic people rather than borrowed real ones on purpose:
-# a real entrant already has assignments in this workspace, and reusing one
-# would make the new draw compete with its own player for court time.
+# ``TournamentDriver.generate_event`` re-enters the solver with every OTHER
+# event's assigned play units as locked phantom matches, and Taipei's plan
+# legitimately holds assignments for R16 units whose feeders have not been
+# played, which ``bracket.adapter.build_problem`` refuses. Any per-event
+# generate on that workspace fails the same way, so there is no scoped
+# generate to use (logged as OPR-0908-12).
+#
+# The path that DOES install a draw without a solve is the one the seeded
+# SE-32s themselves use: ``POST /bracket/import`` -> ``parse_json_payload`` ->
+# ``register_draw``, which takes pre-paired rounds and an already-approved plan
+# verbatim, and whose ``auto_walkover_byes`` records the bye's walkover on the
+# way in. That route replaces the WHOLE bracket of the workspace it is called
+# on, so it can only be aimed at a workspace this fixture owns — hence a
+# dedicated, clearly-labelled test-only workspace rather than a sixth Taipei
+# event. Nothing sourced is touched, and the bye is still the product's own:
+# an empty round-0 side, not a shape invented downstream.
+#
+# It is deliberately obvious wherever it surfaces: the workspace title says
+# "test only", the event id and discipline are ``SYNBYE``, every entrant is
+# named "Synthetic Entrant NN", and the manifest records it with the same
+# ``syntheticOutcome`` provenance the walkover/retirement/forfeit fixtures
+# carry.
 SYNTHETIC_BYE: dict[str, Any] = {
-    "tournamentId": _DEMO_LIVE_TOURNAMENT,
+    # Manifest key. Deliberately outside the dataset's T0NN range: this
+    # workspace has no source row and must never be confused with one.
+    "tournamentId": "TSYN",
+    "workspaceName": "Synthetic Bye Fixture (test only)",
+    # Pinned rather than derived: the fixture has no source dates, and the
+    # demo clock is frozen inside the seeded week.
+    "workspaceDate": "2026-07-28",
+    "timeZone": "Asia/Taipei",
+    "startTime": "2026-07-28T09:00:00+08:00",
     "eventId": "SYNBYE",
     "discipline": "SYNBYE",
     "format": "se",
     "bracketSize": 16,
     "entrantCount": 15,
     "durationSlots": 2,
-    # Pinned, because the generator's ids are deterministic:
-    # ``{event_id}-R{round}-{match}``, and the pad lands opposite seed 1, so
-    # the bye is always the first match of round 0. Asserted against the real
-    # generator by the unit test.
+    "courts": 2,
+    "totalSlots": 32,
+    "intervalMinutes": _DEMO_INTERVAL_MINUTES,
+    # Pinned, because the import installs the ids verbatim:
+    # ``{event_id}-R{round}-{match}``, with the bye first in round 0.
     "byePlayUnitId": "SYNBYE-R0-0",
     "note": "synthetic: test-only 15-entrant draw carrying the fixture's one structural bye",
 }
 
 
 def synthetic_bye_participants() -> list[dict[str, Any]]:
-    """The fifteen fixture entrants, in seed order."""
+    """The fifteen fixture entrants, in draw order."""
     return [
         {
             "id": f"synthetic-bye-{index:02d}",
             "name": f"Synthetic Entrant {index:02d}",
         }
-        for index in range(1, SYNTHETIC_BYE["entrantCount"] + 1)
+        for index in range(1, int(SYNTHETIC_BYE["entrantCount"]) + 1)
+    ]
+
+
+def synthetic_bye_import_body() -> dict[str, Any]:
+    """The pre-paired SE draw, in ``POST /bracket/import`` shape.
+
+    Round 0 pairs the entrants in order and leaves the FIRST unit's B side
+    absent — ``_slot_from_side`` reads an omitted side as the engine's BYE
+    sentinel, and ``register_draw`` walks that unit over on import. Later
+    rounds carry feeder references only, exactly like a generated SE draw.
+    Only the seven playable round-0 units get plan cells; the bye holds no
+    court, and later rounds stay unscheduled until their feeders resolve.
+    """
+    participants = synthetic_bye_participants()
+    playable = participants[1:]
+    rounds: list[list[dict[str, Any]]] = []
+    duration = int(SYNTHETIC_BYE["durationSlots"])
+    first_round: list[dict[str, Any]] = [
+        {
+            "id": f"{SYNTHETIC_BYE['eventId']}-R0-0",
+            "side_a": [participants[0]["id"]],
+            # No ``side_b``: this is the structural bye.
+            "duration_slots": duration,
+            # The bye's walkover stated as a FACT of the payload rather than
+            # left to be inferred. ``register_draw`` would record it anyway
+            # (``auto_walkover_byes``), but declaring it here also makes the
+            # imported event "started" rather than "draft", which is what a
+            # draw with a recorded result and an approved plan actually is.
+            "result": {"winner_side": "A", "walkover": True, "reason": "walkover"},
+        }
+    ]
+    for match_index in range(len(playable) // 2):
+        first_round.append(
+            {
+                "id": f"{SYNTHETIC_BYE['eventId']}-R0-{match_index + 1}",
+                "side_a": [playable[match_index * 2]["id"]],
+                "side_b": [playable[match_index * 2 + 1]["id"]],
+                "duration_slots": duration,
+            }
+        )
+    rounds.append(first_round)
+    previous = [unit["id"] for unit in first_round]
+    round_index = 0
+    while len(previous) > 1:
+        round_index += 1
+        current: list[dict[str, Any]] = []
+        for match_index in range(0, len(previous), 2):
+            current.append(
+                {
+                    "id": f"{SYNTHETIC_BYE['eventId']}-R{round_index}-{match_index // 2}",
+                    "feeder_a": previous[match_index],
+                    "feeder_b": previous[match_index + 1],
+                    "duration_slots": duration,
+                }
+            )
+        rounds.append(current)
+        previous = [unit["id"] for unit in current]
+    assignments = [
+        {
+            "play_unit_id": unit["id"],
+            "slot_id": (index // int(SYNTHETIC_BYE["courts"])) * duration,
+            "court_id": index % int(SYNTHETIC_BYE["courts"]) + 1,
+            "duration_slots": duration,
+        }
+        for index, unit in enumerate(first_round[1:])
+    ]
+    return {
+        "courts": SYNTHETIC_BYE["courts"],
+        "total_slots": SYNTHETIC_BYE["totalSlots"],
+        "rest_between_rounds": 1,
+        "interval_minutes": SYNTHETIC_BYE["intervalMinutes"],
+        "time_limit_seconds": 5,
+        "start_time": SYNTHETIC_BYE["startTime"],
+        "roster": [dict(row) for row in participants],
+        "events": [
+            {
+                "id": SYNTHETIC_BYE["eventId"],
+                "discipline": SYNTHETIC_BYE["discipline"],
+                "format": SYNTHETIC_BYE["format"],
+                "participants": [dict(row) for row in participants],
+                "rounds": rounds,
+            }
+        ],
+        "assignments": assignments,
+    }
+
+
+def _event_unit_ids(session: dict | None, event_id: str) -> list[str]:
+    """Ids of ``event_id``'s play units in a serialized bracket session."""
+    if not isinstance(session, dict):
+        return []
+    return [
+        str(unit.get("id"))
+        for unit in session.get("play_units") or []
+        if unit.get("event_id") == event_id
     ]
 
 
@@ -3221,80 +3337,120 @@ def _structural_bye_unit_ids(session: dict | None, event_id: str) -> list[str]:
     return found
 
 
+def _drop_stranded_bye_events(
+    manifest: dict, client: SimClient, event_id: str
+) -> list[str]:
+    """Delete an EMPTY ``event_id`` left on a seeded workspace by a failed run.
+
+    The first attempt at this fixture created the event on the live demo
+    workspace and then failed to generate its draw, leaving a draft event with
+    no play units that no surface can render. ``DELETE /bracket/events/{id}``
+    refuses anything but a draft, and this only ever fires when the event has
+    zero units, so a draw that exists can never be removed by it.
+    """
+    removed: list[str] = []
+    for tournament_id, entry in (manifest.get("tournaments") or {}).items():
+        workspace_id = (entry or {}).get("workspaceId")
+        if not workspace_id:
+            continue
+        session = client.get_bracket_or_none(workspace_id)
+        if session is None:
+            continue
+        if event_id not in {str(event.get("id")) for event in session.get("events") or []}:
+            continue
+        if _event_unit_ids(session, event_id):
+            continue
+        client.delete_event(workspace_id, event_id)
+        removed.append(f"{tournament_id}:{workspace_id}")
+    return removed
+
+
 def apply_synthetic_bye(
     *, seed_key: str, client: SimClient, run_dir: Path = _DEFAULT_RUN_DIR
 ) -> dict:
-    """Create :data:`SYNTHETIC_BYE`'s draw through the product's draw path.
+    """Install :data:`SYNTHETIC_BYE`'s draw through the product's import path.
 
-    Idempotent by existence, not by a local flag: the event is created only
-    when the workspace's bracket does not already carry it, so a second run
-    writes nothing at all — the generate route is destructive to its own
-    event, and a blind re-run would rebuild a draw the demo may already be
-    running. Scoped to the seed manifest, exactly like
-    :func:`apply_synthetic_outcomes`: a tournament this run did not create is
-    reported as ``missing`` rather than modified somewhere else.
+    Idempotent on the DRAW, not on the event row: the step re-imports whenever
+    the fixture workspace does not already hold the event's play units, so a
+    half-finished run is completed on the next attempt, and it never touches a
+    draw that is already there. Everything it writes lives in the fixture's own
+    workspace, which is created on first run and recorded in the manifest.
     """
     path = _run_path(run_dir, seed_key)
     manifest = status(seed_key=seed_key, run_dir=run_dir)
     event_id = str(SYNTHETIC_BYE["eventId"])
-    entry = (manifest.get("tournaments") or {}).get(SYNTHETIC_BYE["tournamentId"]) or {}
-    workspace_id = entry.get("workspaceId")
-    record: dict[str, Any] = {
+    bye_unit_id = str(SYNTHETIC_BYE["byePlayUnitId"])
+    record = dict(manifest.get("syntheticBye") or {})
+    removed = _drop_stranded_bye_events(manifest, client, event_id)
+
+    workspace_id = record.get("workspaceId")
+    if workspace_id and client.get_tournament(workspace_id, expect=(200, 404)) is None:
+        workspace_id = None
+    created_workspace = False
+    if not workspace_id:
+        workspace = client.create_tournament(
+            str(SYNTHETIC_BYE["workspaceName"]),
+            kind="bracket",
+            modules=[
+                {"moduleId": "bracket", "status": "enabled"},
+                {"moduleId": "display", "status": "enabled"},
+            ],
+            tournament_date=str(SYNTHETIC_BYE["workspaceDate"]),
+            time_zone=str(SYNTHETIC_BYE["timeZone"]),
+        )
+        workspace_id = workspace["id"]
+        created_workspace = True
+
+    session = client.get_bracket_or_none(workspace_id)
+    imported = False
+    if not _event_unit_ids(session, event_id):
+        session = client.import_bracket(workspace_id, synthetic_bye_import_body())
+        imported = True
+
+    # The import's ``register_draw`` walks the bye over on the way in. Assert
+    # that rather than assume it: if the result is absent, record it through
+    # the same idempotent command path the other synthetic outcomes use, whose
+    # deterministic id makes a replay the product's replay.
+    walkover_command: str | None = None
+    results = {str(row.get("play_unit_id")) for row in (session or {}).get("results") or []}
+    if bye_unit_id not in results:
+        walkover_command = command_uuid(0, "synthetic-bye", bye_unit_id, "walkover")
+        client.bracket_command(
+            workspace_id,
+            {
+                "id": walkover_command,
+                "kind": "record_result",
+                "play_unit_id": bye_unit_id,
+                "winner_side": "A",
+                "reason": "walkover",
+            },
+        )
+        session = client.get_bracket_or_none(workspace_id)
+
+    bye_unit_ids = _structural_bye_unit_ids(session, event_id)
+    manifest["syntheticBye"] = {
         "tournamentId": SYNTHETIC_BYE["tournamentId"],
         "workspaceId": workspace_id,
         "eventId": event_id,
-        "byePlayUnitId": SYNTHETIC_BYE["byePlayUnitId"],
+        "entrantCount": int(SYNTHETIC_BYE["entrantCount"]),
+        "byePlayUnitId": bye_unit_id,
+        "byePlayUnitIds": bye_unit_ids,
+        "unitCount": len(_event_unit_ids(session, event_id)),
         "syntheticOutcome": True,
         "note": SYNTHETIC_BYE["note"],
-    }
-    if not workspace_id:
-        result = {"seedKey": seed_key, "created": False, "unchanged": False, "missing": [event_id]}
-        manifest["syntheticBye"] = {**record, "state": "missing"}
-        _write_manifest(path, manifest)
-        return result
-
-    bracket = client.get_bracket(workspace_id)
-    existing = {str(event.get("id")) for event in bracket.get("events") or []}
-    if event_id in existing:
-        manifest["syntheticBye"] = {
-            **record,
-            "state": "unchanged",
-            "byePlayUnitIds": _structural_bye_unit_ids(bracket, event_id),
-        }
-        _write_manifest(path, manifest)
-        return {"seedKey": seed_key, "created": False, "unchanged": True, "missing": []}
-
-    participants = synthetic_bye_participants()
-    client.upsert_event(
-        workspace_id,
-        event_id,
-        {
-            "discipline": SYNTHETIC_BYE["discipline"],
-            "format": SYNTHETIC_BYE["format"],
-            "bracket_size": SYNTHETIC_BYE["bracketSize"],
-            "seeded_count": 0,
-            "duration_slots": SYNTHETIC_BYE["durationSlots"],
-            "participants": participants,
-        },
-    )
-    session = client.generate_event(workspace_id, event_id)
-    bye_unit_ids = _structural_bye_unit_ids(session, event_id)
-    manifest["syntheticBye"] = {
-        **record,
-        "state": "created",
-        "entrantCount": len(participants),
-        "byePlayUnitIds": bye_unit_ids,
+        "state": "created" if imported else "unchanged",
     }
     _write_manifest(path, manifest)
     return {
         "seedKey": seed_key,
-        "created": True,
-        "unchanged": False,
-        "missing": [],
         "workspaceId": workspace_id,
+        "workspaceCreated": created_workspace,
         "eventId": event_id,
-        "entrants": len(participants),
+        "created": imported,
+        "unchanged": not imported,
         "byePlayUnitIds": bye_unit_ids,
+        "walkoverCommandId": walkover_command,
+        "strandedEventsRemoved": removed,
     }
 
 

@@ -23,6 +23,7 @@ from tournament_sim.seed import (
     apply,
     apply_synthetic_bye,
     apply_synthetic_outcomes,
+    synthetic_bye_import_body,
     synthetic_bye_participants,
     canonical_tournament_name,
     person_map,
@@ -1227,128 +1228,213 @@ def test_apply_synthetic_outcomes_skips_a_tournament_this_run_does_not_own(tmp_p
     assert client.commands == []
 
 
-class ByeClient:
-    """Just enough bracket surface for :func:`apply_synthetic_bye`.
+def _session_from_import(body: dict) -> dict:
+    """The bracket session an import produces, as the API would serialize it.
 
-    ``generate_event`` answers the shape the real route returns for a
-    15-entrant SE draw: eight round-0 units, the first of which carries the
-    engine's ``__BYE__`` sentinel in slot B (the generator pads 15 up to 16
-    and places the pad opposite the top seed).
+    Mirrors ``bracket.io.import_matches``: round-0 sides become concrete
+    participant slots (an absent side becomes the ``__BYE__`` sentinel), later
+    rounds become feeder slots, and declared results come back as result rows.
     """
+    event = body["events"][0]
+    units: list[dict] = []
+    results: list[dict] = []
+    for round_index, round_units in enumerate(event["rounds"]):
+        for unit in round_units:
+            if round_index == 0:
+                slots = {
+                    "slot_a": {"participant_id": (unit.get("side_a") or ["__BYE__"])[0]},
+                    "slot_b": {"participant_id": (unit.get("side_b") or ["__BYE__"])[0]},
+                }
+            else:
+                slots = {
+                    "slot_a": {"feeder_play_unit_id": unit["feeder_a"]},
+                    "slot_b": {"feeder_play_unit_id": unit["feeder_b"]},
+                }
+            units.append({"id": unit["id"], "event_id": event["id"], **slots})
+            if unit.get("result"):
+                results.append({"play_unit_id": unit["id"], **unit["result"]})
+    return {
+        "events": [{"id": event["id"], "status": "started"}],
+        "play_units": units,
+        "results": results,
+    }
 
-    def __init__(self, events: list[str] | None = None):
-        self.events = list(events or ["MS", "WS"])
-        self.upserts: list[tuple[str, str, dict]] = []
-        self.generates: list[tuple[str, str]] = []
 
-    def _session(self) -> dict:
-        play_units = [
-            {
-                "id": f"SYNBYE-R0-{index}",
-                "event_id": "SYNBYE",
-                "slot_a": {"participant_id": f"synthetic-bye-{index * 2 + 1:02d}"},
-                "slot_b": (
-                    {"participant_id": "__BYE__"}
-                    if index == 0
-                    else {"participant_id": f"synthetic-bye-{index * 2 + 2:02d}"}
-                ),
-            }
-            for index in range(8)
+class ByeClient:
+    """Just enough workspace + bracket surface for :func:`apply_synthetic_bye`."""
+
+    def __init__(self, brackets: dict[str, dict] | None = None, workspaces: set[str] | None = None):
+        self.brackets: dict[str, dict] = dict(brackets or {})
+        self.workspaces: set[str] = set(workspaces or set())
+        self.created: list[tuple[str, str]] = []
+        self.imports: list[tuple[str, dict]] = []
+        self.deleted: list[tuple[str, str]] = []
+        self.commands: list[tuple[str, dict]] = []
+
+    def get_tournament(self, tid, *, expect=(200,)):
+        return {"id": tid} if tid in self.workspaces else None
+
+    def create_tournament(self, name, kind="meet", modules=None, **kw):
+        tid = f"ws-synthetic-{len(self.created) + 1}"
+        self.workspaces.add(tid)
+        self.created.append((tid, name))
+        return {"id": tid}
+
+    def get_bracket_or_none(self, tid):
+        return self.brackets.get(tid)
+
+    def delete_event(self, tid, event_id):
+        session = self.brackets.get(tid) or {}
+        session["events"] = [
+            event for event in session.get("events") or [] if event.get("id") != event_id
         ]
-        play_units.append(
-            {
-                "id": "MS-R0-0",
-                "event_id": "MS",
-                "slot_a": {"participant_id": "__BYE__"},
-                "slot_b": {"participant_id": "someone"},
-            }
-        )
-        return {
-            "events": [{"id": event} for event in self.events],
-            "play_units": play_units,
-        }
+        self.deleted.append((tid, event_id))
 
-    def get_bracket(self, tid):
-        return self._session()
+    def import_bracket(self, tid, body):
+        self.imports.append((tid, body))
+        self.brackets[tid] = _session_from_import(body)
+        return self.brackets[tid]
 
-    def upsert_event(self, tid, event_id, body):
-        self.upserts.append((tid, event_id, body))
-        self.events.append(event_id)
-        return self._session()
-
-    def generate_event(self, tid, event_id, wipe=False):
-        self.generates.append((tid, event_id))
-        return self._session()
+    def bracket_command(self, tid, body):
+        self.commands.append((tid, body))
+        session = self.brackets.setdefault(tid, {"events": [], "play_units": [], "results": []})
+        session.setdefault("results", []).append({"play_unit_id": body["play_unit_id"]})
+        return session
 
 
-def test_the_synthetic_bye_is_one_short_draw_with_exactly_one_empty_slot():
+def test_the_synthetic_bye_draw_carries_exactly_one_empty_slot():
     participants = synthetic_bye_participants()
+    body = synthetic_bye_import_body()
+    event = body["events"][0]
+    rounds = event["rounds"]
 
     assert len(participants) == SYNTHETIC_BYE["entrantCount"] == 15
-    # One entrant short of the bracket, so the generator pads exactly once.
+    # One entrant short of the bracket, so the draw holds exactly one bye.
     assert SYNTHETIC_BYE["bracketSize"] - len(participants) == 1
-    assert len({row["id"] for row in participants}) == len(participants)
-    # Clearly synthetic wherever it surfaces: id, discipline and every name.
+    assert [len(one_round) for one_round in rounds] == [8, 4, 2, 1]
+    byes = [unit for unit in rounds[0] if not unit.get("side_b")]
+    assert [unit["id"] for unit in byes] == [SYNTHETIC_BYE["byePlayUnitId"]]
+    # The bye's walkover is declared, not inferred.
+    assert byes[0]["result"] == {"winner_side": "A", "walkover": True, "reason": "walkover"}
+    # Later rounds are feeder references only — the same shape a generated SE
+    # draw has, so nothing here pre-decides an unplayed match.
+    for one_round in rounds[1:]:
+        assert all(unit["feeder_a"] and unit["feeder_b"] for unit in one_round)
+        assert all("side_a" not in unit and "side_b" not in unit for unit in one_round)
+    # Seven plan cells: every playable first-round match, and never the bye.
+    assert len(body["assignments"]) == 7
+    assigned = {cell["play_unit_id"] for cell in body["assignments"]}
+    assert SYNTHETIC_BYE["byePlayUnitId"] not in assigned
+    assert all(1 <= cell["court_id"] <= body["courts"] for cell in body["assignments"])
+    assert all(
+        cell["slot_id"] + cell["duration_slots"] <= body["total_slots"]
+        for cell in body["assignments"]
+    )
+    # Clearly synthetic wherever it surfaces.
     assert all(row["name"].startswith("Synthetic ") for row in participants)
     assert all(row["id"].startswith("synthetic-bye-") for row in participants)
     assert SYNTHETIC_BYE["note"].startswith("synthetic:")
-    assert SYNTHETIC_BYE["tournamentId"] == "T029"
-    # The engine's play-unit ids are ``{event}-R{round}-{match}`` and the pad
-    # lands opposite seed 1, so the bye is always round 0 match 0.
-    assert SYNTHETIC_BYE["byePlayUnitId"] == f"{SYNTHETIC_BYE['eventId']}-R0-0"
+    assert "test only" in SYNTHETIC_BYE["workspaceName"]
 
 
-def test_apply_synthetic_bye_creates_the_draw_once_and_then_writes_nothing(tmp_path: Path):
+def test_apply_synthetic_bye_imports_the_draw_once_and_then_writes_nothing(tmp_path: Path):
     _outcome_manifest(tmp_path)
     client = ByeClient()
 
     first = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
 
-    assert first["created"] is True
-    assert first["unchanged"] is False
-    assert first["entrants"] == 15
-    # The bye appears once — one unit of this event holds the sentinel, and
-    # another event's bye is not counted as ours.
+    assert first["created"] is True and first["unchanged"] is False
+    assert first["workspaceCreated"] is True
+    # Everything lands in the fixture's OWN workspace — the import route
+    # replaces a whole bracket, so it must never be aimed at a seeded one.
+    assert [tid for tid, _ in client.imports] == [first["workspaceId"]]
+    assert first["workspaceId"] not in {"ws-taipei"}
+    # The bye appears once.
     assert first["byePlayUnitIds"] == [SYNTHETIC_BYE["byePlayUnitId"]]
-    assert [event_id for _, event_id, _ in client.upserts] == ["SYNBYE"]
-    assert client.generates == [("ws-taipei", "SYNBYE")]
-    body = client.upserts[0][2]
-    assert body["bracket_size"] == 16 and len(body["participants"]) == 15
+    # The import already carries the walkover, so no command is needed.
+    assert first["walkoverCommandId"] is None and client.commands == []
 
     second = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
 
-    assert second["created"] is False
-    assert second["unchanged"] is True
-    # A re-run must not re-generate: the generate route rebuilds its own
-    # event, and the demo may already be running matches in this draw.
-    assert len(client.upserts) == 1
-    assert len(client.generates) == 1
+    assert second["created"] is False and second["unchanged"] is True
+    assert second["workspaceId"] == first["workspaceId"]
+    assert second["workspaceCreated"] is False
+    # A re-run must not re-import: that would replace a draw that exists.
+    assert len(client.imports) == 1
+    assert len(client.created) == 1
 
     manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
     assert manifest["syntheticBye"]["state"] == "unchanged"
     assert manifest["syntheticBye"]["syntheticOutcome"] is True
+    assert manifest["syntheticBye"]["unitCount"] == 15
     assert manifest["syntheticBye"]["byePlayUnitIds"] == [SYNTHETIC_BYE["byePlayUnitId"]]
 
 
-def test_apply_synthetic_bye_skips_a_tournament_this_run_does_not_own(tmp_path: Path):
-    (tmp_path / "bwf-demo.json").write_text(
-        json.dumps(
-            {
-                "seedKey": "bwf-demo",
-                "seedFormatVersion": 3,
-                "status": "complete",
-                "tournaments": {"T029": {"workspaceId": None, "source": {"name": "Taipei Open"}}},
-            }
-        ),
-        encoding="utf-8",
+def test_apply_synthetic_bye_completes_a_drawless_event_and_clears_a_stranded_one(
+    tmp_path: Path,
+):
+    _outcome_manifest(tmp_path)
+    # The state a failed run leaves behind: an empty SYNBYE event on a seeded
+    # workspace, and a fixture workspace whose event has no play units.
+    client = ByeClient(
+        brackets={
+            "ws-taipei": {
+                "events": [{"id": "MS", "status": "started"}, {"id": "SYNBYE", "status": "draft"}],
+                "play_units": [{"id": "MS-R0-0", "event_id": "MS"}],
+                "results": [],
+            },
+            "ws-synthetic-0": {
+                "events": [{"id": "SYNBYE", "status": "draft"}],
+                "play_units": [],
+                "results": [],
+            },
+        },
+        workspaces={"ws-taipei", "ws-synthetic-0"},
     )
-    client = ByeClient()
+    manifest = status(seed_key="bwf-demo", run_dir=tmp_path)
+    manifest["syntheticBye"] = {"workspaceId": "ws-synthetic-0", "state": "created"}
+    _write_manifest(tmp_path / "bwf-demo.json", manifest)
 
     output = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
 
-    assert output["created"] is False
-    assert output["missing"] == [SYNTHETIC_BYE["eventId"]]
-    assert client.upserts == [] and client.generates == []
+    # The stranded, drawless event is removed from the seeded workspace…
+    assert client.deleted == [("ws-taipei", "SYNBYE")]
+    assert "T029:ws-taipei" in output["strandedEventsRemoved"]
+    # …and the fixture workspace is reused, not recreated, with its draw
+    # completed on this run.
+    assert client.created == []
+    assert output["workspaceId"] == "ws-synthetic-0"
+    assert output["created"] is True
+    assert [tid for tid, _ in client.imports] == ["ws-synthetic-0"]
+    assert output["byePlayUnitIds"] == [SYNTHETIC_BYE["byePlayUnitId"]]
+
+
+def test_apply_synthetic_bye_records_the_walkover_when_the_import_did_not(tmp_path: Path):
+    _outcome_manifest(tmp_path)
+    client = ByeClient()
+    # An import that installs the draw without the bye's result — the walkover
+    # then goes through the same idempotent command path the other synthetic
+    # outcomes use.
+    real_import = client.import_bracket
+
+    def import_without_results(tid, body):
+        session = real_import(tid, body)
+        session["results"] = []
+        return session
+
+    client.import_bracket = import_without_results  # type: ignore[method-assign]
+
+    output = apply_synthetic_bye(seed_key="bwf-demo", client=client, run_dir=tmp_path)
+
+    assert len(client.commands) == 1
+    workspace_id, command = client.commands[0]
+    assert workspace_id == output["workspaceId"]
+    assert command["kind"] == "record_result"
+    assert command["play_unit_id"] == SYNTHETIC_BYE["byePlayUnitId"]
+    assert command["reason"] == "walkover"
+    # Deterministic idempotency key: a replay is the product's replay.
+    assert command["id"] == output["walkoverCommandId"]
+
 
 
 def test_person_map_publishes_the_datasets_own_player_table():

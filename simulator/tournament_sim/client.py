@@ -464,6 +464,27 @@ class SimClient:
     def get_bracket(self, tid: str) -> dict:
         return self._json("GET", f"/tournaments/{tid}/bracket")
 
+    def get_bracket_or_none(self, tid: str) -> Optional[dict]:
+        """As :meth:`get_bracket`, but ``None`` when the workspace has no
+        bracket session yet (the route 404s rather than returning an empty
+        one). Lets a caller ask "is there a draw here?" without a try/except."""
+        resp = self.request("GET", f"/tournaments/{tid}/bracket", expect=(200, 404))
+        if resp.status_code == 404:
+            return None
+        return resp.json()
+
+    def delete_event(self, tid: str, event_id: str) -> None:
+        """``DELETE /tournaments/{tid}/bracket/events/{event_id}``.
+
+        The API allows this for DRAFT events only, so it cannot remove a draw
+        that has been generated or started. 404 is tolerated: the caller's
+        intent is absence."""
+        self.request(
+            "DELETE",
+            f"/tournaments/{tid}/bracket/events/{event_id}",
+            expect=(204, 404),
+        )
+
     def upsert_event(self, tid: str, event_id: str, body: dict) -> dict:
         """``POST /tournaments/{tid}/bracket/events/{event_id}`` — create or
         replace ONE event of an existing bracket session, leaving the others

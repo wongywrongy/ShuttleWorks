@@ -90,7 +90,7 @@ help:
 	@echo "  make demo-seed-repair-names  Re-apply canonical tournament names to this seed run"
 	@echo "  make demo-seed-repair-names-locked  Repair the frozen Setup copy of the title (in-container)"
 	@echo "  make demo-seed-apply-outcomes      Apply the synthetic walkover/retired/forfeit fixtures"
-	@echo "  make demo-seed-apply-bye           Create the synthetic 15-entrant draw with one bye"
+	@echo "  make demo-seed-apply-bye           Import the synthetic 15-entrant draw with one bye"
 	@echo "  make demo-seed-drop-stray-match    Delete one stray Operations matches row by id"
 	@echo "  make demo-seed-backfill-person-ids Write personId onto pre-P6 roster rows"
 	@echo "  make surface-books      Capture numbered operator + entrant UI review PDFs"
@@ -230,9 +230,12 @@ demo-seed-apply-outcomes:
 		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
 
 # The synthetic bye fixture (OPR-0908-11): one test-only 15-entrant SE draw
-# added to the live demo workspace through the product's own draw path, so its
-# sixteenth slot is a real generator bye. Creates nothing if the event already
-# exists, so it is safe to run twice; no reseed, no other draw is touched.
+# whose sixteenth slot is a real BYE, installed through the same
+# POST /bracket/import path the seeded SE-32s use, into its own clearly
+# labelled fixture workspace (that route replaces a whole bracket, so it must
+# never be aimed at a seeded one). Imports only when the draw is absent, so it
+# is safe to run twice; no reseed, and no seeded workspace is touched except to
+# remove an EMPTY SYNBYE event left by the first, failed attempt.
 demo-seed-apply-bye:
 	@$(DEMO_SEED_LOCKED) apply-bye --seed-key $(DEMO_SEED_KEY) \
 		--run-dir $(DEMO_SEED_RUN_DIR) --base-url http://$$($(DEMO_COMPOSE) ip):8092
