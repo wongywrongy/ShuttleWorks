@@ -9,6 +9,7 @@
  *
  * Not wired into CI: it needs a running stack and is an authoring tool.
  */
+import { bookMode, selectedExamples, renderOrderedPages } from "./surface-book-profile.mjs";
 import { renderSurfaceBookPdf } from "./render-surface-book.mjs";
 import { inventoryControls } from "./surface-interaction-recipes.mjs";
 import { captureInteractions, interactionSections, interactionIndexSections } from "./surface-interactions.mjs";
@@ -45,6 +46,8 @@ if (
   );
   process.exit(2);
 }
+
+const fullBook = bookMode(process.env.SURFACE_BOOK_MODE) === "full";
 
 // Current production-parity demo defaults. Override these for another seed run;
 // the selected values are printed into the report so a review is reproducible.
@@ -896,7 +899,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
       }));
       let previousActualTop = -1;
       const segmentStep = Math.max(1, height - stickyHeaderHeight);
-      for (let top = 0; top < documentHeight && !(hasNonDocumentOverflow && top > 0); top += segmentStep) {
+      for (let top = 0; top < documentHeight && (fullBook || top === 0) && !(hasNonDocumentOverflow && top > 0); top += segmentStep) {
         const segmentHeight = Math.min(height, documentHeight - top);
         // Capture a viewport-sized continuation at the real document offset.
         // Combining fullPage with clip can rasterize the entire long document
@@ -943,7 +946,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
         element.setAttribute('data-capture-scroll-region', key);
         return { key, height: element.clientHeight, scrollHeight: element.scrollHeight };
       });
-      if (internalRegion) {
+      if (fullBook && internalRegion) {
         const internalStep = Math.max(1, internalRegion.height - stickyHeaderHeight);
         for (let scrollTop = internalStep; scrollTop < internalRegion.scrollHeight; scrollTop += internalStep) {
           const visible = await page.evaluate(({ key, scrollTop }) => {
@@ -972,7 +975,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
       // known to be an inventory; never expand overflow or imply this is the
       // complete record set. The marker is assigned temporarily and removed
       // before the next route.
-      if (tier === "console" && /Roster|Matches|Hub/.test(label)) {
+      if (fullBook && tier === "console" && /Roster|Matches|Hub/.test(label)) {
         const regions = await page.evaluate(() => {
           let index = 0;
           return Array.from(document.querySelectorAll('*'))
@@ -1082,8 +1085,9 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
   );
 }
 
-const interactions = process.env.SURFACE_INTERACTIONS === "0" ? [] : await captureInteractions({ browser, tier, surfaces, base: normalizedBase, viewports: VIEWPORTS, assetDir: rawAssetDir, assetDirName: rawAssetDirName, auth: cachedAuthMe, entrantStorageState, inventories: runState.surfaces.flatMap(surface => Object.entries(surface.viewports).map(([viewport, result]) => ({ label: surface.label, path: surface.path, viewport, controls: result.controls ?? [] }))) });
+const interactions = process.env.SURFACE_INTERACTIONS === "0" ? [] : await captureInteractions({ selection: fullBook ? undefined : selectedExamples(tier, surfaces), browser, tier, surfaces, base: normalizedBase, viewports: VIEWPORTS, assetDir: rawAssetDir, assetDirName: rawAssetDirName, auth: cachedAuthMe, entrantStorageState, inventories: runState.surfaces.flatMap(surface => Object.entries(surface.viewports).map(([viewport, result]) => ({ label: surface.label, path: surface.path, viewport, controls: result.controls ?? [] }))) });
 runState.interactions = interactions;
+runState.bookMode = fullBook ? "full" : "review";
 const interactionHtml = interactionIndexSections(interactions, esc) + interactionSections(interactions, escAttr);
 
 const title =
@@ -1104,6 +1108,12 @@ const pages = cards.flatMap((card, index) => VIEWPORTS.flatMap(([viewport]) => {
     .map((shot, segment, all) => ({ card, index, viewport, shot, segment, count: all.length, kind: "scroll-end" }));
   return [...regular, ...supplemental];
 }));
+const renderPage = ({card:c,index,viewport,shot,segment,count,kind})=>`<section class="sheet ${viewport} ${kind === 'scroll-end' ? 'scroll-end' : ''}" ${viewport==='desktop'&&segment===0&&kind==='document'?`id="s${index}"`:''}>
+<p class="eyebrow">${esc(c.ref)} · ${viewport} · ${kind === 'scroll-end' ? 'supplemental list end' : `segment ${segment+1} / ${count}`}</p>
+<h2>${esc(c.label)}</h2>
+<div class="frame"><div class="capture">${shot?`<img src="data:image/png;base64,${shot.png}" alt="${escAttr(c.label)} ${escAttr(viewport)} ${kind === 'scroll-end' ? 'list end' : `segment ${segment+1}`}">`:'<p class="err">Capture unavailable. Consult the manifest.</p>'}</div>
+<aside><p>${esc(c.description)}</p><p class="path">Requested <code>${esc(c.path)}</code></p><p class="path">${esc(`HTTP ${c.viewportRuns[viewport]?.httpStatus ?? "unavailable"} · final ${c.viewportRuns[viewport]?.finalUrl ?? "unavailable"} · ${c.viewportRuns[viewport]?.consoleErrors?.length ?? 0} console errors`)}</p>${shot?`<p class="caption">${shot.width} CSS px wide · document y=${shot.top}–${shot.top+shot.height} · 2× capture. ${kind === 'scroll-end' ? `Supplemental list-end view; internal region ${escAttr(shot.region)} at scroll ${shot.scrollTop}/${shot.scrollHeight}. This does not represent a complete record capture.` : segment?'Continuation of the same page.':'Initial document position; no interactive controls changed.'}</p>`:''}<h2>Review focus</h2><p>${esc(reviewFocus(c.label))}</p><p>Observation → user impact → proposed treatment → acceptance criterion.</p></aside></div></section>`;
+const bodySheets = fullBook ? pages.map(renderPage).join('') : renderOrderedPages({ includeInteractions: process.env.SURFACE_INTERACTIONS !== "0", tier, cards, pages, interactions, renderPage, renderInteractions: records => interactionSections(records, escAttr, { ordered: true }) });
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>
@@ -1139,7 +1149,7 @@ const html = `<!doctype html>
     .path,.caption {font-size:10px;}
   }
 </style></head><body>
-<section class="cover">
+${fullBook ? `<section class="cover">
 <p class="eyebrow">ShuttleWorks · UI / UX review evidence · edition 2</p>
 <h1>${esc(title)}</h1>
 <p>Captured ${new Date().toISOString()} from <code>${esc(normalizedBase)}</code>.</p>
@@ -1154,13 +1164,9 @@ const html = `<!doctype html>
 <p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · reviewed build <code>${esc(REVIEWED_BUILD_SHA)}</code> · dirty-tree fingerprint <code>${esc(WORKING_TREE_FINGERPRINT)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · effective demo instant <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code> · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> unique product surfaces across <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets, plus <code>${esc(routeCoverage.enhancedStateSheets)}</code> enhanced-state and <code>${esc(routeCoverage.expectedErrorSheets)}</code> expected-error sheets. An enhanced-state sheet is a progressive-enhancement state of a surface already in the book; an expected-error sheet is a genuine refusal the product is SUPPOSED to give, not a defect. Retired compatibility URLs are excluded from the book and covered by route tests. Every sheet records its requested route and the final URL reached.</p>
 <p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Default theme (appearance controls are captured in their selected state); static sheets use reduced motion. Interaction appendix uses normal motion captured as PDF action frames. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Effective demo instant: <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code>; data is live from the captured stack and may vary between sheets. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
 </div></section>
-<section class="index"><h1>Surface index</h1><p><a href="#interactions">Interaction sequences and selected states</a> · ${interactions.length} desktop/mobile sequences. Each captured action is shown as a separate PDF frame.</p><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>
-${pages.map(({card:c,index,viewport,shot,segment,count,kind})=>`<section class="sheet ${viewport} ${kind === 'scroll-end' ? 'scroll-end' : ''}" ${viewport==='desktop'&&segment===0&&kind==='document'?`id="s${index}"`:''}>
-<p class="eyebrow">${esc(c.ref)} · ${viewport} · ${kind === 'scroll-end' ? 'supplemental list end' : `segment ${segment+1} / ${count}`}</p>
-<h2>${esc(c.label)}</h2>
-<div class="frame"><div class="capture">${shot?`<img src="data:image/png;base64,${shot.png}" alt="${escAttr(c.label)} ${escAttr(viewport)} ${kind === 'scroll-end' ? 'list end' : `segment ${segment+1}`}">`:'<p class="err">Capture unavailable. Consult the manifest.</p>'}</div>
-<aside><p>${esc(c.description)}</p><p class="path">Requested <code>${esc(c.path)}</code></p><p class="path">${esc(`HTTP ${c.viewportRuns[viewport]?.httpStatus ?? "unavailable"} · final ${c.viewportRuns[viewport]?.finalUrl ?? "unavailable"} · ${c.viewportRuns[viewport]?.consoleErrors?.length ?? 0} console errors`)}</p>${shot?`<p class="caption">${shot.width} CSS px wide · document y=${shot.top}–${shot.top+shot.height} · 2× capture. ${kind === 'scroll-end' ? `Supplemental list-end view; internal region ${escAttr(shot.region)} at scroll ${shot.scrollTop}/${shot.scrollHeight}. This does not represent a complete record capture.` : segment?'Continuation of the same page.':'Initial document position; no interactive controls changed.'}</p>`:''}<h2>Review focus</h2><p>${esc(reviewFocus(c.label))}</p><p>Observation → user impact → proposed treatment → acceptance criterion.</p></aside></div></section>`).join('')}
-${interactionHtml.replace('<section ', '<section id="interactions" ')}
+<section class="index"><h1>Surface index</h1><p><a href="#interactions">Interaction sequences and selected states</a> · ${interactions.length} desktop/mobile sequences. Each captured action is shown as a separate PDF frame.</p><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>` : `<section class="cover"><h1>${esc(title.replace("full surface report", "pages and interactions"))}</h1><p>All ${cards.length} captured pages, grouped by workflow. Each page appears once as an overview, followed immediately by selected interaction examples in click order.</p><p>Selected mobile views sit with their related page. Images lead; notes remain alongside. Repeated records, picker alternatives and scroll continuations are omitted.</p><p>Captured ${new Date().toISOString()} from <code>${esc(normalizedBase)}</code>. Reviewed build <code>${esc(REVIEWED_BUILD_SHA)}</code>; fixture ${esc(FIXTURE_MODE)}; demo instant ${esc(EFFECTIVE_DEMO_INSTANT)}.</p><p>Optional states unavailable in this fixture: ${esc(omittedOptionalStates.map(state => `${state.label}: ${state.reason}`).join("; ") || "none")}.</p></section>`}
+${bodySheets}
+${fullBook ? interactionHtml.replace('<section ', '<section id="interactions" ') : ""}
 </body></html>`;
 
 const htmlPath = join(rawAssetDir, "print.html");

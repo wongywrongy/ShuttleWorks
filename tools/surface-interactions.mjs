@@ -31,9 +31,14 @@ export function interactionRecipes(tier, surfaces) {
   ].filter(recipe => recipe.path);
 }
 
-export async function captureInteractions({ browser, tier, surfaces, base, viewports, assetDir, assetDirName, auth, inventories = [], entrantStorageState, refOffset = 0 }) {
+export async function captureInteractions({ browser, tier, surfaces, base, viewports, assetDir, assetDirName, auth, inventories = [], entrantStorageState, refOffset = 0, selection }) {
   const records = [];
-  const recipes = [...interactionRecipes(tier, surfaces), ...expandedRecipes(tier, surfaces, inventories)];
+  const candidates = [...interactionRecipes(tier, surfaces), ...expandedRecipes(tier, surfaces, inventories)];
+  const recipes = selection ? selection.map(example => {
+    const recipe = candidates.find(candidate => candidate.name === example.name && candidate.path === example.path && (!candidate.viewport || candidate.viewport === example.viewport));
+    if (!recipe) throw new Error(`Missing selected interaction recipe: ${example.name} (${example.viewport})`);
+    return { ...recipe, viewport: example.viewport };
+  }) : candidates;
   const knownControls = new Set(inventories.flatMap(inventory => inventory.controls.map(control => `${inventory.path}|${inventory.viewport}|${control.selector}`)));
   const captureRecipe = async (index, recipe) => {
     for (const [viewport, width, height] of viewports) {
@@ -63,7 +68,7 @@ export async function captureInteractions({ browser, tier, surfaces, base, viewp
       const frame = async (caption) => {
         await page.waitForTimeout(700);
         await saveFrame(caption);
-        if (caption === 'Before action') return;
+        if (selection || caption === 'Before action') return;
         const region = await page.evaluate(() => {
           const roots = [...document.querySelectorAll('[role="dialog"], [data-testid="workspace-inspector"], [data-testid="bracket-player-detail"], [data-testid="bracket-match-detail"]')];
           const candidates = roots.flatMap(root => [root, ...root.querySelectorAll('*')]);
@@ -104,7 +109,7 @@ export async function captureInteractions({ browser, tier, surfaces, base, viewp
         }
         record.ok = record.consoleErrors.length === 0 && record.blockedRequests.length === 0;
         if (record.blockedRequests.length) record.error = "Control requires a server write; capture did not submit it";
-        if (record.ok && new URL(page.url()).pathname === new URL(record.frames[0].url).pathname) {
+        if (!selection && record.ok && new URL(page.url()).pathname === new URL(record.frames[0].url).pathname) {
           const controls = record.frames.at(-1)?.controls ?? [];
           const children = expandedRecipes(tier, [], [{ label: recipe.name, path: recipe.path, viewport, controls }]);
           for (const child of children) {
@@ -134,8 +139,8 @@ export async function captureInteractions({ browser, tier, surfaces, base, viewp
   return records.sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }) || a.viewport.localeCompare(b.viewport));
 }
 
-export function interactionSections(records, esc) {
-  return records.flatMap(record => record.frames.map((frame, index) => `<section class="sheet ${record.viewport}" ${index === 0 ? `id="${record.ref}-${record.viewport}"` : ''}><p class="eyebrow">${record.ref} · ${record.viewport} · action ${index}/${record.frames.length - 1}</p><h2>${esc(record.name)}</h2><div class="frame"><div class="capture"><img loading="lazy" decoding="async" src="${esc(frame.assetPath)}" alt="${esc(frame.caption)}"></div><aside><h2>${esc(frame.caption)}</h2><p class="path">${esc(frame.url)}</p><p>${record.ok ? 'Verified interaction' : `Incomplete: ${esc(record.error ?? 'browser errors')}`}</p><p>Each frame shows an action and its visible result.</p><p>Review the selected control, revealed panel, focus, and surrounding context.</p></aside></div></section>`)).join('');
+export function interactionSections(records, esc, { ordered = false } = {}) {
+  return records.flatMap(record => record.frames.map((frame, index) => `<section class="sheet ${record.viewport}" ${index === 0 ? `id="${record.ref}-${record.viewport}"` : ''}><p class="eyebrow">${record.ref} · ${record.viewport} · ${ordered ? `Interaction example · Step ${index + 1} of ${record.frames.length}` : `action ${index}/${record.frames.length - 1}`}</p><h2>${esc(record.name)}</h2><div class="frame"><div class="capture"><img loading="lazy" decoding="async" src="${esc(frame.assetPath)}" alt="${esc(frame.caption)}"></div><aside><h2>${esc(frame.caption)}</h2><p class="path">${esc(frame.url)}</p><p>${record.ok ? 'Verified interaction' : `Incomplete: ${esc(record.error ?? 'browser errors')}`}</p><p>Each frame shows an action and its visible result.</p><p>Review the selected control, revealed panel, focus, and surrounding context.</p></aside></div></section>`)).join('');
 }
 
 export function interactionIndexSections(records, esc) {
