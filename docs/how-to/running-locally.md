@@ -237,15 +237,16 @@ books from the live Tailscale endpoints:
 make surface-books
 ```
 
-Each PDF starts with a reviewer brief and linked index, then gives every captured
-surface a stable `S01`, `S02`, … reference, purpose and review focus. Desktop and
-mobile have separate sheets captured at 2× pixel density. Long documents continue
-in labeled vertical segments instead of being shrunk to fit. Physical pages are
-numbered in the footer. The brief documents identity, fixture, capture limitations
-and an annotation format for UI/UX reviewers; these route captures do not certify
-completed journeys or accessibility. The companion HTML is self-contained. The stable
-outputs are written under `docs/screenshots/ui-review/` as
-`operator-console-surface-book.pdf` and `public-entrant-surface-book.pdf`.
+The default is PDF-only: every available page once, grouped by workflow, with
+selected major-component interactions immediately after the related page in
+click order. Screenshots lead and notes sit alongside. Selected mobile examples
+are included; repeated records, picker alternatives and scroll continuations are
+omitted. Stable surface references and 2× screenshots remain available.
+
+See the [default surface-book contract](publish-demo-review.md#default-surface-book-contract)
+for the saved profile, finishing checks and diagnostic overrides. The outputs are
+`operator-console-surface-book.pdf` and `public-entrant-surface-book.pdf` under
+`docs/screenshots/ui-review/`. Print HTML and screenshots are internal inputs.
 
 The capture writes a `.running.json` file after every surface and replaces it
 with a durable `.manifest.json` when complete. Monitor an active or previous

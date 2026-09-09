@@ -92,3 +92,31 @@ test('native select inventory uses stable IDs instead of concatenated option tex
     assert.equal(control.label, 'Gender');
   } finally { await browser.close(); }
 });
+
+test('selected capture opens the requested menu without exploring revealed controls', { skip: process.env.SURFACE_CAPTURE_INTEGRATION !== '1' }, async () => {
+  const { createServer } = await import('node:http');
+  const { mkdtemp, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { createRequire } = await import('node:module');
+  const { captureInteractions } = await import('../surface-interactions.mjs');
+  const require = createRequire(new URL('../../tests/e2e/package.json', import.meta.url));
+  const server = createServer((request, response) => {
+    response.setHeader('Content-Type', 'text/html');
+    response.end(`<button aria-label="More actions" onclick="document.querySelector('[role=menu]').hidden=false">Menu</button><div role="menu" hidden><details><summary>Extra options</summary><select><option>A</option><option>B</option></select></details><div style="height:900px">Scrollable content</div></div>`);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const directory = await mkdtemp(join(tmpdir(), 'surface-selected-'));
+  const browser = await require('playwright').chromium.launch();
+  try {
+    const records = await captureInteractions({ browser, tier: 'console', surfaces: [['Hub — workspace list', '/']], base: `http://127.0.0.1:${server.address().port}`, viewports: [['desktop', 640, 480], ['mobile', 390, 844]], assetDir: directory, assetDirName: 'assets', selection: [{ name: 'Workspace action menu', path: '/', viewport: 'desktop' }] });
+    assert.equal(records.length, 1, 'only the requested example and viewport are recorded');
+    assert.equal(records[0].ok, true);
+    assert.deepEqual(records[0].frames.map(frame => frame.caption), ['Before action', 'Open workspace actions']);
+    assert.ok(records[0].frames.at(-1).controls.some(control => control.tag === 'summary'), 'revealed controls exist but are not recursively explored');
+  } finally {
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  }
+});

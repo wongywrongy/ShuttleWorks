@@ -113,3 +113,13 @@ draw, a meet, an event — is a real domain noun and is not fenced. ADR 0014.
 ## Future / not yet done
 - mypy on scheduler_core (typed domain core) — candidate next step.
 - Ratchet the depcruise `warn` rules and broaden ruff once the deferred cleanups land.
+
+## Surface-book refreshes
+
+“Refresh the default surface books” uses the existing `make surface-books-fixture`
+pipeline and `tools/surface-book-profile.json`: all available pages once, workflow
+order, selected major-component examples immediately after their page in click
+order, image left and notes right, PDF-only deliverables. Follow the
+[default contract and finishing checks](docs/how-to/publish-demo-review.md).
+Do not rebuild an HTML docs site or expand every control permutation. Exhaustive
+capture requires explicit `SURFACE_BOOK_MODE=full`; it is not the review default.

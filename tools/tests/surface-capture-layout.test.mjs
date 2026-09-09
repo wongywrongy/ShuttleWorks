@@ -15,7 +15,7 @@ function runCapture(args, env) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(process.execPath, [CAPTURE, ...args], {
       cwd: ROOT,
-      env: { ...process.env, SURFACE_INTERACTIONS: "0", ...env },
+      env: { ...process.env, SURFACE_INTERACTIONS: "0", SURFACE_BOOK_MODE: "full", ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -81,6 +81,22 @@ test('surface capture preserves paginated query state and covers a long document
       { width: 780, height: 1424 },
     ]);
     assert.ok((await readFile(output)).byteLength > 0, 'PDF artifact should be generated');
+    // The normal invocation must remain concise even when the source scrolls.
+    await runCapture(['entrant', base, join(outputDir, 'review.pdf')], {
+      SURFACE_BOOK_MODE: undefined,
+      CAPTURE_LABEL: 'Discovery · Season calendar',
+      CAPTURE_LIMIT: '1',
+      CAPTURE_SETTLE_MS: '0',
+    });
+    const review = JSON.parse(await readFile(join(outputDir, 'review.manifest.json'), 'utf8'));
+    assert.equal(review.bookMode, 'review');
+    assert.equal(review.status, 'complete');
+    assert.equal(review.expectedPdfPages, 2, 'one cover and one overview');
+    assert.equal(review.surfaces[0].viewports.desktop.segments, 1);
+    const reviewHtml = await readFile(join(outputDir, 'review-assets', 'print.html'), 'utf8');
+    assert.equal([...reviewHtml.matchAll(/src="data:image\/png;base64,/g)].length, 1);
+    assert.ok((await readFile(join(outputDir, 'review.pdf'))).byteLength > 0);
+
   } finally {
     await new Promise((resolvePromise) => server.close(resolvePromise));
     await rm(outputDir, { recursive: true, force: true });

@@ -149,33 +149,60 @@ After changing these instructions or their helpers, run `npm run test:docs`,
 `npm run docs:paths`, and `npm run docs:build`. Deployment verification additionally
 requires live HTTP checks and a browser check of both published origins.
 
-### Interaction evidence in surface books
+### Default surface-book contract
 
-The PDFs are the only published review artifacts: each sheet leads with a large image
-and places its action, route, and review notes in a side column. An interaction
-index locates before/after sequences, selected workspaces and side panels,
-roster and match inspectors, menus, dialogs, filters, disclosure states, and
-bracket paths. Scrollable detail panels receive continuation frames.
+A request to **“refresh the default surface books”** means: use the normal fixture
+with review extras, capture both tiers with the commands above, check the status,
+and publish the two PDFs. Reuse the existing generator and profile; no custom
+curation script or HTML documentation site is needed.
 
-The capture inventories controls on every included desktop and mobile route,
-then records explicit selection journeys and discovered disclosures, pickers,
-radio choices, tabs, and draft-form controls. Newly revealed controls are
-explored until no unrecorded discrete control remains. Repeated data rows share their control
-pattern; finite pickers capture their alternative selections. Large data lists
-(such as timezones) use one alternative selection and retain the complete native
-option inventory in the manifest. This is a UI-state inventory, not every
-possible combination of form values or every completed server-side operation.
+`make surface-books-fixture` and `make surface-books` default to
+`SURFACE_BOOK_MODE=review`:
 
-Use the normal fixture with `FIXTURE_REVIEW_EXTRAS=1` for Meet, account journey,
-past-workspace, and backup inspection states. Fixture pages record their own
-origin and build context. The disabled-board fixture supplies the saved Off state without switching off
-the active venue board. No scores, deletion, restore, or other server writes
-are submitted by the interaction recorder; confirmation surfaces are captured
-before committing. The pure Meet lineup preview POST is allowed; saving its
-result remains blocked. Immediate-save controls retain their baseline values.
-Disabled controls remain documented in the baseline
-inventory. Missing expected controls or states make the manifest partial.
+- Include every available console and entrant page once as a desktop overview,
+  including account outcomes, settings tabs, pagination routes and expected refusals.
+- Group pages by workflow. Put selected interaction examples immediately after
+  their owning page, with numbered steps in actual click order.
+- Show major components: workspace selection and side panel, action menus,
+  roster details, new-draw dialog, inline score entry, live match selection,
+  backup inspection, entry continuation, schedule filters and highlighted bracket
+  paths. Include the selected mobile examples beside their related desktop pages.
+- Keep the screenshot prominent on the left and action/route/review notes in the
+  narrow right column. Normal-motion actions are represented by successive PDF
+  frames; PDFs do not contain playable animation.
+- Omit duplicate before-action frames, scroll continuations, repeated records and
+  exhaustive picker alternatives. Do not recursively discover every control.
+- Deliver only `operator-console-surface-book.pdf` and
+  `public-entrant-surface-book.pdf`. Screenshots, print markup and manifests are
+  internal capture/verification inputs, not a second documentation deliverable.
 
-Static route sheets retain reduced motion. Interaction sequences capture normal
-motion as before/after PDF frames. Screenshots and print markup are internal
-build inputs; the server exposes only the two PDF downloads.
+The accepted 2026-09-09 fixture produced **47 console PDF pages covering 37 route
+states**, and **57 entrant PDF pages covering 45 route states**. These are useful
+size references, not caps: never drop a new page merely to hold the old count.
+Optional pages require their real fixture tokens, identities or saved state;
+unavailable prerequisites are reported on the cover and in the manifest.
+
+The ordered labels and selected examples live in
+[`tools/surface-book-profile.json`](../../tools/surface-book-profile.json).
+When adding a route, add it to the existing capture inventory and place its label
+in this profile's workflow order. Unlisted routes still appear at the end, so
+forgetting the profile cannot silently remove a page. Add an interaction only
+when it explains a distinct major component; reuse an existing recipe in
+`tools/surface-interactions.mjs` or `tools/surface-interaction-recipes.mjs`.
+Missing selected recipes fail capture rather than silently skipping the example.
+Failed actions remain marked incomplete and make capture status partial.
+
+The finishing point is: both manifests complete, every available route represented,
+selected examples in order, PDF counts consistent with the manifest, and both
+published PDF URLs returning 200. Check a workspace-panel example and a highlighted
+path visually. Stop there; do not add permutations or another publishing system.
+
+For a deliberate diagnostic capture only, opt into
+`SURFACE_BOOK_MODE=full make surface-books-fixture`. It restores both viewports,
+scroll continuations and exhaustive control exploration and can produce thousands
+of pages. It is not the review default. `SURFACE_INTERACTIONS=0`, `CAPTURE_LABEL`
+and `CAPTURE_LIMIT` are diagnostic overrides, not a complete default-book refresh.
+
+The recorder blocks server writes, including score submission, deletion and
+restore. The pure Meet lineup preview POST remains allowed. Static route sheets
+use reduced motion; selected action frames use normal motion.

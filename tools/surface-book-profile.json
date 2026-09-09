@@ -1,0 +1,319 @@
+{
+  "console": [
+    {
+      "label": "Hub — workspace list",
+      "examples": [
+        {
+          "name": "Hub — workspace list · Selected workspace and side panel",
+          "viewport": "desktop"
+        },
+        {
+          "name": "Workspace action menu",
+          "viewport": "desktop"
+        },
+        {
+          "name": "Hub — workspace list · Selected workspace and side panel",
+          "viewport": "mobile"
+        }
+      ]
+    },
+    {
+      "label": "Hub — live workspaces"
+    },
+    {
+      "label": "Hub — past workspaces"
+    },
+    {
+      "label": "Hub — create workspace"
+    },
+    {
+      "label": "Global settings"
+    },
+    {
+      "label": "Global settings · Security"
+    },
+    {
+      "label": "Global settings · Sessions"
+    },
+    {
+      "label": "Global settings · Appearance"
+    },
+    {
+      "label": "Overview"
+    },
+    {
+      "label": "Setup · Details"
+    },
+    {
+      "label": "Setup · Entry rules"
+    },
+    {
+      "label": "Setup · Scoring"
+    },
+    {
+      "label": "Setup · Public site"
+    },
+    {
+      "label": "Participants · Roster",
+      "examples": [
+        {
+          "name": "Participants · Roster · Player side panel",
+          "viewport": "desktop"
+        }
+      ]
+    },
+    {
+      "label": "Participants · Roster · bracket page 2 / 100 rows"
+    },
+    {
+      "label": "Participants · Roster · bracket 25 rows"
+    },
+    {
+      "label": "Meet · Participants roster"
+    },
+    {
+      "label": "Meet · Team structure"
+    },
+    {
+      "label": "Meet · Matches"
+    },
+    {
+      "label": "Bracket · Draws",
+      "examples": [
+        {
+          "name": "Bracket · Draws · New draw dialog",
+          "viewport": "desktop"
+        }
+      ]
+    },
+    {
+      "label": "Bracket · Draw canvas",
+      "examples": [
+        {
+          "name": "Bracket · Draw canvas · Inline score entry",
+          "viewport": "desktop"
+        }
+      ]
+    },
+    {
+      "label": "Bracket · Matches"
+    },
+    {
+      "label": "Bracket · Matches · page 2 / 100 rows"
+    },
+    {
+      "label": "Bracket · Matches · 50 rows"
+    },
+    {
+      "label": "Bracket · Settings"
+    },
+    {
+      "label": "Operations · Plan"
+    },
+    {
+      "label": "Operations · Live day",
+      "examples": [
+        {
+          "name": "Live-day match selection",
+          "viewport": "mobile"
+        }
+      ]
+    },
+    {
+      "label": "Display · Board settings"
+    },
+    {
+      "label": "Display · Board preview"
+    },
+    {
+      "label": "Display · Fullscreen venue board"
+    },
+    {
+      "label": "Display · Board disabled"
+    },
+    {
+      "label": "Administration · Team"
+    },
+    {
+      "label": "Administration · Modules"
+    },
+    {
+      "label": "Administration · Backups",
+      "examples": [
+        {
+          "name": "Administration · Backups · Backup contents",
+          "viewport": "desktop"
+        }
+      ]
+    },
+    {
+      "label": "Administration · Activity"
+    },
+    {
+      "label": "Administration · Lifecycle"
+    },
+    {
+      "label": "Invite · Valid token"
+    }
+  ],
+  "entrant": [
+    {
+      "label": "Discovery · Season calendar"
+    },
+    {
+      "label": "Discovery · Search across seasons"
+    },
+    {
+      "label": "Tournament · Overview"
+    },
+    {
+      "label": "Tournament · Players"
+    },
+    {
+      "label": "Player detail"
+    },
+    {
+      "label": "Tournament · Draws"
+    },
+    {
+      "label": "Draw · Singles full bracket"
+    },
+    {
+      "label": "Draw · Singles match list"
+    },
+    {
+      "label": "Draw · Doubles detail"
+    },
+    {
+      "label": "Tournament · Schedule and live",
+      "examples": [
+        {
+          "name": "Tournament · Schedule and live · More filters",
+          "viewport": "desktop"
+        }
+      ]
+    },
+    {
+      "label": "Regulations reader"
+    },
+    {
+      "label": "Entry form",
+      "mobile": true
+    },
+    {
+      "label": "Entry form · Signed-in outcome",
+      "examples": [
+        {
+          "name": "Entry form · Signed-in outcome · Continue to account",
+          "viewport": "desktop"
+        }
+      ]
+    },
+    {
+      "label": "Entry form · Account-created outcome"
+    },
+    {
+      "label": "Entry receipt"
+    },
+    {
+      "label": "Doubles partner invitation · token"
+    },
+    {
+      "label": "Doubles partner failed"
+    },
+    {
+      "label": "Account · Sign in"
+    },
+    {
+      "label": "Account · Failed sign-in outcome"
+    },
+    {
+      "label": "Account · Signed-in outcome"
+    },
+    {
+      "label": "Account · Create account"
+    },
+    {
+      "label": "Account · Create account for tournament"
+    },
+    {
+      "label": "Account · Created outcome"
+    },
+    {
+      "label": "Account · Verify address"
+    },
+    {
+      "label": "Account · Verification email sent"
+    },
+    {
+      "label": "Account · Verification complete"
+    },
+    {
+      "label": "Account · Verification failed"
+    },
+    {
+      "label": "Account · Forgot password"
+    },
+    {
+      "label": "Account · Reset email sent"
+    },
+    {
+      "label": "Account · Reset password"
+    },
+    {
+      "label": "Account · Password reset complete"
+    },
+    {
+      "label": "Account · Password reset failed"
+    },
+    {
+      "label": "Account · New password failed"
+    },
+    {
+      "label": "My entries (signed out)"
+    },
+    {
+      "label": "My entries (signed in)"
+    },
+    {
+      "label": "Results tournament · Overview"
+    },
+    {
+      "label": "Results tournament · Players"
+    },
+    {
+      "label": "Results tournament · Player detail with history"
+    },
+    {
+      "label": "Results tournament · Draws"
+    },
+    {
+      "label": "Results draw · Singles full bracket",
+      "examples": [
+        {
+          "name": "Player path and round selection",
+          "viewport": "desktop"
+        },
+        {
+          "name": "Player path and round selection",
+          "viewport": "mobile"
+        }
+      ]
+    },
+    {
+      "label": "Results draw · Doubles full bracket"
+    },
+    {
+      "label": "Results tournament · Schedule and live"
+    },
+    {
+      "label": "Results tournament · Regulations"
+    },
+    {
+      "label": "Results draw · Highlighted player path"
+    },
+    {
+      "label": "Expected refusal · Player withheld from publication"
+    }
+  ]
+}
