@@ -148,3 +148,18 @@ not update the application containers.
 After changing these instructions or their helpers, run `npm run test:docs`,
 `npm run docs:paths`, and `npm run docs:build`. Deployment verification additionally
 requires live HTTP checks and a browser check of both published origins.
+
+### Interaction evidence in surface books
+
+`make surface-books` also records desktop and mobile interaction sequences for
+workspace action menus, live-day match selection, and published bracket player
+paths and round selection when those routes are included. Each HTML book embeds
+playable WebM clips with controls (no autoplay); the PDF includes before/after
+keyframes. The interaction appendix is linked from the surface index.
+
+Static route sheets retain reduced motion. Recordings use normal motion and real
+UI controls, including initial loading. Their capture contexts block non-read
+HTTP methods so these review recipes cannot submit tournament changes. A failed
+control or expected state makes the manifest partial. Companion manifests list
+interaction outcomes, final URLs, screenshots, and downloadable video assets.
+These are representative interaction samples, not exhaustive journey coverage.

@@ -48,6 +48,9 @@ export function summarizeStatus(paths, { now = Date.now() } = {}) {
         `${expectedErrors} declared refusal(s) · ` +
         `${consoleErrors} browser-console error(s)`,
     );
+    for (const interaction of run.interactions ?? []) {
+      lines.push(`  ${interaction.ref} ${interaction.viewport}: ${interaction.name} · ${interaction.ok ? "verified" : interaction.error ?? "failed"} · ${interaction.frames.length} keyframes`);
+    }
     if (run.artifacts?.pdf) lines.push(`  PDF: ${run.artifacts.pdf}`);
     if (run.failedViewports?.length) {
       for (const failure of run.failedViewports) {
