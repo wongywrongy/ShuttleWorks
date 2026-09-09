@@ -100,7 +100,7 @@ The capture inventory excludes compatibility aliases, disabled destinations,
 fabricated capabilities, and duplicate pages. Real reachable recovery states
 remain. An expected refusal must return its declared status. Manifests record
 URLs, viewport results, provenance, omitted states, and the expected PDF page
-count; raw PNGs sit beside the HTML/PDF output.
+count. Raw PNGs and print markup are internal capture inputs.
 
 ## Publish the reviewed directory
 
@@ -120,7 +120,7 @@ http://<tailscale-ip>:8093/operator-console-surface-book.pdf
 http://<tailscale-ip>:8093/public-entrant-surface-book.pdf
 ```
 
-The corresponding `.html` links open the books in a browser. Verify publication:
+Only the PDF downloads are published. Verify publication:
 
 ```bash
 curl -fI "http://$demo_ip:8093/operator-console-surface-book.pdf"
@@ -148,3 +148,34 @@ not update the application containers.
 After changing these instructions or their helpers, run `npm run test:docs`,
 `npm run docs:paths`, and `npm run docs:build`. Deployment verification additionally
 requires live HTTP checks and a browser check of both published origins.
+
+### Interaction evidence in surface books
+
+The PDFs are the only published review artifacts: each sheet leads with a large image
+and places its action, route, and review notes in a side column. An interaction
+index locates before/after sequences, selected workspaces and side panels,
+roster and match inspectors, menus, dialogs, filters, disclosure states, and
+bracket paths. Scrollable detail panels receive continuation frames.
+
+The capture inventories controls on every included desktop and mobile route,
+then records explicit selection journeys and discovered disclosures, pickers,
+radio choices, tabs, and draft-form controls. Newly revealed controls are
+explored until no unrecorded discrete control remains. Repeated data rows share their control
+pattern; finite pickers capture their alternative selections. Large data lists
+(such as timezones) use one alternative selection and retain the complete native
+option inventory in the manifest. This is a UI-state inventory, not every
+possible combination of form values or every completed server-side operation.
+
+Use the normal fixture with `FIXTURE_REVIEW_EXTRAS=1` for Meet, account journey,
+past-workspace, and backup inspection states. Fixture pages record their own
+origin and build context. The disabled-board fixture supplies the saved Off state without switching off
+the active venue board. No scores, deletion, restore, or other server writes
+are submitted by the interaction recorder; confirmation surfaces are captured
+before committing. The pure Meet lineup preview POST is allowed; saving its
+result remains blocked. Immediate-save controls retain their baseline values.
+Disabled controls remain documented in the baseline
+inventory. Missing expected controls or states make the manifest partial.
+
+Static route sheets retain reduced motion. Interaction sequences capture normal
+motion as before/after PDF frames. Screenshots and print markup are internal
+build inputs; the server exposes only the two PDF downloads.

@@ -599,6 +599,7 @@ surface-books-fixture:
 	entrant_url="$$(jq -er .entrantBaseUrl "$$fixture_json")"; \
 	workspace_id="$$(jq -er .taipeiTid "$$fixture_json")"; \
 	meet_workspace_id="$$(jq -r '.meetTid // ""' "$$fixture_json")"; \
+	past_workspace_id="$$(jq -r '.pastTid // ""' "$$fixture_json")"; \
 	meet_invite_token="$$(jq -r '.meetInviteToken // ""' "$$fixture_json")"; \
 	display_token="$$(jq -er .displayToken "$$fixture_json")"; \
 	entrant_slug="$$(jq -er .koreaSlug "$$fixture_json")"; \
@@ -619,7 +620,7 @@ surface-books-fixture:
 	AUTH_ME_URL="$$console_url/api/auth/me" \
 	SHUTTLEWORKS_DEMO_NOW="$$demo_now" REVIEWED_BUILD_SHA="$${REVIEWED_BUILD_SHA:-$$reviewed_build_sha}" \
 	FIXTURE_MODE="$$fixture_mode" EVENT_TIMEZONE="$$event_tz" \
-	WS_ID="$$workspace_id" MEET_WS_ID="$$meet_workspace_id" DISPLAY_TOKEN="$$display_token" \
+	WS_ID="$$workspace_id" MEET_WS_ID="$$meet_workspace_id" PAST_WS_ID="$$past_workspace_id" DISPLAY_TOKEN="$$display_token" \
 	INVITE_TOKEN="$$meet_invite_token" \
 		node tools/surface-capture.mjs console "$$console_url" \
 		"$(SURFACE_REPORT_DIR)/operator-console-surface-book.pdf" && \

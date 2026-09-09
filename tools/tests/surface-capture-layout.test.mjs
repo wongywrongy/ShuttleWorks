@@ -15,7 +15,7 @@ function runCapture(args, env) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(process.execPath, [CAPTURE, ...args], {
       cwd: ROOT,
-      env: { ...process.env, ...env },
+      env: { ...process.env, SURFACE_INTERACTIONS: "0", ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -70,7 +70,7 @@ test('surface capture preserves paginated query state and covers a long document
     assert.equal(manifest.surfaces[0].viewports.desktop.segments, 3);
     assert.equal(manifest.surfaces[0].viewports.mobile.segments, 3);
 
-    const html = await readFile(join(outputDir, 'fixture.html'), 'utf8');
+    const html = await readFile(join(outputDir, 'fixture-assets', 'print.html'), 'utf8');
     const images = [...html.matchAll(/src="data:image\/png;base64,([^\"]+)"/g)].map((match) => pngSize(match[1]));
     assert.deepEqual(images, [
       { width: 2880, height: 1800 },
@@ -118,14 +118,14 @@ test('inventory capture adds an internal list-end sheet and valid PDF', {
       assert.equal(manifest.surfaces[0].viewports[viewport].scrollEndSegments, 1);
       assert.ok(manifest.surfaces[0].viewports[viewport].scrollRegions.length >= 1);
     }
-    const html = await readFile(join(outputDir, 'inventory.html'), 'utf8');
+    const html = await readFile(join(outputDir, 'inventory-assets', 'print.html'), 'utf8');
     assert.match(html, /supplemental list end/);
     assert.match(html, /This does not represent a complete record capture/);
     const expectedImages = manifest.surfaces[0].viewports.desktop.segments
       + manifest.surfaces[0].viewports.mobile.segments + 2;
     assert.equal([...html.matchAll(/src="data:image\/png;base64,/g)].length, expectedImages);
     assert.ok((await readFile(output)).byteLength > 0, 'inventory PDF artifact should be generated');
-    await runCapture(['console', base, join(outputDir, 'omitted.html')], {
+    await runCapture(['console', base, join(outputDir, 'omitted.pdf')], {
       CAPTURE_LABEL: 'Participants · Entries',
       CAPTURE_LIMIT: '0',
       CAPTURE_SETTLE_MS: '0',
@@ -177,5 +177,38 @@ test('capture inventory covers every canonical workflow route and excludes alias
       surfacesBlock.includes(`/${routePath}\``) || surfacesBlock.includes(`/${routePath}?`),
       `capture inventory is missing workflow route ${routePath}`,
     );
+  }
+});
+
+test('PDF printing embeds dense batches of external high-resolution state images', {
+  skip: !RUN_INTEGRATION,
+}, async () => {
+  const { createRequire } = await import('node:module');
+  const { writeFile } = await import('node:fs/promises');
+  const { execFileSync } = await import('node:child_process');
+  const { renderSurfaceBookPdf } = await import('../render-surface-book.mjs');
+  const require = createRequire(new URL('../../tests/e2e/package.json', import.meta.url));
+  const browser = await require('playwright').chromium.launch();
+  const outputDir = await mkdtemp(join(tmpdir(), 'surface-pdf-external-'));
+  try {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+    const page = await context.newPage();
+    const sections = [];
+    for (let i = 0; i < 24; i++) {
+      await page.setContent(`<body style="background:hsl(${i * 13} 70% 65%);font-size:60px">Selected state ${i}</body>`);
+      await page.screenshot({ path: join(outputDir, `state-${i}.png`) });
+      sections.push(`<section class="sheet"><img loading="lazy" src="state-${i}.png" alt="State ${i}"></section>`);
+    }
+    await context.close();
+    const html = `<html><head><style>@page{size:A3 landscape;margin:10mm}.sheet{height:260mm;break-after:page}img{width:310mm}</style></head><body>${sections.join('')}</body></html>`;
+    await writeFile(join(outputDir, 'book.html'), html);
+    const outPath = join(outputDir, 'book.pdf');
+    await renderSurfaceBookPdf({ browser, html, outPath, title: 'External state images' });
+    const counts = JSON.parse(execFileSync(join(ROOT, '.venv/bin/python'), ['-c', 'import json,sys; from pypdf import PdfReader; r=PdfReader(sys.argv[1]); print(json.dumps([len(p.images) for p in r.pages]))', outPath], { encoding: 'utf8' }));
+    assert.equal(counts.length, 24);
+    assert.ok(counts.every(count => count > 0), 'every PDF page must embed its external screenshot');
+  } finally {
+    await browser.close();
+    await rm(outputDir, { recursive: true, force: true });
   }
 });

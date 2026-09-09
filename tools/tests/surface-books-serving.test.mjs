@@ -86,5 +86,7 @@ test('surface-book container exposes only a read-only static root', () => {
   assert.match(helper, /--restart unless-stopped/)
   assert.match(nginx, /root \/usr\/share\/nginx\/html;/)
   assert.match(nginx, /disable_symlinks on;/)
-  assert.match(nginx, /deny all;/)
+  assert.match(nginx, /return 404;/)
+  assert.match(nginx, /location = \/operator-console-surface-book\.pdf/)
+  assert.match(nginx, /location = \/public-entrant-surface-book\.pdf/)
 })
