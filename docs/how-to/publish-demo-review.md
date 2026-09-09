@@ -151,15 +151,34 @@ requires live HTTP checks and a browser check of both published origins.
 
 ### Interaction evidence in surface books
 
-`make surface-books` also records desktop and mobile interaction sequences for
-workspace action menus, live-day match selection, and published bracket player
-paths and round selection when those routes are included. Each HTML book embeds
-playable WebM clips with controls (no autoplay); the PDF includes before/after
-keyframes. The interaction appendix is linked from the surface index.
+The PDFs are the primary review artifacts: each sheet leads with a large image
+and places its action, route, and review notes in a side column. An interaction
+index locates before/after sequences, selected workspaces and side panels,
+roster and match inspectors, menus, dialogs, filters, disclosure states, and
+bracket paths. Scrollable detail panels receive continuation frames.
 
-Static route sheets retain reduced motion. Recordings use normal motion and real
-UI controls, including initial loading. Their capture contexts block non-read
-HTTP methods so these review recipes cannot submit tournament changes. A failed
-control or expected state makes the manifest partial. Companion manifests list
-interaction outcomes, final URLs, screenshots, and downloadable video assets.
-These are representative interaction samples, not exhaustive journey coverage.
+The capture inventories controls on every included desktop and mobile route,
+then records explicit selection journeys and discovered disclosures, pickers,
+radio choices, tabs, and draft-form controls. Newly revealed controls are
+explored until no unrecorded discrete control remains. Repeated data rows share their control
+pattern; finite pickers capture their alternative selections. Large data lists
+(such as timezones) use one alternative selection and retain the complete native
+option inventory in the manifest. This is a UI-state inventory, not every
+possible combination of form values or every completed server-side operation.
+
+Use the normal fixture with `FIXTURE_REVIEW_EXTRAS=1` for Meet, account journey,
+past-workspace, and backup inspection states. Fixture pages record their own
+origin and build context. The disabled-board fixture supplies the saved Off state without switching off
+the active venue board. No scores, deletion, restore, or other server writes
+are submitted by the interaction recorder; confirmation surfaces are captured
+before committing. The pure Meet lineup preview POST is allowed; saving its
+result remains blocked. Immediate-save controls retain their baseline values.
+Disabled controls remain documented in the baseline
+inventory. Missing expected controls or states make the manifest partial.
+
+Static route sheets retain reduced motion. Interaction sequences use normal
+motion; selected sequences also have controlled WebM playback in the companion
+HTML. Keep its adjacent asset directory when copying the HTML; the PDF embeds
+its images and can be shared alone. The PDF contains the still frames needed to review them independently.
+Use `SURFACE_INTERACTIONS=0` only for a deliberately static capture, or
+`SURFACE_INTERACTION_FILTER` to diagnose a named interaction sequence.

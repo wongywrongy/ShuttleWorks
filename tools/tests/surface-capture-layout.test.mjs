@@ -15,7 +15,7 @@ function runCapture(args, env) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(process.execPath, [CAPTURE, ...args], {
       cwd: ROOT,
-      env: { ...process.env, ...env },
+      env: { ...process.env, SURFACE_INTERACTIONS: "0", ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';

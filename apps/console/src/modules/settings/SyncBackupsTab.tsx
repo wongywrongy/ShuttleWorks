@@ -471,14 +471,13 @@ export function SyncBackupsTab({ timeZone: timeZoneProp }: { timeZone?: string }
             {inspectLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading snapshot contents…</p> : inspectError ? <p role="alert" className="mt-4 text-sm text-destructive">{inspectError}</p> : inspectState ? (
               <>
               <p className="mt-4 text-xs text-muted-foreground">
-                Counts are split by module because this recovery point includes
-                the Meet state and Bracket session in one workspace snapshot.
+                Counts are shown by module. A module with no saved data shows zero.
               </p>
               <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <dt className="text-muted-foreground">Tournament</dt><dd>{inspectState.config?.tournamentName || 'Unnamed tournament'}</dd>
-                <dt className="text-muted-foreground">Meet roster players</dt><dd>{inspectState.players.length}</dd>
-                <dt className="text-muted-foreground">Meet schools / groups</dt><dd>{inspectState.groups.length}</dd>
-                <dt className="text-muted-foreground">Meet matches</dt><dd>{inspectState.matches.length}</dd>
+                <dt className="text-muted-foreground">Meet roster players</dt><dd>{inspectState.players?.length ?? 0}</dd>
+                <dt className="text-muted-foreground">Meet schools / groups</dt><dd>{inspectState.groups?.length ?? 0}</dd>
+                <dt className="text-muted-foreground">Meet matches</dt><dd>{inspectState.matches?.length ?? 0}</dd>
                 <dt className="text-muted-foreground">Meet scheduled items</dt><dd>{inspectState.schedule?.assignments?.length ?? 0}</dd>
                 <dt className="text-muted-foreground">Bracket entrants</dt><dd>{inspectState.bracketPlayers?.length ?? 0}</dd>
                 <dt className="text-muted-foreground">Bracket scheduled items</dt><dd>{inspectState.bracket_session?.assignments?.length ?? 0}</dd>

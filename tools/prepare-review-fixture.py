@@ -71,6 +71,21 @@ def main() -> int:
 
     client = SimClient(args.base_url)
     try:
+        # Review books need both an empty past-workspace inspector and a real
+        # backup to expose the inspection/restore-confirmation controls.
+        if not fixture.get("pastTid"):
+            past = client.create_tournament(
+                "Past workspace review", kind="meet",
+                tournament_date="2026-07-01", tournament_end_date="2026-07-02",
+                time_zone="UTC",
+            )
+            fixture["pastTid"] = str(past["id"])
+        if not fixture.get("reviewBackupFilename"):
+            backup = client.request(
+                "POST", f"/tournaments/{fixture['taipeiTid']}/state/backup",
+                expect={200, 201},
+            ).json()
+            fixture["reviewBackupFilename"] = backup["filename"]
         existing = fixture.get("meetTid")
         if existing:
             row = client.request("GET", f"/tournaments/{existing}", expect={200}).json()

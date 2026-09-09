@@ -86,6 +86,24 @@ describe('SyncBackupsTab', () => {
     expect(restoreBackup).not.toHaveBeenCalled();
   });
 
+  it('inspects bracket-only snapshots without requiring Meet collections', async () => {
+    inspectBackup.mockResolvedValue({
+      version: 1,
+      config: { tournamentName: 'Bracket finals' },
+      bracketPlayers: [{ id: 'p1', name: 'Ada' }],
+      bracket_session: { assignments: [{ play_unit_id: 'u1' }] },
+    });
+    render(<SyncBackupsTab />);
+    fireEvent.click(within(screen.getByTestId('backup-b1.json')).getByRole('button', { name: 'Backup b1.json' }));
+    fireEvent.click(await screen.findByTestId('backup-inspect-b1.json'));
+    expect(await screen.findByText('Bracket finals')).toBeInTheDocument();
+    for (const label of ['Meet roster players', 'Meet schools / groups', 'Meet matches']) {
+      expect(screen.getByText(label).nextElementSibling).toHaveTextContent('0');
+    }
+    expect(screen.getByText('Bracket entrants').nextElementSibling).toHaveTextContent('1');
+    expect(restoreBackup).not.toHaveBeenCalled();
+  });
+
   it('restores a backup after confirm (delegates to the hook → store rehydrate)', async () => {
     render(<SyncBackupsTab />);
     fireEvent.click(

@@ -1,22 +1,23 @@
 /**
  * Surface capture — walks every page of one tier and writes a self-contained
- * HTML/PDF review book with an embedded screenshot per surface.
+ * PDF review book with a screenshot per surface and interaction state.
  *
- * One card per surface, with base64 PNGs inline so the file opens anywhere
- * without an asset directory beside it.
+ * The HTML companion uses an adjacent asset directory for interaction images
+ * and recordings. The PDF embeds its images and can be shared independently.
  *
  *   node tools/surface-capture.mjs console  http://127.0.0.1:5173  out.pdf
  *   node tools/surface-capture.mjs entrant  http://127.0.0.1:5180  out.pdf
  *
  * Not wired into CI: it needs a running stack and is an authoring tool.
  */
-import { captureInteractions, interactionSections } from "./surface-interactions.mjs";
+import { inventoryControls } from "./surface-interaction-recipes.mjs";
+import { captureInteractions, interactionSections, interactionIndexSections } from "./surface-interactions.mjs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, join } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 // Playwright is installed in the e2e workspace, not at the repo root, and ESM
@@ -53,6 +54,7 @@ const WS = process.env.WS_ID ?? "a86a39b3-0eb4-4c12-9106-5ff1bd1e5aa2";
 // has the Meet dataset. The production-parity default is a Bracket workspace,
 // so never capture Meet query parameters against it and call that coverage.
 const MEET_WS_ID = process.env.MEET_WS_ID ?? "";
+const PAST_WS_ID = process.env.PAST_WS_ID ?? "";
 const SLUG = process.env.SLUG ?? "2026-korea-masters-t030";
 // A second public tournament whose RESULTS are published. `SLUG` above is the
 // entry-taking workspace — the one the account and entry-form sheets need —
@@ -244,6 +246,10 @@ if (MEET_WS_ID) {
       `/tournaments/${MEET_WS_ID}/participants/people`,
     ],
   );
+}
+
+if (PAST_WS_ID) {
+  CONSOLE_SURFACES.push(["Display · Board disabled", `/tournaments/${PAST_WS_ID}/display/board`]);
 }
 
 const ENTRANT_SURFACES = [
@@ -697,6 +703,7 @@ const captureContext = {
   fixtureMode: FIXTURE_MODE,
   eventTimeZone,
   workspaceId: tier === "console" ? WS : null,
+  reviewWorkspaceIds: tier === "console" ? { meet: MEET_WS_ID || null, past: PAST_WS_ID || null } : null,
   publicSlug: tier === "entrant" ? SLUG : null,
   baselineRoute: surfaces.length ? surfaces[0][1] : null,
   viewports: VIEWPORTS.map(([name, width, height]) => ({ name, width, height, deviceScaleFactor: 2 })),
@@ -851,6 +858,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
         : unexpectedErrorPage
           ? "Required surface rendered an error/guard page"
           : null;
+      const controls = await inventoryControls(page);
       const documentHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, window.innerHeight));
       const scrollRegions = await page.evaluate(() => Array.from(document.querySelectorAll('*'))
         .filter((element) => {
@@ -1024,6 +1032,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
         documentHeight,
         segments: shots[vpName].length,
         scrollRegions,
+        controls,
         stickyHeaderHeight,
         scrollEndSegments: scrollEndShots[vpName].length,
         assets: [
@@ -1074,9 +1083,10 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
   );
 }
 
-const interactions = await captureInteractions({ browser, tier, surfaces, base: normalizedBase, viewports: VIEWPORTS, assetDir: rawAssetDir, assetDirName: rawAssetDirName, auth: cachedAuthMe });
+const interactions = process.env.SURFACE_INTERACTIONS === "0" ? [] : await captureInteractions({ browser, tier, surfaces, base: normalizedBase, viewports: VIEWPORTS, assetDir: rawAssetDir, assetDirName: rawAssetDirName, auth: cachedAuthMe, entrantStorageState, inventories: runState.surfaces.flatMap(surface => Object.entries(surface.viewports).map(([viewport, result]) => ({ label: surface.label, path: surface.path, viewport, controls: result.controls ?? [] }))) });
 runState.interactions = interactions.map(({ videoBase64, frames, ...record }) => ({ ...record, frames: frames.map(({ png, ...frame }) => frame) }));
-const interactionHtml = interactionSections(interactions, esc);
+writeFileSync(`${artifactStem}.capture.json`, JSON.stringify({ captureContext, runState, cards, interactions: runState.interactions }));
+const interactionHtml = interactionIndexSections(interactions, esc) + interactionSections(interactions, escAttr);
 
 const title =
   tier === "console"
@@ -1109,8 +1119,8 @@ const html = `<!doctype html>
   .guide {max-width:100ch;} .index ul {columns:2;padding-left:20px;} .index li {font-size:13px;margin:6px 0;break-inside:avoid;}
   .frame {display:flex;gap:28px;align-items:flex-start;margin-top:16px;}
   .frame img {display:block;width:100%;height:auto;border:1px solid #cbd5e1;}
-  .desktop .capture {width:100%;} .desktop aside {display:none;}
-  .mobile .capture {width:390px;flex-shrink:0;} aside {max-width:580px;padding:20px;border-top:2px solid #dbe2eb;}
+  .desktop .capture {flex:1;min-width:0;}
+  .mobile .capture {width:390px;flex-shrink:0;} aside {width:250px;flex-shrink:0;padding:14px;border-top:2px solid #dbe2eb;font-size:13px;overflow-wrap:anywhere;}
   .focus {font-size:13px;margin-top:10px;} .caption {font-size:12px;color:#475569;}
   @page {size:A3 landscape;margin:12mm;}
   @media print {
@@ -1122,7 +1132,8 @@ const html = `<!doctype html>
     .sheet {height:258mm;break-inside:avoid;}
     h2 {font-size:18px;margin-bottom:4px;} p {margin:4px 0;}
     .frame {margin-top:10px;}
-    .desktop .capture {width:330mm;}
+    .desktop .capture {width:310mm;flex:none;}
+    .frame {gap:8mm;} aside {width:65mm;padding:3mm;font-size:11px;}
     /* A 390px viewport segment is 844px tall. At 97mm wide it remains more
        readable than the former 94mm setting while leaving enough room for
        the heading, caption, and review focus on one A3 continuation sheet. */
@@ -1144,16 +1155,14 @@ const html = `<!doctype html>
 <p><strong>Annotate:</strong> cite surface ID, viewport and segment, then state the observed problem, affected task, severity, proposed change and measurable acceptance criterion. Distinguish a visual observation from an interaction hypothesis.</p>
 <p><strong>Further validation:</strong> keyboard/focus order, screen-reader output, dark theme, form errors, offline recovery and physical venue viewing distance require separate testing. This run captures document continuations and user-scrollable internal panes; hidden overflow is never forced open. Receipt and signed-in My Entries sheets are included only after a real entrant sign-in, while signed-out account sheets remain signed out. Authentication, receipt, and other outcome states are recorded only when their real token or credential prerequisite is supplied. The demo instant applies to event-facing phase/date decisions; authentication and audit/security clocks continue using real time.</p>
 <p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · reviewed build <code>${esc(REVIEWED_BUILD_SHA)}</code> · dirty-tree fingerprint <code>${esc(WORKING_TREE_FINGERPRINT)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · effective demo instant <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code> · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> unique product surfaces across <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets, plus <code>${esc(routeCoverage.enhancedStateSheets)}</code> enhanced-state and <code>${esc(routeCoverage.expectedErrorSheets)}</code> expected-error sheets. An enhanced-state sheet is a progressive-enhancement state of a surface already in the book; an expected-error sheet is a genuine refusal the product is SUPPOSED to give, not a defect. Retired compatibility URLs are excluded from the book and covered by route tests. Every sheet records its requested route and the final URL reached.</p>
-<p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Light/default theme; static sheets use reduced motion. Interaction appendix uses normal motion with playable HTML recordings and PDF keyframes. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Effective demo instant: <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code>; data is live from the captured stack and may vary between sheets. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
+<p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Default theme (appearance controls are captured in their selected state); static sheets use reduced motion. Interaction appendix uses normal motion with playable HTML recordings and PDF keyframes. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Effective demo instant: <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code>; data is live from the captured stack and may vary between sheets. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
 </div></section>
-<section class="index"><h1>Surface index</h1><p><a href="#interactions">Interaction recordings and selected states</a> · ${interactions.length} desktop/mobile sequences. Video playback is available in HTML; PDF includes every captured keyframe.</p><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>
+<section class="index"><h1>Surface index</h1><p><a href="#interactions">Interaction sequences and selected states</a> · ${interactions.length} desktop/mobile sequences. Video playback is available in HTML; PDF includes every captured keyframe.</p><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>
 ${pages.map(({card:c,index,viewport,shot,segment,count,kind})=>`<section class="sheet ${viewport} ${kind === 'scroll-end' ? 'scroll-end' : ''}" ${viewport==='desktop'&&segment===0&&kind==='document'?`id="s${index}"`:''}>
 <p class="eyebrow">${esc(c.ref)} · ${viewport} · ${kind === 'scroll-end' ? 'supplemental list end' : `segment ${segment+1} / ${count}`}</p>
-<h2>${esc(c.label)}</h2><p>${esc(c.description)}</p>
-<p class="path">Requested <code>${esc(c.path)}</code> · ${esc(`HTTP ${c.viewportRuns[viewport]?.httpStatus ?? "unavailable"} · final ${c.viewportRuns[viewport]?.finalUrl ?? "unavailable"} · ${c.viewportRuns[viewport]?.consoleErrors?.length ?? 0} console errors`)}</p>
-<div class="frame"><div class="capture">${shot?`<img src="data:image/png;base64,${shot.png}" alt="${escAttr(c.label)} ${escAttr(viewport)} ${kind === 'scroll-end' ? 'list end' : `segment ${segment+1}`}"><p class="caption">${shot.width} CSS px wide · document y=${shot.top}–${shot.top+shot.height} · 2× capture. ${kind === 'scroll-end' ? `Supplemental list-end view; internal region ${escAttr(shot.region)} at scroll ${shot.scrollTop}/${shot.scrollHeight}. This does not represent a complete record capture.` : segment?'Continuation of the same page; top navigation may be outside this segment.':'Initial document position; no interactive controls changed.'}</p>`:'<p class="err">Capture unavailable. Consult the manifest; do not treat this as an empty product state.</p>'}</div>
-<aside><h2>Reviewer notes</h2><p>${esc(reviewFocus(c.label))}</p><p>Compare this surface with its desktop sheets. Review at a comfortable zoom; printed screenshot size is not the physical target size.</p><p>Record: observation → user impact → proposed treatment → acceptance criterion.</p></aside></div>
-<p class="focus"><strong>Review focus:</strong> ${esc(reviewFocus(c.label))}</p></section>`).join('')}
+<h2>${esc(c.label)}</h2>
+<div class="frame"><div class="capture">${shot?`<img src="data:image/png;base64,${shot.png}" alt="${escAttr(c.label)} ${escAttr(viewport)} ${kind === 'scroll-end' ? 'list end' : `segment ${segment+1}`}">`:'<p class="err">Capture unavailable. Consult the manifest.</p>'}</div>
+<aside><p>${esc(c.description)}</p><p class="path">Requested <code>${esc(c.path)}</code></p><p class="path">${esc(`HTTP ${c.viewportRuns[viewport]?.httpStatus ?? "unavailable"} · final ${c.viewportRuns[viewport]?.finalUrl ?? "unavailable"} · ${c.viewportRuns[viewport]?.consoleErrors?.length ?? 0} console errors`)}</p>${shot?`<p class="caption">${shot.width} CSS px wide · document y=${shot.top}–${shot.top+shot.height} · 2× capture. ${kind === 'scroll-end' ? `Supplemental list-end view; internal region ${escAttr(shot.region)} at scroll ${shot.scrollTop}/${shot.scrollHeight}. This does not represent a complete record capture.` : segment?'Continuation of the same page.':'Initial document position; no interactive controls changed.'}</p>`:''}<h2>Review focus</h2><p>${esc(reviewFocus(c.label))}</p><p>Observation → user impact → proposed treatment → acceptance criterion.</p></aside></div></section>`).join('')}
 ${interactionHtml.replace('<section ', '<section id="interactions" ')}
 </body></html>`;
 
@@ -1169,7 +1178,7 @@ if (extname(outPath) === ".pdf") {
   // when the HTML loads successfully. Print bounded groups, then concatenate
   // their PDF pages without re-rasterizing the screenshots or selectable text.
   const sections = [...html.matchAll(/<section\b[\s\S]*?<\/section>/g)].map((match) => match[0]);
-  const prefix = html.slice(0, html.indexOf("<body>") + "<body>".length);
+  const prefix = html.slice(0, html.indexOf("<body>") + "<body>".length).replace("</head>", `<base href="${escAttr(pathToFileURL(resolve(dirname(outPath)) + "/").href)}"></head>`);
   const chunkSize = 20;
   const chunkCount = Math.ceil(sections.length / chunkSize);
   const temporary = mkdtempSync(join(tmpdir(), "shuttleworks-book-pdf-"));
@@ -1179,7 +1188,12 @@ if (extname(outPath) === ".pdf") {
       const partNumber = parts.length + 1;
       const reportPage = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
       try {
-        await reportPage.setContent(prefix + sections.slice(start, start + chunkSize).join("") + "</body></html>", { waitUntil: "load", timeout: 120000 });
+        const chunkPath = join(temporary, `part-${partNumber}.html`);
+        writeFileSync(chunkPath, prefix + sections.slice(start, start + chunkSize).join("") + "</body></html>");
+        await reportPage.goto(pathToFileURL(chunkPath).href, { waitUntil: "load", timeout: 120000 });
+        await reportPage.locator("img").evaluateAll(async images => {
+          await Promise.all(images.map(image => { image.loading = "eager"; return image.decode(); }));
+        });
         await reportPage.emulateMedia({ media: "print", reducedMotion: "reduce" });
         const clippedSheets = await reportPage.locator('.sheet').evaluateAll((sheets) =>
           sheets.flatMap((sheet, index) => sheet.scrollHeight > sheet.clientHeight + 2 ? [index + 1] : []));
@@ -1234,7 +1248,7 @@ const manifest = {
     pdf: extname(outPath) === ".pdf" ? outPath : null,
     rawScreenshots: rawAssetDir,
   },
-  expectedPdfPages: extname(outPath) === ".pdf" ? pages.length + 2 + interactions.reduce((sum, record) => sum + record.frames.length, 0) : null,
+  expectedPdfPages: extname(outPath) === ".pdf" ? [...html.matchAll(/<section\b/g)].length : null,
   failedViewports,
 };
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

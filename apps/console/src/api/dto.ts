@@ -520,8 +520,9 @@ export interface TournamentStateDTO {
   standings?: MeetStandingRowDTO[];
 }
 
-/** Authenticated backup download may include the bracket engine sidecar. */
-export type BackupSnapshotDTO = TournamentStateDTO & {
+/** Raw snapshots omit collections for modules that were never initialized.
+ * Unlike the state endpoint, downloads do not normalize missing Meet fields. */
+export type BackupSnapshotDTO = Partial<TournamentStateDTO> & {
   bracket_session?: { assignments?: unknown[] } | null;
 };
 
