@@ -5,7 +5,7 @@ const step = (caption, selector, expected = 'body', position) => [caption, selec
 // Snapshot every control, including disabled actions and native select options,
 // so the manifest can distinguish a reviewed state from an unavailable action.
 export async function inventoryControls(page) {
-  return page.locator('button, summary, select, input[type="checkbox"], [role="tab"], [role="radio"], [role="switch"], [role="option"], [role="menuitemcheckbox"]').evaluateAll(elements => elements.filter(element => element.getBoundingClientRect().width > 2 && element.getBoundingClientRect().height > 2).map(element => {
+  return page.locator('button, summary, select, input[type="checkbox"], [role="tab"], [role="radio"], [role="switch"], [role="option"], [role="menuitemcheckbox"]').filter({ visible: true }).evaluateAll(elements => elements.filter(element => element.getBoundingClientRect().width > 2 && element.getBoundingClientRect().height > 2).map(element => {
     const label = element.getAttribute('aria-label');
     const testId = element.getAttribute('data-testid');
     const content = (element.textContent ?? '').trim();

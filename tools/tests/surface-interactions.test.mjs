@@ -84,8 +84,10 @@ test('native select inventory uses stable IDs instead of concatenated option tex
   const browser = await require('playwright').chromium.launch();
   try {
     const page = await browser.newPage();
-    await page.setContent('<label for="gender">Gender</label><select id="gender"><option value="">Select gender</option><option value="F">Female</option><option value="M">Male</option></select>');
-    const [control] = await inventoryControls(page);
+    await page.setContent('<label for="gender">Gender</label><select id="gender"><option value="">Select gender</option><option value="F">Female</option><option value="M">Male</option></select><details><summary>More filters</summary><select id="hidden-filter"><option>All</option></select></details>');
+    const controls = await inventoryControls(page);
+    assert.ok(!controls.some(control => control.selector === '#hidden-filter'), 'closed disclosure controls must be discovered after opening');
+    const control = controls.find(control => control.label === 'Gender');
     await page.locator(control.selector).selectOption('F');
     assert.equal(await page.locator('#gender').inputValue(), 'F');
     assert.equal(control.label, 'Gender');
