@@ -31,7 +31,7 @@ export function interactionRecipes(tier, surfaces) {
   ].filter(recipe => recipe.path);
 }
 
-export async function captureInteractions({ browser, tier, surfaces, base, viewports, assetDir, assetDirName, auth, inventories = [], entrantStorageState }) {
+export async function captureInteractions({ browser, tier, surfaces, base, viewports, assetDir, assetDirName, auth, inventories = [], entrantStorageState, refOffset = 0 }) {
   const records = [];
   const recipes = [...interactionRecipes(tier, surfaces).map(recipe => ({ ...recipe, video: true })), ...expandedRecipes(tier, surfaces, inventories)];
   const knownControls = new Set(inventories.flatMap(inventory => inventory.controls.map(control => `${inventory.path}|${inventory.viewport}|${control.selector}`)));
@@ -39,7 +39,7 @@ export async function captureInteractions({ browser, tier, surfaces, base, viewp
     for (const [viewport, width, height] of viewports) {
       if (process.env.SURFACE_INTERACTION_FILTER && !recipe.name.includes(process.env.SURFACE_INTERACTION_FILTER)) continue;
       if (recipe.viewport && recipe.viewport !== viewport) continue;
-      const ref = `I${String(index + 1).padStart(2, '0')}`;
+      const ref = `I${String(refOffset + index + 1).padStart(2, '0')}`;
       const record = { ref, name: recipe.name, requestedUrl: base + recipe.path, viewport, reducedMotion: 'no-preference', ok: false, frames: [], consoleErrors: [], blockedRequests: [] };
       const usesEntrantSession = /My entries \(signed in\)|Entry receipt|Signed-in outcome|Account-created outcome/.test(recipe.name);
       const context = await browser.newContext({ ...(usesEntrantSession ? { storageState: entrantStorageState } : {}), viewport: { width, height }, deviceScaleFactor: 2, reducedMotion: 'no-preference', ...(recipe.video ? { recordVideo: { dir: assetDir, size: { width, height } } } : {}) });
@@ -97,7 +97,8 @@ export async function captureInteractions({ browser, tier, surfaces, base, viewp
           await target.scrollIntoViewIfNeeded();
           await target.hover();
           await page.waitForTimeout(400);
-          if (action?.select !== undefined) await target.selectOption(action.select);
+          if (action?.fill !== undefined) await target.fill(action.fill);
+          else if (action?.select !== undefined) await target.selectOption(action.select);
           else await target.click();
           await page.locator(expected).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 5000 });
           await frame(caption);

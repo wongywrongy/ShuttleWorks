@@ -182,3 +182,13 @@ HTML. Keep its adjacent asset directory when copying the HTML; the PDF embeds
 its images and can be shared alone. The PDF contains the still frames needed to review them independently.
 Use `SURFACE_INTERACTIONS=0` only for a deliberately static capture, or
 `SURFACE_INTERACTION_FILTER` to diagnose a named interaction sequence.
+
+If printing is interrupted after capture, retain the HTML, adjacent assets, and
+`.capture.json` checkpoint. Reprint without revisiting the fixture:
+
+```bash
+node tools/render-surface-book.mjs path/to/operator-console-surface-book.html
+```
+
+Printing uses small batches of full-resolution images to stay within Chromium's
+decoder budget. A successful reprint also restores the capture manifest.

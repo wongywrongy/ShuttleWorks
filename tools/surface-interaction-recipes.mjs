@@ -12,7 +12,7 @@ export async function inventoryControls(page) {
     const role = element.getAttribute('role');
     const groupLabel = element.closest('[role="radiogroup"]')?.getAttribute('aria-label');
     const associatedLabel = element.labels?.[0]?.textContent?.trim();
-    let selector = testId ? `[data-testid=${JSON.stringify(testId)}]` : label ? `[aria-label=${JSON.stringify(label)}]` : content ? `${role ? `[role=${JSON.stringify(role)}]` : element.tagName.toLowerCase()}:${['option', 'menuitemcheckbox'].includes(role) ? 'has-text' : 'text-is'}(${JSON.stringify(content)})` : element.id ? `#${CSS.escape(element.id)}` : associatedLabel ? `label:has-text(${JSON.stringify(associatedLabel)}) input[type="checkbox"]` : null;
+    let selector = testId ? `[data-testid=${JSON.stringify(testId)}]` : label ? `[aria-label=${JSON.stringify(label)}]` : element.tagName === 'SELECT' && element.id ? `#${CSS.escape(element.id)}` : content ? `${role ? `[role=${JSON.stringify(role)}]` : element.tagName.toLowerCase()}:${['option', 'menuitemcheckbox'].includes(role) ? 'has-text' : 'text-is'}(${JSON.stringify(content)})` : element.id ? `#${CSS.escape(element.id)}` : associatedLabel ? `label:has-text(${JSON.stringify(associatedLabel)}) input[type="checkbox"]` : null;
     if (groupLabel && selector) selector = `[role="radiogroup"][aria-label=${JSON.stringify(groupLabel)}] ${selector}`;
     return { label: groupLabel ? `${groupLabel} · ${label || content}` : label || associatedLabel || content || element.tagName.toLowerCase(), selector, tag: element.tagName.toLowerCase(), role: element.getAttribute('role'), expanded: element.getAttribute('aria-expanded'), checked: element.getAttribute('aria-checked'), selected: element.getAttribute('aria-selected'), disabled: Boolean(element.disabled), options: element.tagName === 'SELECT' ? [...element.options].map(option => ({ value: option.value, label: option.label, disabled: option.disabled, selected: option.selected })) : undefined };
   }));
@@ -25,6 +25,11 @@ export function expandedRecipes(tier, surfaces, inventories = []) {
     if (path) recipes.push({ name: `${label} · ${name}`, path, steps });
   };
   if (tier === 'console') {
+    add('Hub — workspace list', 'Workspace search', [
+      ['Filter the workspace list', 'input[placeholder="Search or jump to…"]', 'body', undefined, { fill: 'Taipei' }],
+      ['Clear the workspace filter', 'input[placeholder="Search or jump to…"]', 'body', undefined, { fill: '' }],
+    ]);
+    add('Meet · Team structure', 'Position reassignment picker', [step('Open the position player picker', 'button[aria-label^="Reassign "]', '[data-testid="picker-search"]')]);
     for (const label of ['Hub — workspace list', 'Hub — past workspaces', 'Hub — live workspaces']) {
       add(label, 'Selected workspace and side panel', [step('Click the workspace row', '[class~="cursor-pointer"]:has([data-testid="row-date"]) > span:first-child > span', '[data-testid="workspace-inspector"]')]);
     }

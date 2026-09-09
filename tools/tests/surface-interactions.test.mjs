@@ -74,3 +74,20 @@ test('only the same-origin pure lineup preview is exempt from the write guard', 
   assert.equal(isReadOnlyCaptureRequest('PUT',origin+'/api/tournaments/id/state',origin),false);
   assert.equal(isReadOnlyCaptureRequest('POST',origin+preview+'/commit',origin),false);
 });
+
+test('native select inventory uses stable IDs instead of concatenated option text', {
+  skip: process.env.SURFACE_CAPTURE_INTEGRATION !== '1',
+}, async () => {
+  const { createRequire } = await import('node:module');
+  const { inventoryControls } = await import('../surface-interaction-recipes.mjs');
+  const require = createRequire(new URL('../../tests/e2e/package.json', import.meta.url));
+  const browser = await require('playwright').chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<label for="gender">Gender</label><select id="gender"><option value="">Select gender</option><option value="F">Female</option><option value="M">Male</option></select>');
+    const [control] = await inventoryControls(page);
+    await page.locator(control.selector).selectOption('F');
+    assert.equal(await page.locator('#gender').inputValue(), 'F');
+    assert.equal(control.label, 'Gender');
+  } finally { await browser.close(); }
+});
