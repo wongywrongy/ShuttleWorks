@@ -34,12 +34,8 @@ case "$artifact_dir" in
     echo "Refusing to serve a broad root directory: $artifact_dir" >&2; exit 1 ;;
 esac
 if [[ ! -e "$artifact_dir/operator-console-surface-book.pdf" &&
-      ! -e "$artifact_dir/operator-console-surface-book.html" &&
-      ! -e "$artifact_dir/operator-console-surface-book.manifest.json" &&
-      ! -e "$artifact_dir/public-entrant-surface-book.pdf" &&
-      ! -e "$artifact_dir/public-entrant-surface-book.html" &&
-      ! -e "$artifact_dir/public-entrant-surface-book.manifest.json" ]]; then
-  echo "Artifact directory must contain a named operator or public surface book." >&2
+      ! -e "$artifact_dir/public-entrant-surface-book.pdf" ]]; then
+  echo "Artifact directory must contain an operator or public PDF surface book." >&2
   exit 1
 fi
 if [[ ! -r "$nginx_conf" ]]; then

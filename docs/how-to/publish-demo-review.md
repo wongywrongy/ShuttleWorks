@@ -100,7 +100,7 @@ The capture inventory excludes compatibility aliases, disabled destinations,
 fabricated capabilities, and duplicate pages. Real reachable recovery states
 remain. An expected refusal must return its declared status. Manifests record
 URLs, viewport results, provenance, omitted states, and the expected PDF page
-count; raw PNGs sit beside the HTML/PDF output.
+count. Raw PNGs and print markup are internal capture inputs.
 
 ## Publish the reviewed directory
 
@@ -120,7 +120,7 @@ http://<tailscale-ip>:8093/operator-console-surface-book.pdf
 http://<tailscale-ip>:8093/public-entrant-surface-book.pdf
 ```
 
-The corresponding `.html` links open the books in a browser. Verify publication:
+Only the PDF downloads are published. Verify publication:
 
 ```bash
 curl -fI "http://$demo_ip:8093/operator-console-surface-book.pdf"
@@ -151,7 +151,7 @@ requires live HTTP checks and a browser check of both published origins.
 
 ### Interaction evidence in surface books
 
-The PDFs are the primary review artifacts: each sheet leads with a large image
+The PDFs are the only published review artifacts: each sheet leads with a large image
 and places its action, route, and review notes in a side column. An interaction
 index locates before/after sequences, selected workspaces and side panels,
 roster and match inspectors, menus, dialogs, filters, disclosure states, and
@@ -176,19 +176,6 @@ result remains blocked. Immediate-save controls retain their baseline values.
 Disabled controls remain documented in the baseline
 inventory. Missing expected controls or states make the manifest partial.
 
-Static route sheets retain reduced motion. Interaction sequences use normal
-motion; selected sequences also have controlled WebM playback in the companion
-HTML. Keep its adjacent asset directory when copying the HTML; the PDF embeds
-its images and can be shared alone. The PDF contains the still frames needed to review them independently.
-Use `SURFACE_INTERACTIONS=0` only for a deliberately static capture, or
-`SURFACE_INTERACTION_FILTER` to diagnose a named interaction sequence.
-
-If printing is interrupted after capture, retain the HTML, adjacent assets, and
-`.capture.json` checkpoint. Reprint without revisiting the fixture:
-
-```bash
-node tools/render-surface-book.mjs path/to/operator-console-surface-book.html
-```
-
-Printing uses small batches of full-resolution images to stay within Chromium's
-decoder budget. A successful reprint also restores the capture manifest.
+Static route sheets retain reduced motion. Interaction sequences capture normal
+motion as before/after PDF frames. Screenshots and print markup are internal
+build inputs; the server exposes only the two PDF downloads.

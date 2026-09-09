@@ -1,4 +1,4 @@
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expandedRecipes, inventoryControls } from './surface-interaction-recipes.mjs';
 
@@ -33,7 +33,7 @@ export function interactionRecipes(tier, surfaces) {
 
 export async function captureInteractions({ browser, tier, surfaces, base, viewports, assetDir, assetDirName, auth, inventories = [], entrantStorageState, refOffset = 0 }) {
   const records = [];
-  const recipes = [...interactionRecipes(tier, surfaces).map(recipe => ({ ...recipe, video: true })), ...expandedRecipes(tier, surfaces, inventories)];
+  const recipes = [...interactionRecipes(tier, surfaces), ...expandedRecipes(tier, surfaces, inventories)];
   const knownControls = new Set(inventories.flatMap(inventory => inventory.controls.map(control => `${inventory.path}|${inventory.viewport}|${control.selector}`)));
   const captureRecipe = async (index, recipe) => {
     for (const [viewport, width, height] of viewports) {
@@ -42,10 +42,9 @@ export async function captureInteractions({ browser, tier, surfaces, base, viewp
       const ref = `I${String(refOffset + index + 1).padStart(2, '0')}`;
       const record = { ref, name: recipe.name, requestedUrl: base + recipe.path, viewport, reducedMotion: 'no-preference', ok: false, frames: [], consoleErrors: [], blockedRequests: [] };
       const usesEntrantSession = /My entries \(signed in\)|Entry receipt|Signed-in outcome|Account-created outcome/.test(recipe.name);
-      const context = await browser.newContext({ ...(usesEntrantSession ? { storageState: entrantStorageState } : {}), viewport: { width, height }, deviceScaleFactor: 2, reducedMotion: 'no-preference', ...(recipe.video ? { recordVideo: { dir: assetDir, size: { width, height } } } : {}) });
+      const context = await browser.newContext({ ...(usesEntrantSession ? { storageState: entrantStorageState } : {}), viewport: { width, height }, deviceScaleFactor: 2, reducedMotion: 'no-preference' });
       const page = await context.newPage();
       page.setDefaultTimeout(5000);
-      const video = page.video();
       if (tier === 'console' && auth) await page.route('**/api/auth/me', route => route.fulfill(auth));
       page.on('console', message => { if (message.type() === 'error') record.consoleErrors.push(message.text().slice(0, 200)); });
       // Guard the recipe itself against accidentally submitting live data.
@@ -119,13 +118,6 @@ export async function captureInteractions({ browser, tier, surfaces, base, viewp
       } catch (error) { record.error = error.message.split('\n')[0]; await frame('Observed state when verification failed').catch(() => {}); }
       record.finalUrl = page.url();
       await context.close();
-      if (video) {
-      const original = await video.path();
-      const file = `${ref}-${viewport}.webm`;
-      await video.saveAs(join(assetDir, file));
-      if (original !== join(assetDir, file)) unlinkSync(original);
-      record.videoAsset = `${assetDirName}/${file}`;
-      }
       writeFileSync(join(assetDir, `${ref}-${viewport}.json`), JSON.stringify(record, null, 2));
       records.push(record);
       console.log(`${ref} ${viewport}: ${recipe.name} — ${record.ok ? 'complete' : record.error ?? 'console errors'}`);
@@ -143,7 +135,7 @@ export async function captureInteractions({ browser, tier, surfaces, base, viewp
 }
 
 export function interactionSections(records, esc) {
-  return records.flatMap(record => record.frames.map((frame, index) => `<section class="sheet ${record.viewport}" ${index === 0 ? `id="${record.ref}-${record.viewport}"` : ''}><p class="eyebrow">${record.ref} · ${record.viewport} · action ${index}/${record.frames.length - 1}</p><h2>${esc(record.name)}</h2>${index === 0 && record.videoAsset ? `<div class="interaction-video"><p>Play the recorded action sequence (normal motion; includes initial loading).</p><video controls preload="none" poster="${esc(frame.assetPath)}" src="${esc(record.videoAsset)}" style="width:100%;max-height:70vh"></video></div>` : ''}<div class="frame"><div class="capture"><img loading="lazy" decoding="async" src="${esc(frame.assetPath)}" alt="${esc(frame.caption).replace(/"/g, "&quot;").replace(/'/g, "&#39;")}"><\/div><aside><h2>${esc(frame.caption)}</h2><p class="path">${esc(frame.url)}</p><p>${record.ok ? 'Verified interaction' : `Incomplete: ${esc(record.error ?? 'browser errors')}`}</p><p>Recorded UI state. PDF shows keyframes; use the HTML book to play the motion.</p><p>Review the selected control, revealed panel, focus, and surrounding context.</p></aside></div></section>`)).join('');
+  return records.flatMap(record => record.frames.map((frame, index) => `<section class="sheet ${record.viewport}" ${index === 0 ? `id="${record.ref}-${record.viewport}"` : ''}><p class="eyebrow">${record.ref} · ${record.viewport} · action ${index}/${record.frames.length - 1}</p><h2>${esc(record.name)}</h2><div class="frame"><div class="capture"><img loading="lazy" decoding="async" src="${esc(frame.assetPath)}" alt="${esc(frame.caption)}"></div><aside><h2>${esc(frame.caption)}</h2><p class="path">${esc(frame.url)}</p><p>${record.ok ? 'Verified interaction' : `Incomplete: ${esc(record.error ?? 'browser errors')}`}</p><p>Each frame shows an action and its visible result.</p><p>Review the selected control, revealed panel, focus, and surrounding context.</p></aside></div></section>`)).join('');
 }
 
 export function interactionIndexSections(records, esc) {

@@ -2,8 +2,7 @@
  * Surface capture — walks every page of one tier and writes a self-contained
  * PDF review book with a screenshot per surface and interaction state.
  *
- * The HTML companion uses an adjacent asset directory for interaction images
- * and recordings. The PDF embeds its images and can be shared independently.
+ * HTML and screenshots are internal print inputs. The PDF is the review output.
  *
  *   node tools/surface-capture.mjs console  http://127.0.0.1:5173  out.pdf
  *   node tools/surface-capture.mjs entrant  http://127.0.0.1:5180  out.pdf
@@ -33,16 +32,16 @@ const brand = JSON.parse(
 const [tier, base, outPath] = process.argv.slice(2);
 if (!tier || !base || !outPath) {
   console.error(
-    "usage: surface-capture.mjs <console|entrant> <baseUrl> <out.html|out.pdf>",
+    "usage: surface-capture.mjs <console|entrant> <baseUrl> <out.pdf>",
   );
   process.exit(2);
 }
 if (
   !["console", "entrant"].includes(tier) ||
-  ![".html", ".pdf"].includes(extname(outPath))
+  extname(outPath) !== ".pdf"
 ) {
   console.error(
-    "tier must be console or entrant; output must end in .html or .pdf",
+    "tier must be console or entrant; output must end in .pdf",
   );
   process.exit(2);
 }
@@ -1084,8 +1083,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
 }
 
 const interactions = process.env.SURFACE_INTERACTIONS === "0" ? [] : await captureInteractions({ browser, tier, surfaces, base: normalizedBase, viewports: VIEWPORTS, assetDir: rawAssetDir, assetDirName: rawAssetDirName, auth: cachedAuthMe, entrantStorageState, inventories: runState.surfaces.flatMap(surface => Object.entries(surface.viewports).map(([viewport, result]) => ({ label: surface.label, path: surface.path, viewport, controls: result.controls ?? [] }))) });
-runState.interactions = interactions.map(({ videoBase64, frames, ...record }) => ({ ...record, frames: frames.map(({ png, ...frame }) => frame) }));
-writeFileSync(`${artifactStem}.capture.json`, JSON.stringify({ captureContext, runState, cards, interactions: runState.interactions }));
+runState.interactions = interactions;
 const interactionHtml = interactionIndexSections(interactions, esc) + interactionSections(interactions, escAttr);
 
 const title =
@@ -1124,7 +1122,6 @@ const html = `<!doctype html>
   .focus {font-size:13px;margin-top:10px;} .caption {font-size:12px;color:#475569;}
   @page {size:A3 landscape;margin:12mm;}
   @media print {
-    .interaction-video {display:none;}
     body {background:white;font-size:13px;}
     .cover,.index,.sheet {max-width:none;margin:0;padding:0;break-after:page;}
     .sheet:last-child {break-after:auto;}
@@ -1155,9 +1152,9 @@ const html = `<!doctype html>
 <p><strong>Annotate:</strong> cite surface ID, viewport and segment, then state the observed problem, affected task, severity, proposed change and measurable acceptance criterion. Distinguish a visual observation from an interaction hypothesis.</p>
 <p><strong>Further validation:</strong> keyboard/focus order, screen-reader output, dark theme, form errors, offline recovery and physical venue viewing distance require separate testing. This run captures document continuations and user-scrollable internal panes; hidden overflow is never forced open. Receipt and signed-in My Entries sheets are included only after a real entrant sign-in, while signed-out account sheets remain signed out. Authentication, receipt, and other outcome states are recorded only when their real token or credential prerequisite is supplied. The demo instant applies to event-facing phase/date decisions; authentication and audit/security clocks continue using real time.</p>
 <p><strong>Capture context:</strong> checkout <code>${esc(CHECKOUT_SHA)}</code> · reviewed build <code>${esc(REVIEWED_BUILD_SHA)}</code> · dirty-tree fingerprint <code>${esc(WORKING_TREE_FINGERPRINT)}</code> · baseline route <code>${esc(captureContext.baselineRoute ?? "unavailable")}</code> · fixture mode <code>${esc(FIXTURE_MODE)}</code>${FIXTURE_MODE === "normal" ? " (clean visual-review dataset — no deliberately corrupted or conflicting state)" : " (deliberate failure/recovery dataset — corrupted and conflicting state is EXPECTED here and is not a product defect)"} · effective demo instant <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code> · event timezone <code>${esc(eventTimeZone)}</code>. Route coverage: <code>${esc(routeCoverage.canonicalDestinations)}</code> unique product surfaces across <code>${esc(routeCoverage.stateSheets)}</code> state/continuation sheets, plus <code>${esc(routeCoverage.enhancedStateSheets)}</code> enhanced-state and <code>${esc(routeCoverage.expectedErrorSheets)}</code> expected-error sheets. An enhanced-state sheet is a progressive-enhancement state of a surface already in the book; an expected-error sheet is a genuine refusal the product is SUPPOSED to give, not a defect. Retired compatibility URLs are excluded from the book and covered by route tests. Every sheet records its requested route and the final URL reached.</p>
-<p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Default theme (appearance controls are captured in their selected state); static sheets use reduced motion. Interaction appendix uses normal motion with playable HTML recordings and PDF keyframes. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Effective demo instant: <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code>; data is live from the captured stack and may vary between sheets. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
+<p class="meta">Viewports: desktop 1440 × 900 CSS px; mobile 390 × 844 CSS px. Default theme (appearance controls are captured in their selected state); static sheets use reduced motion. Interaction appendix uses normal motion captured as PDF action frames. Workspace: <code>${esc(WS)}</code>. Public fixture: <code>${esc(SLUG)}</code>. Effective demo instant: <code>${esc(EFFECTIVE_DEMO_INSTANT)}</code>; data is live from the captured stack and may vary between sheets. Optional states omitted from this fixture: <code>${esc(omittedOptionalStates.map((state) => `${state.label}: ${state.reason}`).join("; ") || "none")}</code>. See companion manifest for per-viewport HTTP status, final URL and console errors.</p>
 </div></section>
-<section class="index"><h1>Surface index</h1><p><a href="#interactions">Interaction sequences and selected states</a> · ${interactions.length} desktop/mobile sequences. Video playback is available in HTML; PDF includes every captured keyframe.</p><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>
+<section class="index"><h1>Surface index</h1><p><a href="#interactions">Interaction sequences and selected states</a> · ${interactions.length} desktop/mobile sequences. Each captured action is shown as a separate PDF frame.</p><p>${cards.length} surfaces · ${pages.length} capture sheets. Existing audit references retain their original surface IDs.</p><ul>${cards.map((c,i)=>`<li><a href="#s${i}">${esc(c.ref)} · ${esc(c.label)}</a></li>`).join('')}</ul></section>
 ${pages.map(({card:c,index,viewport,shot,segment,count,kind})=>`<section class="sheet ${viewport} ${kind === 'scroll-end' ? 'scroll-end' : ''}" ${viewport==='desktop'&&segment===0&&kind==='document'?`id="s${index}"`:''}>
 <p class="eyebrow">${esc(c.ref)} · ${viewport} · ${kind === 'scroll-end' ? 'supplemental list end' : `segment ${segment+1} / ${count}`}</p>
 <h2>${esc(c.label)}</h2>
@@ -1166,8 +1163,7 @@ ${pages.map(({card:c,index,viewport,shot,segment,count,kind})=>`<section class="
 ${interactionHtml.replace('<section ', '<section id="interactions" ')}
 </body></html>`;
 
-const htmlPath =
-  extname(outPath) === ".pdf" ? outPath.replace(/\.pdf$/, ".html") : outPath;
+const htmlPath = join(rawAssetDir, "print.html");
 writeFileSync(htmlPath, html);
 console.log(
   `\nwrote ${htmlPath} (${(html.length / 1024 / 1024).toFixed(1)} MB)`,
@@ -1194,7 +1190,7 @@ const manifest = {
   finishedAt: finishedAt.toISOString(),
   durationMs: finishedAt.getTime() - startedAt.getTime(),
   artifacts: {
-    html: htmlPath,
+    renderInput: htmlPath,
     pdf: extname(outPath) === ".pdf" ? outPath : null,
     rawScreenshots: rawAssetDir,
   },

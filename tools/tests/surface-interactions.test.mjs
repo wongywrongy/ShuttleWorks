@@ -9,14 +9,13 @@ test('filtered books only record interactions for included routes', () => {
   assert.equal(recipes[0].path, '/e/demo/draws/MS');
   assert.equal(recipes[0].steps.length, 4);
 });
-test('HTML offers controllable motion and a static frame for every action, including failures', () => {
+test('PDF print input contains every action frame and no video player', () => {
   const html = interactionSections([{ref:'I01',viewport:'mobile',name:'Menu',ok:false,error:'missing control',videoAsset:'assets/clip.webm',frames:[{caption:'Before',url:'/demo',assetPath:'assets/frame.png'},{caption:'After',url:'/demo',assetPath:'assets/frame.png'}]}], text => String(text).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'));
   assert.equal((html.match(/<section /g) ?? []).length, 2);
-  assert.equal((html.match(/<video /g) ?? []).length, 1);
-  assert.match(html, /controls preload="none"/);
+  assert.doesNotMatch(html, /<video /);
   assert.doesNotMatch(html, /autoplay/);
   assert.match(html, /Incomplete: missing control/);
-  assert.match(html, /PDF shows keyframes/);
+  assert.match(html, /Each frame shows an action/);
 });
 
 test('expanded inventory captures menus and every finite choice without replaying disabled controls', async () => {

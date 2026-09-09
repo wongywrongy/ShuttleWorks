@@ -70,7 +70,7 @@ test('surface capture preserves paginated query state and covers a long document
     assert.equal(manifest.surfaces[0].viewports.desktop.segments, 3);
     assert.equal(manifest.surfaces[0].viewports.mobile.segments, 3);
 
-    const html = await readFile(join(outputDir, 'fixture.html'), 'utf8');
+    const html = await readFile(join(outputDir, 'fixture-assets', 'print.html'), 'utf8');
     const images = [...html.matchAll(/src="data:image\/png;base64,([^\"]+)"/g)].map((match) => pngSize(match[1]));
     assert.deepEqual(images, [
       { width: 2880, height: 1800 },
@@ -118,14 +118,14 @@ test('inventory capture adds an internal list-end sheet and valid PDF', {
       assert.equal(manifest.surfaces[0].viewports[viewport].scrollEndSegments, 1);
       assert.ok(manifest.surfaces[0].viewports[viewport].scrollRegions.length >= 1);
     }
-    const html = await readFile(join(outputDir, 'inventory.html'), 'utf8');
+    const html = await readFile(join(outputDir, 'inventory-assets', 'print.html'), 'utf8');
     assert.match(html, /supplemental list end/);
     assert.match(html, /This does not represent a complete record capture/);
     const expectedImages = manifest.surfaces[0].viewports.desktop.segments
       + manifest.surfaces[0].viewports.mobile.segments + 2;
     assert.equal([...html.matchAll(/src="data:image\/png;base64,/g)].length, expectedImages);
     assert.ok((await readFile(output)).byteLength > 0, 'inventory PDF artifact should be generated');
-    await runCapture(['console', base, join(outputDir, 'omitted.html')], {
+    await runCapture(['console', base, join(outputDir, 'omitted.pdf')], {
       CAPTURE_LABEL: 'Participants · Entries',
       CAPTURE_LIMIT: '0',
       CAPTURE_SETTLE_MS: '0',

@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, unlinkSync } from "node:fs";
-import { createRequire } from "node:module";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -62,26 +61,3 @@ export async function renderSurfaceBookPdf({ browser, html, outPath, title }) {
   console.log(`wrote ${outPath}`);
 }
 
-// Reprint saved capture evidence without revisiting or changing the fixture.
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const htmlPath = resolve(process.argv[2] ?? "");
-  if (!htmlPath.endsWith(".html")) throw new Error("Usage: node tools/render-surface-book.mjs BOOK.html");
-  const outPath = htmlPath.replace(/\.html$/, ".pdf");
-  const html = readFileSync(htmlPath, "utf8");
-  const require = createRequire(new URL("../tests/e2e/package.json", import.meta.url));
-  const browser = await require("playwright").chromium.launch();
-  try {
-    await renderSurfaceBookPdf({ browser, html, outPath, title: "ShuttleWorks surface review" });
-  } finally { await browser.close(); }
-  const checkpointPath = htmlPath.replace(/\.html$/, ".capture.json");
-  if (existsSync(checkpointPath)) {
-    const { runState } = JSON.parse(readFileSync(checkpointPath, "utf8"));
-    const finishedAt = new Date();
-    const failedViewports = runState.surfaces.flatMap(surface => Object.entries(surface.viewports).filter(([, result]) => !result.ok).map(([viewport, result]) => ({ ref: surface.ref, viewport, error: result.error })));
-    const manifest = { ...runState, status: failedViewports.length === 0 && runState.interactions.every(record => record.ok) ? "complete" : "partial", updatedAt: finishedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - new Date(runState.startedAt).getTime(), artifacts: { html: htmlPath, pdf: outPath, rawScreenshots: htmlPath.replace(/\.html$/, "-assets") }, expectedPdfPages: [...html.matchAll(/<section\b/g)].length, failedViewports };
-    writeFileSync(htmlPath.replace(/\.html$/, ".manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
-    const running = htmlPath.replace(/\.html$/, ".running.json");
-    if (existsSync(running)) unlinkSync(running);
-    console.log(`Recovered ${manifest.status} book: ${manifest.expectedPdfPages} pages`);
-  }
-}
