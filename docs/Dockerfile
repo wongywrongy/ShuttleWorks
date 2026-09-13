@@ -62,6 +62,7 @@ ARG SOURCE_REVISION
 LABEL org.opencontainers.image.revision=$SOURCE_REVISION
 
 COPY infra/nginx/docs.conf /etc/nginx/conf.d/default.conf
+COPY infra/nginx/http-shared.conf infra/nginx/security-headers.conf infra/nginx/log-redaction.conf /etc/nginx/snippets/
 
 # nginx-unprivileged already owns /usr/share/nginx/html as UID 101.
 COPY --from=builder --chown=101:101 \

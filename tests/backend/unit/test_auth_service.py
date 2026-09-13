@@ -8,6 +8,8 @@ import uuid
 from datetime import timedelta
 
 import pytest
+
+pytestmark = pytest.mark.shared_postgres
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker

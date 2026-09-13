@@ -7,6 +7,8 @@ import uuid
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.shared_postgres
 import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config

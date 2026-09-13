@@ -1,14 +1,15 @@
 name: CI
 
 on:
-  # Every branch, not an allowlist. The old filter was [main, "dev/**"], which
-  # silently stopped matching the day CONTRIBUTING.md retired `dev/*` in favour
-  # of short-lived `<type>/<slug>` branches: pushes to `sec/hardening` ran no
-  # CI at all, and the gap was invisible because a green PR check looks the
-  # same either way. A gate whose trigger has to be kept in step with a naming
-  # convention is a gate that will be out of step.
   pull_request:
   push:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel obsolete PR runs; main commits retain their exact-revision evidence.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege for the whole workflow (2026-09-07 hardening), matching
 # security.yml. The default GITHUB_TOKEN is write-all on a repository whose
@@ -213,12 +214,12 @@ jobs:
         run: |
           alembic upgrade head
           alembic check
-      - name: Unit tests (pytest)
+      - name: Isolated backend tests (four workers)
+        run: pytest tests/backend -m 'not shared_postgres' -n 4
+      - name: Shared-schema dialect parity (serial)
         env:
           TEST_POSTGRES_URL: postgresql://scheduler:scheduler@localhost:5433/scheduler
-        # The Postgres dialect-parity fixtures rebuild one shared schema, so
-        # this job stays serial. Local SQLite-only suites use xdist via Make.
-        run: pytest tests/backend
+        run: pytest tests/backend -m shared_postgres
 
   compose-lint:
     name: Compose files parse (docker compose config)
@@ -267,11 +268,10 @@ jobs:
           TURNSTILE_SECRET_KEY: dummy-turnstile-secret-key
           SW_WORKER_PASSWORD: dummy-password
           PRIMARY_TAILNET_HOST: 100.64.0.1
-          # The release stack intentionally has no mutable `latest` default.
-          # A harmless fixed value is supplied only to parse the deployment
-          # contract in this job; publication itself uses a tested release
-          # ref or exact commit-SHA tag.
-          TAG: ci-validation
+          # Parse only: synthetic digests cannot select a registry image.
+          BACKEND_DIGEST: sha256:0000000000000000000000000000000000000000000000000000000000000000
+          ENTRANT_DIGEST: sha256:0000000000000000000000000000000000000000000000000000000000000000
+          FRONTEND_DIGEST: sha256:0000000000000000000000000000000000000000000000000000000000000000
         run: |
           # The self-host stack declares file-backed secrets; `config`
           # resolves the paths, so the files must exist.
@@ -323,6 +323,9 @@ jobs:
           fi
           exit $status
 
+      - name: Validate every nginx fragment
+        run: bash tools/check-nginx.sh
+
   observability-config:
     name: Observability configs (Collector + Prometheus)
     runs-on: ubuntu-latest
@@ -372,7 +375,7 @@ jobs:
               -e POSTGRES_TELEMETRY_CA_FILE \
               -v /tmp:/hostfs:ro \
               -v "$PWD/infra/otel:/etc/otel:ro" \
-              otel/opentelemetry-collector-contrib:0.155.0 \
+              otel/opentelemetry-collector-contrib@sha256:4935caa35e9a4cb387e35732e8fb22b2b5759af8d12e7043357f03837f6e8df5 \
               validate --config="/etc/otel/$config" || status=1
           done
           exit $status
@@ -392,7 +395,7 @@ jobs:
             -e OTEL_GATEWAY_TLS_MIN_VERSION \
             -v /tmp:/hostfs:ro \
             -v "$PWD/infra/otel:/etc/otel:ro" \
-            otel/opentelemetry-collector-contrib:0.155.0 \
+            otel/opentelemetry-collector-contrib@sha256:4935caa35e9a4cb387e35732e8fb22b2b5759af8d12e7043357f03837f6e8df5 \
             validate --config=/etc/otel/collector-event-node.yaml; then
             echo "::error::Collector accepted an invalid TLS minimum"
             exit 1

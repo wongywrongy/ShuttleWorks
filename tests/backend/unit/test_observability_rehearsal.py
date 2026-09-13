@@ -161,7 +161,7 @@ def test_rehearsal_compose_and_collector_contract_are_isolated_and_pinned():
     compose_path = ROOT / "infra/compose/docker-compose.observability-rehearsal.yml"
     compose = yaml.safe_load(compose_path.read_text())
     collector = compose["services"]["otel-collector"]
-    expected_image = "otel/opentelemetry-collector-contrib:0.155.0"
+    expected_image = "otel/opentelemetry-collector-contrib@sha256:4935caa35e9a4cb387e35732e8fb22b2b5759af8d12e7043357f03837f6e8df5"
     assert collector["image"] == expected_image
     event_node = yaml.safe_load(
         (ROOT / "infra/compose/docker-compose.event-node.yml").read_text()
