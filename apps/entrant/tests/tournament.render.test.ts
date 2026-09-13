@@ -5,12 +5,13 @@
  * coming-soon of any species, under any state.
  *
  * Same shape as the rest of this directory: the REAL @react-router/dev
- * pipeline through `createRequestHandler`, request in, bytes out. The chip
- * countdown is rendered against the real clock, so assertions match the
- * chip's KIND, never a day count.
+ * pipeline through `createRequestHandler`, request in, bytes out. A fixed
+ * demo clock keeps the fixture's deadline rows stable on every test date.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
+import { parse } from 'parse5';
+import { documentText } from './helpers/documentText';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 
 import entryPageFixture from './helpers/entryPage.fixture.json';
@@ -30,10 +31,14 @@ const vite = await createServer({ server: { middlewareMode: true }, appType: 'cu
 afterAll(() => vite.close());
 
 beforeEach(() => {
-  process.env.API_BASE_URL = 'http://backend:8000';
+  vi.stubEnv('API_BASE_URL', 'http://backend:8000');
+  vi.stubEnv('ENVIRONMENT', 'local');
+  // Keep the fixture's August deadline rows future-facing on every test date.
+  vi.stubEnv('SHUTTLEWORKS_DEMO_NOW', '2026-07-31T12:00:00Z');
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 async function respond(body: unknown, status: number, path: string): Promise<Response> {
@@ -97,7 +102,7 @@ describe('the hero band', () => {
 
     expect(html).toContain('Entries closed');
     expect(html).not.toContain('Enter this tournament');
-    expect(html).not.toContain('href="/e/spring-open/enter"');
+    expect(html).not.toMatch(/href="\/e\/spring-open\/enter"[^>]*>Enter/);
     expect(html).not.toMatch(/ disabled=""/);
   });
 });
@@ -255,55 +260,66 @@ describe('key dates: venue-local, and exact on a deadline (P7)', () => {
 });
 
 describe('the panels', () => {
-  it('Overview: About card, currently-relevant key dates, fees pointer, documents, venue (P6)', async () => {
+  it('Overview: events lead, then About and Documents; one Tournament details card (refined 2026-09-12)', async () => {
     const html = await render();
 
-    // The organizer's words lead, in a card of their own that spans the
-    // left column (public-visual-fixes P6).
+    // The EVENTS section leads the main column: every event as one aligned
+    // row with its own entry state, stated to the minute in the venue zone.
+    expect(html).toContain('>Events<');
+    expect(html).toMatch(/Open until \d{1,2} \w{3}, \d{2}:\d{2}/);
+    const main = html.slice(html.indexOf('<main'));
+    expect(main.indexOf('>Events<')).toBeLessThan(main.indexOf('>About<'));
+
+    // The organizer's words follow, in a card of their own.
     expect(html).toContain('>About<');
     expect(html).toContain('Entries close on the 1st.');
 
-    // Key dates are plain label/value rows now; the timeline rail and its
-    // "you are here" marker went with the entrant-site port.
-    expect(html).toContain('Key dates');
+    // ONE details card replaces Key dates / Match format / Venue / Fees:
+    // plain label/value rows, no timeline rail, no "you are here".
+    expect(html).toContain('Tournament details');
+    expect(html).not.toContain('Key dates');
     expect(html).not.toMatch(/you are here/i);
-    // ONE entries row — the elapsed opening timestamp is gone — and the
-    // play day is labelled Play, not "Tournament", on a tournament page.
+    expect(html).toContain('>Dates<');
     expect(html).toContain('>Entries<');
-    expect(html).toContain('>Play<');
     expect(html).not.toContain('>Entries open<');
     expect(html).not.toContain('>Tournament<');
-    // (A withdrawal deadline shows only while it is still ahead; the
-    // fixture's is clock-relative, so `phase.test.ts` pins that rule.)
     // The fixture's XD event closes earlier than MS/WD, so the entries row
-    // is a per-event range, pointing at the Draws panel.
+    // is a per-event range, pointing at the events list on this page.
     expect(html).toContain('Varies by event');
-    expect(html).toContain('href="/e/spring-open?tab=draws"');
+    expect(html).toContain('href="#ov-events"');
+    expect(html).toContain('>Venue<');
     expect(html).toContain('4 Kingsway');
     // No zone abbreviation or offset in public prose (contract §7.1): the
     // hero already says all times are local to the venue.
     expect(html).not.toMatch(/\bUTC\b|GMT[+-]/);
 
-    // The Events/Entered-so-far facts card is gone: the Draws tab answers
-    // both, per event, in the unit each event uses.
+    // The Events/Entered-so-far facts card stays gone.
     expect(html).not.toContain('Entered so far');
-    expect(html).not.toContain('>Events<');
 
-    // FEES LEFT THE OVERVIEW (Kyle's mockup-review ruling): no price, no
-    // payment prose — a pointer row into the entry flow instead. The
-    // receipt keeps the payment instructions (`receipt.tsx`).
+    // FEES: no bare figure is printed as a price (the fixture states no
+    // currency); the payment row carries the organizer's own instructions
+    // and points at the entry form, where the quote is computed.
     expect(html).not.toContain('25.00');
-    expect(html).not.toContain('Bank transfer on the day.');
-    expect(html).toContain('Quoted on the entry form before you submit');
+    expect(html).toContain('Bank transfer on the day.');
+    expect(html).toContain('Fees are quoted on the entry form');
     expect(html).toContain('href="/e/spring-open/enter"');
 
     // Regulations became a DOCUMENT ROW: identity + version + updated date
     // + a link to the routed reader — the text itself no longer inlines.
     expect(html).toContain('Tournament regulations');
-    expect(html).toContain('Version 3');
+    expect(documentText(parse(html)).replace(/\s+/g, ' ')).toContain('Version 3');
     expect(html).toContain('href="/e/spring-open/regulations"');
     expect(html).not.toContain('BWF laws apply.');
     expect(html).not.toContain('<details');
+  });
+
+  it('prints an event fee only with its currency, never as a bare figure', async () => {
+    const priced = await render({ ...PAGE, page: { ...PAGE.page, feeCurrency: 'GBP' } });
+    expect(priced).toContain('GBP 15.00');
+    expect(priced).toContain('>Fee<');
+    const unpriced = await render();
+    expect(unpriced).not.toContain('15.00');
+    expect(unpriced).toContain('has not stated a currency');
   });
 
   it('omits the pricing card entirely once no event is open (no negative filler)', async () => {
@@ -322,6 +338,18 @@ describe('the panels', () => {
     // just no longer as the header's first line.
     const hero = html.slice(0, html.indexOf('<main'));
     expect(hero).not.toMatch(/text-status-live[^>]*>Entries/);
+  });
+
+  it('publishes the derived scoring summary, and no card without one', async () => {
+    const html = await render({
+      ...PAGE,
+      page: { ...PAGE.page, scoringSummary: 'Best of 3 games to 21, win by 2, capped at 30.' },
+    });
+    expect(html).toContain('>Format<');
+    expect(html).toContain('Best of 3 games to 21, win by 2, capped at 30.');
+
+    // Unconfigured scoring publishes nothing rather than a filler row.
+    expect(await render(PAGE)).not.toContain('>Format<');
   });
 
   it('renders no document row when the director wrote no regulations (rule 4)', async () => {

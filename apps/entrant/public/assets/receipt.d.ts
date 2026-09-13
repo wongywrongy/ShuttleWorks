@@ -21,16 +21,20 @@ export interface SubmissionReceipt {
   submittedAt: string;
   status: string;
   feeTotalCents?: number | null;
+  feeCurrency?: string | null;
   paymentState: string;
-  paymentNote?: string | null;
+  paidCents?: number;
+  outstandingCents?: number | null;
   paymentInstructions?: string | null;
   events: ReceiptEvent[];
 }
 
 export function formatCents(cents: number | null | undefined): string;
+export function formatMoney(cents: number | null | undefined, currency?: string | null): string;
 export function formatMoment(value: string): string;
 export function receiptStatus(status: string): { label: string; tone: string };
 export function paymentSummary(receipt: SubmissionReceipt): string;
+export function lineState(state: string): string;
 export function receiptText(receipt: SubmissionReceipt): string;
 export function renderReceipt(root: HTMLElement, receipt: SubmissionReceipt): void;
 export function loadReceipt(root: HTMLElement, fetchImpl?: typeof fetch): Promise<void>;

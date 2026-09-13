@@ -25,6 +25,8 @@ confidently wrong (the 2026-08-10 defect class).
 
 from __future__ import annotations
 
+from db.models import CompetitionEvent, UnitMembership
+
 import hashlib
 import json
 import unicodedata
@@ -230,17 +232,18 @@ def _public_identities_many(
         select(
             EntryPlayer.tournament_id,
             EntryPlayer.id,
+            EntryPlayer.roster_key,
             EntryPlayer.full_name,
             EntryPlayer.club,
             EntryEvent.code,
-            EntryEvent.bracket_event_id,
-            EntryEvent.meet_event_id,
+            CompetitionEvent.bracket_event_id,
+            CompetitionEvent.meet_event_id,
             Entry.state,
             Entry.list_opt_out,
             EntryPlayer.erased_at,
         )
         .select_from(EntryPlayer)
-        .join(
+        .outerjoin(
             Entry,
             (Entry.tournament_id == EntryPlayer.tournament_id)
             & (Entry.entry_player_id == EntryPlayer.id),
@@ -250,6 +253,8 @@ def _public_identities_many(
             (EntryEvent.tournament_id == Entry.tournament_id)
             & (EntryEvent.id == Entry.entry_event_id),
         )
+        .outerjoin(UnitMembership, (UnitMembership.tournament_id == EntryPlayer.tournament_id) & ((UnitMembership.entry_id == Entry.id) | ((Entry.id.is_(None)) & (UnitMembership.player_id == EntryPlayer.id))))
+        .outerjoin(CompetitionEvent, (CompetitionEvent.tournament_id == UnitMembership.tournament_id) & (CompetitionEvent.id == UnitMembership.competition_event_id))
         .where(EntryPlayer.tournament_id.in_(ids)),
     )
     identities: Dict[str, Dict[str, PublicPersonIdentityDTO]] = {}
@@ -259,6 +264,7 @@ def _public_identities_many(
     for (
         tournament_key,
         player_id,
+        player_key,
         name,
         club,
         event_code,
@@ -273,17 +279,17 @@ def _public_identities_many(
         hidden.setdefault(scope, set())
         clubs.setdefault(scope, {})
         visible_events.setdefault(scope, {})
-        key = roster_id(player_id)
+        key = player_key or roster_id(player_id)
         visible = (
             erased_at is None
-            and state == "confirmed"
+            and (state == "confirmed" or (state is None and player_key is not None))
             and not opted_out
             and isinstance(name, str)
             and bool(name.strip())
         )
         if visible:
             identities[scope].setdefault(
-                key, PublicPersonIdentityDTO(id=str(player_id), name=name.strip())
+                key, PublicPersonIdentityDTO(id=key if state is None else str(player_id), name=name.strip())
             )
             if isinstance(event_code, str):
                 visible_events[scope].setdefault(key, set()).add(event_code)
@@ -388,7 +394,8 @@ def _with_draw_roster(
         if key in directory.identities or key in directory.hidden:
             continue
         extra[key] = PublicPersonIdentityDTO(id=key, name=row["name"].strip())
-    if not extra:
+    canonical_manual = {row["id"] for row in roster_rows if not row["id"].startswith(_ENTRY_ROSTER_PREFIX) and row["id"] in directory.identities and directory.identities[row["id"]].id == row["id"] and row["id"] not in directory.hidden}
+    if not extra and not canonical_manual:
         return directory
     merged = dict(directory.identities)
     merged.update(extra)
@@ -397,7 +404,7 @@ def _with_draw_roster(
         hidden=directory.hidden,
         clubs=directory.clubs,
         visible_events=directory.visible_events,
-        draw_people=frozenset(extra),
+        draw_people=frozenset(extra) | frozenset(canonical_manual),
     )
 
 
@@ -803,6 +810,7 @@ class NodeResultDTO(BaseModel):
     # Sets mode: [[a, b], …]; None for winner-only results.
     score: Optional[List[List[int]]] = None
     walkover: bool = False
+    reason: Optional[Literal["walkover", "retired", "forfeit"]] = None
 
 
 class MatchNodeDTO(BaseModel):
@@ -1016,6 +1024,7 @@ class PlayerHistoryEntryDTO(BaseModel):
 
 
 class PlayerPageDTO(BaseModel):
+    representation: Optional[str] = None
     person: PersonReferenceDTO
     club: Optional[str] = None
     events: List[PlayerEventDTO]
@@ -1025,6 +1034,7 @@ class PlayerPageDTO(BaseModel):
     # entrant account that owns the ``entry_players`` row — never on a name
     # match across the estate. See ``_person_history``.
     history: List[PlayerHistoryEntryDTO] = Field(default_factory=list)
+    historyNextOffset: Optional[int] = None
 
 
 class ScheduleSideDTO(BaseModel):
@@ -1061,6 +1071,12 @@ class ScheduleMatchDTO(BaseModel):
     # The entrant schedule used to count games won and call the higher total
     # the winner, which retirement and walkover contradict outright.
     winnerSide: Optional[Literal["A", "B"]] = None
+    # The points of the game IN PLAY, ``[a, b]``, as the desk last recorded
+    # them on the Operations match state (public refinement 2026-09-12).
+    # Published only for a ``live`` match with results on and a state row
+    # carrying both sides; ``None`` otherwise. It is a running figure, never
+    # a game of the ledger: ``score`` stays the recorded games only.
+    liveScore: Optional[List[int]] = None
     updatedAt: Optional[str] = None
     # The SHARED human match reference (state-and-formatting §6.1, "One
     # reference, both tiers") — the identical string the operator's match
@@ -1272,7 +1288,7 @@ def _pending_pair_keys(event) -> frozenset:
     for participant in event.participants:
         members = list(participant.members or [])
         if members:
-            if len(members) == 1:
+            if pair_event and len(members) == 1:
                 keys.add(participant.id)
         elif pair_event and (participant.entryPlayerId or participant.sourceEntryId):
             keys.add(participant.id)
@@ -1775,6 +1791,7 @@ def draw_detail(
                                 ),
                                 score=_score_rows(result.score),
                                 walkover=bool(result.walkover),
+                                reason=result.reason if result.reason in ("walkover", "retired", "forfeit") else None,
                             )
                             if result is not None
                             else None
@@ -1930,7 +1947,8 @@ def players_index(
             eventCodes=sorted(event_codes),
         )
         for player_id, event_codes in events_by_player.items()
-        if player_id in roster_names or player_id in entrants_by_roster_id
+        if (player_id in roster_names or player_id in entrants_by_roster_id)
+        and (page.entrants_published or player_id in identities.draw_people)
     ]
     players.sort(
         key=lambda row: (
@@ -2145,7 +2163,7 @@ def _event_final_unit(event, units):
 # ---- the player page (§3.3) ----------------------------------------------
 
 
-def _canonical_person_key(account_id, full_name: Optional[str]) -> Optional[str]:
+def _canonical_person_key(account_id, full_name: Optional[str], birth_year: Optional[int] = None) -> Optional[str]:
     """The one canonical identity a public profile may be joined on.
 
     An ``entry_players`` row is tournament-scoped by design, so a person's
@@ -2161,12 +2179,12 @@ def _canonical_person_key(account_id, full_name: Optional[str]) -> Optional[str]
     Returns ``None`` when there is nothing verified to join on, which
     collapses the history to the current tournament rather than guessing.
     """
-    if account_id is None or not isinstance(full_name, str):
+    if account_id is None or birth_year is None or not isinstance(full_name, str):
         return None
-    name = _alphabetic_name_key(" ".join(full_name.split()))
+    name = full_name.strip().lower()
     if not name:
         return None
-    return f"{account_id}:{name}"
+    return f"{account_id}:{name}:{birth_year}"
 
 
 def _imported_person_correlation(row: dict) -> Optional[str]:
@@ -2210,7 +2228,8 @@ def _entry_person_history_rows(
     tournament: Tournament,
 ) -> Dict[str, Tuple[PlayerHistoryEntryDTO, set]]:
     """Workspaces reachable from an ENTRY-BACKED person's verified account."""
-    canonical = _canonical_person_key(person.account_id, person.full_name)
+    representative_id = min((r.account_id for r in person.representatives), key=str, default=None)
+    canonical = _canonical_person_key(representative_id, person.full_name, person.birth_year)
     if canonical is None:
         return {}
     rows = repo.execute_query(
@@ -2219,6 +2238,7 @@ def _entry_person_history_rows(
             EntryPlayer.tournament_id,
             EntryPlayer.id,
             EntryPlayer.full_name,
+            EntryPlayer.birth_year,
             EntryEvent.code,
             EntryPage.slug,
             EntryPage.audience,
@@ -2242,7 +2262,7 @@ def _entry_person_history_rows(
         .join(EntryPage, EntryPage.tournament_id == EntryPlayer.tournament_id)
         .join(Tournament, Tournament.id == EntryPlayer.tournament_id)
         .where(
-            EntryPlayer.account_id == person.account_id,
+            EntryPlayer.representatives.any(account_id=representative_id),
             EntryPlayer.erased_at.is_(None),
             Entry.state == "confirmed",
             Entry.list_opt_out.is_(False),
@@ -2255,6 +2275,7 @@ def _entry_person_history_rows(
         tournament_id,
         player_id,
         full_name,
+        birth_year,
         event_code,
         slug,
         audience,
@@ -2264,7 +2285,7 @@ def _entry_person_history_rows(
         start_date,
         end_date,
     ) in rows:
-        if _canonical_person_key(person.account_id, full_name) != canonical:
+        if _canonical_person_key(representative_id, full_name, birth_year) != canonical:
             continue
         current = tournament_id == tournament.id
         if not current and audience != "public":
@@ -2487,7 +2508,7 @@ def _index_participant(row) -> _IndexParticipant:
         # rule ``_participant_out`` applies, so a singles participant reads
         # as ``None`` here too and ``_participant_people`` takes its
         # single-person branch.
-        members=list(row.member_ids) if row.type == "TEAM" and row.member_ids else None,
+        members=list(row.member_ids) if row.member_ids else None,
         seed=row.seed if row.seed is not None else meta.get("seed"),
         entryPlayerId=str(row.entry_player_id) if row.entry_player_id else None,
         sourceEntryId=meta.get("sourceEntryId"),
@@ -2782,7 +2803,8 @@ def _person_history(
     identity_key: str,
     person: Optional[EntryPlayer],
     identity: PublicPersonIdentityDTO,
-) -> List[PlayerHistoryEntryDTO]:
+    history_offset: int = 0,
+) -> tuple[List[PlayerHistoryEntryDTO], Optional[int]]:
     """This person's public tournament history, newest first.
 
     **Published and permitted only.** Every other workspace has to clear its
@@ -2808,6 +2830,16 @@ def _person_history(
     """
     if person is not None:
         by_tournament = _entry_person_history_rows(repo, person, tournament)
+        if person.birth_year is None:
+            # A declared import identity attached to this exact roster row
+            # can link history without guessing a birthday or matching names.
+            declared = next((row for row in _bracket_roster_rows(tournament)
+                             if row["id"] == roster_id(person.id)
+                             and row.get("personId") and row.get("personSource")), None)
+            if declared is not None:
+                correlation = _imported_person_correlation(declared)
+                if correlation:
+                    by_tournament = _imported_person_history_rows(repo, tournament, correlation)
     else:
         correlation = _imported_person_correlation(
             {"id": identity_key, "name": identity.name}
@@ -2855,14 +2887,16 @@ def _person_history(
     # the date descends while the tiebreaker still ascends. An empty date
     # sorts last, which is where an undated workspace belongs.
     ordered.sort(key=lambda row: row.date or "", reverse=True)
-    # Every non-current row, in one batch — no cap. See
-    # ``_expand_history_rows``: the detail costs a handful of queries for the
-    # whole career rather than one hydrated bracket per workspace.
-    _expand_history_rows(
-        repo,
-        {tid: row for tid, (row, _codes) in by_tournament.items() if not row.current},
-    )
-    return ordered
+    current = [row for row in ordered if row.current]
+    others = [row for row in ordered if not row.current]
+    selected = others[history_offset:history_offset + 10]
+    selected_slugs = {row.slug for row in selected}
+    _expand_history_rows(repo, {
+        tid: row for tid, (row, _codes) in by_tournament.items()
+        if row.slug in selected_slugs
+    })
+    next_offset = history_offset + 10 if len(others) > history_offset + 10 else None
+    return [*current, *selected], next_offset
 
 
 def _draw_partner(
@@ -3050,6 +3084,7 @@ def player_page(
     # ``player-{sha256}`` for a draw-roster person — 71 characters, which
     # this route used to reject with a 422 before it could even look.
     person_key: str = Path(..., max_length=100),
+    history_offset: int = Query(0, ge=0, le=100000),
     repo: LocalRepository = Depends(get_repository),
 ) -> PlayerPageDTO:
     """One person's tournament: events, draw paths, and matches.
@@ -3091,7 +3126,7 @@ def player_page(
     except (ValueError, AttributeError, TypeError):
         person_id = None
 
-    if person_id is not None:
+    if person_id is not None and person_key not in identities.draw_people:
         if not page.entrants_published:
             raise _not_found()
         person = repo.execute_query(
@@ -3140,9 +3175,9 @@ def player_page(
     # Batched: one SELECT for the partner entries, one for their players —
     # never per-line (the N+1 precedent). See PlayerEventDTO for the gates.
     partner_ids = [
-        e.partner_entry_id
+        e.paired_entry_id
         for e in entries
-        if e.partner_entry_id is not None and e.partner_accepted_at is not None
+        if e.paired_entry_id is not None and e.invitation_accepted_at is not None
     ]
     partner_ref_by_event: dict = {}
     if partner_ids:
@@ -3176,7 +3211,7 @@ def player_page(
             else {}
         )
         for e in entries:
-            pe = partner_entries.get(e.partner_entry_id)
+            pe = partner_entries.get(e.paired_entry_id)
             if pe is None or pe.list_opt_out:
                 continue
             partner = partner_players.get(pe.entry_player_id)
@@ -3376,13 +3411,14 @@ def player_page(
     else:
         events = draw_events
 
-    history = _person_history(
+    history, history_next_offset = _person_history(
         repo,
         tournament,
         page,
         identity_key=identity_key,
         person=person,
         identity=identity,
+        history_offset=history_offset,
     )
     for row in history:
         if not row.current:
@@ -3392,7 +3428,12 @@ def player_page(
         # can check against what they are looking at reads as the emptiest.
         row.eventCodes = sorted({event.code for event in events} | set(row.eventCodes))
 
+    representation = person.representation if person is not None and person.representation_public else None
+    if person is None:
+        representation = next((row.get("representation") for row in _bracket_roster_rows(tournament)
+                               if row["id"] == identity_key), None)
     return PlayerPageDTO(
+        representation=representation,
         person=PersonReferenceDTO(
             identity=identity,
             resolution="resolved",
@@ -3402,7 +3443,7 @@ def player_page(
         events=events,
         matches=matches,
         history=history,
-    )
+        historyNextOffset=history_next_offset,    )
 
 
 class _MeetMatches:
@@ -3794,11 +3835,16 @@ def _bracket_schedule_matches(
     roster_names: Optional[Dict[str, str]] = None,
     identities: Optional[PublicPersonDirectory | Dict[str, PublicPersonIdentityDTO]] = None,
     operational_courts: Optional[Dict[str, int]] = None,
+    states: Optional[Dict[str, object]] = None,
 ) -> List[ScheduleMatchDTO]:
     units, results, assignments = _bracket_indexes(payload)
     roster_names = roster_names or {}
     identities = identities or {}
     operational_courts = operational_courts or {}
+    # Operations match-state rows keyed by the bracket unit id — the same key
+    # space ``operational_courts`` uses (``_merge_live_bracket_courts``). The
+    # only thing read off them here is the running score of a live match.
+    states = states or {}
     clubs = identities.clubs if isinstance(identities, PublicPersonDirectory) else {}
     out: List[ScheduleMatchDTO] = []
     for event in payload.events:
@@ -3853,6 +3899,14 @@ def _bracket_schedule_matches(
                     slot_id = assignment.slot_id if assignment else None
                     scheduled = _slot_time(payload, slot_id)
                     unit_ref = locator.get(unit_id)
+                    state_row = states.get(unit_id) if state == "live" and results_on else None
+                    live_score = (
+                        [state_row.score_side_a, state_row.score_side_b]
+                        if state_row is not None
+                        and getattr(state_row, "score_side_a", None) is not None
+                        and getattr(state_row, "score_side_b", None) is not None
+                        else None
+                    )
                     out.append(ScheduleMatchDTO(
                         matchKey=f"{event.id}:{unit.id}",
                         reference=unit_ref.reference if unit_ref else None,
@@ -3869,6 +3923,7 @@ def _bracket_schedule_matches(
                         court=operational_courts.get(unit_id),
                         sides=sides,
                         score=_score_rows(result.score) if result is not None and results_on else None,
+                        liveScore=live_score,
                         walkover=bool(result.walkover) if result is not None and results_on else False,
                         winnerSide=(
                             result.winner_side
@@ -4072,6 +4127,7 @@ def schedule_matches(
                 roster_names=_bracket_roster_names(tournament),
                 identities=identities,
                 operational_courts=runtime.courts,
+                states=runtime.states,
             )
         )
     if tournament.kind == "meet":

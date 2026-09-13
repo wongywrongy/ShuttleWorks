@@ -55,7 +55,7 @@ describe('<BoardAppearance />', () => {
     fireEvent.change(screen.getByLabelText('Board title'), {
       target: { value: 'Riverside Open' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to board' }));
 
     await waitFor(() =>
       expect(apiClient.updateBoardSettings).toHaveBeenCalledWith('t1', {
@@ -65,7 +65,11 @@ describe('<BoardAppearance />', () => {
       }),
     );
     // Reloads clean: the saved document is what the controls now reflect.
-    await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('board-apply-status').textContent).toBe(
+        'Saved. The board shows this.',
+      ),
+    );
   });
 
   it('offers Replace and Remove for an image the workspace already has', async () => {
@@ -82,7 +86,7 @@ describe('<BoardAppearance />', () => {
       'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
     );
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to board' }));
     await waitFor(() =>
       expect(apiClient.updateBoardSettings).toHaveBeenCalledWith(
         't1',
@@ -95,6 +99,6 @@ describe('<BoardAppearance />', () => {
     vi.spyOn(apiClient, 'getBoardSettings').mockRejectedValue(new Error('offline'));
     render(<BoardAppearance tid="t1" />);
     expect(await screen.findByText('The board settings could not be loaded.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apply to board' })).toBeNull();
   });
 });

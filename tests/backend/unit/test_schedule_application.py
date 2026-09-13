@@ -38,7 +38,7 @@ from core.schemas import (
     TournamentConfig,
     TournamentStateDTO,
 )
-from db.models import Base, EventOperation, SyncOutbox, Tournament
+from db.models import EventOperation, SyncOutbox, Tournament
 from repositories import LocalRepository
 
 
@@ -125,7 +125,8 @@ def _history():
 
 def _real_session() -> Session:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return Session(engine, expire_on_commit=False)
 
 
@@ -249,7 +250,7 @@ def test_real_event_node_commit_persists_state_operation_and_outbox(monkeypatch,
             id=tournament_id,
             name="Schedule transaction proof",
             data=original.model_dump(mode="json"),
-            schema_version=2,
+            schema_version=1,
             state_version=1,
         )
     )
@@ -299,7 +300,7 @@ def test_real_event_node_append_failure_rolls_back_schedule_projection(
             id=tournament_id,
             name="Schedule rollback proof",
             data=original.model_dump(mode="json"),
-            schema_version=2,
+            schema_version=1,
             state_version=1,
         )
     )

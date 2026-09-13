@@ -1136,6 +1136,10 @@ def put_tournament_state(
             f"tournament not found: {tournament_id}",
         )
     except Exception as e:
+        from competition.service import CompetitionError
+        from fastapi import HTTPException
+        if isinstance(e, CompetitionError):
+            raise HTTPException(status_code=409, detail={"code": e.code, "message": str(e)}) from e
         log.error("tournament-state write failed: %s", e)
         raise http_error(
             500,

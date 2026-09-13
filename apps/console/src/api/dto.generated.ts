@@ -1208,6 +1208,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/competition/units/{unit_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw Unit */
+        post: operations["withdraw_unit_tournaments__tournament_id__competition_units__unit_id__withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/competition/registration-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Registration Events */
+        get: operations["registration_events_tournaments__tournament_id__competition_registration_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/competition/formats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Formats */
+        get: operations["list_formats_tournaments__tournament_id__competition_formats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/competition/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Events */
+        get: operations["list_events_tournaments__tournament_id__competition_events_get"];
+        put?: never;
+        /** Create Event */
+        post: operations["create_event_tournaments__tournament_id__competition_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/competition/entry-events/{entry_event_id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Default */
+        put: operations["set_default_tournaments__tournament_id__competition_entry_events__entry_event_id__default_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/competition/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bind Entries */
+        post: operations["bind_entries_tournaments__tournament_id__competition_bind_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/competition/entries/{entry_id}/rebind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rebind Entry */
+        post: operations["rebind_entry_tournaments__tournament_id__competition_entries__entry_id__rebind_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/competition/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Units */
+        get: operations["list_units_tournaments__tournament_id__competition_units_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments": {
         parameters: {
             query?: never;
@@ -2047,34 +2184,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tournaments/{tournament_id}/entries/commit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Commit Entries Route
-         * @description Run Seam A and return the per-entry summary.
-         *
-         *     Safe to press twice: the seam is idempotent by design (Q3 — entries
-         *     reopen, late arrivals are routine), so a double-click commits nothing
-         *     twice and answers with an empty ``committed`` list.
-         *
-         *     Declared **before** the ``{entry_id}`` route below only for reading
-         *     order; ``/entries/commit`` and ``/entries/{entry_id}/confirm`` are
-         *     different depths and cannot shadow each other.
-         */
-        post: operations["commit_entries_route_tournaments__tournament_id__entries_commit_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/tournaments/{tournament_id}/entries/import": {
         parameters: {
             query?: never;
@@ -2214,7 +2323,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tournaments/{tournament_id}/submissions/{submission_id}/paid": {
+    "/tournaments/{tournament_id}/submissions/{submission_id}/payments": {
         parameters: {
             query?: never;
             header?: never;
@@ -2223,44 +2332,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Mark Submission Paid
-         * @description Record that this act was paid. **Clears one reason; confirms nothing.**
-         *
-         *     Invariant I4, and the one most likely to erode: an operator marking a
-         *     payment obviously wants the entry to go through, and a helpful edit that
-         *     also confirmed it would make payment a consequential automatic decision.
-         *     Confirmation stays a separate press.
-         *
-         *     Idempotent — a second call finds the timestamp already there and is not
-         *     an error. Two operators on a busy desk is a thing that happens.
-         */
-        post: operations["mark_submission_paid_tournaments__tournament_id__submissions__submission_id__paid_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tournaments/{tournament_id}/submissions/{submission_id}/unpaid": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mark Submission Unpaid
-         * @description Take a payment record back — the operator marked the wrong act.
-         *
-         *     The reason returns only where the act OWES money: un-marking a free act
-         *     must not invent a debt that never existed. A confirmed entry stays
-         *     confirmed; whether to un-confirm has consequences on a roster and belongs
-         *     to the ordinary desk actions, not to correcting a note.
-         */
-        post: operations["mark_submission_unpaid_tournaments__tournament_id__submissions__submission_id__unpaid_post"];
+        /** Record Submission Payment */
+        post: operations["record_submission_payment_tournaments__tournament_id__submissions__submission_id__payments_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3992,6 +4065,15 @@ export interface components {
             /** Backups */
             backups: components["schemas"]["BackupEntryDTO"][];
         };
+        /** BindRequest */
+        BindRequest: {
+            /** Entryeventid */
+            entryEventId?: string | null;
+            /** Competitioneventid */
+            competitionEventId?: string | null;
+            /** Requestid */
+            requestId: string;
+        };
         /**
          * BoardSettingsDTO
          * @description What the venue board LOOKS like and WHICH optional content it carries.
@@ -4097,9 +4179,9 @@ export interface components {
             id: string;
             /**
              * Kind
-             * @constant
+             * @enum {string}
              */
-            kind: "record_result";
+            kind: "record_result" | "correct_result";
             /** Play Unit Id */
             play_unit_id: string;
             /**
@@ -4163,6 +4245,8 @@ export interface components {
             notes?: string | null;
             /** Restslots */
             restSlots?: number | null;
+            /** Representation */
+            representation?: string | null;
             /** Availability */
             availability?: components["schemas"]["AvailabilityWindow"][];
             /** Sourceentryid */
@@ -4286,7 +4370,7 @@ export interface components {
             node_id: string;
             /**
              * Checkpoint Schema Version
-             * @default 3
+             * @default 1
              */
             checkpoint_schema_version: number;
         };
@@ -4513,6 +4597,13 @@ export interface components {
             start_time?: string | null;
             /** Events */
             events: components["schemas"]["EventIn"][];
+        };
+        /** DefaultTargetRequest */
+        DefaultTargetRequest: {
+            /** Competitioneventid */
+            competitionEventId: string | null;
+            /** Expectedversion */
+            expectedVersion: number;
         };
         /** DeviceEnrollmentRequest */
         DeviceEnrollmentRequest: {
@@ -5010,20 +5101,31 @@ export interface components {
              */
             closed: boolean;
         };
-        /**
-         * EntryCommitOutcomeDTO
-         * @description One committed entry: which entry, which roster player it became.
-         */
-        EntryCommitOutcomeDTO: {
-            /** Id */
-            id: string;
-            /** Playerid */
-            playerId: string;
+        /** EntryBindOutcomeDTO */
+        EntryBindOutcomeDTO: {
+            /** Entryid */
+            entryId: string;
+            /** Membershipid */
+            membershipId: string;
+            /** Unitid */
+            unitId: string;
+            /** Competitioneventid */
+            competitionEventId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "withdrawn";
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "bound" | "already_bound" | "withdrawn" | "moved";
         };
-        /** EntryCommitResultDTO */
-        EntryCommitResultDTO: {
-            /** Committed */
-            committed?: components["schemas"]["EntryCommitOutcomeDTO"][];
+        /** EntryBindResultDTO */
+        EntryBindResultDTO: {
+            /** Bindings */
+            bindings?: components["schemas"]["EntryBindOutcomeDTO"][];
             /** Skipped */
             skipped?: components["schemas"]["EntrySkipDTO"][];
         };
@@ -5074,8 +5176,21 @@ export interface components {
              * @default false
              */
             listOptOut: boolean;
-            /** Committedplayerid */
-            committedPlayerId?: string | null;
+            /** Membershipid */
+            membershipId?: string | null;
+            /** Unitid */
+            unitId?: string | null;
+            /** Competitioneventid */
+            competitionEventId?: string | null;
+            /** Membershipstatus */
+            membershipStatus?: string | null;
+            /** Unitstatus */
+            unitStatus?: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
             /** Submittedat */
             submittedAt?: string | null;
             /** Withdrawnat */
@@ -5106,8 +5221,8 @@ export interface components {
              * @enum {string}
              */
             entryType: "singles" | "doubles";
-            /** Bracketeventid */
-            bracketEventId?: string | null;
+            /** Competitioneventid */
+            competitionEventId?: string | null;
             /** Cap */
             cap?: number | null;
             /** Feecents */
@@ -5131,8 +5246,13 @@ export interface components {
             discipline: string;
             /** Entrytype */
             entryType: string;
-            /** Bracketeventid */
-            bracketEventId?: string | null;
+            /** Competitioneventid */
+            competitionEventId?: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
             /** Cap */
             cap?: number | null;
             /** Feecents */
@@ -5183,6 +5303,8 @@ export interface components {
             gender: string;
             /** Club */
             club?: string | null;
+            /** Representation */
+            representation?: string | null;
             /** Birthyear */
             birthYear?: number | null;
             /** Remarks */
@@ -5270,6 +5392,8 @@ export interface components {
             feeSchedule?: {
                 [key: string]: unknown;
             } | null;
+            /** Feecurrency */
+            feeCurrency?: string | null;
             /** Paymentinstructions */
             paymentInstructions?: string | null;
             /** Maxeventsperperson */
@@ -5420,6 +5544,8 @@ export interface components {
             feeSchedule?: {
                 [key: string]: unknown;
             } | null;
+            /** Feecurrency */
+            feeCurrency?: string | null;
             /** Paymentinstructions */
             paymentInstructions?: string | null;
             /** Maxeventsperperson */
@@ -5438,18 +5564,14 @@ export interface components {
             /** Venueaddress */
             venueAddress?: string | null;
         };
-        /**
-         * EntrySkipDTO
-         * @description One skipped entry and the stable reason code for the skip.
-         *
-         *     Spec §5: partial success is reported per-entry, not rolled back
-         *     wholesale — so this list is a normal outcome, not an error body.
-         */
+        /** EntrySkipDTO */
         EntrySkipDTO: {
-            /** Id */
-            id: string;
+            /** Entryid */
+            entryId: string;
             /** Reason */
             reason: string;
+            /** Message */
+            message: string;
         };
         /**
          * EntrySubmissionDTO
@@ -5479,6 +5601,20 @@ export interface components {
             feeTotalCents?: number | null;
             /** Submittedat */
             submittedAt?: string | null;
+            /** Feecurrency */
+            feeCurrency?: string | null;
+            /**
+             * Paidcents
+             * @default 0
+             */
+            paidCents: number;
+            /** Outstandingcents */
+            outstandingCents?: number | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /**
          * EventConfigPatchIn
@@ -5615,6 +5751,28 @@ export interface components {
             /** Participants */
             participants?: components["schemas"]["ParticipantOut"][];
         };
+        /** EventRequest */
+        EventRequest: {
+            /** Categorycode */
+            categoryCode: string;
+            /** Formatkey */
+            formatKey: string;
+            /**
+             * Formatversion
+             * @default 1
+             */
+            formatVersion: number;
+            /** Gendercategory */
+            genderCategory?: string | null;
+            /** Agegroup */
+            ageGroup?: string | null;
+            /** Level */
+            level?: string | null;
+            /** Bracketeventid */
+            bracketEventId?: string | null;
+            /** Meeteventid */
+            meetEventId?: string | null;
+        };
         /**
          * EventUpsertIn
          * @description Body of POST /bracket/events/{event_id} — upsert one event.
@@ -5677,6 +5835,8 @@ export interface components {
             gender: string;
             /** Club */
             club?: string | null;
+            /** Representation */
+            representation?: string | null;
             /** Birthyear */
             birthYear?: number | null;
             /** Remarks */
@@ -5694,8 +5854,15 @@ export interface components {
             submittedAt: string;
             /** Feetotalcents */
             feeTotalCents?: number | null;
-            /** Paidat */
-            paidAt?: string | null;
+            /** Feecurrency */
+            feeCurrency?: string | null;
+            /**
+             * Paidcents
+             * @default 0
+             */
+            paidCents: number;
+            /** Outstandingcents */
+            outstandingCents?: number | null;
             /** Regulationsacceptedat */
             regulationsAcceptedAt?: string | null;
             /** Regulationsversionaccepted */
@@ -6068,15 +6235,6 @@ export interface components {
             pinnedCourtId: number;
         };
         /**
-         * MarkPaidRequest
-         * @description ``note`` is free text for the director's own record — "Zelle, ref
-         *     4412", "cash at the desk". Never rendered publicly.
-         */
-        MarkPaidRequest: {
-            /** Note */
-            note?: string | null;
-        };
-        /**
          * MatchAction
          * @description Operator-facing names for the legal state transitions.
          *
@@ -6286,7 +6444,7 @@ export interface components {
              * @default scheduled
              * @enum {string}
              */
-            status: "scheduled" | "called" | "started" | "finished";
+            status: "scheduled" | "called" | "started" | "finished" | "retired";
             /** Calledat */
             calledAt?: string | null;
             /** Actualstarttime */
@@ -6419,6 +6577,8 @@ export interface components {
              * @default false
              */
             canWithdraw: boolean;
+            /** Pendingreasons */
+            pendingReasons?: string[];
             /** Shortreference */
             shortReference: string;
             /** Resultbadge */
@@ -6454,8 +6614,15 @@ export interface components {
             venueName?: string | null;
             /** Status */
             status: string;
+            /**
+             * Ispast
+             * @default false
+             */
+            isPast: boolean;
             /** Feetotalcents */
             feeTotalCents?: number | null;
+            /** Feecurrency */
+            feeCurrency?: string | null;
             /** Submittedat */
             submittedAt: string;
             /** Events */
@@ -6520,6 +6687,8 @@ export interface components {
              * @default false
              */
             walkover: boolean;
+            /** Reason */
+            reason?: ("walkover" | "retired" | "forfeit") | null;
         };
         /** NowStripDTO */
         NowStripDTO: {
@@ -6653,6 +6822,8 @@ export interface components {
             regulationsUpdatedAt?: string | null;
             /** Paymentinstructions */
             paymentInstructions?: string | null;
+            /** Scoringsummary */
+            scoringSummary?: string | null;
             /**
              * Feeschedule
              * @default {}
@@ -6660,6 +6831,8 @@ export interface components {
             feeSchedule: {
                 [key: string]: number;
             };
+            /** Feecurrency */
+            feeCurrency?: string | null;
         };
         /** ParticipantIn */
         ParticipantIn: {
@@ -6683,6 +6856,8 @@ export interface components {
             personId?: string | null;
             /** Personsource */
             personSource?: string | null;
+            /** Representation */
+            representation?: string | null;
         };
         /** ParticipantOut */
         ParticipantOut: {
@@ -6702,6 +6877,8 @@ export interface components {
             personId?: string | null;
             /** Personsource */
             personSource?: string | null;
+            /** Representation */
+            representation?: string | null;
         };
         /** PartnerAcceptedDTO */
         PartnerAcceptedDTO: {
@@ -6742,6 +6919,16 @@ export interface components {
              * @default false
              */
             askBirthYear: boolean;
+            /** Totalcents */
+            totalCents?: number | null;
+            /** Feecurrency */
+            feeCurrency?: string | null;
+            /** Reviewedquote */
+            reviewedQuote?: string | null;
+            /** Regulationstext */
+            regulationsText?: string | null;
+            /** Regulationsversion */
+            regulationsVersion?: number | null;
         };
         /**
          * PersonRefDTO
@@ -6872,6 +7059,8 @@ export interface components {
             minRestMinutes?: number | null;
             /** Notes */
             notes?: string | null;
+            /** Representation */
+            representation?: string | null;
             /** Sourceentryid */
             sourceEntryId?: string | null;
             /** Entryplayerid */
@@ -7041,6 +7230,8 @@ export interface components {
         };
         /** PlayerPageDTO */
         PlayerPageDTO: {
+            /** Representation */
+            representation?: string | null;
             person: components["schemas"]["PersonReferenceDTO"];
             /** Club */
             club?: string | null;
@@ -7050,6 +7241,8 @@ export interface components {
             matches: components["schemas"]["PlayerMatchDTO"][];
             /** History */
             history?: components["schemas"]["PlayerHistoryEntryDTO"][];
+            /** Historynextoffset */
+            historyNextOffset?: number | null;
         };
         /** PlayersDTO */
         PlayersDTO: {
@@ -7251,6 +7444,10 @@ export interface components {
         QuoteResponse: {
             /** Totalcents */
             totalCents?: number | null;
+            /** Reviewedquote */
+            reviewedQuote?: string | null;
+            /** Feecurrency */
+            feeCurrency?: string | null;
             /**
              * Feebasis
              * @default {}
@@ -7276,6 +7473,22 @@ export interface components {
             /** Ready Proof */
             ready_proof?: string | null;
         };
+        /** RebindRequest */
+        RebindRequest: {
+            /**
+             * Competitioneventid
+             * Format: uuid
+             */
+            competitionEventId: string;
+            /** Unitid */
+            unitId?: string | null;
+            /** Expectedversion */
+            expectedVersion: number;
+            /** Targetversion */
+            targetVersion?: number | null;
+            /** Requestid */
+            requestId: string;
+        };
         /**
          * ReceiptEntryLineDTO
          * @description One event line on an account-scoped receipt.
@@ -7294,6 +7507,17 @@ export interface components {
             partner?: components["schemas"]["PersonReferenceDTO"] | null;
             /** State */
             state: string;
+        };
+        /** RecordPaymentRequest */
+        RecordPaymentRequest: {
+            /** Amountcents */
+            amountCents: number;
+            /** Currency */
+            currency: string;
+            /** Note */
+            note?: string | null;
+            /** Requestid */
+            requestId: string;
         };
         /** RecordResultIn */
         RecordResultIn: {
@@ -7596,6 +7820,8 @@ export interface components {
             walkover: boolean;
             /** Winnerside */
             winnerSide?: ("A" | "B") | null;
+            /** Livescore */
+            liveScore?: number[] | null;
             /** Updatedat */
             updatedAt?: string | null;
             /** Reference */
@@ -8017,25 +8243,16 @@ export interface components {
              */
             history: string[];
         };
-        /**
-         * SubmissionPaymentDTO
-         * @description What the desk is told after marking a payment.
-         *
-         *     Deliberately small, and deliberately NOT the entry rows: the caller
-         *     re-reads the list, which is the same posture every other desk action
-         *     takes, and a partial row set here would be a second projection of the
-         *     desk that could disagree with the first.
-         */
+        /** SubmissionPaymentDTO */
         SubmissionPaymentDTO: {
             /** Submissionid */
             submissionId: string;
-            /** Paidat */
-            paidAt?: string | null;
-            /**
-             * Entriesupdated
-             * @default 0
-             */
-            entriesUpdated: number;
+            /** Paidcents */
+            paidCents: number;
+            /** Outstandingcents */
+            outstandingCents: number | null;
+            /** Currency */
+            currency: string | null;
         };
         /**
          * SubmissionReceiptDTO
@@ -8060,10 +8277,17 @@ export interface components {
             status: string;
             /** Feetotalcents */
             feeTotalCents?: number | null;
+            /** Feecurrency */
+            feeCurrency?: string | null;
             /** Paymentstate */
             paymentState: string;
-            /** Paymentnote */
-            paymentNote?: string | null;
+            /**
+             * Paidcents
+             * @default 0
+             */
+            paidCents: number;
+            /** Outstandingcents */
+            outstandingCents?: number | null;
             /** Paymentinstructions */
             paymentInstructions?: string | null;
             /** Regulationsversionaccepted */
@@ -8840,6 +9064,11 @@ export interface components {
             state: string;
             /** Erased */
             erased: boolean;
+        };
+        /** WithdrawUnitRequest */
+        WithdrawUnitRequest: {
+            /** Expectedversion */
+            expectedVersion: number;
         };
         /**
          * WorkspaceModuleDTO
@@ -10710,6 +10939,308 @@ export interface operations {
             };
         };
     };
+    withdraw_unit_tournaments__tournament_id__competition_units__unit_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithdrawUnitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    registration_events_tournaments__tournament_id__competition_registration_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryEventDTO"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_formats_tournaments__tournament_id__competition_formats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_events_tournaments__tournament_id__competition_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_event_tournaments__tournament_id__competition_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_default_tournaments__tournament_id__competition_entry_events__entry_event_id__default_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                entry_event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DefaultTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bind_entries_tournaments__tournament_id__competition_bind_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryBindResultDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rebind_entry_tournaments__tournament_id__competition_entries__entry_id__rebind_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RebindRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryBindOutcomeDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_units_tournaments__tournament_id__competition_units_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_tournaments_tournaments_get: {
         parameters: {
             query?: never;
@@ -12166,40 +12697,6 @@ export interface operations {
             };
         };
     };
-    commit_entries_route_tournaments__tournament_id__entries_commit_post: {
-        parameters: {
-            query?: {
-                /** @description Commit only this entry event (spec §5's event filter). */
-                entry_event_id?: string | null;
-            };
-            header?: never;
-            path: {
-                tournament_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EntryCommitResultDTO"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     import_entries_tournaments__tournament_id__entries_import_post: {
         parameters: {
             query?: never;
@@ -12363,7 +12860,7 @@ export interface operations {
             };
         };
     };
-    mark_submission_paid_tournaments__tournament_id__submissions__submission_id__paid_post: {
+    record_submission_payment_tournaments__tournament_id__submissions__submission_id__payments_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -12373,43 +12870,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["MarkPaidRequest"];
+                "application/json": components["schemas"]["RecordPaymentRequest"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubmissionPaymentDTO"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_submission_unpaid_tournaments__tournament_id__submissions__submission_id__unpaid_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                tournament_id: string;
-                submission_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -12986,7 +13451,9 @@ export interface operations {
     };
     player_page_e_api_page__slug__players__person_key__get: {
         parameters: {
-            query?: never;
+            query?: {
+                history_offset?: number;
+            };
             header?: never;
             path: {
                 slug: string;

@@ -1,0 +1,6 @@
+CONFIRMED paid partner: total=5000, entry fee=NULL, reasons=[], regulations version=NULL (page=7)
+.CONFIRMED accepts after page/event close; full cap bypassed; mismatching gender unflagged
+.CONFIRMED forced overlapping-read interleave: two accepted partner rows; original points only to second
+.CONFIRMED withdrawal: other half withdrawn; survivor pending, no awaiting_partner; My Entries still projects accepted partner name with no partner lifecycle
+.
+4 passed in 10.71s

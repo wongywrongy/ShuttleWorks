@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from db.models import Base, BracketEvent, BracketMatch, BracketResult, Tournament
+from db.models import BracketEvent, BracketMatch, BracketResult, Tournament
 from bracket.state import is_event_started
 
 
@@ -18,7 +18,8 @@ def session():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     s = SessionLocal()
     try:

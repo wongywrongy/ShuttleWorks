@@ -1,3 +1,4 @@
+import { validBracketSets } from '../../lib/bracketScores';
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@scheduler/design-system";
@@ -18,13 +19,17 @@ import { useBracketResultQueue } from "../../hooks/useBracketResultQueue";
 import { INTERACTIVE_BASE } from "../../lib/utils";
 import {
   REASON_BADGE,
+  RecordResultModal,
   ScoreLane,
   SideScores,
   WinnerDot,
+  effectiveScoringRules,
+  type EffectiveScoringRules,
+  type ResultEntryValue,
+  type ResultSaveState,
 } from "../../components/control-plane";
 import { BracketEmptyState } from "./BracketEmptyState";
 import { PanZoomCanvas } from "./PanZoomCanvas";
-import { BracketScoreEntry } from "./BracketScoreEntry";
 import { BracketInlineNotice } from "./BracketInlineNotice";
 import { applyOptimisticResult } from "./optimisticResult";
 import { bwfPositions } from "./bwf";
@@ -121,6 +126,75 @@ export function DrawView({
   }
 }
 
+/**
+ * Result recording for every renderer family in this file (O7).
+ *
+ * Owns the idempotent command queue wiring the four views used to repeat
+ * verbatim, plus the dialog's open match and its save state. The save state
+ * is read straight off the queue's own outcome — `ok` is synchronised, a
+ * network error means the command is durably queued on this device and will
+ * flush later (so the dialog closes: the result IS recorded), and a
+ * conflict/stale version keeps the dialog open with the entered values so the
+ * operator can see what happened before deciding.
+ */
+function useDrawResultRecorder(
+  data: TournamentDTO,
+  onChange: (t: TournamentDTO) => void,
+) {
+  const [recordingId, setRecordingId] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<ResultSaveState>("idle");
+  const [resultConflict, setResultConflict] = useState<string | null>(null);
+  const { submit } = useBracketResultQueue({
+    onOptimistic: (input) => onChange(applyOptimisticResult(data, input)),
+    onSettled: (dto) => onChange(dto),
+    onConflict: (_kind, message) => setResultConflict(message),
+  });
+
+  const record = async (puId: string, value: ResultEntryValue) => {
+    const assignment = data.assignments.find((a) => a.play_unit_id === puId);
+    const finishedAt = assignment
+      ? (assignment.actual_end_slot ?? assignment.slot_id + assignment.duration_slots)
+      : null;
+    setResultConflict(null);
+    setSaveState("saving");
+    const { result } = await submit({
+      matchId: puId,
+      correction: data.results.some((result) => result.play_unit_id === puId),
+      winnerSide: value.winner,
+      seenVersion: data.play_units.find((pu) => pu.id === puId)?.version ?? 1,
+      finishedAtSlot: finishedAt,
+      walkover: value.outcome === "walkover",
+      reason: value.outcome === "played" ? null : value.outcome,
+      score: value.sets.length > 0 ? { sets: value.sets } : null,
+    });
+    if (result.kind === "ok") {
+      setSaveState("synced");
+      setRecordingId(null);
+    } else if (result.kind === "networkError") {
+      setSaveState("queued");
+      setRecordingId(null);
+    } else {
+      setSaveState("failed");
+    }
+  };
+
+  return {
+    recordingId,
+    openFor: (puId: string) => {
+      setResultConflict(null);
+      setSaveState("idle");
+      setRecordingId(puId);
+    },
+    close: () => {
+      setRecordingId(null);
+      setSaveState("idle");
+    },
+    saveState,
+    resultConflict,
+    record,
+  };
+}
+
 function BracketView({
   data,
   eventId,
@@ -137,7 +211,6 @@ function BracketView({
   const api = useBracketApi();
   const config = useTournamentStore((s) => s.config);
   const scoringFormat = config?.scoringFormat ?? "badminton";
-  const setsToWin = config?.setsToWin ?? 2;
   const event = data.events.find((e) => e.id === eventId)!;
   const idMap = useMemo(
     () =>
@@ -177,12 +250,8 @@ function BracketView({
   // Result writes route through the idempotent command queue (SP-F3):
   // optimistic apply, commit behind a UUID + version optimistic concurrency,
   // and inline conflict surfacing when a second operator beat us.
-  const [resultConflict, setResultConflict] = useState<string | null>(null);
-  const { submit: submitResult } = useBracketResultQueue({
-    onOptimistic: (input) => onChange(applyOptimisticResult(data, input)),
-    onSettled: (dto) => onChange(dto),
-    onConflict: (_kind, message) => setResultConflict(message),
-  });
+  const recorder = useDrawResultRecorder(data, onChange);
+  const resultConflict = recorder.resultConflict;
 
   // Round-0 bracket positions: match m holds positions (2m, 2m+1).
   const round0 = event.rounds[0] ?? [];
@@ -266,24 +335,8 @@ function BracketView({
     [event.rounds, layoutMode, cardHeight],
   );
 
-  const recordResultFor = (
-    puId: string,
-    winner: "A" | "B",
-    sets?: BracketSetScore[],
-  ) => {
-    const a = assignmentByPu[puId];
-    const finishedAt = a
-      ? (a.actual_end_slot ?? a.slot_id + a.duration_slots)
-      : null;
-    setResultConflict(null);
-    void submitResult({
-      matchId: puId,
-      winnerSide: winner,
-      seenVersion: idMap[puId]?.version ?? 1,
-      finishedAtSlot: finishedAt,
-      score: sets && sets.length > 0 ? { sets } : null,
-    });
-  };
+  // The dialog is mounted from HERE, never from the node — see DrawResultDialog.
+  const recordingPu = recorder.recordingId ? idMap[recorder.recordingId] : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -392,12 +445,8 @@ function BracketView({
                             final={isFinal}
                             seeding={editing && col.roundIndex === 0}
                             selectedPos={selectedPos}
-                            scoringFormat={scoringFormat}
-                            setsToWin={setsToWin}
                             onSlotClick={onSlotClick}
-                            onResult={(winner, sets) =>
-                              recordResultFor(puId, winner, sets)
-                            }
+                            onRecordRequest={() => recorder.openFor(puId)}
                           />
                         </div>
                       );
@@ -420,6 +469,23 @@ function BracketView({
           />
         </div>
       </div>
+      {recordingPu ? (
+        <DrawResultDialog
+          pu={recordingPu}
+          identityLabel={identityLabelById.get(recordingPu.id) ?? recordingPu.id}
+          feederLabels={identityLabelById}
+          nameById={nameById}
+          assignment={assignmentByPu[recordingPu.id]}
+          slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
+          scoringFormat={scoringFormat}
+          rules={effectiveScoringRules(config)}
+          result={resultByPu[recordingPu.id]}
+          saveState={recorder.saveState}
+          error={recorder.resultConflict}
+          onClose={recorder.close}
+          onRecord={(value) => recorder.record(recordingPu.id, value)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -650,14 +716,7 @@ function formatMobileSide(
  * than `undefined–undefined`. One helper, so the node, the mobile row and
  * every future caller read the same games.
  */
-function validBracketSets(result: ResultDTO | undefined): BracketSetScore[] {
-  return Array.isArray(result?.score?.sets)
-    ? result.score.sets.filter(
-        (s): s is BracketSetScore =>
-          !!s && typeof s.sideA === "number" && typeof s.sideB === "number",
-      )
-    : [];
-}
+
 
 // ── Bracket geometry ────────────────────────────────────────────────────
 // The canvas is laid out with absolute positions rather than flex so it can
@@ -1268,7 +1327,6 @@ function SegmentedBracketView({
   const identityLabelById = useMemo(() => buildPlayUnitLabels(data), [data]);
   const config = useTournamentStore((s) => s.config);
   const scoringFormat = config?.scoringFormat ?? "badminton";
-  const setsToWin = config?.setsToWin ?? 2;
   const event = data.events.find((e) => e.id === eventId)!;
   const segments = useMemo(() => event.segments ?? [], [event.segments]);
 
@@ -1296,12 +1354,8 @@ function SegmentedBracketView({
 
   // Result writes route through the idempotent command queue (SP-F3),
   // exactly like BracketView.
-  const [resultConflict, setResultConflict] = useState<string | null>(null);
-  const { submit: submitResult } = useBracketResultQueue({
-    onOptimistic: (input) => onChange(applyOptimisticResult(data, input)),
-    onSettled: (dto) => onChange(dto),
-    onConflict: (_kind, message) => setResultConflict(message),
-  });
+  const recorder = useDrawResultRecorder(data, onChange);
+  const resultConflict = recorder.resultConflict;
 
   // Same derivation as BracketView — one uniform node height for the whole
   // segmented canvas, so every block's pitch matches and blocks stay
@@ -1345,24 +1399,7 @@ function SegmentedBracketView({
   );
   const roundLabels = Array.from({ length: maxColumns }, (_, i) => `R${i + 1}`);
 
-  const recordResultFor = (
-    puId: string,
-    winner: "A" | "B",
-    sets?: BracketSetScore[],
-  ) => {
-    const a = assignmentByPu[puId];
-    const finishedAt = a
-      ? (a.actual_end_slot ?? a.slot_id + a.duration_slots)
-      : null;
-    setResultConflict(null);
-    void submitResult({
-      matchId: puId,
-      winnerSide: winner,
-      seenVersion: idMap[puId]?.version ?? 1,
-      finishedAtSlot: finishedAt,
-      score: sets && sets.length > 0 ? { sets } : null,
-    });
-  };
+  const recordingPu = recorder.recordingId ? idMap[recorder.recordingId] : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -1463,11 +1500,7 @@ function SegmentedBracketView({
                                 assignment={assignmentByPu[m.puId]}
                                 slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
                                 final={isFinalCol}
-                                scoringFormat={scoringFormat}
-                                setsToWin={setsToWin}
-                                onResult={(winner, sets) =>
-                                  recordResultFor(m.puId, winner, sets)
-                                }
+                                onRecordRequest={() => recorder.openFor(m.puId)}
                               />
                             </div>
                           );
@@ -1481,7 +1514,92 @@ function SegmentedBracketView({
           </div>
         </PanZoomCanvas>
       </div>
+      {recordingPu ? (
+        <DrawResultDialog
+          pu={recordingPu}
+          identityLabel={identityLabelById.get(recordingPu.id) ?? recordingPu.id}
+          feederLabels={identityLabelById}
+          nameById={nameById}
+          assignment={assignmentByPu[recordingPu.id]}
+          slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
+          scoringFormat={scoringFormat}
+          rules={effectiveScoringRules(config)}
+          result={resultByPu[recordingPu.id]}
+          saveState={recorder.saveState}
+          error={recorder.resultConflict}
+          onClose={recorder.close}
+          onRecord={(value) => recorder.record(recordingPu.id, value)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * The draw's Record result dialog (plan D6/D8, O7).
+ *
+ * Every renderer family in this file mounts exactly one of these, OUTSIDE
+ * its canvas: `position: fixed` inside a transformed pan/zoom container is
+ * positioned against that container, so a dialog rendered from the node
+ * would be laid out on the canvas rather than the viewport. Keeping it here
+ * also means the canvas is untouched while the dialog is open — same pan
+ * position, same selected node, same scroll offset on dismissal.
+ */
+function DrawResultDialog({
+  pu,
+  identityLabel,
+  feederLabels,
+  nameById,
+  assignment,
+  slotContext,
+  scoringFormat,
+  rules,
+  result,
+  saveState,
+  error,
+  onClose,
+  onRecord,
+}: {
+  pu: PlayUnitDTO;
+  identityLabel: string;
+  feederLabels: Map<string, string>;
+  nameById: Record<string, string>;
+  assignment?: AssignmentDTO;
+  slotContext?: BracketSlotContext;
+  scoringFormat: "simple" | "badminton";
+  rules: EffectiveScoringRules;
+  result?: ResultDTO;
+  saveState: ResultSaveState;
+  error: string | null;
+  onClose: () => void;
+  onRecord: (value: ResultEntryValue) => void | Promise<void>;
+}) {
+  const time =
+    assignment && slotContext?.start_time
+      ? formatBracketSlot(assignment.slot_id, slotContext)
+      : null;
+  const context = assignment
+    ? [time, `Court ${assignment.court_id}`].filter(Boolean).join(" · ")
+    : "Not scheduled";
+  return (
+    <RecordResultModal
+      matchReference={identityLabel}
+      matchContext={context}
+      correction={!!result}
+      // Real participant names, never "A"/"B" — the same formatter the node
+      // caption uses, so the dialog names exactly who the operator clicked.
+      sideALabel={labelFor(pu.side_a, pu.slot_a, nameById, feederLabels)}
+      sideBLabel={labelFor(pu.side_b, pu.slot_b, nameById, feederLabels)}
+      rules={rules}
+      mode={scoringFormat === "badminton" ? "games" : "winner"}
+      initialSets={validBracketSets(result)}
+      outcomes={["played", "walkover", "retired", "forfeit"]}
+      saveState={saveState}
+      error={error}
+      onSubmit={onRecord}
+      onCancel={onClose}
+      testId="draw-result-form"
+    />
   );
 }
 
@@ -1496,10 +1614,8 @@ function BracketCell({
   final = false,
   seeding = false,
   selectedPos = null,
-  scoringFormat = "badminton",
-  setsToWin = 2,
   onSlotClick,
-  onResult,
+  onRecordRequest,
 }: {
   pu: PlayUnitDTO;
   /** F-UNI-22: source-aware identity formatted at the draw adapter seam. */
@@ -1517,11 +1633,10 @@ function BracketCell({
   /** Round-0 cell in seeding-edit mode: sides swap instead of recording. */
   seeding?: boolean;
   selectedPos?: number | null;
-  /** Engine score type — Sets mode captures a set-by-set score. */
-  scoringFormat?: "simple" | "badminton";
-  setsToWin?: number;
   onSlotClick?: (pos: number) => void;
-  onResult: (w: "A" | "B", sets?: BracketSetScore[]) => void | Promise<void>;
+  /** Open the view's Record result dialog for this match. The node never
+   *  renders the editor itself — see the comment on the control below. */
+  onRecordRequest: () => void;
 }) {
   const winner = result?.winner_side;
   const aName = labelFor(pu.side_a, pu.slot_a, nameById, feederLabels);
@@ -1531,8 +1646,6 @@ function BracketCell({
   const canRecord = !!pu.side_a && !!pu.side_b && !result && !seeding;
   const posA = pu.match_index * 2;
   const posB = posA + 1;
-  const setsMode = scoringFormat === "badminton";
-  const [recording, setRecording] = useState(false);
   const validSets = validBracketSets(result);
 
   return (
@@ -1602,59 +1715,21 @@ function BracketCell({
         selected={seeding && selectedPos === posB}
         onSlotClick={seeding ? () => onSlotClick?.(posB) : undefined}
       />
-      {/* ONE interaction per node (P3). The node used to offer three
-          overlapping ways in: a click on either side row ("↵ wins"), a
-          separate "Enter score" strip, and — in Sets mode — a side row that
-          looked identical but did nothing. Now a recordable node has exactly
-          one control, and it opens the same score entry in both scoring
-          modes; only the panel it opens differs, because Simple mode records
-          a winner and Sets mode records a score. */}
+      {/* ONE interaction per node, and it no longer EXPANDS the node (C12 /
+          plan D6). The node used to grow a score form inside its own box,
+          which pushed the card over the next match in the column and left the
+          operator typing on top of a neighbouring node. The control now opens
+          the shared Record result dialog, owned by the view OUTSIDE the
+          pan/zoom canvas — the node keeps its measured height, the canvas
+          keeps its position, and focus returns here on dismissal. */}
       {canRecord ? (
-        recording ? (
-          setsMode ? (
-            <BracketScoreEntry
-              setsToWin={setsToWin}
-              labelA={aName}
-              labelB={bName}
-              onRecord={async (w, sets) => {
-                await onResult(w, sets);
-                setRecording(false);
-              }}
-              onCancel={() => setRecording(false)}
-            />
-          ) : (
-            <div className="flex items-center gap-1">
-              {(["A", "B"] as const).map((sideKey) => (
-                <button
-                  key={sideKey}
-                  type="button"
-                  onClick={() => {
-                    void onResult(sideKey);
-                    setRecording(false);
-                  }}
-                  className={`${INTERACTIVE_BASE} min-w-0 flex-1 break-words rounded-sm border border-border bg-bg-elev px-2 py-1 text-xs font-medium text-foreground hover:border-accent`}
-                >
-                  {sideKey === "A" ? aName : bName} won
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setRecording(false)}
-                className={`${INTERACTIVE_BASE} shrink-0 rounded-sm px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground`}
-              >
-                Cancel
-              </button>
-            </div>
-          )
-        ) : (
-          <button
-            type="button"
-            onClick={() => setRecording(true)}
-            className={`${INTERACTIVE_BASE} w-full rounded-sm border border-border bg-bg-elev px-2 py-1 text-xs font-medium text-muted-foreground hover:border-accent hover:text-foreground`}
-          >
-            Enter score
-          </button>
-        )
+        <button
+          type="button"
+          onClick={onRecordRequest}
+          className={`${INTERACTIVE_BASE} w-full rounded-sm border border-border bg-bg-elev px-2 py-1 text-xs font-medium text-muted-foreground hover:border-accent hover:text-foreground`}
+        >
+          Enter score
+        </button>
       ) : null}
     </Card>
   );
@@ -1846,7 +1921,6 @@ function RoundRobinView({
   const identityLabelById = useMemo(() => buildPlayUnitLabels(data), [data]);
   const config = useTournamentStore((s) => s.config);
   const scoringFormat = config?.scoringFormat ?? "badminton";
-  const setsToWin = config?.setsToWin ?? 2;
   const event = data.events.find((e) => e.id === eventId)!;
   const nameById = Object.fromEntries(
     data.participants.map((p) => [p.id, p.name]),
@@ -1862,12 +1936,9 @@ function RoundRobinView({
   );
 
   // Result writes route through the idempotent command queue (SP-F3).
-  const [resultConflict, setResultConflict] = useState<string | null>(null);
-  const { submit: submitResult } = useBracketResultQueue({
-    onOptimistic: (input) => onChange(applyOptimisticResult(data, input)),
-    onSettled: (dto) => onChange(dto),
-    onConflict: (_kind, message) => setResultConflict(message),
-  });
+  const recorder = useDrawResultRecorder(data, onChange);
+  const resultConflict = recorder.resultConflict;
+  const recordingPu = recorder.recordingId ? puById[recorder.recordingId] : null;
 
   return (
     <div className="h-full space-y-6 overflow-auto p-4">
@@ -1899,28 +1970,30 @@ function RoundRobinView({
                   result={result}
                   assignment={assignment}
                   slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
-                  scoringFormat={scoringFormat}
-                  setsToWin={setsToWin}
-                  onResult={(winner, sets) => {
-                    const a = assignment;
-                    const finishedAt = a
-                      ? (a.actual_end_slot ?? a.slot_id + a.duration_slots)
-                      : null;
-                    setResultConflict(null);
-                    void submitResult({
-                      matchId: puId,
-                      winnerSide: winner,
-                      seenVersion: pu.version ?? 1,
-                      finishedAtSlot: finishedAt,
-                      score: sets && sets.length > 0 ? { sets } : null,
-                    });
-                  }}
+                  onRecordRequest={() => recorder.openFor(puId)}
                 />
               );
             })}
           </div>
         </Card>
       ))}
+      {recordingPu ? (
+        <DrawResultDialog
+          pu={recordingPu}
+          identityLabel={identityLabelById.get(recordingPu.id) ?? recordingPu.id}
+          feederLabels={identityLabelById}
+          nameById={nameById}
+          assignment={assignmentByPu[recordingPu.id]}
+          slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
+          scoringFormat={scoringFormat}
+          rules={effectiveScoringRules(config)}
+          result={resultByPu[recordingPu.id]}
+          saveState={recorder.saveState}
+          error={recorder.resultConflict}
+          onClose={recorder.close}
+          onRecord={(value) => recorder.record(recordingPu.id, value)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -2002,7 +2075,6 @@ function SwissView({
   const api = useBracketApi();
   const config = useTournamentStore((s) => s.config);
   const scoringFormat = config?.scoringFormat ?? "badminton";
-  const setsToWin = config?.setsToWin ?? 2;
   const event = data.events.find((e) => e.id === eventId)!;
   const nameById = Object.fromEntries(
     data.participants.map((p) => [p.id, p.name]),
@@ -2017,13 +2089,10 @@ function SwissView({
   const puById = Object.fromEntries(eventPus.map((p) => [p.id, p]));
 
   // Result writes route through the idempotent command queue (SP-F3).
-  const [resultConflict, setResultConflict] = useState<string | null>(null);
+  const recorder = useDrawResultRecorder(data, onChange);
+  const resultConflict = recorder.resultConflict;
+  const recordingPu = recorder.recordingId ? puById[recorder.recordingId] : null;
   const [generating, setGenerating] = useState(false);
-  const { submit: submitResult } = useBracketResultQueue({
-    onOptimistic: (input) => onChange(applyOptimisticResult(data, input)),
-    onSettled: (dto) => onChange(dto),
-    onConflict: (_kind, message) => setResultConflict(message),
-  });
 
   // Resolved round count, persisted into the event config at generate time.
   const rawRounds = event.config?.["swiss_rounds"];
@@ -2087,22 +2156,7 @@ function SwissView({
                     result={resultByPu[puId]}
                     assignment={assignment}
                     slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
-                    scoringFormat={scoringFormat}
-                    setsToWin={setsToWin}
-                    onResult={(winner, sets) => {
-                      const finishedAt = assignment
-                        ? (assignment.actual_end_slot ??
-                          assignment.slot_id + assignment.duration_slots)
-                        : null;
-                      setResultConflict(null);
-                      void submitResult({
-                        matchId: puId,
-                        winnerSide: winner,
-                        seenVersion: pu.version ?? 1,
-                        finishedAtSlot: finishedAt,
-                        score: sets && sets.length > 0 ? { sets } : null,
-                      });
-                    }}
+                    onRecordRequest={() => recorder.openFor(puId)}
                   />
                 );
               })}
@@ -2131,6 +2185,23 @@ function SwissView({
       {standings.length > 0 && (
         <StandingsAside rows={standings} nameById={nameById} />
       )}
+      {recordingPu ? (
+        <DrawResultDialog
+          pu={recordingPu}
+          identityLabel={identityLabelById.get(recordingPu.id) ?? recordingPu.id}
+          feederLabels={identityLabelById}
+          nameById={nameById}
+          assignment={assignmentByPu[recordingPu.id]}
+          slotContext={{ start_time: data.start_time, interval_minutes: data.interval_minutes }}
+          scoringFormat={scoringFormat}
+          rules={effectiveScoringRules(config)}
+          result={resultByPu[recordingPu.id]}
+          saveState={recorder.saveState}
+          error={recorder.resultConflict}
+          onClose={recorder.close}
+          onRecord={(value) => recorder.record(recordingPu.id, value)}
+        />
+      ) : null}
     </div>
   );
 }

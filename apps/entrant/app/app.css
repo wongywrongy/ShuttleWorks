@@ -32,6 +32,9 @@
  * absolute positioning, or SVG is involved. */
 .bracket-link-slot {
   display: grid;
+  /* public-ui-refinement P4: the containing block for the per-edge highlight
+   * overlays below. The base brace itself is unchanged. */
+  position: relative;
 }
 
 .bracket-link-slot::before,
@@ -80,7 +83,7 @@
  * PAGE growing; scroll chaining is left at its default so reaching an edge
  * hands the scroll back to the document rather than trapping it. */
 .bracket-scroll {
-  max-height: min(78vh, 46rem);
+  max-height: min(82vh, 52rem);
 }
 
 /* Round headers stay in view while the reader scrolls the tree. The opaque
@@ -92,24 +95,89 @@
   background-color: hsl(var(--surface-raised));
 }
 
-/* The selected player's path, painted server-side (`?player=`/`?view=path`,
+/* ---- P4 draw path (public-ui-refinement, A05/D4) ----------------------
+ *
+ * The selected player's path, painted server-side (`?player=`/`?view=path`,
  * the no-JavaScript fallback) and kept in sync in place by
- * `bracket-path.js`. */
-.bracket-slot.is-person-path {
+ * `bracket-path.js`. Three corrections to the previous treatment:
+ *
+ * 1. The emphasis lands on the NODE and on the selected SIDE ROW inside it,
+ *    not on the tall equal-share layout slot the node is centred in. Outlining
+ *    the slot outlined mostly empty canvas.
+ * 2. The connector brace is no longer one highlightable object. It draws the
+ *    same neutral geometry it always did; the accent lives on three
+ *    independently addressable overlay edges (upper feeder, lower feeder,
+ *    stub), so the sibling branch a player never came from stays neutral.
+ * 3. Unrelated matches are no longer faded to 0.32. Opponents and scores stay
+ *    readable; only the connector DECORATION (aria-hidden) recedes.
+ */
+.bracket-slot.is-person-path > article {
   outline: 2px solid hsl(var(--action-primary));
-  outline-offset: -2px;
+  outline-offset: 1px;
   border-radius: 2px;
 }
 
-[data-bracket-grid].has-person-path .bracket-slot:not(.is-person-path),
-[data-bracket-grid].has-person-path .bracket-link-slot:not(.is-person-path) {
-  opacity: 0.32;
+/* The side row the selection is actually standing on. Weight, an inset rule
+ * and a ground change — never colour alone, and distinct from the winner cue
+ * (name weight + "Winner:") and the live cue (the node's leading border and
+ * the "On court" word). */
+.bracket-slot[data-selected-side='a'] > article > div:nth-of-type(1),
+.bracket-slot[data-selected-side='b'] > article > div:nth-of-type(2) {
+  background-color: hsl(var(--surface-sunken));
+  box-shadow: inset 3px 0 0 hsl(var(--action-primary));
 }
 
-.bracket-link-slot.is-person-path::before,
-.bracket-link-slot.is-person-path::after {
+.is-person-selected {
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+/* Recession, not erasure: a match off the path keeps full text contrast. */
+[data-bracket-grid].has-person-path .bracket-slot:not(.is-person-path) > article {
+  border-color: hsl(var(--border-control) / 0.5);
+}
+
+[data-bracket-grid].has-person-path .bracket-link-slot::before,
+[data-bracket-grid].has-person-path .bracket-link-slot::after {
+  opacity: 0.4;
+}
+
+/* The three overlay edges. Hidden until they are on the path, so the neutral
+ * bracket graph below them is exactly the geometry it was before. Positions
+ * mirror the base brace: horizontals at 25% and 75% of the slot, the vertical
+ * spine at the 50% width mark, the stub on the trailing half. */
+.bracket-link-edge {
+  display: none;
+  position: absolute;
   border-color: hsl(var(--action-primary));
-  border-width: 2px;
+  border-style: solid;
+  border-width: 0;
+}
+
+.bracket-link-edge.is-person-path {
+  display: block;
+}
+
+.bracket-link-edge[data-edge='top'] {
+  inset-block: 25% 50%;
+  inset-inline: 0 50%;
+  border-block-start-width: 2px;
+  border-inline-end-width: 2px;
+}
+
+.bracket-link-edge[data-edge='bottom'] {
+  inset-block: 50% 25%;
+  inset-inline: 0 50%;
+  border-block-end-width: 2px;
+  border-inline-end-width: 2px;
+}
+
+.bracket-link-edge[data-edge='stub'] {
+  inset-block: 50% 50%;
+  inset-inline: 50% 0;
+  border-block-start-width: 2px;
 }
 
 /* 2026-08-11 design audit, finding #8 (optional, zero page-weight cost: CSS
@@ -132,15 +200,39 @@
   }
 }
 
-/* The NOW strip's live sweep (ADR 0028): a 1px track along the band's bottom
- * rule with a 20%-wide light travelling across it. Pure decoration, on an
- * `aria-hidden` element; the design system's universal reduced-motion block
- * (globals.css) collapses the animation to a single frame. */
-@keyframes sw-sweep {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(400%); }
+/* ---- P5 regulations ---- */
+
+/* Ensure readable line length and centered layout on narrow screens. The
+   document container (max-w-3xl) provides comfortable reading width; this
+   section refinement ensures proper spacing and button accessibility. */
+
+/* On mobile, actions remain within readable width and keyboard-reachable. */
+@media (max-width: 640px) {
+  #regulations-actions button {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
-.sw-sweep {
-  animation: sw-sweep 6s linear infinite;
+/* ---- P7 partner ---- */
+/* Labeled fields section for invitation details and form visibility control */
+
+/* ---- P6 entry flow ----------------------------------------------------
+ *
+ * `hidden` has to actually hide on the entry page (audit A08).
+ *
+ * The entry form marks its inactive stage, its inactive controls and its
+ * conditional partner fields with the `hidden` ATTRIBUTE. Every one of those
+ * elements also carries a Tailwind display utility (`grid`, `flex`) — and
+ * utilities are emitted in the `utilities` layer, which outranks both the UA
+ * sheet's and preflight's `[hidden] { display: none }`. The result was the
+ * captured defect: every Continue/Back control and the whole review panel
+ * painted at once, in the server document AND after the script ran, because
+ * setting `element.hidden = true` changed nothing visible.
+ *
+ * One declaration, scoped to the page that relies on it. `display: none` also
+ * removes the subtree from the tab order, which is the other half of the
+ * requirement (an inactive control must not be reachable by keyboard). */
+[data-entry-page] [hidden] {
+  display: none !important;
 }

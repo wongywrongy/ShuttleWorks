@@ -15,6 +15,8 @@ nobody meant to publish. See
 """
 from __future__ import annotations
 
+from _helpers import submit_reviewed
+
 import json
 import re
 import uuid
@@ -152,7 +154,7 @@ def _seed_one_entry(client, page):
     one, and using it keeps the fixture honest about what the list is
     built from.
     """
-    return client.post(
+    return submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={
             "playerName": "Alice Chen",
@@ -196,7 +198,12 @@ def _confirm_all(page):
 # ---- GET /e/api/page/{slug} ---------------------------------------------
 
 
-def test_the_page_projection_carries_the_public_blocks(client, page):
+def test_the_page_projection_carries_the_public_blocks(client, page, monkeypatch):
+    from datetime import datetime, timezone
+    from entries import entries_json
+
+    # The fixture is before its September tournament, regardless of test date.
+    monkeypatch.setattr(entries_json, "_utcnow", lambda: datetime(2026, 8, 13, tzinfo=timezone.utc))
     r = client.get(f"/e/api/page/{page['slug']}")
     assert r.status_code == 200, r.text
     body = r.json()
@@ -360,7 +367,7 @@ def test_one_person_entering_two_events_is_listed_once(client, page, entrant):
     routine at a club (the reason ``_entrants`` orders by name *and* id), so
     the grouping key is the person, ``entries.entry_player_id``.
     """
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={
             "playerName": "Alice Chen",
@@ -422,7 +429,7 @@ def test_two_entrants_who_share_a_name_are_both_listed(client, page, entrant):
             == 200
         )
         assert (
-            client.post(
+            submit_reviewed(client,
                 f"/e/api/submit/{page['slug']}",
                 data={
                     "playerName": "Alice Chen",
@@ -461,7 +468,7 @@ def test_one_person_entering_across_two_submissions_is_one_person(
     """
     for event_key in ("ms", "ws"):
         assert (
-            client.post(
+            submit_reviewed(client,
                 f"/e/api/submit/{page['slug']}",
                 data={
                     "playerName": "Alice Chen",
@@ -501,7 +508,7 @@ def test_a_person_without_a_birth_year_is_never_guessed_together(
     """
     for _ in range(2):
         assert (
-            client.post(
+            submit_reviewed(client,
                 f"/e/api/submit/{page['slug']}",
                 data={
                     "playerName": "Alice Chen",
@@ -547,7 +554,7 @@ def test_an_entrants_row_carries_their_event_codes_without_re_duplicating(
     """
     def submit(name, events):
         assert (
-            client.post(
+            submit_reviewed(client,
                 f"/e/api/submit/{page['slug']}",
                 data={
                     "playerName": name,
@@ -769,7 +776,7 @@ def test_the_quoted_total_is_the_total_recorded(client, page, entrant):
     quoted = _quote(client, page, [f"0:{page['ms']}", f"0:{page['ws']}"]).json()
     assert quoted["totalCents"] == 5500
 
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={
             "playerName": "Alice Chen",
@@ -894,7 +901,7 @@ def _submit(client, page, **overrides):
     for key, value in overrides.items():
         if value is None:
             data.pop(key, None)
-    return client.post(
+    return submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data=data,
         headers=headers,
@@ -996,7 +1003,7 @@ def test_an_anonymous_submission_is_refused(client, page):
     bootstrap fallback in either mode. To prove it is not vacuous: swap it
     for ``_optional_entrant`` and this goes red while the 303 test — the
     same request, one cookie different — stays green. Put it back."""
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={
             "playerName": "Alice Chen",
@@ -1014,7 +1021,7 @@ def test_an_anonymous_submission_is_refused(client, page):
 def test_a_submission_with_no_csrf_proof_at_all_is_refused(client, page, entrant):
     """Guard 3 with neither channel present: no form field, and no
     ``X-ShuttleWorks-CSRF`` header for the middleware either."""
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={
             "playerName": "Alice Chen",
@@ -1306,7 +1313,7 @@ def test_a_browser_quote_never_puts_entrant_detail_in_a_url(client, page, entran
     location = r.headers["location"]
 
     # Nothing but the three the server itself wrote.
-    assert set(_echo(r)) <= {"totalCents", "refusalCode", "refusalSubjects"}
+    assert set(_echo(r)) <= {"totalCents", "refusalCode", "refusalSubjects", "reviewedQuote"}
     # And no posted VALUE reached the header by any spelling — including the
     # transport fields, which are not typing but are still a spent
     # idempotency key and a session-derived CSRF digest in a shareable URL.
@@ -1454,7 +1461,7 @@ def test_a_dropped_block_does_not_misprice_the_players_that_survive_it(
     the entrant their per-entry fee: one dropped block, and every share after
     it would come back ``None`` if anything paired the two lists by key.
     """
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={
             "playerName": ["Alice Chen", "Ben Ito"],
@@ -1615,7 +1622,7 @@ def test_an_anonymous_browser_submit_is_navigated_back_to_the_form(client, page)
     in front of an entrant by sending a link (`_echo_redirect` argues this
     at length).
     """
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={"playerName": "Alice Chen", "gender": "F", "acknowledged": "on"},
         headers=_BROWSER,
@@ -1639,7 +1646,7 @@ def test_an_anonymous_JSON_submit_is_still_a_plain_401(client, page):
     Widening the redirect to every caller would turn a refusal into a 3xx
     that a naive client follows to a 200 HTML page and reads as success.
     """
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={"playerName": "Alice Chen", "gender": "F", "acknowledged": "on"},
         headers={"accept": "application/json", "content-type": "application/x-www-form-urlencoded"},
@@ -1675,7 +1682,7 @@ def test_a_non_401_from_the_identity_dependency_is_not_dressed_as_signed_out(
 
     monkeypatch.setattr(mod, "get_current_entrant", locked)
 
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={"playerName": "Alice Chen", "gender": "F", "acknowledged": "on"},
         headers=_BROWSER,
@@ -1694,7 +1701,7 @@ def test_the_redirect_never_fires_for_a_caller_who_IS_signed_in(client, page, en
     post deliberately carries no `_csrf` — and never by the sign-in
     redirect. A wrapper that redirected everyone would leave every test
     above green while silently making the whole route unreachable."""
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={"playerName": "Alice Chen", "gender": "F", "acknowledged": "on"},
         headers=_BROWSER,

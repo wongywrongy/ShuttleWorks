@@ -1,8 +1,10 @@
 /** `/e/{slug}/schedule` — public, URL-backed matches document. */
+import { Fragment } from "react";
 import { isRouteErrorResponse, useRouteError } from "react-router";
 
 import { EmptyState } from "../components/EmptyState";
-import { MatchCard, type MatchCardData } from "../components/MatchCard";
+import type { MatchCardData } from "../components/MatchCard";
+import { MATCH_ROW_COLUMNS, MatchRow } from "../components/MatchRow";
 import { MessagePage } from "../components/MessagePage";
 import { PlayShell } from "../components/PlayShell";
 import { SearchField } from "../components/SearchField";
@@ -12,7 +14,7 @@ import { ApiError, apiGet } from "../lib/apiFetch.server";
 import { demoNowMs } from "../lib/demoClock.server";
 import type { EntryPageDTO } from "../lib/entryPage.types";
 import { eventDisciplineLabel } from "../lib/draws.types";
-import { formatInstantInZone } from "../lib/format";
+import { formatCalendarDayShort, formatInstantInZone } from "../lib/format";
 import {
   SCHEDULE_STATES,
   schedulePublicState,
@@ -24,7 +26,7 @@ import {
   type ScheduleMatchDTO,
   type ScheduleState,
 } from "../lib/schedule.types";
-import { ACTION_LINK, ACTION_LINK_MUTED, EYEBROW, SELECT_CONTROL } from "../lib/ui";
+import { ACTION_LINK, ACTION_LINK_MUTED, EYEBROW, LIST_CARD, SELECT_CONTROL, TEXT_SECONDARY } from "../lib/ui";
 import { Chevron } from "../components/Chevron";
 import type { Route } from "./+types/schedule";
 
@@ -195,6 +197,7 @@ function scheduleToMatch(
     shortReference: match.shortReference ?? null,
     sides,
     score: match.score,
+    liveScore: match.liveScore ?? null,
     decided,
     status: match.status,
     scheduledTime: match.scheduledTime,
@@ -213,7 +216,17 @@ function scheduleToMatch(
 }
 /** `EYEBROW` recoloured in the live tone (kept literal for the Tailwind scan). */
 const LIVE_EYEBROW = "text-xs font-bold uppercase tracking-[0.06em] text-status-live";
-function ScheduleMatchCard({
+/**
+ * One schedule match as one aligned ROW (public refinement 2026-09-12): the
+ * card grid is gone from the main listing, so a spectator scans time and
+ * court, event and round, the two sides and the score down fixed columns
+ * instead of reading a wall of cards. The row is the shared `MatchRow`;
+ * this adapter only reshapes the wire DTO.
+ *
+ * `showDate` is spelled INTO the first column when the list spans days:
+ * the day nav or heading already states it otherwise (V3-PE09.3).
+ */
+function ScheduleMatchRow({
   match,
   slug,
   showDate = true,
@@ -222,8 +235,55 @@ function ScheduleMatchCard({
   slug: string;
   showDate?: boolean;
 }) {
+  const data = scheduleToMatch(match, { showDate: false });
   return (
-    <MatchCard match={scheduleToMatch(match, { showDate })} variant="card" slug={slug} />
+    <MatchRow
+      match={data}
+      slug={slug}
+      context={showDate && match.scheduledDate ? "player" : "schedule"}
+      dayLabel={showDate && match.scheduledDate ? scheduleDateLabel(match.scheduledDate) : null}
+    />
+  );
+}
+
+/** The column header over a run of rows, aligned to `MATCH_ROW_COLUMNS`.
+ *  Decoration for a sighted reader at `md:` and up; each row already names
+ *  its facts for assistive tech. */
+function RowHeader() {
+  return (
+    <div
+      aria-hidden
+      className={`hidden gap-x-4 px-3 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-[0.06em] ${TEXT_SECONDARY} md:grid ${MATCH_ROW_COLUMNS}`}
+    >
+      <span>Time · court</span>
+      <span>Event · round</span>
+      <span className="grid md:grid-cols-[minmax(0,1fr)_auto]">
+        <span>Players</span>
+        <span>Score · status</span>
+      </span>
+    </div>
+  );
+}
+
+/** A run of rows under one heading, in the tier's list card. */
+function RowList({
+  slug,
+  matches,
+  showDate,
+}: {
+  slug: string;
+  matches: ScheduleMatchDTO[];
+  showDate: boolean;
+}) {
+  return (
+    <div className={LIST_CARD}>
+      <RowHeader />
+      <ul>
+        {matches.map((match) => (
+          <ScheduleMatchRow key={match.matchKey} match={match} slug={slug} showDate={showDate} />
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -306,22 +366,34 @@ function DayNavigation({
   days: ScheduleDayFacetDTO[];
 }) {
   if (!days.length) return null;
+  // Refinement 2026-09-12: a SHORT day (`Wed 5 Aug`) with the count as a
+  // tabular figure beside it, in ONE row that scrolls inside itself on a
+  // phone — the long `Wednesday, August 5 · 64 matches` labels wrapped the
+  // row three deep at 1280px. `aria-label` on each item keeps the full
+  // spelling and the noun for assistive tech.
   return (
-    <SegmentedNav
-      label="Schedule days"
-      segments={[
-        {
-          label: "All days",
-          href: matchesPath(slug, { ...filters, day: "", page: 1 }),
-          current: filters.day === "",
-        },
-        ...days.map((day) => ({
-          label: `${scheduleDateLabel(day.day)} · ${dayMatchCountLabel(day.count)}`,
-          href: matchesPath(slug, { ...filters, day: day.day, page: 1 }),
-          current: Boolean(filters.day) && day.day === filters.day,
-        })),
-      ]}
-    />
+    <div className="-mx-4 overflow-x-auto px-4 scroll-px-4">
+      <SegmentedNav
+        label="Schedule days"
+        wrap={false}
+        segments={[
+          {
+            label: "All days",
+            href: matchesPath(slug, { ...filters, day: "", page: 1 }),
+            current: filters.day === "",
+          },
+          ...days.map((day) => ({
+            label: formatCalendarDayShort(day.day),
+            href: matchesPath(slug, { ...filters, day: day.day, page: 1 }),
+            current: Boolean(filters.day) && day.day === filters.day,
+            count: day.count,
+            extra: (
+              <span className="sr-only">{`, ${scheduleDateLabel(day.day)}, ${dayMatchCountLabel(day.count)}`}</span>
+            ),
+          })),
+        ]}
+      />
+    </div>
   );
 }
 
@@ -414,27 +486,29 @@ function ScheduleControls({
   ] as ScheduleState[];
   const days = scheduleDays(filters, matches);
   const dayAsLinks = daysAreLinkable(days);
-  const moreOpen = Boolean(filters.event || filters.court || filters.state);
+  const activeMore = [filters.event, filters.court, filters.state].filter(Boolean).length;
   return (
     <div
       className={`sticky ${TOOLBAR_OFFSET} z-20 -mx-4 border-b border-rule-soft bg-surface-base px-4 py-2`}
     >
+      {/* Refinement 2026-09-12: TWO short rows instead of one that wrapped
+          three deep. The days on their own scrolling strip; then the
+          organisation, the player search and the secondary filters. */}
       <form
         method="get"
         action={`/e/${encodeURIComponent(slug)}/schedule`}
         data-schedule-filters
         aria-label="Filter schedule"
-        className="flex flex-wrap items-center gap-x-4 gap-y-2"
+        className="grid gap-y-2"
       >
         <input type="hidden" name="organization" value={filters.organization} />
         {dayAsLinks ? <input type="hidden" name="day" value={filters.day} /> : null}
         {dayAsLinks ? (
           <DayNavigation slug={slug} filters={filters} days={days} />
-        ) : days.length ? (
-          <DaySelect filters={filters} days={days} />
         ) : null}
-        <OrganizationSwitch slug={slug} filters={filters} />
-        <div className="flex min-w-0 flex-1 basis-64 flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {!dayAsLinks && days.length ? <DaySelect filters={filters} days={days} /> : null}
+          <OrganizationSwitch slug={slug} filters={filters} />
           <SearchField
             id="schedule-player"
             name="player"
@@ -444,19 +518,29 @@ function ScheduleControls({
             submitLabel="Search matches"
             className="min-w-0 flex-1 basis-48"
           />
-          <details className="group min-w-0" open={moreOpen || undefined}>
-            <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-foreground marker:hidden">
-              More filters
+          {/* The secondary filters. OPEN in the server document, so a reader
+              without script sees them at every width; from `md:` up the
+              summary is hidden and the selects sit inline in this row. Below
+              `md:` the script closes the disclosure when none is active and
+              labels it with the count, so a closed disclosure never hides a
+              filter the list is under. */}
+          <details
+            data-schedule-more
+            open
+            className="group min-w-0 basis-full md:flex md:basis-auto md:items-center"
+          >
+            <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 text-sm font-medium text-foreground marker:hidden md:hidden">
+              <span data-schedule-more-label>{activeMore > 0 ? `Filters · ${activeMore}` : "Filters"}</span>
               <Chevron direction="down" className="text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
-            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <div className="mt-2 grid gap-2 sm:grid-cols-3 md:mt-0 md:flex md:flex-wrap md:items-center">
               <div>
                 <label className="sr-only" htmlFor="schedule-event">Event</label>
                 <select
                   id="schedule-event"
                   name="event"
                   defaultValue={filters.event}
-                  className={SELECT_CONTROL}
+                  className={`${SELECT_CONTROL} md:w-auto`}
                 >
                   <option value="">All events</option>
                   {events.map((event) => (
@@ -472,7 +556,7 @@ function ScheduleControls({
                   id="schedule-court"
                   name="court"
                   defaultValue={filters.court}
-                  className={SELECT_CONTROL}
+                  className={`${SELECT_CONTROL} md:w-auto`}
                 >
                   <option value="">All courts</option>
                   {courts.map((court) => (
@@ -486,7 +570,7 @@ function ScheduleControls({
                   id="schedule-state"
                   name="state"
                   defaultValue={filters.state}
-                  className={SELECT_CONTROL}
+                  className={`${SELECT_CONTROL} md:w-auto`}
                 >
                   <option value="">Any status</option>
                   {states.map((state) => (
@@ -553,10 +637,8 @@ function LiveBand({
           zoom) was measurably forcing this shared column past the
           viewport (plan §6 "Responsive/signage"). Both occurrences in
           this file share the fix. */}
-      <div className="mt-3 grid min-w-0 gap-4 md:grid-cols-2">
-        {matches.map((match) => (
-          <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} showDate={showDate} />
-        ))}
+      <div className="mt-2 min-w-0">
+        <RowList slug={slug} matches={matches} showDate={showDate} />
       </div>
     </section>
   );
@@ -577,16 +659,14 @@ function ByTime({
     groups.set(key, [...(groups.get(key) ?? []), match]);
   });
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-5">
       {[...groups.entries()].map(([time, group]) => (
         <section key={time} aria-labelledby={`time-${time}`}>
           <h2 id={`time-${time}`} className={`${EYEBROW} tabular-nums`}>
             {time}
           </h2>
-          <div className="mt-3 grid min-w-0 gap-4 md:grid-cols-2">
-            {group.map((match) => (
-              <ScheduleMatchCard key={match.matchKey} match={match} slug={slug} showDate={showDate} />
-            ))}
+          <div className="mt-2 min-w-0">
+            <RowList slug={slug} matches={group} showDate={showDate} />
           </div>
         </section>
       ))}
@@ -626,23 +706,31 @@ function ByCourt({
       queues.set(key, [...(queues.get(key) ?? []), match]);
     });
   return (
-    <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-5">
       {[...queues.entries()].map(([court, queue]) => (
         <section key={court} aria-labelledby={`court-${court}`}>
           <h2 id={`court-${court}`} className={EYEBROW}>
             {court}
           </h2>
-          <div className="mt-3 grid gap-4">
-            {queue.map((match, index) => (
-              <div key={match.matchKey}>
-                {queueLabel(match, queue, index) ? (
-                  <p className={`mb-1 ${EYEBROW}`}>
-                    {queueLabel(match, queue, index)}
-                  </p>
-                ) : null}
-                <ScheduleMatchCard match={match} slug={slug} showDate={showDate} />
-              </div>
-            ))}
+          {/* One list per court, in queue order; the queue word (Now · Next
+              · Then · Completed) leads each row's first column. */}
+          <div className={`mt-2 ${LIST_CARD}`}>
+            <RowHeader />
+            <ul>
+              {queue.map((match, index) => {
+                const word = queueLabel(match, queue, index);
+                return (
+                  <Fragment key={match.matchKey}>
+                    {word ? (
+                      <li aria-hidden className={`border-t border-rule-soft px-3 pb-0.5 pt-2 ${EYEBROW}`}>
+                        {word}
+                      </li>
+                    ) : null}
+                    <ScheduleMatchRow match={match} slug={slug} showDate={showDate} />
+                  </Fragment>
+                );
+              })}
+            </ul>
           </div>
         </section>
       ))}

@@ -16,6 +16,13 @@ from enum import Enum
 
 from db.models import MatchStatus
 
+#: The name the bootstrap operator's personal org is created with in
+#: ``AUTH_MODE=local``. It is an ownership placeholder for a machine with no
+#: real organizer identity, not something a public reader should ever meet
+#: as "the organizer": the public projections (``entries.entries_json``)
+#: omit an org carrying this name, so no tier has to guard the string.
+BOOTSTRAP_ORG_NAME = "Local Workspace"
+
 
 class MatchAction(str, Enum):
     """Operator-facing names for the legal state transitions.

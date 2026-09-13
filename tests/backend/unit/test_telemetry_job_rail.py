@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from core.telemetry.context import enqueue_span
 from core.telemetry.state import set_runtime
-from db.models import Base, SolveJob, Tournament
+from db.models import SolveJob, Tournament
 from solve_rail import solve_jobs
 from solve_rail.solve_runner import RunnerOutcome
 from solve_rail.solve_worker import SolveWorker
@@ -64,7 +64,8 @@ def Session():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     try:
         yield sessionmaker(
             bind=engine, autoflush=False, autocommit=False, expire_on_commit=False

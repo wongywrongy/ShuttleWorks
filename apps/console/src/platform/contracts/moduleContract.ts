@@ -48,7 +48,7 @@ import type {
   TournamentStateDTO,
   LineupDTO,
   EntryDTO,
-  EntryCommitResultDTO,
+  EntryBindResultDTO,
 } from '../../api/dto';
 import type {
   BracketTournamentDTO,
@@ -79,7 +79,7 @@ interface DtoRegistry {
   AssignmentDTO: AssignmentDTO;
   PlayUnitDTO: PlayUnitDTO;
   EntryDTO: EntryDTO;
-  EntryCommitResultDTO: EntryCommitResultDTO;
+  EntryBindResultDTO: EntryBindResultDTO;
 }
 
 /** A DTO type name that exists in the wire vocabulary (compile-time checked). */
@@ -319,13 +319,19 @@ export const entriesContract: ModuleContract = {
     // E5 (program Phase 10): the payment record. Owned by Entries — the
     // desk is the only surface that records a payment, and the submission
     // is the level that was actually paid.
-    apiClient.markSubmissionPaid,
-    apiClient.markSubmissionUnpaid,
-    apiClient.commitEntries,
+    apiClient.recordSubmissionPayment,
+    apiClient.bindEntries,
+    apiClient.listCompetitionEvents,
+    apiClient.listCompetitionUnits,
+    apiClient.listRegistrationEvents,
+    apiClient.createCompetitionEvent,
+    apiClient.setCompetitionDefault,
+    apiClient.rebindEntry,
+    apiClient.withdrawCompetitionUnit,
   ],
   consumedEndpoints: [],
   produces: ['PlayerDTO'], // via Seam A, into the Meet roster blob
-  consumes: ['EntryDTO', 'EntryCommitResultDTO'],
+  consumes: ['EntryDTO', 'EntryBindResultDTO'],
   emits: ['entriesCommitted'],
   reactsTo: [],
 };

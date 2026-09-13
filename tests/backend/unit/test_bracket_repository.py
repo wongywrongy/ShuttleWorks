@@ -3,7 +3,7 @@
 Covers CRUD against an in-memory SQLite session for the four bracket
 tables: BracketEvent, BracketParticipant, BracketMatch, BracketResult.
 Mirrors the shape of ``test_repositories.py`` — same per-test fixture
-that creates the full schema via ``Base.metadata.create_all`` so the
+that creates the full schema via Alembic so the
 tests don't depend on Alembic.
 
 PR 1 ships persistence only; routes wiring lands in PR 2. These tests
@@ -23,7 +23,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # conftest.py adds backend/ to sys.path before this module is collected.
-from db.models import Base
 from repositories.local import LocalRepository
 
 
@@ -50,7 +49,8 @@ def session():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     s = SessionLocal()
     try:
@@ -231,6 +231,8 @@ def test_bulk_create_participants_round_trips(repo, tournament_id):
 
 
 def test_bulk_create_participants_handles_team_type(repo, tournament_id):
+    repo.tournaments.upsert_data(tournament_id, {'bracketPlayers': [
+        {'id': 'P1', 'name': 'Alice'}, {'id': 'P2', 'name': 'Bob'}]})
     repo.brackets.create_event(
         tournament_id,
         "MD",
@@ -323,31 +325,20 @@ def test_add_participants_is_the_only_additive_write(repo, tournament_id):
 
 
 def test_add_participants_defaults_match_the_bulk_path(repo, tournament_id):
-    """Same input dict shape, same defaults — one participant vocabulary."""
+    """Manual entrants receive canonical person and membership identities."""
     _singles_event(repo, tournament_id)
-    repo.brackets.add_participants(
-        tournament_id,
-        "MS",
-        [
-            {"id": "P1", "name": "Alice", "type": "PLAYER"},
-            {
-                "id": "T1",
-                "name": "Alice & Bob",
-                "type": "TEAM",
-                "member_ids": ["P1", "P2"],
-                "meta": {"club": "Riverside"},
-                "seed": 3,
-            },
-        ],
-    )
-    rows = {p.id: p for p in repo.brackets.list_participants(tournament_id, "MS")}
-    assert rows["P1"].member_ids == []
-    assert rows["P1"].meta == {}
-    assert rows["P1"].seed is None
-    assert rows["P1"].entry_player_id is None
-    assert rows["T1"].type == "TEAM"
-    assert rows["T1"].member_ids == ["P1", "P2"]
-    assert rows["T1"].seed == 3
+    repo.brackets.add_participants(tournament_id, 'MS', [
+        {'id': 'P1', 'name': 'Alice', 'type': 'PLAYER'},
+        {'id': 'P2', 'name': 'Bob', 'type': 'PLAYER', 'seed': 3, 'meta': {'club': 'Riverside'}},
+    ])
+    rows = {p.id: p for p in repo.brackets.list_participants(tournament_id, 'MS')}
+    assert rows['P1'].member_ids == ['P1']
+    assert rows['P1'].meta == {}
+    assert rows['P1'].seed is None
+    assert rows['P1'].entry_player_id is not None
+    assert rows['P1'].unit_id is not None
+    assert rows['P2'].seed == 3
+    assert rows['P2'].meta == {'club': 'Riverside'}
 
 
 def test_add_participants_empty_returns_zero(repo, tournament_id):

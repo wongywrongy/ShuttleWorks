@@ -15,6 +15,7 @@ declares its own client/page/entrant, lifted not reinvented).
 """
 from __future__ import annotations
 
+
 import json
 import re
 import uuid
@@ -135,7 +136,7 @@ def _seed_submission(page, email, player_name="Robin Seeded", state="pending",
         )
         player = EntryPlayer(
             tournament_id=uuid.UUID(page["tid"]),
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name=player_name,
             gender="X",
         )
@@ -281,8 +282,9 @@ def test_receipt_is_complete_private_and_account_scoped(client, page, turnstile)
         "submittedAt",
         "status",
         "feeTotalCents",
+        "feeCurrency",
         "paymentState",
-        "paymentNote",
+        "paidCents", "outstandingCents",
         "paymentInstructions",
         "regulationsVersionAccepted",
         "events",
@@ -375,7 +377,7 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
 
     assert set(card) == {
-        "slug",
+        "isPast",        "slug",
         "tournamentName",
         "orgName",
         "entrantsPublished",
@@ -384,6 +386,7 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
         "venueName",
         "status",
         "feeTotalCents",
+        "feeCurrency",
         "submittedAt",
         "events",
         # SP-PUB-AUDIT-1 Phase 3: the act this card stands for, and the
@@ -409,6 +412,7 @@ def test_card_and_line_key_sets_are_exact(client, page, turnstile):
             # so neither widens what the projection discloses.
             "entryId",
             "canWithdraw",
+            "pendingReasons",
             "resultBadge",
             # SP-P7 delta (§3.1): the ACCEPTED doubles partner's NAME — never
             # the nominated email, which stays on the entry unprojected. The
@@ -449,11 +453,11 @@ def test_awaiting_with_the_quoted_total(client, page, turnstile):
     assert card["events"][0]["state"] == "awaiting"
 
 
-def test_waitlisted_reads_as_awaiting_to_its_owner(client, page, turnstile):
+def test_waitlisted_keeps_its_capacity_state_for_its_owner(client, page, turnstile):
     _sign_in(client, "parent@example.com")
     _seed_submission(page, "parent@example.com", state="waitlisted")
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
-    assert card["status"] == "awaiting"
+    assert card["status"] == "waitlisted"
 
 
 def test_entered_once_every_live_entry_is_confirmed(client, page, turnstile):
@@ -479,12 +483,14 @@ def test_a_mixed_submission_is_still_awaiting_with_per_line_states(
     }
 
 
-def test_played_once_the_date_has_passed(client, page, turnstile):
+def test_past_date_groups_without_inventing_participation(client, page, turnstile):
     _sign_in(client, "parent@example.com")
     _seed_submission(page, "parent@example.com", state="confirmed")
     _set_tournament_date(page, "2020-01-15")
     (card,) = client.get("/e/api/me/entries").json()["tournaments"]
-    assert card["status"] == "played"
+    assert card["status"] == "past"
+    assert card["events"][0]["state"] == "entered"
+    assert card["isPast"] is True
 
 
 def test_withdrawn_and_rejected_pass_through(client, page, turnstile):
@@ -699,6 +705,6 @@ def test_public_my_entries_no_n_plus_one(client, turnstile):
         assert len(client.get("/e/api/me/entries").json()["tournaments"]) == 8
         # Identity-map warmth may remove a lookup; scale must never add one.
         assert expanded <= baseline
-        assert expanded <= 10
+        assert expanded <= 16  # fixed select-in batches for normalized relationships
     finally:
         session.close()

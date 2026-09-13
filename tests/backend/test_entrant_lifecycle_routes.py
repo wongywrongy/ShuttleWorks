@@ -16,6 +16,7 @@ machine. This file pins the four things only a route can get wrong:
 """
 from __future__ import annotations
 
+
 import uuid
 
 import pytest
@@ -136,7 +137,7 @@ def _seed_entry(tid, event_id, email, *, state="pending", name="Alice Chen"):
         )
         player = EntryPlayer(
             tournament_id=uuid.UUID(tid),
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name=name,
             gender="F",
             club="Riverside",

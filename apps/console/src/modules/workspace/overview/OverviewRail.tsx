@@ -4,6 +4,7 @@
  */
 import { Link } from 'react-router-dom';
 import { EYEBROW_CLASS } from '../../../lib/utils';
+import { NavCaret } from '../../../components/NavCaret';
 import type { RailRow } from './railRows';
 
 interface Props {
@@ -52,12 +53,10 @@ export function OverviewRail({ rows, tid }: Props) {
                     that owns its fact, and a chevron that only appears on
                     hover is not an affordance on a touch device or to an eye
                     scanning the rail (OV-5). It brightens on hover instead of
-                    appearing. */}
-                <span
-                  aria-hidden
-                  className="text-text-muted transition-colors duration-fast ease-brand group-hover:text-accent"
-                >
-                  &rsaquo;
+                    appearing. The caret is the shared icon, not a literal
+                    `&rsaquo;` — one navigation glyph, at one size (D1). */}
+                <span className="text-text-muted transition-colors duration-fast ease-brand group-hover:text-accent">
+                  <NavCaret />
                 </span>
               </span>
             </Link>

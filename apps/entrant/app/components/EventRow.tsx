@@ -135,21 +135,28 @@ export function EventRow({
           </p>
         ) : null}
       </div>
-      {/* One template string, not adjacent JSX expressions: React 19's SSR
-          stream separates those with comment nodes, breaking text-level
-          assertions and, worse, screen-reader continuity of the phrase. */}
-      <p className="text-sm tabular-nums text-muted-foreground">{countLabel}</p>
-      <p className={`text-sm font-medium ${progressTone}`}>{progress ?? ''}</p>
+      {/* Refinement 2026-09-12: below `sm:` the count and the progress
+          share ONE line under the name instead of stacking as three rows;
+          from `sm:` up `contents` dissolves the wrapper so both are grid
+          cells in the header's columns again. One template string, not
+          adjacent JSX expressions: React 19's SSR stream separates those
+          with comment nodes, breaking text-level assertions and, worse,
+          screen-reader continuity of the phrase. */}
+      <div className="col-span-2 flex flex-wrap gap-x-3 gap-y-0.5 sm:contents">
+        <p className="text-sm tabular-nums text-muted-foreground">{countLabel}</p>
+        <p className={`text-sm font-medium ${progressTone}`}>{progress ?? ''}</p>
+      </div>
     </>
   );
 
-  const grid = `grid gap-3 px-4 py-3.5 sm:items-center ${EVENT_ROW_COLUMNS}`;
+  // Two columns on a phone (name · action), the header's four from `sm:`.
+  const grid = `grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 px-4 py-3 sm:items-center sm:gap-3 ${EVENT_ROW_COLUMNS}`;
   if (drawHref === null) {
     return (
       <li>
         <div className={grid}>
           {cells}
-          <p />
+          <p className="order-first col-start-2 sm:order-none sm:col-start-auto" />
         </div>
       </li>
     );
@@ -162,7 +169,10 @@ export function EventRow({
         className={`${grid} hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent`}
       >
         {cells}
-        <span className="text-sm font-semibold text-accent sm:text-right">Open</span>
+        {/* On a phone the action sits beside the name (first row, second
+            column); from `sm:` it is the last cell, under the empty header
+            slot, right-aligned. */}
+        <span className="col-start-2 row-start-1 self-center text-sm font-semibold text-accent sm:col-start-auto sm:row-start-auto sm:text-right">Open</span>
       </a>
     </li>
   );

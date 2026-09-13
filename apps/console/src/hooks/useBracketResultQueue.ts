@@ -35,11 +35,14 @@ import { useTournamentId } from './useTournamentId';
 
 export interface BracketResultInput {
   matchId: string;
+  correction?: boolean;
   winnerSide: 'A' | 'B';
   /** ``BracketMatch.version`` the client last observed (``PlayUnitDTO.version``). */
   seenVersion: number;
   finishedAtSlot?: number | null;
   walkover?: boolean;
+  /** Non-played outcome (walkover / retired / forfeit); omitted when played. */
+  reason?: 'walkover' | 'retired' | 'forfeit' | null;
   score?: BracketScore | null;
 }
 
@@ -74,9 +77,11 @@ export function useBracketResultQueue(handlers: BracketResultHandlers) {
         kind: 'bracket_result',
         tournamentId: tid,
         matchId: input.matchId,
+        correction: input.correction,
         winnerSide: input.winnerSide,
         finishedAtSlot: input.finishedAtSlot ?? null,
         walkover: input.walkover ?? false,
+        reason: input.reason ?? null,
         score: input.score ?? null,
         seenVersion: input.seenVersion,
         createdAt: Date.now(),
@@ -94,12 +99,14 @@ export function useBracketResultQueue(handlers: BracketResultHandlers) {
         try {
           const raw = await apiClient.recordBracketResultCommand(tid, {
             id: cmd.id,
+            kind: cmd.correction ? 'correct_result' : 'record_result',
             play_unit_id: cmd.matchId,
             winner_side: cmd.winnerSide,
             seen_version: cmd.seenVersion,
             finished_at_slot: cmd.finishedAtSlot ?? undefined,
             score: cmd.score,
             walkover: cmd.walkover,
+            reason: cmd.reason ?? undefined,
           });
           return { kind: 'ok', dto: raw as BracketTournamentDTO };
         } catch (err: unknown) {
@@ -112,6 +119,9 @@ export function useBracketResultQueue(handlers: BracketResultHandlers) {
           };
           const status = axiosErr.response?.status;
           const data = axiosErr.response?.data;
+          if (status && status >= 400 && status < 500 && status !== 409 && status !== 429) {
+            return { kind: 'conflict', message: typeof data?.detail === 'string' ? data.detail : data?.message ?? 'The server refused this result. Reload and review the scores before trying again.' };
+          }
           if (status === 409) {
             if (data?.error === 'stale_version') {
               return { kind: 'staleVersion', message: data.message ?? 'stale version' };

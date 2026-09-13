@@ -10,6 +10,7 @@ import type {
   Participant,
 } from '../../../api/bracketDto';
 import { formatSideCondensed, sideFromWire, type Side } from '../../../platform/domain/sides';
+import { DISCIPLINE_NAMES } from '../../../lib/disciplineNames';
 
 /** The one participant-per-line label the "To be decided" sentinel a board
  *  reader (`isImminentMatch` below) matches against. Kept as a named export
@@ -72,10 +73,38 @@ export interface LiveRow {
    *  scores or none — it never synthesises one (match-card §4.4). Empty
    *  where the result is absent, Simple-mode, or carries no sets. */
   sets: BracketSetScore[];
+  /** The event + round identity of this play unit — "Men's Doubles · Semifinal"
+   *  (D7). A shown match always states which event and round it is; the code
+   *  ('MD') is storage shorthand and is expanded through the one
+   *  `disciplineLabel` map. `null` only when the play unit's event is
+   *  unknown. */
+  eventLabel: string | null;
   /** Whether both sides resolved to real names. The optional Next preview
    *  is omitted when this is false, rather than putting "To be decided"
    *  (or worse, a feeder reference) on the wall. */
   resolved: boolean;
+}
+
+/**
+ * "Men's Doubles · Semifinal" for one play unit (D7).
+ *
+ * The discipline code is expanded through the shared `DISCIPLINE_NAMES` map
+ * — the same one the meet board reads — rather than through the bracket
+ * module's own `disciplineLabel`, which the display module may not import
+ * (cross-module boundary). A free-text discipline passes through unchanged;
+ * a round-robin event has no knockout round to name, so only the discipline
+ * is shown.
+ */
+function playUnitEventLabel(
+  pu: PlayUnitDTO,
+  event: { discipline: string; format: string; rounds: string[][] } | undefined,
+): string | null {
+  if (!event) return null;
+  const discipline = DISCIPLINE_NAMES[event.discipline] ?? event.discipline;
+  const roundCount = event.rounds.length;
+  if (event.format !== 'se' && event.format !== 'de') return discipline || null;
+  if (roundCount <= 0) return discipline || null;
+  return `${discipline} · ${roundLabel(pu.round_index, roundCount)}`;
 }
 
 /** What a spectator can see happening: the bracket matches on court right
@@ -94,6 +123,7 @@ export interface LiveRow {
  *  on what "next" means. */
 export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
   const puById = new Map(data.play_units.map((u) => [u.id, u]));
+  const eventById = new Map(data.events.map((e) => [e.id, e]));
   const setsByPuId = new Map(
     data.results.map((r) => [r.play_unit_id, r.score?.sets ?? []]),
   );
@@ -125,6 +155,7 @@ export function liveMatches(data: BracketTournamentDTO): LiveRow[] {
         sideB,
         status,
         matchRef: assignment.play_unit_id,
+        eventLabel: playUnitEventLabel(pu, eventById.get(pu.event_id)),
         sets: setsByPuId.get(pu.id) ?? [],
         resolved:
           sideA !== UNDETERMINED_SIDE_LABEL && sideB !== UNDETERMINED_SIDE_LABEL,

@@ -474,7 +474,14 @@ measured.push(
 // real content lands, the budget is re-derived from measurement, gate
 // blocking, per the R8-F precedent).
 const PUBLIC_BUDGET_KB = 4;
-const ENTRY_BUDGET_KB = 8;
+// Re-derived 2026-09-12 (the R8-F precedent, gate blocking): the entry
+// journey outgrew 8 KB once real content landed — the per-player
+// representation field and its hint, fees printed with their currency, the
+// fee itemisation and caps moved into the total bar, and the stale-quote
+// handling in the route module. Measured 9.1 KB (one block) and 10.0 KB
+// (the eight-block ceiling) with the module's prose already trimmed; the
+// budget is the measurement rounded up, not headroom.
+const ENTRY_BUDGET_KB = 10;
 // The published-results documents. Their content is a ROSTER, a TREE and a
 // DAY — 256 rows, 31 nodes, 25 match cards — so their floor is the data the
 // reader came for, not chrome, and holding them to the 4 KB poster budget

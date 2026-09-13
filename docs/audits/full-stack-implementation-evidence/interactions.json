@@ -1,0 +1,16 @@
+{
+  "hubLoaded": true,
+  "hubText": "SW\nL\nShuttleWorks\nCtrl K\nNew workspace\nWorkspaces\nActive · 7\nPast · 2\nTOURNAMENT\nDATES\nSTATUS\nOPEN\nACTIONS\nTaipei Open\n2026-07-28 – 08-02\nLive\nOpen\nF&K Junior League Summer 2026\n2026-07-31 – 08-01\nDraft\nOpen\nKorea Masters\n2026-08-04 – 08-09\nUpcoming\nOpen\nAUDIT Bracket WS\n2026-08-05 – 08-06\nLive\nOpen\nDATE NOT SET\nAUDIT-BROWSER Bracket WS\nNo date set\nLive\nOpen\nAUDIT-BROWSER Scoring WS\nNo date set\nDraft\nOpen\nAUDIT Undated Draft\nNo date set\nDraft\nOpen\n9 workspaces · 6 need attention",
+  "before": "Skip to content\nShuttleWorks\nTOURNAMENTS\nSign in\nTournaments\nKorea Masters\nEnter\nEnter this tournament\nEntries open · closes in 2d\n1\nEntry details\n2\nReview\nTournament date\nTuesday 4 August 2026\nEntry deadline\n1 Aug 2026, 23:59\nOpen events\n1 of 5\n\nAll times local to the venue\n\nHow the total is calculated\n\nSubmitting needs an entrant account. Your answers are kept on this device while you sign in.\n\nSign in to continue\nor create one\n\nPlayer 1\nParticipant details\nFull name\nGender\nSelect gender\nFemale\nMale\nClub (optional)\nEvents\nMixed doubles (XD)\nAnything the organizer should know (optional)\nShow every event, including ones not usually open to a player. A mismatch is accepted, the organizer sees a flag and decides.\nAdd another player\nReview entry\n\nPrices are per event; bundles are cheaper. Press “Update total” to see what this selection comes to.\n\nEntries open · closes in 2d\n\n1 Aug 2026, 23:59\n\nUpdate total\n\nThe total is the organizer’s quote and is confirmed on your receipt.\n\nSign in\n\nShuttleWorks by Yunavero\n\nTournament information is published by the organizer.",
+  "afterReview": {
+    "quoteRequests": 0,
+    "text": "Skip to content\nShuttleWorks\nTOURNAMENTS\nSign in\nTournaments\nKorea Masters\nEnter\nEnter this tournament\nEntries open · closes in 2d\n1\nEntry details\n2\nReview\nTournament date\nTuesday 4 August 2026\nEntry deadline\n1 Aug 2026, 23:59\nOpen events\n1 of 5\n\nAll times local to the venue\n\nHow the total is calculated\n\nSubmitting needs an entrant account. Your answers are kept on this device while you sign in.\n\nSign in to continue\nor create one\n\nReview and submit\nPlayer\nAudit Draft Only\nEvents\nMixed doubles (XD)\nYour total is the organizer’s quote and is confirmed on the receipt this submission issues.\nA partner is entered only once they accept the invitation emailed to the address you gave.\nPayment, where the organizer requires it, follows their instructions after submission.\nI have read and accept the regulations, and I understand each player’s name and club will appear on this page’s public entrant list once the organizer publishes it.\nBack to entry details\n\nPrices are per event; bundles are cheaper. Press “Update total” to see what this selection comes to.\n\nEntries open · closes in 2d\n\n1 Aug 2026, 23:59\n\nSubmit entry\n\nThe total is the organizer’s quote and is confirmed on your receipt.\n\nSign in\n\nShuttleWorks by Yunavero\n\nTournament information is published by the organizer.",
+    "focus": {
+      "tag": "BUTTON",
+      "text": "Review entry"
+    }
+  },
+  "reloadDraft": "Audit Draft Only",
+  "offlineText": false,
+  "reconnectDraft": "Audit Offline Draft"
+}

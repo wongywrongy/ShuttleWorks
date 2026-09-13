@@ -121,7 +121,7 @@ def test_app_startup_migrations_do_not_lower_the_root_log_level(
     test still means something if the mechanism changes.
     """
     # An EMPTY database — the migrations build the schema themselves, so
-    # the usual ``isolate_test_database`` (which runs ``create_all``)
+    # the usual ``isolate_test_database`` (which already runs Alembic)
     # would collide with them.
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'startup.db'}")
     monkeypatch.setenv("BACKEND_DATA_DIR", str(tmp_path))

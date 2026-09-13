@@ -46,6 +46,7 @@ from ..demo_data import (
     chunk,
     eligible,
     make_meet_blob,
+    representation_for_club,
     slug_of,
 )
 from ..factories import make_bracket_create_body
@@ -433,6 +434,9 @@ def _submit(
             ("playerName", name),
             ("gender", gender),
             ("club", club),
+            # D4 / O4: the verifiable representation for this club, or ""
+            # (Unknown) for the two clubs that name no place.
+            ("representation", representation_for_club(club) or ""),
             ("birthYear", str(year)),
             ("remarks", remark if remark and index == 0 else ""),
         ]
@@ -775,6 +779,7 @@ class Demo:
                 # so a pair draw gets no entry event rather than a broken one.
                 if event.get("pair"):
                     continue
+                competition = client.competition_event(ctx.tid, event["code"], event["id"])
                 event_rows.append(
                     client.create_entry_event(
                         ctx.tid,
@@ -782,7 +787,7 @@ class Demo:
                             "code": event["code"],
                             "discipline": event["label"],
                             "entryType": "singles",
-                            "bracketEventId": event["id"],
+                            "competitionEventId": competition["id"],
                             "cap": event.get("bracket_size") or event["size"],
                             "genderConstraint": event.get("gender"),
                             "closesAt": closes,
@@ -799,7 +804,8 @@ class Demo:
         if not config["isOpen"]:
             return  # a closed page takes no entries; that is the point of it.
 
-        by_bracket = {row["bracketEventId"]: row["id"] for row in event_rows}
+        ids_by_code = {row["code"]: row["id"] for row in event_rows}
+        by_bracket = {event["id"]: ids_by_code[event["code"]] for event in spec["events"] if event["code"] in ids_by_code}
         with Phase(f"{key}-entrant-submissions", phase_cb):
             submitted = self._submissions(ctx, spec, config, by_bracket, sessions)
         if config["workflow"] == "commit":
@@ -858,8 +864,8 @@ class Demo:
         pending = client.list_entries(ctx.tid, state="pending")
         for entry in pending:
             client.confirm_entry(ctx.tid, entry["id"])
-        result = client.commit_entries(ctx.tid)
-        committed, skipped = len(result["committed"]), len(result["skipped"])
+        result = client.bind_entries(ctx.tid)
+        committed, skipped = sum(item["outcome"] == "bound" for item in result["bindings"]), len(result["skipped"])
         for event in bracket_events:
             client.generate_event(ctx.tid, event["id"], wipe=True)
         dto = client.get_bracket(ctx.tid)

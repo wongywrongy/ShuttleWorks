@@ -270,7 +270,8 @@ describe('the quote round trip, with no JavaScript', () => {
     const html = await render(`?playerName=Ada&gender=F&events=0%3A${WD}&totalCents=3500`);
 
     expect(html).toContain('35.00');
-    expect(html).toContain('Quoted total');
+    // The fixture states no currency, so the figure is a quoted AMOUNT.
+    expect(html).toMatch(/Quoted (total|amount)/);
     expect(html).toContain('1 event');
   });
 
@@ -285,7 +286,7 @@ describe('the quote round trip, with no JavaScript', () => {
   it('renders no total at all before the first round trip', async () => {
     const html = await render();
 
-    expect(html).not.toContain('Quoted total');
+    expect(html).not.toMatch(/Quoted (total|amount)/);
     expect(html).toContain('Update total');
   });
 
@@ -336,7 +337,7 @@ describe('the quote round trip, with no JavaScript', () => {
     expect(ticked).toContain('checked=""');
     // The server's number came the other way, in the query string.
     expect(html).toContain('20.00');
-    expect(html).toContain('Quoted total');
+    expect(html).toMatch(/Quoted (total|amount)/);
   });
 
   it('re-mints the form token on the landing, so the next post still proves itself', async () => {

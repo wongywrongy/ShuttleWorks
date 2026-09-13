@@ -1,13 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { GearSix, List } from '@phosphor-icons/react';
 import { Modal } from '@scheduler/design-system';
+import { ActiveChoice } from '../../components/ActiveChoice';
 import { WorkspaceIdentityBar } from './WorkspaceIdentityBar';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import type { WorkspaceModule, WorkspaceIdentity } from './types';
 import type { AppTab } from '../../store/uiStore';
 import { useViewportBelow } from '../../hooks/useViewportBelow';
 import type { WsKind } from './workspaceNav';
-import { ActiveChoice } from '../../components/ActiveChoice';
 
 /**
  * Below this viewport width the workspace rail becomes an off-canvas drawer.
@@ -125,14 +125,22 @@ export function WorkspaceShell({
         <div className="flex items-center gap-2">
           {/* Labelled, not glyph-only: the rail's account gear is the same
               icon with a different scope, and the two are visible at once
-              (SP-CONSOLE-REFINE G4). */}
+              (SP-CONSOLE-REFINE G4).
+
+              NEUTRAL on its own pages (D2): this is a navigation shortcut in
+              the chrome, not the page's primary action, so on a Settings page
+              it takes a quiet selected ground instead of the accent fill every
+              primary button uses — otherwise the loudest control in the header
+              was the one that goes where you already are. `aria-current` still
+              states the fact. */}
           <ActiveChoice
             active={adminActive}
             geometry="segment"
             semantics="page"
+            emphasis="quiet"
             data-testid="workspace-admin-gear"
-            aria-label="Workspace administration"
-            title="Workspace administration"
+            aria-label="Workspace settings"
+            title="Workspace settings"
             onClick={onOpenAdmin}
             className="inline-flex h-7 items-center gap-1.5 px-2 py-0 text-xs font-medium"
           >

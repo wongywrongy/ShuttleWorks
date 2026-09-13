@@ -74,7 +74,7 @@ help:
 	@echo "  make scheduler-rebuild  Nuclear --no-cache rebuild"
 	@echo "  make demo-up            Start the Tailscale-only tech demo"
 	@echo "  make demo-update        Back up and rebuild current worktree without reseeding"
-	@echo "  make demo-rebuild       Rebuild and restart the tech demo"
+	@echo "  make demo-rebuild       Reset, rebuild, and reseed the pre-launch demo"
 	@echo "  make demo-status        Show tech demo container status and URLs"
 	@echo "  make demo-down          Back up and stop the tech demo"
 	@echo "  make demo-backup        Create and verify a Postgres backup"
@@ -172,6 +172,9 @@ demo-update:
 
 demo-rebuild:
 	$(DEMO_COMPOSE) rebuild
+	$(MAKE) demo-seed-apply
+	$(MAKE) demo-seed-apply-outcomes
+	$(MAKE) demo-seed-apply-bye
 
 demo-status:
 	$(DEMO_COMPOSE) status

@@ -15,21 +15,22 @@ from core.dependencies import (
     require_cloud_tournament_write_authority,
     require_pre_checkout_configuration_write,
 )
-from db.models import Base, Tournament
+from db.models import Tournament
 from repositories import LocalRepository
 from sync.service import begin_checkout
 
 
 def _repo() -> tuple[Session, LocalRepository, uuid.UUID]:
     session = Session(create_engine("sqlite:///:memory:"), expire_on_commit=False)
-    Base.metadata.create_all(session.bind)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(session.bind)
     tournament_id = uuid.uuid4()
     session.add(
         Tournament(
             id=tournament_id,
             name="Authority fence",
             data={"version": 2, "config": {}},
-            schema_version=2,
+            schema_version=1,
         )
     )
     session.commit()

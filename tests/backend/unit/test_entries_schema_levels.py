@@ -24,6 +24,7 @@ that the same key under a different tournament is accepted).
 """
 from __future__ import annotations
 
+
 import uuid
 
 import pytest
@@ -51,7 +52,8 @@ def engine():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(eng)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(eng)
     try:
         yield eng
     finally:
@@ -112,8 +114,8 @@ def test_the_submission_level_carries_the_act_not_the_event(session):
     assert stored.regulations_version_accepted == 3
     assert stored.fee_total_cents == 5500
     assert stored.fee_basis["eventCount"] == 2
-    assert stored.paid_at is None
-    assert stored.payment_note is None
+    assert stored.payments == []
+    assert stored.paid_cents == 0
 
 
 def test_the_player_level_carries_the_human_and_requires_a_gender(session):
@@ -124,7 +126,7 @@ def test_the_player_level_carries_the_human_and_requires_a_gender(session):
     account = _account(session)
     row = EntryPlayer(
         tournament_id=tid,
-        account_id=account.id,
+        representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
         full_name="Alice Chen",
         gender="F",
         club="Riverside BC",
@@ -148,7 +150,7 @@ def test_a_player_without_a_gender_is_refused_by_the_database(session):
     session.add(
         EntryPlayer(
             tournament_id=tid,
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name="No Gender",
             gender=None,
         )
@@ -169,7 +171,7 @@ def test_one_player_can_be_entered_into_several_events(session):
     account = _account(session)
     player = EntryPlayer(
         tournament_id=tid,
-        account_id=account.id,
+        representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
         full_name="Alice Chen",
         gender="F",
         remarks="leaving at 4",
@@ -213,7 +215,7 @@ def test_the_contact_fields_read_through_to_the_account(session):
     tid = _tournament(session)
     account = _account(session, email="parent@example.com")
     player = EntryPlayer(
-        tournament_id=tid, account_id=account.id, full_name="Alice", gender="F"
+        tournament_id=tid, representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)], full_name="Alice", gender="F"
     )
     submission = Submission(tournament_id=tid, account_id=account.id)
     session.add_all([player, submission])
@@ -499,7 +501,7 @@ def test_deleting_the_workspace_actually_removes_the_entry_rows(session):
     account = _account(session)
     event = EntryEvent(tournament_id=tid, code="MS", discipline="singles")
     player = EntryPlayer(
-        tournament_id=tid, account_id=account.id, full_name="Ada L", gender="F"
+        tournament_id=tid, representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)], full_name="Ada L", gender="F"
     )
     session.add_all([event, player, EntryPage(tournament_id=tid, slug="spring-open")])
     session.commit()
@@ -536,7 +538,7 @@ def test_a_submission_belongs_to_an_account(session):
     assert "entrant_accounts" in fks
     assert "entrant_accounts" in {
         fk.column.table.name
-        for fk in Base.metadata.tables["entry_players"].foreign_keys
+        for fk in Base.metadata.tables["player_representatives"].foreign_keys
     }
 
 

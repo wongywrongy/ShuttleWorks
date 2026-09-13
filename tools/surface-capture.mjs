@@ -340,6 +340,7 @@ if (PARTNER_TOKEN) {
 ENTRANT_SURFACES.push(["Doubles partner failed", "/e/partner/failed"]);
 if (tier === "entrant" && ENTRANT_EMAIL && ENTRANT_PASSWORD) {
   ENTRANT_SURFACES.push(["My entries (signed in)", "/e/me/entries"]);
+  ENTRANT_SURFACES.push(["My settings (signed in)", "/e/me/settings"]);
 }
 
 const EXACT_DESCRIPTIONS = Object.freeze({
@@ -811,7 +812,7 @@ for (const [surfaceIndex, [label, path, description]] of surfaces.entries()) {
   const viewportRuns = {};
   let note = "";
   for (const [vpName, width, height] of VIEWPORTS) {
-    const usesEntrantSession = label === "My entries (signed in)" || label === "Entry receipt" ||
+    const usesEntrantSession = label === "My entries (signed in)" || label === "My settings (signed in)" || label === "Entry receipt" ||
       label === "Entry form · Signed-in outcome" || label === "Entry form · Account-created outcome";
     const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, reducedMotion: "reduce", ...(usesEntrantSession ? { storageState: entrantStorageState } : {}) });
     const page = await ctx.newPage();

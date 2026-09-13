@@ -27,7 +27,7 @@ describe('boardPlacements — buildPlanChips', () => {
   it('a finished plan block still renders span=1 (duration is not width)', () => {
     const [c] = buildPlanChips([blk({ id: 'd', court: 1, slot: 0, span: 5, status: 'finished', done: true })]);
     expect(c.placement.span).toBe(1);
-    expect(c.state).toBe('done');
+    expect(c.state).toBe('finished');
   });
 
   it('only court-assigned blocks become chips (unassigned/no-slot stay in the queue)', () => {
@@ -67,7 +67,7 @@ describe('boardPlacements — buildLiveChips', () => {
       [blk({ id: 'd', court: 1, slot: 0, span: 1, status: 'finished', done: true, actualStartSlot: 2, actualEndSlot: 6 })],
       10,
     );
-    expect(c.state).toBe('done');
+    expect(c.state).toBe('finished');
     expect(c.placement.startSlot).toBe(2);
     expect(c.placement.span).toBe(4);   // 6 − 2 (actual length, not planned 1)
     expect(c.overrunSlots).toBe(0);     // overrun is a playing-only concern

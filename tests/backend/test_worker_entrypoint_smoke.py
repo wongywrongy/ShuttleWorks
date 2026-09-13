@@ -53,15 +53,16 @@ def schema():
     sys.path.insert(0, str(BACKEND_DIR))
     from sqlalchemy import create_engine
 
-    from db.models import Base
     from db.session import normalize_database_url
 
     engine = create_engine(normalize_database_url(POSTGRES_URL), future=True)
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     try:
         yield
     finally:
-        Base.metadata.drop_all(engine)
+        from _helpers import drop_test_database
+        drop_test_database(engine)
         engine.dispose()
 
 

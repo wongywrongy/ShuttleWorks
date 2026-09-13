@@ -6,10 +6,14 @@
  * import noise. ``ScoreEditor`` picks the right inner editor
  * based on the tournament's scoring format.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from '@phosphor-icons/react';
 import { Select } from '@scheduler/design-system/components';
 import { EYEBROW_CLASS, INTERACTIVE_BASE, ACCENT_PRESS } from '../../../lib/utils';
+import {
+  ResultEntryForm,
+  effectiveScoringRules,
+} from '../../../components/control-plane';
 import type { MatchDTO, MatchStateDTO, SetScore, TournamentConfig } from '../../../api/dto';
 
 interface ScoreEditorProps {
@@ -67,6 +71,7 @@ export function ScoreEditor({
       defaultSetsToWin={config?.setsToWin ?? 2}
       defaultPointsPerSet={config?.pointsPerSet ?? 21}
       defaultDeuceEnabled={config?.deuceEnabled ?? true}
+      pointCap={config?.pointCap ?? null}
       initialSets={matchState?.sets}
       onCancel={onCancel}
       onSubmit={(sets) => {
@@ -181,13 +186,27 @@ function SimpleScoreEditor({
   );
 }
 
-// ── Badminton inline editor ─────────────────────────────────────────
+// ── Badminton inline editor ─────────────────────────────────
+/**
+ * O7: the games/winner half of this editor is the SHARED `ResultEntryForm`,
+ * the same body the bracket's Record result dialog and the match lists use.
+ * Live keeps it INLINE in the persistent rail — a modal cycle per score is
+ * exactly the wrong shape for repeated scoring — and adds the one thing only
+ * this surface has: a per-match format override, passed down as the form's
+ * `children` so it sits above the fields and re-renders them with new rules.
+ *
+ * What went with the old bespoke body: the "loser-first" auto-fill (typing a
+ * losing score guessed 21 for the other side — a guess written into a stored
+ * result) and the pre-seeded 0-0 in every unplayed game. A blank game now
+ * stays blank.
+ */
 function BadmintonInlineEditor({
   sideAName,
   sideBName,
   defaultSetsToWin,
   defaultPointsPerSet,
   defaultDeuceEnabled,
+  pointCap,
   initialSets,
   onCancel,
   onSubmit,
@@ -198,94 +217,27 @@ function BadmintonInlineEditor({
   defaultSetsToWin: number;
   defaultPointsPerSet: number;
   defaultDeuceEnabled: boolean;
+  pointCap: number | null;
   initialSets?: SetScore[];
   onCancel: () => void;
   onSubmit: (sets: SetScore[], winner: 'A' | 'B') => Promise<void>;
   isSubmitting: boolean;
 }) {
-  // Per-match overrides — start at the tournament default but allow
-  // tuning right next to the score row (e.g. an exhibition single
-  // 21-point set in an otherwise best-of-3 tournament).
+  // Per-match overrides — start at the tournament default but allow tuning
+  // right next to the score row (e.g. an exhibition single 21-point set in an
+  // otherwise best-of-3 tournament).
   const [setsToWin, setSetsToWin] = useState(defaultSetsToWin);
   const [pointsPerSet, setPointsPerSet] = useState(defaultPointsPerSet);
   const [deuceEnabled, setDeuceEnabled] = useState(defaultDeuceEnabled);
   const [showFormat, setShowFormat] = useState(false);
 
-  const maxSets = setsToWin * 2 - 1;
-  const maxPoints = deuceEnabled ? (pointsPerSet === 21 ? 30 : pointsPerSet + 10) : pointsPerSet;
-
-  const padSets = (existing?: SetScore[]): SetScore[] => {
-    const out: SetScore[] = [];
-    for (let i = 0; i < maxSets; i++) {
-      out.push(existing?.[i] ?? { sideA: 0, sideB: 0 });
-    }
-    return out;
-  };
-  const [sets, setSets] = useState<SetScore[]>(() => padSets(initialSets));
-
-  // Keep the array length in sync with the format choice. Guard the
-  // setState so a maxSets change that doesn't actually need to resize
-  // (previous length already matches) returns the same array ref —
-  // React then skips the re-render. Avoids the cascading-render
-  // anti-pattern in practice; the lint rule is silenced for this
-  // specific intentional sync-from-prop case.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSets((prev) => (prev.length === maxSets ? prev : padSets(prev)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maxSets]);
-
-  const setWinners = useMemo(() => {
-    return sets.map((s) => {
-      if (s.sideA === 0 && s.sideB === 0) return null;
-      const reach = (n: number) => n >= pointsPerSet;
-      const twoAhead = (x: number, y: number) => x - y >= 2;
-      if (reach(s.sideA) && s.sideA > s.sideB) {
-        if (!deuceEnabled || twoAhead(s.sideA, s.sideB) || s.sideA >= maxPoints) return 'A';
-      }
-      if (reach(s.sideB) && s.sideB > s.sideA) {
-        if (!deuceEnabled || twoAhead(s.sideB, s.sideA) || s.sideB >= maxPoints) return 'B';
-      }
-      return null;
-    });
-  }, [sets, pointsPerSet, deuceEnabled, maxPoints]);
-
-  const setsWonA = setWinners.filter((w) => w === 'A').length;
-  const setsWonB = setWinners.filter((w) => w === 'B').length;
-  const matchWinner: 'A' | 'B' | null =
-    setsWonA >= setsToWin ? 'A' : setsWonB >= setsToWin ? 'B' : null;
-
-  const updateScore = (i: number, side: 'sideA' | 'sideB', raw: string) => {
-    const value = Math.max(0, Math.min(maxPoints, parseInt(raw, 10) || 0));
-    setSets((prev) => {
-      const next = [...prev];
-      const other = side === 'sideA' ? 'sideB' : 'sideA';
-      const otherScore = next[i][other];
-      next[i] = { ...next[i], [side]: value };
-      // Loser-first auto-fill: typing a clearly losing score in an
-      // untouched row defaults the other side to ``pointsPerSet``.
-      if (value > 0 && value < pointsPerSet - 1 && otherScore === 0) {
-        next[i] = { ...next[i], [other]: pointsPerSet };
-      }
-      return next;
-    });
-  };
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!matchWinner) return;
-    const played = sets.slice(0, setsWonA + setsWonB);
-    await onSubmit(played, matchWinner);
-  };
-
-  const inputCls =
-    'w-full rounded border border-border bg-card px-1 py-1 text-center text-sm sw-num tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30';
+  const rules = effectiveScoringRules({ setsToWin, pointsPerSet, deuceEnabled, pointCap });
 
   return (
-    <form onSubmit={submit} className="mb-3 border-t border-border pt-2">
+    <div className="mb-3 border-t border-border pt-2">
       <div className="mb-1 flex items-center justify-between">
         <span className={`${EYEBROW_CLASS} text-muted-foreground`}>
-          Score · best of {maxSets}
+          Score · best of {setsToWin * 2 - 1}
         </span>
         <div className="flex items-center gap-1">
           <button
@@ -307,125 +259,61 @@ function BadmintonInlineEditor({
         </div>
       </div>
 
-      {showFormat && (
-        <div className="mb-2 grid grid-cols-2 gap-1.5 rounded border border-border bg-card p-1.5 text-xs">
-          <label className="flex items-center justify-between gap-1">
-            <span className="text-muted-foreground">Sets to win</span>
-            <Select
-              value={String(setsToWin)}
-              onValueChange={(v) => setSetsToWin(parseInt(v, 10))}
-              options={[1, 2, 3].map((n) => ({
-                value: String(n),
-                label: `${n} (BO${n * 2 - 1})`,
-              }))}
-              ariaLabel="Sets to win"
-              size="sm"
-              mono
-              triggerClassName="h-6 px-1 text-xs"
-            />
-          </label>
-          <label className="flex items-center justify-between gap-1">
-            <span className="text-muted-foreground">Pts/set</span>
-            <Select
-              value={String(pointsPerSet)}
-              onValueChange={(v) => setPointsPerSet(parseInt(v, 10))}
-              options={[11, 15, 21].map((n) => ({
-                value: String(n),
-                label: String(n),
-              }))}
-              ariaLabel="Points per set"
-              size="sm"
-              mono
-              triggerClassName="h-6 px-1 text-xs"
-            />
-          </label>
-          <label className="col-span-2 flex items-center justify-between gap-1">
-            <span className="text-muted-foreground">Deuce (cap {pointsPerSet === 21 ? 30 : pointsPerSet + 10})</span>
-            <input
-              type="checkbox"
-              checked={deuceEnabled}
-              onChange={(e) => setDeuceEnabled(e.target.checked)}
-              className="h-3 w-3"
-            />
-          </label>
-        </div>
-      )}
-
-      <div className="mb-1 grid grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-1.5 text-xs text-muted-foreground">
-        <span></span>
-        <span className="break-words">{sideAName}</span>
-        <span></span>
-        <span className="break-words text-right">{sideBName}</span>
-      </div>
-
-      <div className="space-y-1">
-        {sets.map((s, i) => {
-          const wonBy = setWinners[i];
-          const decided = matchWinner !== null && i >= setsWonA + setsWonB;
-          return (
-            <div
-              key={i}
-              className={`grid grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 ${
-                decided ? 'opacity-40' : ''
-              }`}
-            >
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">Set {i + 1}</span>
-              <input
-                type="number"
-                min={0}
-                max={maxPoints}
-                inputMode="numeric"
-                disabled={decided}
-                value={s.sideA || ''}
-                onChange={(e) => updateScore(i, 'sideA', e.target.value)}
-                placeholder="–"
-                aria-label={`Set ${i + 1} score for ${sideAName}`}
-                className={`${inputCls} ${wonBy === 'A' ? 'border-status-live bg-status-live-bg font-semibold text-status-live' : ''}`}
+      <ResultEntryForm
+        sideALabel={sideAName}
+        sideBLabel={sideBName}
+        rules={rules}
+        initialSets={initialSets}
+        submitLabel="Save"
+        saveState={isSubmitting ? 'saving' : 'idle'}
+        onSubmit={(value) => onSubmit(value.sets, value.winner)}
+        onCancel={onCancel}
+        testId="live-score-form"
+      >
+        {showFormat ? (
+          <div className="grid grid-cols-2 gap-1.5 rounded border border-border bg-card p-1.5 text-xs">
+            <label className="flex items-center justify-between gap-1">
+              <span className="text-muted-foreground">Sets to win</span>
+              <Select
+                value={String(setsToWin)}
+                onValueChange={(v) => setSetsToWin(parseInt(v, 10))}
+                options={[1, 2, 3].map((n) => ({
+                  value: String(n),
+                  label: `${n} (BO${n * 2 - 1})`,
+                }))}
+                ariaLabel="Sets to win"
+                size="sm"
+                mono
+                triggerClassName="h-6 px-1 text-xs"
               />
-              <span className="text-muted-foreground">–</span>
-              <input
-                type="number"
-                min={0}
-                max={maxPoints}
-                inputMode="numeric"
-                disabled={decided}
-                value={s.sideB || ''}
-                onChange={(e) => updateScore(i, 'sideB', e.target.value)}
-                placeholder="–"
-                aria-label={`Set ${i + 1} score for ${sideBName}`}
-                className={`${inputCls} ${wonBy === 'B' ? 'border-status-live bg-status-live-bg font-semibold text-status-live' : ''}`}
+            </label>
+            <label className="flex items-center justify-between gap-1">
+              <span className="text-muted-foreground">Pts/set</span>
+              <Select
+                value={String(pointsPerSet)}
+                onValueChange={(v) => setPointsPerSet(parseInt(v, 10))}
+                options={[11, 15, 21].map((n) => ({
+                  value: String(n),
+                  label: String(n),
+                }))}
+                ariaLabel="Points per set"
+                size="sm"
+                mono
+                triggerClassName="h-6 px-1 text-xs"
               />
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-2 flex items-center justify-between rounded bg-card px-2 py-1 text-xs">
-        <span className="text-muted-foreground">Sets</span>
-        <span className="sw-num tabular-nums text-foreground">
-          <span className={matchWinner === 'A' ? 'font-semibold text-status-live' : ''}>{setsWonA}</span>
-          <span className="mx-1 text-muted-foreground">–</span>
-          <span className={matchWinner === 'B' ? 'font-semibold text-status-live' : ''}>{setsWonB}</span>
-        </span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-end gap-1.5">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded border border-border bg-card px-2 py-1 text-xs text-foreground hover:bg-muted/40`}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={!matchWinner || isSubmitting}
-          className={`${INTERACTIVE_BASE} rounded bg-accent px-2 py-1 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
-        >
-          {isSubmitting ? 'Saving…' : 'Save'}
-        </button>
-      </div>
-    </form>
+            </label>
+            <label className="col-span-2 flex items-center justify-between gap-1">
+              <span className="text-muted-foreground">Deuce (cap {rules.cap})</span>
+              <input
+                type="checkbox"
+                checked={deuceEnabled}
+                onChange={(e) => setDeuceEnabled(e.target.checked)}
+                className="h-3 w-3"
+              />
+            </label>
+          </div>
+        ) : null}
+      </ResultEntryForm>
+    </div>
   );
 }

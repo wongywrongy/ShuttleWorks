@@ -1,4 +1,8 @@
-"""${message}
+"""<additive | destructive | data | constraint> — <ADR or ruling>: ${message}
+
+Batch-altered tables: <names, or none>.
+Constraint additions scan first and abort with offending keys; never purge.
+Data conversions use revision-local tables and idempotent backfills.
 
 Revision ID: ${up_revision}
 Revises: ${down_revision | comma,n}
@@ -25,4 +29,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
-    ${downgrades if downgrades else "pass"}
+    raise NotImplementedError("forward-only until GA")

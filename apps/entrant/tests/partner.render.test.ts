@@ -6,11 +6,12 @@ import PartnerInvitePage, { type PartnerLoaderData } from '../app/routes/partner
 
 const TOKEN = 'invite_AbC-123';
 
-function renderInvite() {
+function renderInvite(signedIn = true) {
   const loaderData: PartnerLoaderData = {
     formCsrf: 'csrf-value',
     token: TOKEN,
     accepted: false,
+    signedIn,
     failed: false,
     invite: {
       tournamentName: 'Spring Open',
@@ -39,6 +40,7 @@ function renderDead() {
     formCsrf: 'csrf-value',
     token: TOKEN,
     accepted: false,
+    signedIn: true,
     failed: false,
     invite: null,
   };
@@ -56,6 +58,7 @@ function renderFailed(reason: 'unverified' | 'unusable' | 'retry' | null) {
     formCsrf: 'csrf-value',
     token: TOKEN,
     accepted: false,
+    signedIn: true,
     failed: true,
     failureReason: reason,
     invite: null,
@@ -72,18 +75,21 @@ function renderFailed(reason: 'unverified' | 'unusable' | 'retry' | null) {
 describe('partner invitation context', () => {
   it('shows inviter, event, and tournament before acceptance', () => {
     const html = renderInvite();
-    expect(html).toMatch(/<span[^>]*person-ref[^>]*>Ada Chen<\/span> invited you to play/);
-    expect(html).toContain('Mixed Doubles at Spring Open');
+    expect(html).toContain('Ada Chen');
+    expect(html).toContain('Invited by');
+    expect(html).toContain('Mixed Doubles');
+    expect(html).toContain('Spring Open');
     expect(html).toContain(`/e/api/partner-invites/${TOKEN}/accept`);
   });
 
   it('preserves the invitation through sign-in and account creation', () => {
-    const html = renderInvite();
+    const html = renderInvite(false);
     expect(html).toContain(
       `href="/e/login?next=%2Fe%2Fpartner%2F${TOKEN}"`,
     );
     expect(html).toContain(`href="/e/signup?next=%2Fe%2Fpartner%2F${TOKEN}"`);
-    expect(html).toContain('You will return to this invitation.');
+    expect(html).toContain('verified email address');
+    expect(html).toContain('return to this page to complete your entry.');
   });
 });
 

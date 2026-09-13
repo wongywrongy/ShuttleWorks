@@ -20,7 +20,7 @@ from sqlalchemy.pool import StaticPool
 import sys
 
 # conftest.py adds backend/ to sys.path before this module is collected.
-from db.models import Base, MatchStatus
+from db.models import MatchStatus
 from repositories.local import LocalRepository
 from operations.match_state import (
     LOCKED_STATUSES,
@@ -80,7 +80,8 @@ def session():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     s = SessionLocal()
     try:

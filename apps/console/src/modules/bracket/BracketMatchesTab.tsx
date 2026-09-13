@@ -1,3 +1,4 @@
+import { validBracketSets } from '../../lib/bracketScores';
 /**
  * Bracket Matches — the bracket's output surface, the parallel of the
  * meet's Matches tab. Where the meet derives matches from the roster
@@ -14,6 +15,9 @@ import { Download } from '@phosphor-icons/react';
 import type { BracketTournamentDTO, PlayUnitDTO } from '../../api/bracketDto';
 import { useBracketApi } from '../../api/bracketClient';
 import { useSearchParamState } from '../../hooks/useSearchParamState';
+import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
+import { useTournamentStore } from '../../store/tournamentStore';
+import { applyOptimisticResult } from './optimisticResult';
 import { useDenseDataState } from '../../hooks/useDenseDataState';
 import { useListScrollRestore } from '../../hooks/useListScrollRestore';
 import { useCanEdit } from '../../hooks/useCanEdit';
@@ -29,7 +33,10 @@ import {
   BRACKET_MATCH_LIST_COLUMNS,
   BRACKET_MATCH_LIST_DOCK_MIN_CONTENT_WIDTH,
   MatchInspector,
+  RecordResultModal,
   ScoreLane,
+  effectiveScoringRules,
+  type ResultSaveState,
   formatGamePairs,
   OverflowMenu,
   parseMatchStatusFilter,
@@ -111,6 +118,10 @@ export function BracketMatchesTab({
   // Row-menu deep-link into the shared inspector's Bracket action controls (a
   // winner must still be chosen there — this only pre-selects the kind).
   const [contingency, setContingency] = useState<ContingencyReason | null>(null);
+  // O7: the SAME Record result editor the draw canvas opens, reached from the
+  // row. Writes ride the idempotent command queue, so a result entered from
+  // the list survives an offline moment exactly like one entered on the draw.
+  const [recordingId, setRecordingId] = useState<string | null>(null);
 
   // Panel-side event entry writes ride the same upsert path as the
   // roster panel (config echoed by BracketPlayerFields).
@@ -408,6 +419,9 @@ export function BracketMatchesTab({
   const selected = selectedId
     ? data.play_units.find((pu) => pu.id === selectedId) ?? null
     : null;
+  const recording = recordingId
+    ? data.play_units.find((pu) => pu.id === recordingId) ?? null
+    : null;
 
   const participantNameById = useMemo(
     () => Object.fromEntries(
@@ -522,17 +536,22 @@ export function BracketMatchesTab({
             />
           ) : (
             <>
-              <MatchStatusFilter
-                counts={statusCounts}
-                active={statusFilter}
-                onChange={(v) => { denseActions.setPage(1); setStatusParam(v === 'all' ? '' : v); }}
-                testIdPrefix="bracket-matches"
-              />
+              {/* One toolbar order across both match pages (plan D5):
+                  search, then the frequent status filter, then the occasional
+                  filters, then actions. Applied filters and Clear appear only
+                  when there is something applied — the toolbar itself owns
+                  that rule. */}
               <DenseDataToolbar
                 state={denseState}
                 onStateChange={setDenseState}
                 searchTestId="bracket-matches-search"
                 searchPlaceholder="Search event or player…"
+              />
+              <MatchStatusFilter
+                counts={statusCounts}
+                active={statusFilter}
+                onChange={(v) => { denseActions.setPage(1); setStatusParam(v === 'all' ? '' : v); }}
+                testIdPrefix="bracket-matches"
               />
               <div ref={listScrollRef} data-list-scroll="bracket-matches" className="min-h-0 flex-1 overflow-auto">
                 <DenseDataTable
@@ -550,7 +569,7 @@ export function BracketMatchesTab({
                     const event = data.events.find((candidate) => candidate.id === pu.event_id);
                     return { key: pu.event_id, label: event ? disciplineLabel(event.discipline) : pu.event_id, testId: `bracket-match-group-${pu.event_id}` };
                   }}
-                  renderActions={({ pu }) => statusOf(pu.id) !== 'done' && canEdit ? <OverflowMenu label={`Contingency for ${labelById.get(pu.id) ?? pu.id}`} items={(['walkover', 'retired', 'forfeit'] as const).map((reason) => ({ key: reason, label: CONTINGENCY_MENU_LABEL[reason], testId: `bracket-match-menu-${reason}-${pu.id}`, onSelect: () => { setSelectedId(pu.id); setContingency(reason); } }))} /> : null}
+                  renderActions={({ pu }) => canEdit ? <OverflowMenu label={`${statusOf(pu.id) === 'done' ? 'Result actions' : 'Contingency'} for ${labelById.get(pu.id) ?? pu.id}`} items={[{ key: 'record', label: statusOf(pu.id) === 'done' ? 'Correct result…' : 'Record result…', testId: `bracket-match-menu-record-${pu.id}`, onSelect: () => { setSelectedId(pu.id); setRecordingId(pu.id); } }, ...(statusOf(pu.id) === 'done' ? [] : (['walkover', 'retired', 'forfeit'] as const)).map((reason) => ({ key: reason, label: CONTINGENCY_MENU_LABEL[reason], testId: `bracket-match-menu-${reason}-${pu.id}`, onSelect: () => { setSelectedId(pu.id); setContingency(reason); } }))]} /> : null}
                   emptyState="No matches match the current filters."
                 />
               </div>
@@ -628,6 +647,99 @@ export function BracketMatchesTab({
         ) : null}
         </DetailDock>
       </div>
+      {recording ? (
+        <BracketRecordResultDialog
+          pu={recording}
+          data={data}
+          reference={labelById.get(recording.id) ?? recording.id}
+          sideALabel={sideSummaryText(sideOf(recording, 'A'))}
+          sideBLabel={sideSummaryText(sideOf(recording, 'B'))}
+          assignment={assignmentByPu.get(recording.id)}
+          onData={onData}
+          onClose={() => setRecordingId(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * O7: the row's Record result editor — the same shared body the draw canvas
+ * opens, so a result entered from the inventory and one entered on the draw
+ * are the same transaction with the same validation.
+ *
+ * It is a SEPARATE component so the command-queue hook (which resolves the
+ * workspace from the route) mounts only when a dialog is actually open; the
+ * list itself stays route-independent.
+ */
+function BracketRecordResultDialog({
+  pu,
+  data,
+  reference,
+  sideALabel,
+  sideBLabel,
+  assignment,
+  onData,
+  onClose,
+}: {
+  pu: PlayUnitDTO;
+  data: BracketTournamentDTO;
+  reference: string;
+  sideALabel: string;
+  sideBLabel: string;
+  assignment?: BracketTournamentDTO['assignments'][number];
+  onData?: (next: BracketTournamentDTO) => void;
+  onClose: () => void;
+}) {
+  const config = useTournamentStore((state) => state.config);
+  const [saveState, setSaveState] = useState<ResultSaveState>('idle');
+  const [recordError, setRecordError] = useState<string | null>(null);
+  const { submit } = useBracketResultQueue({
+    onOptimistic: (input) => onData?.(applyOptimisticResult(data, input)),
+    onSettled: (dto) => onData?.(dto),
+    onConflict: (_kind, message) => setRecordError(message),
+  });
+
+  return (
+    <RecordResultModal
+      matchReference={reference}
+      correction={data.results.some((result) => result.play_unit_id === pu.id)}
+      initialSets={validBracketSets(data.results.find((result) => result.play_unit_id === pu.id))}
+      matchContext={assignment ? `Court ${assignment.court_id}` : 'Not scheduled'}
+      sideALabel={sideALabel}
+      sideBLabel={sideBLabel}
+      rules={effectiveScoringRules(config)}
+      mode={config?.scoringFormat === 'simple' ? 'winner' : 'games'}
+      outcomes={['played', 'walkover', 'retired', 'forfeit']}
+      saveState={saveState}
+      error={recordError}
+      onCancel={onClose}
+      onSubmit={async (value) => {
+        setRecordError(null);
+        setSaveState('saving');
+        const { result } = await submit({
+          matchId: pu.id,
+          correction: data.results.some((result) => result.play_unit_id === pu.id),
+          winnerSide: value.winner,
+          seenVersion: pu.version ?? 1,
+          finishedAtSlot: assignment
+            ? (assignment.actual_end_slot ??
+              assignment.slot_id + assignment.duration_slots)
+            : null,
+          walkover: value.outcome === 'walkover',
+          reason: value.outcome === 'played' ? null : value.outcome,
+          score: value.sets.length > 0 ? { sets: value.sets } : null,
+        });
+        if (result.kind === 'ok' || result.kind === 'networkError') {
+          // `networkError` means durably queued on this device — the result IS
+          // recorded, so the dialog finishes; a conflict keeps it open.
+          setSaveState(result.kind === 'ok' ? 'synced' : 'queued');
+          onClose();
+        } else {
+          setSaveState('failed');
+        }
+      }}
+      testId="bracket-record-result"
+    />
   );
 }

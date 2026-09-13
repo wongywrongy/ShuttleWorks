@@ -1,0 +1,409 @@
+{
+  "machines": {
+    "entry": {
+      "name": "entry",
+      "version": 1,
+      "states": [
+        "confirmed",
+        "pending",
+        "rejected",
+        "unverified",
+        "waitlisted",
+        "withdrawn"
+      ],
+      "initial": [
+        "pending",
+        "unverified"
+      ],
+      "terminal": [
+        "rejected",
+        "withdrawn"
+      ],
+      "transitions": [
+        {
+          "event": "verify",
+          "from_states": [
+            "unverified"
+          ],
+          "to": "pending",
+          "actor": "system",
+          "guard": null,
+          "consequential": false,
+          "description": ""
+        },
+        {
+          "event": "waitlist_at_cap",
+          "from_states": [
+            "pending",
+            "unverified"
+          ],
+          "to": "waitlisted",
+          "actor": "system",
+          "guard": "at_capacity",
+          "consequential": false,
+          "description": ""
+        },
+        {
+          "event": "confirm",
+          "from_states": [
+            "pending"
+          ],
+          "to": "confirmed",
+          "actor": "operator",
+          "guard": "is_pending_exactly",
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "reject",
+          "from_states": [
+            "pending",
+            "unverified",
+            "waitlisted"
+          ],
+          "to": "rejected",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "promote",
+          "from_states": [
+            "waitlisted"
+          ],
+          "to": "pending",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "withdraw",
+          "from_states": [
+            "confirmed",
+            "pending",
+            "unverified",
+            "waitlisted"
+          ],
+          "to": "withdrawn",
+          "actor": "entrant",
+          "guard": "before_withdrawal_deadline",
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "operator_withdraw",
+          "from_states": [
+            "confirmed",
+            "pending",
+            "unverified",
+            "waitlisted"
+          ],
+          "to": "withdrawn",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        }
+      ],
+      "state_attribute": "state",
+      "state_keys": {
+        "confirmed": "confirmed",
+        "pending": "pending",
+        "rejected": "rejected",
+        "unverified": "unverified",
+        "waitlisted": "waitlisted",
+        "withdrawn": "withdrawn"
+      },
+      "event_keys": {
+        "confirm": "confirm",
+        "operator_withdraw": "operator_withdraw",
+        "promote": "promote",
+        "reject": "reject",
+        "verify": "verify",
+        "waitlist_at_cap": "waitlist_at_cap",
+        "withdraw": "withdraw"
+      }
+    },
+    "match": {
+      "name": "match",
+      "version": 1,
+      "states": [
+        "called",
+        "finished",
+        "playing",
+        "retired",
+        "scheduled"
+      ],
+      "initial": [
+        "scheduled"
+      ],
+      "terminal": [
+        "retired"
+      ],
+      "transitions": [
+        {
+          "event": "call",
+          "from_states": [
+            "scheduled"
+          ],
+          "to": "called",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "start",
+          "from_states": [
+            "called"
+          ],
+          "to": "playing",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "record",
+          "from_states": [
+            "playing"
+          ],
+          "to": "finished",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "retire",
+          "from_states": [
+            "playing"
+          ],
+          "to": "retired",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "postpone",
+          "from_states": [
+            "called",
+            "playing"
+          ],
+          "to": "scheduled",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "undo_finish",
+          "from_states": [
+            "finished"
+          ],
+          "to": "playing",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": "Undo finish corrects a live-day mis-tap and removes the match from standings again. Retirement remains terminal."
+        }
+      ],
+      "state_attribute": "status",
+      "state_keys": {
+        "called": "called",
+        "finished": "finished",
+        "playing": "playing",
+        "retired": "retired",
+        "scheduled": "scheduled"
+      },
+      "event_keys": {
+        "call": "call",
+        "postpone": "postpone",
+        "record": "record",
+        "retire": "retire",
+        "start": "start",
+        "undo_finish": "undo_finish"
+      }
+    },
+    "solve_job": {
+      "name": "solve_job",
+      "version": 1,
+      "states": [
+        "cancelled",
+        "claimed",
+        "failed",
+        "infeasible",
+        "queued",
+        "running",
+        "succeeded"
+      ],
+      "initial": [
+        "queued"
+      ],
+      "terminal": [
+        "cancelled",
+        "failed",
+        "infeasible",
+        "succeeded"
+      ],
+      "transitions": [
+        {
+          "event": "claim",
+          "from_states": [
+            "queued"
+          ],
+          "to": "claimed",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "run",
+          "from_states": [
+            "claimed"
+          ],
+          "to": "running",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "succeed",
+          "from_states": [
+            "running"
+          ],
+          "to": "succeeded",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "infeasible",
+          "from_states": [
+            "running"
+          ],
+          "to": "infeasible",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "fail",
+          "from_states": [
+            "claimed",
+            "running"
+          ],
+          "to": "failed",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "reap",
+          "from_states": [
+            "claimed",
+            "running"
+          ],
+          "to": "queued",
+          "actor": "system",
+          "guard": null,
+          "consequential": false,
+          "description": ""
+        },
+        {
+          "event": "cancel",
+          "from_states": [
+            "claimed",
+            "queued",
+            "running"
+          ],
+          "to": "cancelled",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        }
+      ],
+      "state_attribute": "status",
+      "state_keys": {
+        "cancelled": "cancelled",
+        "claimed": "claimed",
+        "failed": "failed",
+        "infeasible": "infeasible",
+        "queued": "queued",
+        "running": "running",
+        "succeeded": "succeeded"
+      },
+      "event_keys": {
+        "cancel": "cancel",
+        "claim": "claim",
+        "fail": "fail",
+        "infeasible": "infeasible",
+        "reap": "reap",
+        "run": "run",
+        "succeed": "succeed"
+      }
+    },
+    "workspace_module": {
+      "name": "workspace_module",
+      "version": 1,
+      "states": [
+        "available",
+        "coming_soon",
+        "disabled",
+        "enabled"
+      ],
+      "initial": [
+        "available",
+        "coming_soon"
+      ],
+      "terminal": [
+        "coming_soon"
+      ],
+      "transitions": [
+        {
+          "event": "enable",
+          "from_states": [
+            "available",
+            "disabled"
+          ],
+          "to": "enabled",
+          "actor": "operator",
+          "guard": "display_has_operator",
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "disable",
+          "from_states": [
+            "enabled"
+          ],
+          "to": "disabled",
+          "actor": "operator",
+          "guard": "keeps_one_operational",
+          "consequential": true,
+          "description": ""
+        }
+      ],
+      "state_attribute": "status",
+      "state_keys": {
+        "available": "available",
+        "coming_soon": "coming_soon",
+        "disabled": "disabled",
+        "enabled": "enabled"
+      },
+      "event_keys": {
+        "disable": "disable",
+        "enable": "enable"
+      }
+    }
+  }
+}

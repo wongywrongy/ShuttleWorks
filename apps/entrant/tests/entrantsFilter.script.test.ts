@@ -14,6 +14,7 @@ import {
   findLabel,
   matchField,
   matches,
+  rowHasEvent,
   searchKey,
 } from '../public/assets/entrants-filter.js';
 
@@ -41,6 +42,16 @@ describe('searchKey (P2 — accuracy over a real roster)', () => {
     expect(matches('kjaer', searchKey('Rasmus Kjær'), '')).toBe(true);
     expect(matches('ARIN', searchKey('Neslihan Arın'), '')).toBe(true);
     expect(matches('nguyen', searchKey('Nguyễn Thùy Linh'), '')).toBe(true);
+  });
+});
+
+describe('rowHasEvent (refinement 2026-09-12 — the event filter)', () => {
+  it('matches a whole code token, keeps every row for no selection, never substrings', () => {
+    expect(rowHasEvent('MS XD', '')).toBe(true);
+    expect(rowHasEvent('MS XD', 'XD')).toBe(true);
+    expect(rowHasEvent('MS XD', 'xd')).toBe(true);
+    expect(rowHasEvent('XMS', 'MS')).toBe(false);
+    expect(rowHasEvent(null, 'MS')).toBe(false);
   });
 });
 
@@ -141,6 +152,20 @@ describe('apply', () => {
     expect(jumps()).toEqual([false, true]);
     apply(doc, '');
     expect(jumps()).toEqual([false, false]);
+  });
+
+  it('filters by event alongside the query, and counts results while an event is chosen', () => {
+    const doc = fixture();
+    doc.querySelector('[data-name="priya radhakrishnan"]')?.setAttribute('data-events', 'WS');
+    doc.querySelector('[data-name="tessa ngo"]')?.setAttribute('data-events', 'WS XD');
+    doc.querySelector('[data-name="tom barker"]')?.setAttribute('data-events', 'MS');
+    expect(apply(doc, '', 'WS')).toBe(2);
+    expect(doc.querySelector('[data-search-count]')?.textContent).toBe('2 results');
+    expect(apply(doc, 'tom', 'WS')).toBe(0);
+    expect(apply(doc, '', 'MS')).toBe(1);
+    const groups = [...doc.querySelectorAll('[data-letter-group]')] as HTMLElement[];
+    expect(groups[0].hidden).toBe(true);
+    expect(apply(doc, '', '')).toBe(3);
   });
 
   it('keeps a diacritic name reachable by its plain-ASCII spelling', () => {

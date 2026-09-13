@@ -48,6 +48,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    MetaData,
     String,
     Text,
     UniqueConstraint,
@@ -85,6 +86,13 @@ def _utcnow() -> datetime:
 
 class Base(DeclarativeBase):
     """Single declarative base for the scheduler product."""
+
+    metadata = MetaData(naming_convention={
+        "ix": "ix_%(column_0_label)s",
+        "uq": "uq_%(table_name)s_%(column_0_N_name)s",
+        "fk": "fk_%(table_name)s_%(column_0_N_name)s_%(referred_table_name)s",
+        "pk": "pk_%(table_name)s",
+    })
 
 
 class Tournament(Base):
@@ -174,7 +182,7 @@ class Tournament(Base):
         nullable=False,
         default=dict,
     )
-    schema_version: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    schema_version: Mapped[int] = mapped_column(Integer, default=CURRENT_TOURNAMENT_SCHEMA_VERSION, nullable=False)
     state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Venue-board presentation, owned by the Display module and read by BOTH
     # boards (meet and bracket) plus the public projection. Deliberately NOT
@@ -246,6 +254,7 @@ class Match(Base):
     """
 
     __tablename__ = "matches"
+    machine_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
 
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
@@ -575,6 +584,7 @@ class BracketParticipant(Base):
     """
 
     __tablename__ = "bracket_participants"
+    unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
     tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     bracket_event_id: Mapped[str] = mapped_column(String(100), primary_key=True)
@@ -604,6 +614,7 @@ class BracketParticipant(Base):
     event: Mapped[BracketEvent] = relationship(back_populates="participants")
 
     __table_args__ = (
+        ForeignKeyConstraint(["tournament_id", "unit_id"], ["competition_units.tournament_id", "competition_units.id"]),
         ForeignKeyConstraint(
             ["tournament_id", "bracket_event_id"],
             ["bracket_events.tournament_id", "bracket_events.id"],
@@ -1271,6 +1282,7 @@ class WorkspaceModule(Base):
     """
 
     __tablename__ = "workspace_modules"
+    machine_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tournament_id: Mapped[uuid.UUID] = mapped_column(
@@ -1353,6 +1365,7 @@ class SolveJob(Base):
     """
 
     __tablename__ = "solve_jobs"
+    machine_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     tournament_id: Mapped[uuid.UUID] = mapped_column(
@@ -1382,7 +1395,7 @@ class SolveJob(Base):
     progress: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    max_attempts: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=CURRENT_TOURNAMENT_SCHEMA_VERSION, nullable=False)
     # Lower = sooner. Claim order is (priority ASC, created_at ASC).
     priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     claimed_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
@@ -1799,6 +1812,9 @@ class Submission(Base):
     """
 
     __tablename__ = "submissions"
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    __mapper_args__ = {"version_id_col": version}
+
 
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
@@ -1807,6 +1823,9 @@ class Submission(Base):
     account_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("entrant_accounts.id", ondelete="CASCADE"), nullable=False
     )
+
+    status: Mapped[str] = mapped_column(String(20), default="submitted", nullable=False)
+    fee_currency: Mapped[Optional[str]] = mapped_column(String(3))
 
     # ---- the act (R13) ------------------------------------------------
     # The entrant-facing handle (V3-24-1): eight characters a human can read
@@ -1846,10 +1865,15 @@ class Submission(Base):
     # components, the basis name), so a dispute months later is answerable
     # without re-deriving prices from a config that has since been edited.
     fee_basis: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    paid_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    payment_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payments = relationship("Payment", lazy="selectin", order_by="Payment.recorded_at", passive_deletes="all")
+
+    @property
+    def paid_cents(self):
+        return sum(payment.amount_cents for payment in self.payments)
+
+    @property
+    def outstanding_cents(self):
+        return None if self.fee_total_cents is None else self.fee_total_cents - self.paid_cents
 
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
@@ -1861,6 +1885,7 @@ class Submission(Base):
     account = relationship("EntrantAccount", lazy="joined")
 
     __table_args__ = (
+        CheckConstraint("status IN ('draft', 'submitted', 'cancelled')", name="ck_submissions_status"),
         # Ruling D4, one level up, narrowed to the principal (Phase 6 §4).
         # It must match ``entries.submissions.find_by_idempotency_key``
         # column for column: that function is what the IntegrityError
@@ -1903,9 +1928,8 @@ class EntryPlayer(Base):
     person who *plays*, and the two are routinely different — a parent
     entering two children, a club representative entering eight players.
 
-    ``account_id`` says who may act for this player. It is not ownership of
-    a human being; it is the join that lets "my entries" (E2) show a parent
-    their children's entries without a second identity system.
+    ``player_representatives`` identifies accounts allowed to submit for
+    this player, including guardians and club representatives.
 
     **R12's never-in-v1 list, recorded because absence is a decision:** no
     postal address, no federation or member id, no date of birth beyond
@@ -1915,14 +1939,17 @@ class EntryPlayer(Base):
     """
 
     __tablename__ = "entry_players"
+    roster_key: Mapped[Optional[str]] = mapped_column(String(100))
+    roster_attributes: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    __mapper_args__ = {"version_id_col": version}
+
 
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    account_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("entrant_accounts.id", ondelete="CASCADE"), nullable=False
-    )
+    representatives = relationship("PlayerRepresentative", cascade="all, delete-orphan", lazy="selectin")
     # Published on the public entrant list (unless the entry opts out).
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     # R12: REQUIRED. Without it MS/WD/XD event filtering is impossible,
@@ -1934,6 +1961,17 @@ class EntryPlayer(Base):
     # Free text, optional, never validated against a club registry we do
     # not have and are not going to invent.
     club: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # D4 / O4: the association this person COMPETES for at this event —
+    # the "Representing" line on a BWF fixture. A controlled code
+    # (``core.representation``), validated at the DTO edge, uppercase,
+    # NULL = Unknown (no companion flag: NULL already says "not told").
+    # It is not citizenship and it is not the club above. Per-tournament
+    # like every other column on this table, which is what preserves
+    # event-specific representation history without touching identity —
+    # the same human keeps one ``entry_players`` row per workspace and is
+    # never split or merged by their code.
+    representation: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    representation_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     # A plain eligibility field (U15, O40) — never a trigger for automatic
     # behavior, and emphatically not a GDPR special category.
     birth_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -1959,38 +1997,21 @@ class EntryPlayer(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
-    __table_args__ = (Index("ix_entry_players_account", "account_id"),)
+
 
 
 class EntryEvent(Base):
-    """One entry-facing event within a workspace (spec Q2).
+    """Registration category with an optional default competition destination.
 
-    Entries owns its own events table rather than borrowing one, because
-    Meet has no events concept at all — it carries a flat player list inside
-    the state blob and expresses divisions through ``PlayerDTO.ranks[]``
-    codes. So ``code`` is the pivot: for a Meet workspace it maps onto that
-    rank vocabulary, and for a Bracket workspace ``bracket_event_id`` points
-    at the matching ``bracket_events`` row.
-
-    ``bracket_event_id`` is a deliberately **unconstrained** pointer (see the
-    migration docstring): the commit seam already specifies "an unmappable
-    code is skipped and reported, never guessed", so a dangling pointer is a
-    handled state — whereas a real FK would have to cascade, letting a draw
-    rebuild silently destroy entry configuration and every entry under it.
-
-    **``code`` is also the entrant tier's public event key** (R-DM-11(b)):
-    it is what the public page groups entrants by and what the player page
-    names events with, so once the workspace's ``entry_pages`` row has any
-    publication flag on, renaming it changes what a published address
-    describes. There is no update route today and there must not be one that
-    can rename a *published* code — a draft one stays renameable, or a
-    director loses their correction path. The absence is pinned, derived
-    from the live route table, by
-    ``tests/backend/test_event_code_unrenameable.py``; add a refusal in the
-    owning service before you add the route.
+    A membership's destination is authoritative, so the default supports bulk
+    binding without restricting later splits or merges. Published event codes
+    remain stable public keys (R-DM-11); default changes never rename them.
     """
 
     __tablename__ = "entry_events"
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    __mapper_args__ = {"version_id_col": version}
+
 
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
@@ -2003,16 +2024,6 @@ class EntryEvent(Base):
     entry_type: Mapped[str] = mapped_column(
         String(20), default="singles", nullable=False
     )
-    bracket_event_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    #: The mapped ``meet_events.id`` (a division code, R-DM-5). FK-LESS for
-    #: the same reason as ``bracket_event_id`` above, and more forcefully:
-    #: ``meet_events`` rows are DERIVED from the state blob and are deleted
-    #: whenever a code leaves ``config.rankCounts`` — so a cascading FK would
-    #: let one config edit (or a backup restore) destroy every entry under a
-    #: division, and a restricting one would make the blob write itself fail.
-    #: A dangling pointer is the already-handled state: an unmappable code is
-    #: skipped and reported, never guessed.
-    meet_event_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     cap: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # R14: the PER-EVENT FALLBACK, kept rather than replaced. It is how
     # flight-tiered pricing (CAN-AM: $50 A flight, $30 all others) is
@@ -2045,9 +2056,12 @@ class EntryEvent(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
+    competition_event_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    competition_event = relationship("CompetitionEvent", lazy="joined", viewonly=True)
+
     __table_args__ = (
-        Index("ix_entry_events_bracket_event", "tournament_id", "bracket_event_id"),
-        Index("ix_entry_events_meet_event", "tournament_id", "meet_event_id"),
+        UniqueConstraint("tournament_id", "code"),
+        ForeignKeyConstraint(["tournament_id", "competition_event_id"], ["competition_events.tournament_id", "competition_events.id"], deferrable=True, initially="DEFERRED"),
     )
 
 
@@ -2084,6 +2098,10 @@ class Entry(Base):
     """
 
     __tablename__ = "entries"
+    machine_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    __mapper_args__ = {"version_id_col": version}
+
 
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
@@ -2101,40 +2119,39 @@ class Entry(Base):
     state: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     pending_reasons: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
 
-    # ---- doubles (E3, program Phase 8) --------------------------------
-    # ``partner_entry_id`` is set on BOTH halves at acceptance and points at
-    # the other one. Mutual rather than one-directional because either half
-    # can be the row a reader has in hand.
-    partner_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
-    # Who was named, in the nominator's own typing. Kept after acceptance:
-    # it is what the invite was addressed to, and the accepting account's
-    # address may differ (people forward mail).
-    partner_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
-    # SHA-256 of the mailed invite token — never the token (invariant I5).
-    partner_invite_hash: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True
-    )
-    partner_invite_expires_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    # When the invited principal accepted. The reasons list loses
-    # ``awaiting_partner`` at that moment, so without this stamp the fact
-    # that a human agreed would survive only as a missing string.
-    partner_accepted_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    # Whether the mailed invite actually sent (V3-PE37.1 / package 05 debt
-    # "Partner-invite delivery failure has no entrant-facing recovery
-    # path"). ``entries_json._send_partner_invite`` already returned a real
-    # bool (ruling R4); the gap this column closes is that the outcome was
-    # logged for an operator and never reached the nominating entrant. NULL
-    # means no invite was ever attempted on this row (most entries); it is
-    # never backfilled for rows written before this column existed, because
-    # "unknown" and "failed" are different facts and only one of them is
-    # true here.
-    partner_invite_mail_sent: Mapped[Optional[bool]] = mapped_column(
-        Boolean, nullable=True
-    )
+    invitations = relationship("PartnerInvitation",
+        primaryjoin="and_(Entry.tournament_id == foreign(PartnerInvitation.tournament_id), Entry.id == foreign(PartnerInvitation.inviting_entry_id))",
+        cascade="all, delete-orphan", lazy="selectin", order_by="PartnerInvitation.created_at")
+    accepted_invitations = relationship("PartnerInvitation",
+        primaryjoin="and_(Entry.tournament_id == foreign(PartnerInvitation.tournament_id), Entry.id == foreign(PartnerInvitation.accepted_entry_id))",
+        viewonly=True, lazy="selectin")
+    membership = relationship("UnitMembership",
+        primaryjoin="and_(Entry.tournament_id == foreign(UnitMembership.tournament_id), Entry.id == foreign(UnitMembership.entry_id))",
+        viewonly=True, uselist=False, lazy="selectin")
+
+    @property
+    def invitation(self):
+        accepted = [i for i in [*self.invitations, *self.accepted_invitations] if i.status == "accepted"]
+        return accepted[-1] if accepted else (self.invitations[-1] if self.invitations else None)
+
+    @property
+    def paired_entry_id(self):
+        invite = self.invitation
+        if invite is None or invite.status != "accepted":
+            return None
+        return invite.accepted_entry_id if invite.inviting_entry_id == self.id else invite.inviting_entry_id
+
+    @property
+    def invitation_accepted_at(self):
+        return self.invitation.accepted_at if self.invitation else None
+
+    @property
+    def invitation_email(self):
+        return self.invitation.recipient_email if self.invitation else None
+
+    @property
+    def invitation_mail_sent(self):
+        return self.invitation.mail_sent if self.invitation else None
 
     # ---- publication ---------------------------------------------------
     # Absent from the public entrant list; still fully entered (Q4/I6). The
@@ -2150,11 +2167,6 @@ class Entry(Base):
     # that means something is ``submissions.fee_total_cents``; the payment
     # record lives up there too, on the act that was paid for.
     fee_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # Back-reference into the roster, written by the commit seam. Its
-    # presence is what makes re-running the seam idempotent.
-    committed_player_id: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -2166,18 +2178,13 @@ class Entry(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("tournament_id", "id", "entry_player_id"),
         ForeignKeyConstraint(
             ["tournament_id", "entry_event_id"],
             ["entry_events.tournament_id", "entry_events.id"],
             ondelete="CASCADE",
         ),
-        # R13's two spine pointers, FK'd in the migration since
-        # ``s3d8f2b5c0e1`` and absent here until SP-DM-3 P4 (F-DM-11). The
-        # gap was not cosmetic: the unit suites build schema with
-        # ``Base.metadata.create_all``, so an orphaned entry was
-        # REPRESENTABLE in every test while raising IntegrityError in
-        # production. The relationships below stay ``viewonly`` +
-        # ``primaryjoin`` — a relationship is a join, never a constraint.
+        # Tenant-scoped spine pointers enforce registration ownership.
         ForeignKeyConstraint(
             ["tournament_id", "submission_id"],
             ["submissions.tournament_id", "submissions.id"],
@@ -2196,7 +2203,6 @@ class Entry(Base):
         Index("ix_entries_event_player", "entry_event_id", "entry_player_id"),
         Index("ix_entries_submission", "submission_id"),
         # The public, unauthenticated preview resolves a token through this.
-        Index("ix_entries_partner_invite", "partner_invite_hash"),
         # SP-DM-3 P7a (F-DM-37). Vocabulary source: the six module-level
         # constants in ``entries/lifecycle.py`` — the four ``LIVE_STATES``
         # plus the two terminals that file writes (``REJECTED`` at
@@ -2330,6 +2336,7 @@ class EntryPage(Base):
     # would have to perform and get wrong. NULL falls back to summing
     # ``entry_events.fee_cents``.
     fee_schedule: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    fee_currency: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
     # Free text, rendered publicly: Zelle, cash at check-in, a PayPal
     # address, in the director's own words. v1 payment is manual and Q8's
     # integration boundary is untouched.
@@ -2372,4 +2379,204 @@ class EntryPage(Base):
     __table_args__ = (
         Index("uq_entry_pages_slug", "slug", unique=True),
         CheckConstraint("audience IN ('private', 'unlisted', 'public')", name="ck_entry_pages_audience"),
+    )
+
+
+# Registration intent and competition realization (ADR 0030).
+class ScoringProfileVersion(Base):
+    __tablename__ = "scoring_profile_versions"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    profile_key: Mapped[str] = mapped_column(String(60), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    rules: Mapped[dict] = mapped_column(JSON, nullable=False)
+    published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    __table_args__ = (UniqueConstraint("profile_key", "version"), CheckConstraint("version > 0", name="ck_scoring_profile_versions_1"))
+
+
+class EventFormatVersion(Base):
+    __tablename__ = "event_format_versions"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    format_key: Mapped[str] = mapped_column(String(60), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    roster_min: Mapped[int] = mapped_column(Integer, nullable=False)
+    roster_max: Mapped[int] = mapped_column(Integer, nullable=False)
+    gender_rule: Mapped[str] = mapped_column(String(30), nullable=False, default="event")
+    scoring_profile_version_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("scoring_profile_versions.id"), nullable=False)
+    published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    __table_args__ = (UniqueConstraint("format_key", "version"),
+                     CheckConstraint("version > 0 AND roster_min > 0 AND roster_max >= roster_min", name="ck_event_format_versions_1"),
+                     CheckConstraint("gender_rule IN ('event', 'mixed', 'open')", name="ck_event_format_versions_2"))
+
+
+class CompetitionEvent(Base):
+    __tablename__ = "competition_events"
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    category_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    format_version_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("event_format_versions.id"), nullable=False)
+    gender_category: Mapped[Optional[str]] = mapped_column(String(20))
+    age_group: Mapped[Optional[str]] = mapped_column(String(40))
+    level: Mapped[Optional[str]] = mapped_column(String(40))
+    bracket_event_id: Mapped[Optional[str]] = mapped_column(String(100))
+    meet_event_id: Mapped[Optional[str]] = mapped_column(String(40))
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+    __mapper_args__ = {"version_id_col": version}
+    __table_args__ = (UniqueConstraint("tournament_id", "category_code"),)
+
+
+class CompetitionUnit(Base):
+    __tablename__ = "competition_units"
+    projection_key: Mapped[Optional[str]] = mapped_column(String(100))
+    seed: Mapped[Optional[int]] = mapped_column(Integer)
+    attributes: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    competition_event_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+    __mapper_args__ = {"version_id_col": version}
+    __table_args__ = (
+        ForeignKeyConstraint(["tournament_id", "competition_event_id"], ["competition_events.tournament_id", "competition_events.id"], ondelete="CASCADE"),
+        UniqueConstraint("tournament_id", "id", "competition_event_id"),
+        CheckConstraint("status IN ('pending', 'confirmed', 'withdrawn')", name="ck_competition_units_1"),
+    )
+
+
+class UnitMembership(Base):
+    __tablename__ = "unit_memberships"
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    unit_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    competition_event_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    player_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    origin: Mapped[str] = mapped_column(String(20), nullable=False, default="entry")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+    unit: Mapped["CompetitionUnit"] = relationship("CompetitionUnit", viewonly=True, lazy="joined")
+    __table_args__ = (
+        ForeignKeyConstraint(["tournament_id", "unit_id", "competition_event_id"], ["competition_units.tournament_id", "competition_units.id", "competition_units.competition_event_id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["tournament_id", "player_id"], ["entry_players.tournament_id", "entry_players.id"], deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["tournament_id", "entry_id", "player_id"], ["entries.tournament_id", "entries.id", "entries.entry_player_id"], deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("tournament_id", "competition_event_id", "player_id"),
+        UniqueConstraint("tournament_id", "unit_id", "slot"),
+        UniqueConstraint("tournament_id", "entry_id"),
+        CheckConstraint("slot > 0", name="ck_unit_memberships_1"),
+        CheckConstraint("status IN ('active', 'withdrawn')", name="ck_unit_memberships_2"),
+        CheckConstraint("(origin = 'manual' AND entry_id IS NULL) OR (origin = 'entry' AND entry_id IS NOT NULL)", name="ck_unit_memberships_3"),
+    )
+
+
+class DrawInstance(Base):
+    __tablename__ = "draw_instances"
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    competition_event_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    config: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(["tournament_id", "competition_event_id"], ["competition_events.tournament_id", "competition_events.id"], ondelete="CASCADE"),
+        UniqueConstraint("tournament_id", "competition_event_id", "revision"),
+        CheckConstraint("revision > 0", name="ck_draw_instances_1"),
+        CheckConstraint("status IN ('draft', 'generated', 'started', 'completed', 'superseded')", name="ck_draw_instances_2"),
+    )
+
+
+class CompetitionAudit(Base):
+    __tablename__ = "competition_audit"
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    actor_id: Mapped[Optional[str]] = mapped_column(String(100))
+    request_id: Mapped[Optional[str]] = mapped_column(String(100))
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+
+class PlayerRepresentative(Base):
+    __tablename__ = "player_representatives"
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    player_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("entrant_accounts.id", ondelete="CASCADE"), primary_key=True)
+    role: Mapped[str] = mapped_column(String(30), default="representative", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    __table_args__ = (ForeignKeyConstraint(["tournament_id", "player_id"], ["entry_players.tournament_id", "entry_players.id"], ondelete="CASCADE"),)
+
+
+class PartnerInvitation(Base):
+    __tablename__ = "partner_invitations"
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    inviting_entry_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    accepted_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    recipient_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    token_hash: Mapped[Optional[str]] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    mail_sent: Mapped[Optional[bool]] = mapped_column(Boolean)
+    status: Mapped[str] = mapped_column(String(20), default="sent", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(["tournament_id", "inviting_entry_id"], ["entries.tournament_id", "entries.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["tournament_id", "accepted_entry_id"], ["entries.tournament_id", "entries.id"], deferrable=True, initially="DEFERRED"),
+        Index("uq_partner_invitations_sent", "tournament_id", "inviting_entry_id", unique=True, sqlite_where=text("status = 'sent'"), postgresql_where=text("status = 'sent'")),
+        CheckConstraint("status IN ('sent', 'accepted', 'expired', 'revoked')", name="ck_partner_invitations_1"),
+        CheckConstraint("accepted_entry_id IS NULL OR accepted_entry_id <> inviting_entry_id", name="ck_partner_invitations_2"),
+        CheckConstraint("status <> 'accepted' OR (accepted_entry_id IS NOT NULL AND accepted_at IS NOT NULL)", name="ck_partner_invitations_3"),
+    )
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    submission_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    actor_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    request_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(["tournament_id", "submission_id"], ["submissions.tournament_id", "submissions.id"], ondelete="CASCADE"),
+        UniqueConstraint("tournament_id", "submission_id", "request_id"),
+        CheckConstraint("amount_cents <> 0", name="ck_payments_1"),
+        CheckConstraint("length(currency) = 3 AND currency = upper(currency)", name="ck_payments_2"),
+    )
+
+# create_all fixtures and Alembic installations must enforce identical rules.
+from db.competition_ddl import register as _register_competition_ddl
+_register_competition_ddl(Base.metadata)
+
+
+class StateTransition(Base):
+    """Append-only lifecycle history, written with the subject transaction."""
+    __tablename__ = "state_transitions"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tournament_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"))
+    machine: Mapped[str] = mapped_column(String(80), nullable=False)
+    machine_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    subject_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    subject_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    from_state: Mapped[str] = mapped_column(String(40), nullable=False)
+    to_state: Mapped[str] = mapped_column(String(40), nullable=False)
+    event: Mapped[str] = mapped_column(String(80), nullable=False)
+    actor_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor_id: Mapped[Optional[str]] = mapped_column(String(100))
+    reason: Mapped[Optional[str]] = mapped_column(Text)
+    detail: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    __table_args__ = (
+        Index("ix_state_transitions_subject", "subject_type", "subject_id", "occurred_at"),
+        CheckConstraint("machine_version > 0", name="ck_state_transitions_version"),
+        CheckConstraint("actor_type IN ('entrant', 'operator', 'system', 'bind')", name="ck_state_transitions_actor"),
     )

@@ -20,22 +20,22 @@ apps/                          the deployable surfaces
 │   └── FRONTEND.md            shell + tabs, the store split, theme system
 ├── entrant/                   PUBLIC tier — React Router 7 SSR + bounded route modules (/e/*)
 │   ├── app/                   routes/ (explicit route table), components/, lib/
-│   ├── scripts/               measure-page-weight.mjs (blocking 4 KB public / 8 KB entry / 14 KB results gates)
+│   ├── scripts/               measure-page-weight.mjs (blocking 4 KB public / 10 KB entry / 14 KB results gates)
 │   └── tests/                 vitest, incl. source-scan contracts (no truncation, no em dash, no client fee rules)
 └── api/                       FastAPI + persistence + command log
-    ├── alembic/               SQLite + Postgres schema migrations
     ├── src/                   sys.path root (not a package)
+    │   ├── alembic/           fresh-install baseline and migration environment
     │   ├── core / shared      composition kernel and cross-domain logic
     │   ├── db / repositories  SQLAlchemy models, sessions, persistence facade
     │   └── workspaces / identity / meet / bracket / operations / display /
-    │       entries / solve_rail / ops  domain routers and services
+    │       entries / competition / solve_rail / ops  domain routers and services
     └── README.md              routes, auth/tenancy, request lifecycle
 
 packages/                      shared libraries (npm workspaces + one pip package)
 ├── design-system/             shared React components + the Tailwind preset
 ├── scheduler-core/            CP-SAT engine distribution (pure Python, no HTTP, no I/O)
 │   └── scheduler_core/        the importable package — domain/, engine/, README.md
-└── shared-contract/           data both tiers read (non-scheduling-keys.json)
+└── shared-contract/           data both tiers read (non-scheduling-keys.json, state-machines.json)
 
 infra/                         deployment orchestration (Dockerfiles stay with their apps)
 ├── compose/                   six stacks + their .env.*.example files
@@ -100,9 +100,9 @@ This site lives in `docs/` and is built by VitePress (`config.mts`, `srcDir: doc
 [Module contracts](/reference/contracts/), [API reference](/reference/api/), and [Decisions](/explanation/decisions/).
 
 Current architecture, decisions, contracts, and open debt live in the built
-quadrants. Historical plans, audits, and dated logs were distilled and removed
-from HEAD; Git history retains their provenance without leaving competing
-current documentation in the tree.
+quadrants. The [v1 prototype baseline](prototype-v1-baseline.md) indexes dated
+source plans and audit evidence under `docs/audits/`; these records preserve
+provenance and do not supersede current implementation references.
 
 ## Keeping these docs current
 

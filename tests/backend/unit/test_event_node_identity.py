@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from db.models import Base, Org, Tournament, TournamentAuthority
+from db.models import Org, Tournament, TournamentAuthority
 from sync.service import (
     ProtocolError,
     begin_checkout,
@@ -24,7 +24,8 @@ from sync.service import (
 
 def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return Session(engine, expire_on_commit=False)
 
 
@@ -42,8 +43,8 @@ def _fixture(session: Session) -> tuple[uuid.UUID, uuid.UUID]:
             id=tournament_id,
             org_id=org_id,
             name="Identity proof",
-            data={"version": 2},
-            schema_version=2,
+            data={"version": 1},
+            schema_version=1,
         )
     )
     session.commit()

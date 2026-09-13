@@ -5,6 +5,7 @@ import json
 import re
 
 import pytest
+from tournament_sim.historical_matches import source_name_key
 
 from tournament_sim.seed import (
     _EVENTS,
@@ -247,6 +248,9 @@ class FakeClient:
         self.events.append((tid, body))
         return {"id": f"entry-event-{len(self.events)}"}
 
+    def competition_event(self, tid, code, bracket_event_id, *, doubles=False):
+        return {"id": f"competition-{tid}-{code}"}
+
     # ---- entrant accounts and the entries desk ---------------------------
 
     def entrant_signup(self, body, *, expect=(202,)):
@@ -405,7 +409,7 @@ def test_apply_checkpoints_and_same_hash_noop(tmp_path: Path):
     assert len(client.imported[0][1]["events"]) == 5
     assert len(client.commands) == 5
     assert len(client.events) == 5
-    assert first["seedFormatVersion"] == 3
+    assert first["seedFormatVersion"] == 4
     assert first["matchCount"] == 5
     assert first["playerCount"] == 5
     assert first["topologyEdgeCount"] == 0
@@ -489,7 +493,7 @@ def test_reset_manifest_can_restart_on_a_new_seed_format(tmp_path: Path):
     output = apply(dataset, FakeClient(), seed_key="bwf-demo", run_dir=tmp_path)
 
     assert output["status"] == "complete"
-    assert output["seedFormatVersion"] == 3
+    assert output["seedFormatVersion"] == 4
 
 
 def test_notes_enrich_manifest_and_label_import_as_finals_only(tmp_path: Path):
@@ -616,6 +620,15 @@ def test_complete_demo_draws_fills_all_events_and_marks_generated_rows(tmp_path:
         if match.round_code != "Final"
     )
     assert sum(match.generated for match in dataset.historical_matches) == 4452
+    for tournament_id, matches in dataset.historical_by_tournament.items():
+        for event in _EVENTS:
+            teams = {
+                tuple(sorted(source_name_key(name) for name in side))
+                for match in matches if match.event == event
+                for side in (match.side_a, match.side_b)
+            }
+            people = [name for team in teams for name in team]
+            assert len(people) == len(set(people)), (tournament_id, event)
     xd_first = {
         side[0]
         for match in dataset.historical_matches
@@ -1020,7 +1033,7 @@ def _rename_fixture(tmp_path: Path):
         json.dumps(
             {
                 "seedKey": "bwf-demo",
-                "seedFormatVersion": 3,
+                "seedFormatVersion": 4,
                 "status": "complete",
                 "tournaments": {
                     "T001": {
@@ -1154,7 +1167,7 @@ def _outcome_manifest(tmp_path: Path) -> None:
         json.dumps(
             {
                 "seedKey": "bwf-demo",
-                "seedFormatVersion": 3,
+                "seedFormatVersion": 4,
                 "status": "complete",
                 "tournaments": {
                     "T029": {
@@ -1212,7 +1225,7 @@ def test_apply_synthetic_outcomes_skips_a_tournament_this_run_does_not_own(tmp_p
         json.dumps(
             {
                 "seedKey": "bwf-demo",
-                "seedFormatVersion": 3,
+                "seedFormatVersion": 4,
                 "status": "complete",
                 "tournaments": {"T029": {"workspaceId": None, "source": {"name": "Taipei Open"}}},
             }

@@ -7,4 +7,6 @@ export function scrollRoundIntoView(
   column: HTMLElement | null,
   behavior?: ScrollBehavior,
 ): void;
+export function applySideRows(root: HTMLElement, personId: string): void;
+export function roundFocusNode(column: HTMLElement | null, personId: string): HTMLElement | null;
 export function mountBracketPath(root: HTMLElement): void;

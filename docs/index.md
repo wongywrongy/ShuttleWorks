@@ -24,7 +24,7 @@ features:
     details: Entries is intake, Meet and Bracket are the engines, Operations is the live-ops layer, Display is the read-only output. Four are user-enableable; Operations is a Tier-2 architectural module.
     link: /explanation/architecture/system-overview
   - title: An SSR-first public tier
-    details: The site where a player finds a tournament and enters it is a separate server-rendered app under /e/. Complete HTML and native writes work without hydration; bounded same-origin route modules enhance search, draws, account state, and entry progress. Poster and discovery pages have a blocking 4 KB budget; the persistent entry journey has an 8 KB budget; the published-results documents have a 14 KB one.
+    details: The site where a player finds a tournament and enters it is a separate server-rendered app under /e/. Complete HTML and native writes work without hydration; bounded same-origin route modules enhance search, draws, account state, and entry progress. Poster and discovery pages have a blocking 4 KB budget; the persistent entry journey has a 10 KB budget; the published-results documents have a 14 KB one.
     link: /explanation/architecture/entrant-tier
   - title: Test-enforced module contracts
     details: The seams between modules are declared in a typed, test-enforced descriptor. Each contract page states what crosses the boundary, who owns it, and the clean interface.
@@ -38,6 +38,7 @@ features:
 
 | If you want to… | Read |
 | --- | --- |
+| Identify the first prototype snapshot | [V1 prototype baseline](/reference/prototype-v1-baseline) |
 | Understand the product and its vocabulary | [What ShuttleWorks is](/explanation/what-is-shuttleworks) |
 | Run it on your machine | [Running locally](/how-to/running-locally) |
 | Update the Tailscale demo and share review books | [Publish a demo review](/how-to/publish-demo-review) |
@@ -45,14 +46,17 @@ features:
 | See the module shape | [System overview](/explanation/architecture/system-overview) |
 | Trace how data moves | [Data flow](/explanation/architecture/data-flow) |
 | Understand a coupling seam | [Module contracts](/reference/contracts/) |
+| Inspect lifecycle transitions | [State machines](/reference/state-machines) |
 | Find an endpoint | [API reference](/reference/api/) |
 | Know why a choice was made | [Decisions (ADRs)](/explanation/decisions/) |
 | Look up a term | [Glossary](/reference/glossary) |
 | See a day play out | [Operational scenarios](/explanation/architecture/operational-scenarios) |
 | See what remains open | [Debt log](/reference/debt-log) |
+| Change the database schema | [Pre-launch migration policy](/reference/migration-and-versioning-policy) |
+| Recreate stale development data | [Reset a pre-launch database](/how-to/reset-prelaunch-database) |
 
 ::: tip This site is the current record
-Historical plans, audits, and dated change logs were distilled into these pages
-and removed from HEAD. Git history retains their provenance without leaving
-stale, competing documentation in the working tree.
+Current guidance lives in the four documentation quadrants. The [v1 prototype
+baseline](/reference/prototype-v1-baseline) indexes the preserved, dated source
+plans and audits separately from current implementation status.
 :::

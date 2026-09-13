@@ -89,18 +89,47 @@ describe('/e/me/entries — the session-aware shell', () => {
     expect(html).toContain('<noscript>');
     // V3-PE38.1: the sorting/organizer-confirmation explanation appears
     // beside the actual list, not ahead of a gate that might not show one.
-    expect(html).toContain('newest first. The organizer');
+    expect(html).toContain('grouped into active and past.');
   });
 
   it('does not show the list explanation ahead of the sign-in gate', async () => {
     const html = await (await respond(PAGE, 200, '/e/me/entries')).text();
-    expect(html).not.toContain('newest first. The organizer');
+    expect(html).not.toContain('grouped into active and past.');
   });
 
   it('says nothing personal in the document itself', async () => {
     const html = await (await respond(PAGE, 200, '/e/me/entries')).text();
     expect(html).not.toContain('@');
     expect(html).not.toMatch(/signed in as/i);
+  });
+});
+
+describe('/e/me/settings — the account settings shell (refinement 2026-09-12)', () => {
+  it('gates a signed-out visitor and returns them here after sign-in', async () => {
+    const response = await respond(PAGE, 200, '/e/me/settings');
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('Account settings');
+    expect(html).toContain('href="/e/login?next=/e/me/settings"');
+    expect(html).not.toContain('id="my-account-root"');
+    expect(html).not.toContain('/e/assets/my-entries.js');
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it('mounts the account controls and loads the same module only with a session present', async () => {
+    const html = await (
+      await respond(PAGE, 200, '/e/me/settings', 'sw_play_session=session-value')
+    ).text();
+    expect(html).toContain('id="my-account-root"');
+    expect(html).not.toContain('id="my-entries-root"');
+    expect(html).toContain('<script type="module" src="/e/assets/my-entries.js">');
+    expect(html).not.toMatch(/<script(?![^>]*src=)/);
+    // The list page no longer carries the settings section; it links here.
+    const entries = await (
+      await respond(PAGE, 200, '/e/me/entries', 'sw_play_session=session-value')
+    ).text();
+    expect(entries).not.toContain('id="my-account-root"');
+    expect(entries).toContain('href="/e/me/settings"');
   });
 });
 

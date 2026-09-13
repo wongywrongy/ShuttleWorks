@@ -39,9 +39,13 @@ export interface BracketResultCommand {
   tournamentId: string;
   /** The bracket play-unit (match) id the result is recorded against. */
   matchId: string;
+  correction?: boolean;
   winnerSide: 'A' | 'B';
   finishedAtSlot: number | null;
   walkover: boolean;
+  /** Non-played outcome recorded against the match, when there was one.
+   *  `walkover` stays set alongside it for the legacy advancement routing. */
+  reason?: 'walkover' | 'retired' | 'forfeit' | null;
   /** Set-by-set score (Sets mode); null in winner-only mode. */
   score: BracketScore | null;
   /** ``BracketMatch.version`` the client observed at submit time. */

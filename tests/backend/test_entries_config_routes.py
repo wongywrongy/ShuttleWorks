@@ -517,11 +517,12 @@ def _events(tid):
 
 def test_an_event_is_created_with_its_optional_fields(client, workspace):
     tid = workspace
+    target = client.post(f"/tournaments/{tid}/competition/events", json={"categoryCode": "MD", "formatKey": "doubles", "bracketEventId": "bracket-event-1"}, headers=CSRF).json()["id"]
     r = _post_event(
         client,
         tid,
         entryType="doubles",
-        bracketEventId="bracket-event-1",
+        competitionEventId=target,
         cap=32,
         feeCents=1500,
         opensAt="2026-08-01T09:00:00+00:00",
@@ -536,7 +537,7 @@ def test_an_event_is_created_with_its_optional_fields(client, workspace):
 
     (row,) = _events(tid)
     assert str(row.id) == body["id"]
-    assert row.bracket_event_id == "bracket-event-1"
+    assert str(row.competition_event_id) == target
     assert row.opens_at is not None and row.closes_at is not None
 
 
@@ -601,7 +602,7 @@ def test_creating_an_event_writes_the_meet_event_mapping(client, workspace):
     assert _post_event(client, workspace).status_code == 201
 
     (row,) = _events(workspace)
-    assert row.meet_event_id == "MS"
+    assert row.competition_event_id is None  # a division is not a default binding
 
 
 def test_an_event_whose_division_is_not_declared_maps_to_nothing(
@@ -617,7 +618,7 @@ def test_an_event_whose_division_is_not_declared_maps_to_nothing(
     assert _post_event(client, workspace, code="ZZ").status_code == 201
 
     (row,) = _events(workspace)
-    assert row.meet_event_id is None
+    assert row.competition_event_id is None
 
 
 def test_an_event_defaults_to_singles_with_everything_optional_omitted(

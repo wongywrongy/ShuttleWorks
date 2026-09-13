@@ -57,7 +57,7 @@ describe('runModel', () => {
   it('orders each court lane by slot, drops done, exposes Now/Next/Later + depth', () => {
     const ms = toRunMatches([
       blk({ id: 'n3', court: 1, slot: 3 }),
-      blk({ id: 'done', court: 1, slot: 0, status: 'finished', done: true }),
+      blk({ id: 'finished', court: 1, slot: 0, status: 'finished', done: true }),
       blk({ id: 'n1', court: 1, slot: 1 }),
       blk({ id: 'n2', court: 1, slot: 2 }),
     ], {});
@@ -302,7 +302,7 @@ describe('rest flag (soft)', () => {
 
   it('NEGATIVE CONTROL: enough elapsed slots clears the flag', () => {
     const ms = toRunMatches([
-      blk({ id: 'done', court: 1, status: 'finished', playerIds: ['p1'], actualEndSlot: 5 }),
+      blk({ id: 'finished', court: 1, status: 'finished', playerIds: ['p1'], actualEndSlot: 5 }),
       blk({ id: 'next', slot: 10, status: 'scheduled', playerIds: ['p1'] }),
     ], {});
     expect(restShortKeys(ms, { currentSlot: 10, restSlots: 2 }).size).toBe(0);
@@ -310,7 +310,7 @@ describe('rest flag (soft)', () => {
 
   it('a finished match with no actual end slot cannot flag anything', () => {
     const ms = toRunMatches([
-      blk({ id: 'done', court: 1, status: 'finished', playerIds: ['p1'] }),
+      blk({ id: 'finished', court: 1, status: 'finished', playerIds: ['p1'] }),
       blk({ id: 'next', slot: 10, status: 'scheduled', playerIds: ['p1'] }),
     ], {});
     expect(restShortKeys(ms, { currentSlot: 10, restSlots: 2 }).size).toBe(0);
@@ -318,7 +318,7 @@ describe('rest flag (soft)', () => {
 
   it('the flag does NOT change what nextEligible returns', () => {
     const ms = toRunMatches([
-      blk({ id: 'done', court: 1, status: 'finished', playerIds: ['p1'], actualEndSlot: 9 }),
+      blk({ id: 'finished', court: 1, status: 'finished', playerIds: ['p1'], actualEndSlot: 9 }),
       blk({ id: 'next', slot: 10, status: 'scheduled', playerIds: ['p1'] }),
     ], {});
     // soft means soft: it is surfaced, never enforced.

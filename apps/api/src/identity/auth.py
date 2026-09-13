@@ -38,6 +38,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from core.paths import WORDLISTS
+from core.constants import BOOTSTRAP_ORG_NAME
 from core.config import settings
 # The counting engine and the two aware-datetime helpers moved to core in
 # SP-REORG-1 Phase 3 (ruling R1). The KEY NAMESPACES below stayed, because
@@ -244,7 +245,7 @@ def ensure_personal_org(session: Session, user: User) -> Org:
     if existing is not None:
         return existing
     if user.id == BOOTSTRAP_USER_UUID:
-        name = "Local Workspace"
+        name = BOOTSTRAP_ORG_NAME
     else:
         base = user.display_name or user.email.split("@")[0]
         name = f"{base}'s workspace"[:200]

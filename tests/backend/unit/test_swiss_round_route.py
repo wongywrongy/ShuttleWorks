@@ -256,6 +256,17 @@ def test_swiss_rounds_next_end_to_end(client, tid):
     for pu_id, res in before_results.items():
         assert after_results[pu_id] == res, pu_id
 
+    # Earlier outcomes already shaped this round's pairings, even though
+    # Swiss units have concrete sides instead of feeder dependencies.
+    import uuid
+    refused = client.post(_bracket_url(tid, "commands"), json={
+        "id": str(uuid.uuid4()), "kind": "correct_result", "play_unit_id": "SW-R0-0",
+        "winner_side": "B", "seen_version": units["SW-R0-0"]["version"],
+        "score": _sets((10, 21), (12, 21)),
+    })
+    assert refused.status_code == 409
+    assert _results(client.get(_bracket_url(tid)).json()) == after_results
+
     # New round appended on the rounds axis; status untouched.
     assert ev["rounds"] == [
         ["SW-R0-0", "SW-R0-1", "SW-R0-2"],

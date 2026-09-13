@@ -93,8 +93,8 @@ def sweep_workspace(
 
     **The aggregate row survives** (Q10). The entry keeps its state, its
     event, its fee history and its place in the counts; what goes is the
-    human — name, club, remarks, birth year — through the same scrub the
-    entrant's own erasure uses.
+    human — name, club, representation, remarks, birth year — through the
+    same scrub the entrant's own erasure uses.
 
     **Withdrawn and rejected entries are swept too.** They are still records
     of a named person, and the reason they are no longer playing is not a
@@ -173,7 +173,7 @@ def erase_account_data(
 
     players = list(
         session.scalars(
-            select(EntryPlayer).where(EntryPlayer.account_id == account.id)
+            select(EntryPlayer).where(EntryPlayer.representatives.any(account_id=account.id))
         )
     )
     scrubbed = 0
@@ -181,7 +181,11 @@ def erase_account_data(
         if player.erased_at is not None:
             continue
         player.full_name = lifecycle.ERASED_NAME
+        player.gender = "unknown"
+        player.roster_attributes = {}
+        player.representation_public = False
         player.club = None
+        player.representation = None
         player.remarks = None
         player.birth_year = None
         player.erased_at = now
@@ -217,4 +221,7 @@ def erase_account_data(
     account.email_verified = False
     entrant_service.revoke_all_sessions(session, account.id)
 
+    from competition.projection import project
+    for tournament_id in {player.tournament_id for player in players}:
+        project(session, tournament_id)
     return scrubbed, kept

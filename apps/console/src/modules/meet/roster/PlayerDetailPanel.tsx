@@ -12,7 +12,8 @@
  *  - The body was ten editable controls under one flat `flex flex-col gap-3`
  *    with no headings, each field re-typing its own `text-xs font-medium`
  *    label. It is now `DetailPanel.Section` groups in ONE order shared with
- *    Bracket's roster pane — Identity, Availability, Events, Notes — with
+ *    Bracket's roster pane — Identity, Event entries, Availability, Internal
+ *    notes (the D4/O5 order) — with
  *    `Row` from the settings grammar inside them. No label recipe is spelled
  *    out in this file any more.
  *  - A doubles position rendered that whole form TWICE, stacked, with nothing
@@ -22,8 +23,8 @@
  *    arm (finding 1.1): 24 immediate `×` targets sat ~4px from the name
  *    buttons whose click means "just show me this".
  */
-import { useState } from 'react';
-import { Select } from '@scheduler/design-system/components';
+import { useState, type ReactNode } from 'react';
+import { FormActions, Select } from '@scheduler/design-system/components';
 import type { PlayerDTO, RosterGroupDTO } from '../../../api/dto';
 import { useTournamentStore } from '../../../store/tournamentStore';
 import {
@@ -37,6 +38,12 @@ import { READ_ONLY_MESSAGE } from '../../../platform/domain/permissions';
 import { useRankAssignment } from './positionGrid/useRankAssignment';
 import { PlayerAvailabilityField, PlayerEventsField } from './PlayerFields';
 import { ActiveChoice } from '../../../components/ActiveChoice';
+import { AutosaveStatus } from '../../../components/AutosaveStatus';
+import {
+  REPRESENTATION_OPTIONS,
+  UNKNOWN_REPRESENTATION_LABEL,
+} from '../../../lib/representations';
+import { isDoublesRank } from './positionGrid/helpers';
 
 /* =========================================================================
  * DetailDrawer — Meet's consumer of the shared DetailPanel chrome.
@@ -143,45 +150,38 @@ function PlayerDetailFields({
 
   return (
     <>
-      <DetailPanel.Section
-        eyebrow="Identity"
+      <IdentitySection
+        player={player}
+        groups={groups}
         right={rank ? <UnassignButton player={player} rank={rank} /> : undefined}
+      />
+
+      <DetailPanel.Section
+        eyebrow="Event entries"
+        right={
+          <span className="text-2xs tabular-nums text-muted-foreground">
+            {entered.length} entered
+          </span>
+        }
       >
-        <Row pane
-          label="Player"
-          control={
-            <span className="text-sm text-foreground">
-              {player.name || '(unnamed)'}
-            </span>
-          }
-        />
-        <Row pane
-          label="School"
-          last
-          control={
-            <Select
-              value={player.groupId}
-              onValueChange={(v) => updatePlayer(player.id, { groupId: v })}
-              options={groups.map((g) => ({ value: g.id, label: g.name }))}
-              ariaLabel="School"
-              size="sm"
-              triggerStyle={{ width: '11rem' }}
-            />
-          }
-        />
+        <EntrySummary player={player} />
+        <PlayerEventsField player={player} />
       </DetailPanel.Section>
 
       <DetailPanel.Section
         eyebrow="Availability"
         right={
-          <span className="text-xs text-muted-foreground">
-            {formatWindowSummary(player.availability ?? [])}
+          <span className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {formatWindowSummary(player.availability ?? [])}
+            </span>
+            <AutosaveStatus />
           </span>
         }
       >
         <PlayerAvailabilityField player={player} />
         <Row pane
-          label="Min rest"
+          label="Minimum rest between matches"
           last
           control={
             <span className="inline-flex items-baseline gap-2">
@@ -189,7 +189,7 @@ function PlayerDetailFields({
                 type="number"
                 min={0}
                 max={120}
-                aria-label="Min rest"
+                aria-label="Minimum rest between matches"
                 value={
                   player.minRestMinutes != null ? String(player.minRestMinutes) : ''
                 }
@@ -210,20 +210,9 @@ function PlayerDetailFields({
         />
       </DetailPanel.Section>
 
-      <DetailPanel.Section
-        eyebrow="Events"
-        right={
-          <span className="text-2xs tabular-nums text-muted-foreground">
-            {entered.length} entered
-          </span>
-        }
-      >
-        <PlayerEventsField player={player} />
-      </DetailPanel.Section>
-
-      <DetailPanel.Section eyebrow="Notes">
+      <DetailPanel.Section eyebrow="Internal notes" right={<AutosaveStatus />}>
         <textarea
-          aria-label="Notes"
+          aria-label="Internal notes"
           value={player.notes ?? ''}
           onChange={(e) =>
             updatePlayer(player.id, { notes: e.target.value || undefined })
@@ -234,6 +223,146 @@ function PlayerDetailFields({
         />
       </DetailPanel.Section>
     </>
+  );
+}
+
+/* =========================================================================
+ * IdentitySection — the GROUPED identity edit (D4/O5): school and the
+ * controlled "Representing" code are drafted locally and written by one
+ * explicit Save. They used to write on every change, mixing an immediate
+ * commit into a form that also holds an availability editor; the isolated
+ * availability/notes autosave stays, and now says so.
+ * ========================================================================= */
+function IdentitySection({
+  player,
+  groups,
+  right,
+}: {
+  player: PlayerDTO;
+  groups: RosterGroupDTO[];
+  right?: ReactNode;
+}) {
+  const updatePlayer = useTournamentStore((s) => s.updatePlayer);
+  const savedGroupId = player.groupId;
+  const savedRepresentation = player.representation ?? '';
+  const [groupId, setGroupId] = useState(savedGroupId);
+  const [representation, setRepresentation] = useState(savedRepresentation);
+  const dirty =
+    groupId !== savedGroupId || representation !== savedRepresentation;
+  return (
+    <DetailPanel.Section
+      eyebrow="Identity"
+      right={
+        <span className="flex items-center gap-2">
+          {dirty ? (
+            <span role="status" className="text-2xs text-muted-foreground">
+              Unsaved
+            </span>
+          ) : (
+            <AutosaveStatus testId="identity-autosave-status" />
+          )}
+          {right}
+        </span>
+      }
+    >
+      <Row pane
+        label="Player"
+        control={
+          <span className="text-sm text-foreground">
+            {player.name || '(unnamed)'}
+          </span>
+        }
+      />
+      <Row pane
+        label="School"
+        control={
+          <Select
+            value={groupId}
+            onValueChange={(v) => setGroupId(v)}
+            options={groups.map((g) => ({ value: g.id, label: g.name }))}
+            ariaLabel="School"
+            size="sm"
+            triggerStyle={{ width: '11rem' }}
+          />
+        }
+      />
+      <Row pane
+        label="Representing"
+        last
+        control={
+          <Select
+            value={representation}
+            onValueChange={(v) => setRepresentation(v)}
+            options={REPRESENTATION_OPTIONS}
+            ariaLabel="Representing"
+            size="sm"
+            clearable
+            placeholder={UNKNOWN_REPRESENTATION_LABEL}
+            triggerStyle={{ width: '11rem' }}
+          />
+        }
+      />
+      <FormActions
+        dirty={dirty}
+        className="mt-3 justify-end"
+        onSave={() =>
+          updatePlayer(player.id, {
+            groupId,
+            representation: representation === '' ? undefined : representation,
+          })
+        }
+        onDiscard={() => {
+          setGroupId(savedGroupId);
+          setRepresentation(savedRepresentation);
+        }}
+      />
+    </DetailPanel.Section>
+  );
+}
+
+/* =========================================================================
+ * EntrySummary — the entered positions AND, for a doubles position, who the
+ * player is paired with, without expanding the picker below.
+ * ========================================================================= */
+function EntrySummary({ player }: { player: PlayerDTO }) {
+  const players = useTournamentStore((s) => s.players);
+  const entered = player.ranks ?? [];
+  if (entered.length === 0) {
+    return (
+      <p className="mb-2 text-xs text-muted-foreground">
+        Not entered in any position yet.
+      </p>
+    );
+  }
+  return (
+    <ul
+      data-testid="entry-summary"
+      className="mb-2 flex flex-col gap-0.5 text-xs text-foreground"
+    >
+      {entered.map((code) => {
+        const partner = isDoublesRank(code)
+          ? players.find(
+              (candidate) =>
+                candidate.id !== player.id &&
+                candidate.groupId === player.groupId &&
+                (candidate.ranks ?? []).includes(code),
+            )
+          : undefined;
+        return (
+          <li key={code} data-testid={`entry-summary-${code}`}>
+            <span className="font-medium sw-num">{code}</span>
+            {isDoublesRank(code) ? (
+              <span className="text-muted-foreground">
+                {' · '}
+                {partner
+                  ? `with ${partner.name || '(unnamed)'}`
+                  : 'partner not assigned'}
+              </span>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

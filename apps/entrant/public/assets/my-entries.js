@@ -20,7 +20,7 @@
  * half runs only when the mount point exists.
  */
 
-import { createPersonRef } from './person-ref.js';
+import { personRefModel, createPersonRef } from './person-ref.js';
 
 // ---- pure decisions -------------------------------------------------------
 
@@ -28,6 +28,16 @@ import { createPersonRef } from './person-ref.js';
  * currency field exists, and inventing one would be a lie with a $ on it). */
 export function formatCents(cents) {
   return cents === null || cents === undefined ? '' : (cents / 100).toFixed(2);
+}
+
+/** An amount with the organizer's currency where they stated one
+ * (`GBP 55.00`), else the figure plus a plain "currency not stated"
+ * (refinement 2026-09-12; mirrors `app/lib/money.ts` `formatMoney`). */
+export function formatMoney(cents, currency) {
+  const figure = formatCents(cents);
+  if (figure === '') return '';
+  const code = (currency ?? '').trim().toUpperCase();
+  return code === '' ? `${figure} (currency not stated)` : `${code} ${figure}`;
 }
 
 const MONTHS_LONG = [
@@ -60,16 +70,44 @@ export function yearGroups(cards) {
   );
 }
 
-/** The §3.1 chip per card status: label + the tier's tone vocabulary. */
+/** The status word per card status: label + the tier's tone vocabulary.
+ *
+ * P9/D9: `played` is now claimed by the backend only where a published
+ * result actually names the player, and `past` is the honest label for a
+ * confirmed entry whose tournament date has gone by with no such evidence.
+ * `rejected` says so in the entrant's words rather than disappearing into
+ * "Withdrawn". */
 export function cardChip(status) {
   return (
     {
       awaiting: { label: 'Awaiting confirmation', tone: 'plain' },
+      waitlisted: { label: 'Waitlisted', tone: 'plain' },
       entered: { label: 'Entered', tone: 'live' },
       played: { label: 'Played', tone: 'done' },
+      past: { label: 'Entered', tone: 'plain' },
+      rejected: { label: 'Not accepted', tone: 'plain' },
       withdrawn: { label: 'Withdrawn', tone: 'plain' },
     }[status] ?? { label: 'Awaiting confirmation', tone: 'plain' }
   );
+}
+
+/** Active vs past is a GROUPING question and the server answers it — the
+ * card carries `isPast`, derived from the effective event clock, so the
+ * page never has to compare the browser's idea of today against a date
+ * string. The two older statuses are accepted as evidence of pastness so an
+ * older payload (or a test fixture) still groups sensibly. */
+export function isPastCard(card) {
+  return card?.isPast === true || card?.status === 'played' || card?.status === 'past';
+}
+
+/** Two sections, active first, card order preserved inside each. Either
+ * section is omitted when empty — an empty "Past" heading is furniture. */
+export function activeAndPast(cards) {
+  const groups = [
+    { key: 'active', label: 'Active', cards: cards.filter((c) => !isPastCard(c)) },
+    { key: 'past', label: 'Past', cards: cards.filter((c) => isPastCard(c)) },
+  ];
+  return groups.filter((group) => group.cards.length > 0);
 }
 
 /** ISO UTC instant -> "5 Sep 2026, 18:00 UTC" (no JS helper importable from
@@ -92,23 +130,97 @@ export function formatWithdrawDeadline(iso) {
 
 /** Quoted while awaiting, plain total after; nothing on withdrawn cards or
  * unpriced pages. Register per the mockup review, symbol-less per the tier.
- * E2: a still-open withdrawal deadline is appended with the tier's own
- * middle-dot separator. */
+ *
+ * P9/D9 + D1: the withdrawal deadline is no longer glued on behind a middle
+ * dot — it is its own line (`withdrawLine`), and both live inside the entry
+ * detail rather than on the summary row. */
 export function priceLine(card) {
   if (card.feeTotalCents === null || card.feeTotalCents === undefined) return null;
-  if (card.status === 'withdrawn') return null;
-  const deadline = formatWithdrawDeadline(card.withdrawsUntil);
-  const suffix = deadline ? ` · withdrawal open until ${deadline}` : '';
+  if (card.status === 'withdrawn' || card.status === 'rejected') return null;
   if (card.status === 'awaiting') {
-    return `Quoted ${formatCents(card.feeTotalCents)} · pay at the desk${suffix}`;
+    return `Quoted ${formatMoney(card.feeTotalCents, card.feeCurrency)}, payable to the organizer`;
   }
-  return `Total ${formatCents(card.feeTotalCents)}${suffix}`;
+  return `Total ${formatMoney(card.feeTotalCents, card.feeCurrency)}`;
+}
+
+/**
+ * The wire's pending reasons, in the entrant's words (refinement
+ * 2026-09-12). Each names what is actually happening in the process, never
+ * the desk's queue vocabulary: "Player identity review needed" told an
+ * entrant nothing they could recognise as their own situation.
+ */
+export const PENDING_REASON_TEXT = Object.freeze({
+  awaiting_partner: 'Waiting for your partner to accept',
+  awaiting_payment: 'Payment outstanding',
+  over_cap: 'Waiting for a place',
+  needs_review: "Waiting for the organizer's decision",
+  needs_review_person: "The organizer is checking this player's details",
+  pair_conflict: 'The organizer is checking this pairing',
+});
+
+export function pendingReasonText(reason) {
+  return Object.hasOwn(PENDING_REASON_TEXT, reason) ? PENDING_REASON_TEXT[reason] : null;
+}
+
+/**
+ * The card's ONE next step, separated from its status (refinement
+ * 2026-09-12): what, if anything, the entrant or the organizer still has to
+ * do, in plain language, with at most one action beside it. The status word
+ * says where the entry stands; this says what happens next. Every other
+ * requirement stays reachable inside "View entry".
+ *
+ * Precedence, most actionable first: something the ENTRANT can do now
+ * (an outstanding payment — the receipt carries the instructions; an
+ * unconfirmed email that blocks changes — the verify page resends), then
+ * what they are waiting on someone else for. `null` for a settled card.
+ */
+export function nextStep(card, emailVerified) {
+  const lines = card?.events ?? [];
+  const live = lines.filter((line) => line.state !== 'withdrawn' && line.state !== 'rejected');
+  if (live.length === 0 || isPastCard(card)) return null;
+  const reasons = new Set(live.flatMap((line) => line.pendingReasons ?? []));
+  const receipt = receiptHref(card);
+  if (reasons.has('awaiting_payment')) {
+    return {
+      text: "Payment outstanding. Follow the organizer's instructions on your receipt.",
+      action: receipt ? { label: 'View receipt', href: receipt } : null,
+    };
+  }
+  if (live.some((line) => line.partnerInviteMailFailed)) {
+    return {
+      text: 'The invitation email to your partner could not be sent. Let them know directly.',
+      action: null,
+    };
+  }
+  if (reasons.has('awaiting_partner')) {
+    return { text: 'Waiting for your partner to accept the invitation.', action: null };
+  }
+  for (const reason of ['pair_conflict', 'needs_review_person', 'needs_review', 'over_cap']) {
+    if (reasons.has(reason)) return { text: `${PENDING_REASON_TEXT[reason]}.`, action: null };
+  }
+  if (!emailVerified && live.some((line) => line.canWithdraw)) {
+    return {
+      text: 'Confirm your email address to change or withdraw this entry.',
+      action: { label: 'Confirm your email', href: '/e/verify' },
+    };
+  }
+  if (card.status === 'awaiting' || live.some((line) => line.state === 'awaiting' || line.state === 'waitlisted')) {
+    return { text: 'Waiting for the organizer to confirm.', action: null };
+  }
+  return null;
+}
+
+/** The still-open self-serve withdrawal window, as its own statement. */
+export function withdrawLine(card) {
+  const deadline = formatWithdrawDeadline(card.withdrawsUntil);
+  return deadline ? `You can withdraw yourself until ${deadline}` : null;
 }
 
 /** A line wears its own chip only when it disagrees with the card. */
 export function lineChip(cardStatus, state) {
   if (state === 'withdrawn') return 'Withdrawn';
   if (state === 'rejected') return 'Not accepted';
+  if (state === 'waitlisted') return 'Waitlisted';
   if (state === 'awaiting' && cardStatus !== 'awaiting') return 'Awaiting confirmation';
   if (state === 'entered' && cardStatus === 'awaiting') return 'Entered';
   return null;
@@ -130,7 +242,7 @@ export function receiptHref(card) {
 /** "View results" exists only where the player page answers (§4): played
  * card, published entrant pages, and a real person key to point at. */
 export function resultsHref(card, line) {
-  if (card.status !== 'played' || !card.entrantsPublished) return null;
+  if (!isPastCard(card) || !card.entrantsPublished) return null;
   const personId = line.player?.identity?.id;
   if (!card.slug || !personId) return null;
   return `/e/${encodeURIComponent(card.slug)}/players/${encodeURIComponent(personId)}`;
@@ -149,7 +261,8 @@ export function resultsHref(card, line) {
  * - the line is not withdrawable (already withdrawn, decided, or past the
  *   organiser's deadline) -> nothing at all. `canWithdraw` is the server's
  *   own predicate, so this never disagrees with the route.
- * - otherwise -> the two actions, withdraw and withdraw-and-erase.
+ * - otherwise -> the one action, withdraw (erasure is an option inside its
+ *   confirmation, not a second competing button — see `withdrawControls`).
  */
 export function withdrawAffordance(line, emailVerified) {
   if (!line?.entryId) return null;
@@ -211,6 +324,35 @@ function receiptLink(doc, href) {
   return view;
 }
 
+/** The local simulator's bootstrap workspace label is an implementation
+ * fallback, not organizer information an entrant can act on — the receipt and
+ * the tournament frame suppress it too (P9/D9: "remove generic organization
+ * fallback text"). */
+function realOrgName(name) {
+  return name && name !== 'Local Workspace' ? name : null;
+}
+
+/** A field on the entry detail: small label, plain value, no separators. */
+function factEl(doc, term, value) {
+  const wrap = el(doc, 'div', 'grid gap-0.5');
+  wrap.appendChild(
+    el(doc, 'dt', 'text-xs font-medium uppercase tracking-wide text-muted-foreground', term),
+  );
+  wrap.appendChild(el(doc, 'dd', 'text-sm text-foreground', value));
+  return wrap;
+}
+
+/**
+ * One card: a summary a reader can scan, and one disclosure holding the
+ * management detail (P9/D9).
+ *
+ * The summary carries tournament and date, then one row per entry with the
+ * participant, the event, the partner where there is one, and the precise
+ * state. Everything else the old card printed on every line — fees, the
+ * reference, the withdrawal deadline, the receipt link, the withdraw
+ * controls — moved inside "View entry", which is the one action on the
+ * summary.
+ */
 function cardEl(doc, card, emailVerified) {
   const article = el(
     doc,
@@ -239,22 +381,37 @@ function cardEl(doc, card, emailVerified) {
         card.tournamentName ?? 'Tournament'),
     );
   }
-  const metaParts = [card.orgName, card.venueName, formatDate(card.date)].filter(Boolean);
-  if (metaParts.length > 0) {
-    title.appendChild(
-      el(doc, 'p', 'mt-0.5 text-sm text-muted-foreground', metaParts.join(' · ')),
-    );
+  // D1: date and venue are two fields with space between them, not one
+  // middle-dot string. The organizer name is dropped from the summary
+  // altogether — it is on the tournament page, and the fallback label was
+  // noise on every row.
+  const meta = el(doc, 'p', 'mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted-foreground');
+  for (const part of [formatDate(card.date), card.venueName]) {
+    if (part) meta.appendChild(el(doc, 'span', undefined, part));
   }
+  if (meta.childNodes.length > 0) title.appendChild(meta);
   head.appendChild(title);
   const status = cardChip(card.status);
   head.appendChild(statusEl(doc, status.label, status.tone));
+  const step = nextStep(card, emailVerified);
+  if (step) {
+    const row = el(doc, 'p', 'flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 text-sm');
+    row.appendChild(el(doc, 'span', 'text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground', 'Next step'));
+    row.appendChild(el(doc, 'span', 'text-foreground', step.text));
+    if (step.action) {
+      const go = el(doc, 'a', 'text-sm font-medium text-accent underline-offset-4 hover:underline', step.action.label);
+      go.href = step.action.href;
+      row.appendChild(go);
+    }
+    head.appendChild(row);
+  }
   article.appendChild(head);
 
   // One card holds every line this account submitted for the tournament,
   // which can be several people (a parent entering two children). The
-  // footer carries the "View results" link when the card resolves to ONE
+  // detail carries the "View results" link when the card resolves to ONE
   // player page; with several distinct pages each line keeps its own link,
-  // because a footer with two identical labels would name nobody.
+  // because one label would name nobody.
   const resultHrefs = [
     ...new Set((card.events ?? []).map((line) => resultsHref(card, line)).filter(Boolean)),
   ];
@@ -267,10 +424,7 @@ function cardEl(doc, card, emailVerified) {
       'li',
       'flex flex-wrap items-baseline justify-between gap-4 py-2.5 text-sm text-foreground',
     );
-    const lead = el(doc, 'span', 'min-w-0');
-    lead.appendChild(el(doc, 'span', 'font-medium', line.eventCode));
-    lead.appendChild(el(doc, 'span', 'text-muted-foreground', ` · ${line.discipline} · `));
-    row.appendChild(lead);
+    const lead = el(doc, 'span', 'flex min-w-0 flex-wrap items-baseline gap-x-2');
     lead.appendChild(createPersonRef(doc, {
       slug: card.slug ?? '',
       identity: line.player?.identity ?? null,
@@ -279,7 +433,7 @@ function cardEl(doc, card, emailVerified) {
       className: 'font-medium',
     }));
     if (line.partner) {
-      lead.appendChild(el(doc, 'span', 'text-muted-foreground', ' with '));
+      lead.appendChild(el(doc, 'span', 'text-muted-foreground', 'with'));
       lead.appendChild(createPersonRef(doc, {
         slug: card.slug ?? '',
         identity: line.partner.identity ?? null,
@@ -287,10 +441,22 @@ function cardEl(doc, card, emailVerified) {
         label: line.partner.label ?? 'Partner',
       }));
     }
+    lead.appendChild(el(doc, 'span', 'font-medium', line.eventCode));
+    lead.appendChild(el(doc, 'span', 'text-muted-foreground', line.discipline));
+    row.appendChild(lead);
     const own = lineChip(card.status, line.state);
     if (own) {
       row.appendChild(
         el(doc, 'span', `${CHIP} border-rule-control text-muted-foreground`, own),
+      );
+    }
+    for (const reason of line.pendingReasons ?? []) {
+      const text = pendingReasonText(reason);
+      if (text) row.appendChild(el(doc, 'span', 'text-xs text-muted-foreground', text));
+    }
+    if (line.resultBadge) {
+      row.appendChild(
+        el(doc, 'span', `${CHIP} border-status-done text-status-done`, line.resultBadge),
       );
     }
     if (line.partnerInviteMailFailed) {
@@ -308,148 +474,232 @@ function cardEl(doc, card, emailVerified) {
         ),
       );
     }
-    if (line.resultBadge) {
-      row.appendChild(
-        el(doc, 'span', `${CHIP} border-status-done text-status-done`, line.resultBadge),
-      );
-    }
-    // V3-24-1: a card folds every act this account made against one
-    // tournament, and the footer can only name one of them. A line from an
-    // OLDER act says so, because "quote your reference" is useless advice
-    // when the entrant holds two and the page shows one. A line from the
-    // card's own act stays silent — repeating the footer on every row is
-    // noise, not information.
-    if (line.shortReference && line.shortReference !== card.shortReference) {
-      row.appendChild(
-        el(
-          doc,
-          'span',
-          'text-xs text-muted-foreground',
-          `Reference ${line.shortReference}`,
-        ),
-      );
-    }
-    const href = resultsHref(card, line);
-    if (href && !footerHref) {
-      row.appendChild(resultsLink(doc, href));
-    }
-    const affordance = withdrawAffordance(line, emailVerified);
-    if (affordance?.kind === 'reason') {
-      row.appendChild(
-        el(doc, 'span', 'text-xs text-muted-foreground', affordance.text),
-      );
-    } else if (affordance?.kind === 'actions') {
-      row.appendChild(withdrawControls(doc, affordance.entryId, row));
-    }
     lines.appendChild(row);
   }
   article.appendChild(lines);
 
-  const price = priceLine(card);
-  const receiptHrefValue = receiptHref(card);
-  if (price || footerHref || receiptHrefValue || card.shortReference) {
-    const footer = el(
-      doc,
-      'footer',
-      'flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft px-6 py-3 text-xs text-muted-foreground',
-    );
-    if (price) footer.appendChild(el(doc, 'span', undefined, price));
-    // V3-24-1: the entrant's own handle on this entry, on the surface they
-    // reach for before the receipt. It is the same string the receipt page
-    // prints and the same one in the receipt link beside it.
-    if (card.shortReference) {
-      footer.appendChild(
-        el(doc, 'span', 'tabular-nums', `Reference ${card.shortReference}`),
-      );
-    }
-    const links = el(doc, 'span', 'flex items-center gap-3');
-    if (receiptHrefValue) links.appendChild(receiptLink(doc, receiptHrefValue));
-    if (footerHref) links.appendChild(resultsLink(doc, footerHref));
-    if (links.childNodes.length > 0) footer.appendChild(links);
-    article.appendChild(footer);
-  }
+  article.appendChild(detailEl(doc, card, emailVerified, footerHref));
   return article;
 }
 
 /**
- * The two-click arm for an irreversible act (E2).
+ * "View entry" — the card's one action, and everything management-shaped
+ * behind it (P9/D9).
+ *
+ * A native `<details>`: no route, no state to keep, keyboard-operable for
+ * free, and it collapses again. Inside it, in this order: the money and the
+ * reference the organizer will ask for, the links out (receipt, results),
+ * and last the withdrawal, which is the only irreversible thing here.
+ */
+function detailEl(doc, card, emailVerified, footerHref) {
+  const details = el(doc, 'details', 'border-t border-rule-soft px-6 py-3');
+  const summary = el(
+    doc,
+    'summary',
+    'cursor-pointer text-sm font-medium text-accent underline-offset-4 hover:underline',
+    'View entry',
+  );
+  details.appendChild(summary);
+
+  const body = el(doc, 'div', 'grid gap-4 pt-3');
+  const facts = el(doc, 'dl', 'grid gap-3 sm:grid-cols-2');
+
+  // V3-24-1: a card folds every act this account made against one
+  // tournament. The card's own reference is the newest; a line entered under
+  // an older act names its own, because "quote your reference" is useless
+  // advice when the entrant holds two and the page shows one.
+  if (card.shortReference) {
+    facts.appendChild(factEl(doc, 'Reference', card.shortReference));
+  }
+  const olderRefs = [
+    ...new Set(
+      (card.events ?? [])
+        .map((line) => line.shortReference)
+        .filter((ref) => ref && ref !== card.shortReference),
+    ),
+  ];
+  if (olderRefs.length > 0) {
+    facts.appendChild(factEl(doc, 'Earlier entries', olderRefs.join(', ')));
+  }
+  const price = priceLine(card);
+  if (price) facts.appendChild(factEl(doc, 'Fees', price));
+  const org = realOrgName(card.orgName);
+  if (org) facts.appendChild(factEl(doc, 'Organizer', org));
+  const withdrawal = withdrawLine(card);
+  if (withdrawal) facts.appendChild(factEl(doc, 'Withdrawal', withdrawal));
+  if (facts.childNodes.length > 0) body.appendChild(facts);
+
+  const links = el(doc, 'p', 'flex flex-wrap items-center gap-4');
+  const receiptHrefValue = receiptHref(card);
+  if (receiptHrefValue) links.appendChild(receiptLink(doc, receiptHrefValue));
+  if (footerHref) links.appendChild(resultsLink(doc, footerHref));
+  for (const line of card.events ?? []) {
+    const href = footerHref ? null : resultsHref(card, line);
+    if (href) links.appendChild(resultsLink(doc, href));
+  }
+  if (links.childNodes.length > 0) body.appendChild(links);
+
+  // One withdrawal control per entry that the SERVER says can be withdrawn
+  // right now — `canWithdraw` is `assert_withdrawable` asked rather than
+  // re-implemented, so a control that renders is one the route accepts.
+  const manage = el(doc, 'div', 'grid gap-2');
+  let reasonShown = false;
+  for (const line of card.events ?? []) {
+    const affordance = withdrawAffordance(line, emailVerified);
+    if (!affordance) continue;
+    if (affordance.kind === 'reason') {
+      // Once per card, not once per line: the account is unverified, which
+      // is one fact about the reader and not a property of each entry.
+      if (reasonShown) continue;
+      reasonShown = true;
+      manage.appendChild(
+        el(doc, 'p', 'text-xs text-muted-foreground', affordance.text),
+      );
+      continue;
+    }
+    manage.appendChild(withdrawControls(doc, affordance.entryId, card, line));
+  }
+  if (manage.childNodes.length > 0) body.appendChild(manage);
+
+  details.appendChild(body);
+  return details;
+}
+
+/** The player and event this withdrawal would affect, in one phrase. */
+function withdrawSubject(line) {
+  const player =
+    personRefModel({ slug: '', identity: line.player?.identity ?? null, state: line.player?.resolution ?? 'dead', label: line.player?.label ?? 'this player' }).text;
+  const event = [line.eventCode, line.discipline].filter(Boolean).join(' ');
+  return event ? `${player} from ${event}` : player;
+}
+
+/**
+ * ONE withdrawal action, behind a focused confirmation (P9/D9, E2).
  *
  * **`window.confirm` is banned product-wide** — the 2026-07-11 interaction
  * audit removed the last call site, because a native modal blocks the whole
  * event loop and, in an automated browser, silently deadlocks the page. The
  * replacement everywhere else is the same shape as this: the first press
- * ARMS and states exactly what is about to happen, the second press does it,
- * and Cancel is always the wider target.
+ * opens a confirmation that states exactly what is about to happen, the
+ * second press does it, and Cancel is always the wider target.
  *
- * Withdraw and erase are separate armed actions rather than a button with a
- * checkbox: they have different consequences, and a tickbox next to a
- * destructive button is read after the click at least as often as before it.
+ * Withdraw and withdraw-and-erase used to sit side by side as two equally
+ * weighted destructive links on every row. They are not two acts — the
+ * backend models erasure as a FLAG on the one withdrawal transition
+ * (`WithdrawRequest.erase`) — and presenting them as twins invited the
+ * reader to pick the irreversible one by mistake. There is one action now;
+ * erasure is an unticked option inside its confirmation, described in the
+ * entrant's terms, and the request body is byte-for-byte what it was.
+ *
+ * The confirmation states three things and no more: who is being withdrawn
+ * from what, that a doubles partner's own entry is NOT withdrawn with it
+ * (`lifecycle.withdraw` touches one entry), and — only when the card knows
+ * one — nothing at all about refunds. No money claim is made here, because
+ * no refund policy is carried on the wire and an invented one is worse than
+ * silence.
  */
-function withdrawControls(doc, entryId, row) {
-  const wrap = el(doc, 'span', 'ml-auto flex items-center gap-2');
+function withdrawControls(doc, entryId, card, line) {
+  const wrap = el(doc, 'div', 'grid gap-2');
   const linkClass =
-    'text-xs font-medium text-muted-foreground underline-offset-4 hover:underline';
-
-  const arm = (label, prompt, erase) => {
-    const button = el(doc, 'button', linkClass, label);
-    button.type = 'button';
-    button.addEventListener('click', () => {
-      wrap.textContent = '';
-      wrap.appendChild(el(doc, 'span', 'text-xs text-muted-foreground', prompt));
-
-      const go = el(
-        doc,
-        'button',
-        'text-xs font-medium text-status-attention underline-offset-4 hover:underline',
-        erase ? 'Withdraw and erase' : 'Withdraw',
-      );
-      go.type = 'button';
-      go.addEventListener('click', () => {
-        go.disabled = true;
-        void submitWithdraw(doc, entryId, erase, row, wrap);
-      });
-
-      const cancel = el(doc, 'button', linkClass, 'Keep it');
-      cancel.type = 'button';
-      cancel.addEventListener('click', () => {
-        wrap.textContent = '';
-        build();
-      });
-
-      wrap.appendChild(go);
-      wrap.appendChild(cancel);
-    });
-    return button;
-  };
+    'text-sm font-medium text-muted-foreground underline-offset-4 hover:underline';
 
   function build() {
-    wrap.appendChild(arm('Withdraw', 'Withdraw this entry?', false));
-    wrap.appendChild(
-      arm(
-        'Withdraw and erase',
-        'Withdraw and erase this player’s details? This cannot be undone.',
-        true,
+    wrap.textContent = '';
+    const start = el(doc, 'button', linkClass, 'Withdraw entry');
+    start.type = 'button';
+    start.addEventListener('click', confirm);
+    wrap.appendChild(start);
+  }
+
+  function confirm() {
+    wrap.textContent = '';
+    const panel = el(
+      doc,
+      'div',
+      'grid gap-2 rounded-md border border-rule-soft bg-surface-sunken p-3',
+    );
+    panel.appendChild(
+      el(
+        doc,
+        'p',
+        'text-sm text-foreground',
+        `Withdraw ${withdrawSubject(line)}?`,
       ),
     );
+    if (line.partner) {
+      panel.appendChild(
+        el(
+          doc,
+          'p',
+          'text-xs text-muted-foreground',
+          'Your partner’s own entry is not withdrawn with yours. Tell them directly.',
+        ),
+      );
+    }
+    panel.appendChild(
+      el(
+        doc,
+        'p',
+        'text-xs text-muted-foreground',
+        'Ask the organizer about anything you have already paid.',
+      ),
+    );
+
+    const eraseId = `erase-${entryId}`;
+    const eraseRow = el(doc, 'label', 'flex items-start gap-2 text-xs text-muted-foreground');
+    const erase = doc.createElement('input');
+    erase.type = 'checkbox';
+    erase.id = eraseId;
+    erase.className = 'mt-0.5';
+    eraseRow.appendChild(erase);
+    eraseRow.appendChild(
+      el(
+        doc,
+        'span',
+        undefined,
+        'Also erase this player’s personal details. The entry stays as the organizers’ record. This cannot be undone.',
+      ),
+    );
+    panel.appendChild(eraseRow);
+
+    const actions = el(doc, 'div', 'flex flex-wrap items-center gap-3');
+    const go = el(
+      doc,
+      'button',
+      'text-sm font-medium text-status-attention underline-offset-4 hover:underline',
+      'Withdraw entry',
+    );
+    go.type = 'button';
+    go.addEventListener('click', () => {
+      go.disabled = true;
+      void submitWithdraw(doc, entryId, erase.checked, wrap);
+    });
+    const cancel = el(doc, 'button', linkClass, 'Keep it');
+    cancel.type = 'button';
+    cancel.addEventListener('click', build);
+    actions.append(go, cancel);
+    panel.appendChild(actions);
+    wrap.appendChild(panel);
   }
+
   build();
   return wrap;
 }
 
 /**
- * POST the withdrawal and rewrite the row in place.
+ * POST the withdrawal and rewrite the control in place.
  *
  * Carries `X-ShuttleWorks-CSRF` because the middleware requires it of every
  * cookie-carrying write; a native form could not send it, which is why this
  * one control on this one already-scripted page is a fetch rather than the
  * `<form>` every other entrant write uses.
  *
- * The row is rewritten from the ANSWER, not optimistically: a 409 (somebody
- * else moved it, the deadline passed while the page sat open) has to read as
- * "that did not happen", and an optimistic update would have already said it
- * did.
+ * The outcome is read from the ANSWER, not applied optimistically: a 409
+ * (somebody else moved it, the deadline passed while the page sat open) has
+ * to read as "that did not happen", and an optimistic update would have
+ * already said it did.
  */
-async function submitWithdraw(doc, entryId, erase, row, wrap) {
+async function submitWithdraw(doc, entryId, erase, wrap) {
   let response;
   try {
     response = await fetch(
@@ -467,7 +717,7 @@ async function submitWithdraw(doc, entryId, erase, row, wrap) {
   } catch {
     wrap.textContent = '';
     wrap.appendChild(
-      el(doc, 'span', 'text-xs text-status-attention', 'Could not reach the server. Try again.'),
+      el(doc, 'p', 'text-sm text-status-attention', 'Could not reach the server. Try again.'),
     );
     return;
   }
@@ -480,14 +730,18 @@ async function submitWithdraw(doc, entryId, erase, row, wrap) {
       /* keep the default — a body we cannot read is not a message. */
     }
     wrap.textContent = '';
-    wrap.appendChild(el(doc, 'span', 'text-xs text-status-attention', message));
+    wrap.appendChild(el(doc, 'p', 'text-sm text-status-attention', message));
     return;
   }
   wrap.textContent = '';
   wrap.appendChild(
-    el(doc, 'span', 'text-xs text-muted-foreground', erase ? 'Withdrawn and erased' : 'Withdrawn'),
+    el(
+      doc,
+      'p',
+      'text-sm text-muted-foreground',
+      erase ? 'Withdrawn, and the details were erased.' : 'Withdrawn.',
+    ),
   );
-  row.classList.add('opacity-60');
 }
 
 
@@ -514,7 +768,10 @@ export function accountPanel(doc, { onExport, onErase }) {
     'mt-8 grid gap-3 rounded-lg border border-rule-soft bg-surface-raised p-4',
   );
   panel.appendChild(
-    el(doc, 'h2', 'font-display text-base font-bold tracking-tight text-foreground', 'Your account'),
+    // `h3`: this panel now sits INSIDE the page's Settings section (whose
+    // `h2` is in `routes/myEntries.tsx`), so the heading level follows the
+    // document rather than restarting at 2 in the middle of a section.
+    el(doc, 'h3', 'font-display text-base font-bold tracking-tight text-foreground', 'Your account'),
   );
 
   const actions = el(doc, 'div', 'flex flex-wrap items-center gap-3');
@@ -600,9 +857,22 @@ async function downloadExport(doc) {
 
 /** Render the whole answer into `root` (exported for the test suite). */
 export function render(root, data) {
-  const doc = root.ownerDocument;
-  root.textContent = '';
+  // `root` is null on the settings page, which has the account mount and
+  // no entries list; the document is then the global one.
+  const doc = root?.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+  if (!doc) return;
   const cards = data?.tournaments ?? [];
+  const verified = data?.emailVerified === true;
+
+  // Refinement 2026-09-12: the account's privacy controls live on their own
+  // page (`/e/me/settings`, `routes/mySettings.tsx`), which mounts
+  // `#my-account-root` and loads this same module. They render wherever
+  // that mount exists and nowhere else — never appended to the entries
+  // list, which is a different task.
+  renderSettings(doc, verified);
+
+  if (!root) return;
+  root.textContent = '';
   if (cards.length === 0) {
     root.appendChild(
       el(doc, 'p', 'text-muted-foreground',
@@ -610,61 +880,93 @@ export function render(root, data) {
     );
     return;
   }
-  if (data?.emailVerified === true) {
-    // Only for a verified account: both rights are irreversible or
-    // disclosing, and E2's reasoning applies — an unverified account has
-    // not shown it controls the address it claims.
-    root.appendChild(
-      accountPanel(doc, {
-        onExport: () => downloadExport(doc),
-        onErase: async () => {
-          const response = await fetch('/e/api/me/erase', {
-            method: 'POST',
-            headers: { accept: 'application/json', 'X-ShuttleWorks-CSRF': '1' },
-          });
-          if (response.ok) window.location.assign('/e/login');
-        },
-      }),
-    );
-  }
-  for (const group of yearGroups(cards)) {
+  // Active first, then past (D9). Grouping by YEAR answered a question
+  // nobody asked of this page: what an entrant looks for here is the
+  // tournament they still have something to do about.
+  for (const group of activeAndPast(cards)) {
     const section = el(doc, 'section', 'grid gap-3');
     section.appendChild(
       el(doc, 'h2', 'mt-2 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground',
-        group.year),
+        group.label),
     );
     for (const card of group.cards) {
-      section.appendChild(cardEl(doc, card, data?.emailVerified === true));
+      section.appendChild(cardEl(doc, card, verified));
     }
     root.appendChild(section);
   }
 }
 
-async function boot(root) {
+/** Put the account panel in the settings page's mount, if this document has one. */
+function renderSettings(doc, verified) {
+  const slot = doc.getElementById('my-account-root');
+  if (!slot) return;
+  slot.textContent = '';
+  if (!verified) {
+    // Both rights are irreversible or disclosing, and E2's reasoning
+    // applies — an unverified account has not shown it controls the address
+    // it claims. Say so where the controls would be, rather than leaving an
+    // empty section the reader has to interpret.
+    const note = el(doc, 'p', 'text-sm text-muted-foreground',
+      'Confirm your email address to download or erase your details. ');
+    const go = el(doc, 'a', 'font-medium text-accent underline-offset-4 hover:underline', 'Confirm your email');
+    go.href = '/e/verify';
+    note.appendChild(go);
+    slot.appendChild(note);
+    return;
+  }
+  const panel = accountPanel(doc, {
+    onExport: () => downloadExport(doc),
+    onErase: async () => {
+      const response = await fetch('/e/api/me/erase', {
+        method: 'POST',
+        headers: { accept: 'application/json', 'X-ShuttleWorks-CSRF': '1' },
+      });
+      if (response.ok) window.location.assign('/e/login');
+    },
+  });
+  slot.appendChild(panel);
+}
+
+/** The page's own address, for the sign-in return: the entries list or the
+ * settings page, whichever this document is. */
+function selfPath() {
+  return document.getElementById('my-entries-root') ? '/e/me/entries' : '/e/me/settings';
+}
+
+function fail(root, slot) {
+  const copy = root
+    ? 'Your entries could not be loaded. Please try again in a moment.'
+    : 'Your account details could not be loaded. Please try again in a moment.';
+  (root ?? slot).textContent = copy;
+}
+
+async function boot(root, slot) {
   let response;
   try {
+    // The one account read this module makes. On the settings page it is
+    // read for `emailVerified` alone; the list is not rendered there.
     response = await fetch('/e/api/me/entries', {
       headers: { accept: 'application/json' },
     });
   } catch {
-    root.textContent = 'Your entries could not be loaded. Please try again in a moment.';
+    fail(root, slot);
     return;
   }
   if (response.status === 401) {
     // §3.1: signed-out visitors go to sign-in with a return-to. The target
     // matches the `safeNext` allowlist on both tiers.
-    window.location.assign('/e/login?next=/e/me/entries');
+    window.location.assign(`/e/login?next=${selfPath()}`);
     return;
   }
   if (!response.ok) {
-    root.textContent = 'Your entries could not be loaded. Please try again in a moment.';
+    fail(root, slot);
     return;
   }
   let data;
   try {
     data = await response.json();
   } catch {
-    root.textContent = 'Your entries could not be loaded. Please try again in a moment.';
+    fail(root, slot);
     return;
   }
   render(root, data);
@@ -672,5 +974,6 @@ async function boot(root) {
 
 if (typeof document !== 'undefined') {
   const root = document.getElementById('my-entries-root');
-  if (root) void boot(root);
+  const slot = document.getElementById('my-account-root');
+  if (root || slot) void boot(root, slot);
 }

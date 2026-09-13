@@ -16,6 +16,7 @@ from bracket import brackets  # Backend-merge arc PR 2 — draws / advancement /
 from display import display as display_api  # SP-CLOUD-2 — capability-token spectator display
 from entries import entries_json as entries_json_api  # SP-PROGRAM-1 Phase 6 — the entrant tier's JSON surface
 from entries import entries_me as entries_me_api  # SP-P7 — the signed-in entrant's own record
+from competition import routes as competition_api
 from entries import entries_routes as entries_api  # SP-E1-1 — the operator's Entries desk
 from entries import entries_site as entries_site_api  # SP-P7 — public draws/player pages
 from entries import partner_routes as partner_invites_api  # E3 (Phase 8) — the doubles partner invite
@@ -74,17 +75,12 @@ log = logging.getLogger("scheduler.app")
 telemetry_runtime = configure_telemetry(settings, role="api")
 
 def _run_migrations() -> None:
-    """Apply outstanding Alembic migrations on startup.
-
-    Idempotent: a no-op once the database is at the latest revision.
-    Tests that build their own schema via ``Base.metadata.create_all``
-    skip this entirely (they don't invoke the lifespan).
-    """
+    """Upgrade before serving; snapshot SQLite and reject inconsistent results."""
     from alembic import command
     from alembic.config import Config
 
     # Built WITHOUT the .ini file, deliberately — the same construction
-    # ``tests/unit/test_entries_migration.py`` uses and for the same
+    # ``tests/backend/unit/test_baseline_schema.py`` uses and for the same
     # reason. ``env.py`` calls ``fileConfig`` only when it was handed an
     # ini, and ``fileConfig`` reconfigures the ROOT logger from
     # ``[logger_root] level = WARNING``. Running the app's migrations
@@ -100,7 +96,47 @@ def _run_migrations() -> None:
     # the CLI — this process has already imported the backend packages.
     cfg = Config()
     cfg.set_main_option("script_location", str(ALEMBIC_SCRIPTS))
-    command.upgrade(cfg, "head")
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+    from datetime import datetime, timezone
+    from pathlib import Path
+    import sqlite3
+
+    from db.session import engine
+
+    source = engine.url.database if engine.dialect.name == "sqlite" else None
+    existing_file = bool(
+        source and source != ":memory:" and Path(source).is_file()
+        and Path(source).stat().st_size > 0
+    )
+    with engine.connect() as connection:
+        current = MigrationContext.configure(connection).get_current_heads()
+    head = ScriptDirectory.from_config(cfg).get_current_head()
+    if engine.dialect.name == "sqlite" and current != (head,):
+        if existing_file:
+            backup_dir = Path(settings.data_dir) / "backups"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+            backup = backup_dir / f"pre-migration-{head}-{timestamp}.db"
+            # SQLite's backup API copies a consistent database, including
+            # committed WAL pages that a plain file copy would miss.
+            with sqlite3.connect(source) as src, sqlite3.connect(backup) as dst:
+                src.backup(dst)
+            for stale in sorted(backup_dir.glob("pre-migration-*.db"),
+                                key=lambda path: path.stat().st_mtime_ns)[:-5]:
+                stale.unlink()
+            log.info("alembic_pre_migration_backup path=%s", backup)
+
+    with engine.connect() as connection:
+        cfg.attributes["connection"] = connection
+        command.upgrade(cfg, "head")
+        if engine.dialect.name == "sqlite":
+            violations = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                raise RuntimeError(
+                    f"Foreign key violations after migration: {violations!r}. "
+                    "Reset with make fixture-up (demo: make demo-rebuild)."
+                )
 
 
 @asynccontextmanager
@@ -126,7 +162,8 @@ async def lifespan(app: FastAPI):
         _run_migrations()
         log.info("alembic_upgrade_head_complete")
     except Exception:
-        log.exception("alembic_upgrade_failed — continuing; reads will surface")
+        log.exception("alembic_upgrade_failed")
+        raise
 
     # SP-CLOUD-2: materialize the local bootstrap identity so the
     # zero-friction solo-operator flow has a real users row (one code
@@ -292,6 +329,19 @@ app.add_middleware(
     ],
     expose_headers=["X-Request-ID", "ETag"],
 )
+
+
+from competition.service import CompetitionError
+from sqlalchemy.orm.exc import StaleDataError
+
+@app.exception_handler(StaleDataError)
+async def _stale_record_handler(request: Request, exc: StaleDataError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"error": "VERSION_CONFLICT", "message": "This record changed; reload and retry"})
+
+
+@app.exception_handler(CompetitionError)
+async def _competition_error_handler(request: Request, exc: CompetitionError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"error": exc.code, "message": str(exc)})
 
 
 @app.exception_handler(ConflictError)
@@ -511,6 +561,7 @@ app.include_router(schedule_suggestions.router, dependencies=_EVENT_DATA_DEP)
 app.include_router(match_state.router, dependencies=_EVENT_DATA_DEP)
 app.include_router(commands.router, dependencies=_EVENT_DATA_DEP)
 app.include_router(brackets.router, dependencies=_EVENT_DATA_DEP)
+app.include_router(competition_api.router, dependencies=_EVENT_DATA_DEP)
 app.include_router(tournaments.router, dependencies=_EVENT_DATA_DEP)
 app.include_router(setup_api.router, dependencies=_EVENT_DATA_DEP)
 app.include_router(workspace_modules.router, dependencies=_EVENT_DATA_DEP)

@@ -41,6 +41,9 @@ references a longer source, it names the file rather than duplicating it.
 | [0027](/explanation/decisions/0027-curated-data-components) | The curated Claude Design library is the visual source for the shared data components: Card, StatusPill, Badge, Avatar | Accepted (2026-09-04) |
 | [0028](/explanation/decisions/0028-entrant-site-port) | The public entrant site takes the curated Claude Design mock: four tournament tabs, webfonts on the public tier, key dates as rows | Accepted (2026-09-04) |
 | [0029](/explanation/decisions/0029-state-and-formatting-contract) | One state and formatting authority per domain: nine domains, explicit missing-data rules, no global enum | Proposed (2026-09-06) |
+| [0030](/explanation/decisions/0030-registration-competition) | Registration intent and competition membership | Accepted (2026-09-12) |
+| [0031](/explanation/decisions/0031-state-machine-schema-rulings) | State-machine schema rulings and missing source tables | Proposed; five open rulings (2026-09-13) |
+| [0032](/explanation/decisions/0032-prelaunch-migration-policy) | Pre-launch migration policy and rollout rulings | Proposed; four open rulings (2026-09-13) |
 
 ## Format
 

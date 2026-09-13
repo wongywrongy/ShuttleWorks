@@ -148,6 +148,8 @@ def test_entry_event_paths_carry_only_the_create(app):
         if "entry-event" in path
         for method in operations
     }
+    # The default-target command has no code field and cannot rename an event.
+    found.discard(("PUT", "/tournaments/{tournament_id}/competition/entry-events/{entry_event_id}/default"))
     assert found == _CODE_WRITERS, f"{_VIOLATION}\nfound: {sorted(found)}"
 
 

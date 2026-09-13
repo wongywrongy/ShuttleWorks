@@ -571,3 +571,31 @@ def test_an_unrecorded_zero_zero_is_not_published_as_a_score(client, workspace):
     # A recorded 0–0 outcome is a real (if unusual) result; publish it.
     assert body["m-done"]["score"] == {"sideA": 0, "sideB": 0}
     assert body["m-real"]["score"] == {"sideA": 2, "sideB": 1}
+
+
+def test_two_first_display_opens_converge_on_one_capability(client, monkeypatch):
+    import uuid
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from sqlalchemy.orm import Session
+    from db.models import DisplayToken
+    from db.session import SessionLocal
+    from repositories import LocalRepository
+
+    tid = uuid.UUID(seed_tournament(client, name="Concurrent display opens"))
+    both_read = Barrier(2)
+    get = Session.get
+    def overlapping_get(session, model, key, *args, **kwargs):
+        result = get(session, model, key, *args, **kwargs)
+        if model is DisplayToken and not session.info.get("first_token_read"):
+            session.info["first_token_read"] = True
+            assert result is None
+            both_read.wait(timeout=10)
+        return result
+    monkeypatch.setattr(Session, "get", overlapping_get)
+    def open_display(candidate):
+        with SessionLocal() as session:
+            return LocalRepository(session).get_or_create_display_token(tid, candidate)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        tokens = list(pool.map(open_display, ["isolated-candidate-a", "isolated-candidate-b"]))
+    assert tokens[0] == tokens[1]

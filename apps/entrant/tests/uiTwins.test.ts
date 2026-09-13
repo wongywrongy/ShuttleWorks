@@ -37,11 +37,10 @@ const PRIMARY_BUTTON =
 
 /** Each JS twin, the constant it mirrors, and the file it lives in. */
 const TWINS: readonly { name: string; value: () => string; files: string[] }[] = [
-  { name: 'CHIP', value: () => uiConstant('CHIP'), files: ['public/assets/receipt.js'] },
   {
     name: 'PRIMARY_BUTTON',
     value: () => PRIMARY_BUTTON,
-    files: ['public/assets/entry-wizard.js', 'app/routes/enter.tsx'],
+    files: ['app/routes/enter.tsx'],
   },
 ];
 

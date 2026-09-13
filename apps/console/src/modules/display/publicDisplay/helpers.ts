@@ -6,6 +6,7 @@
  * grow each view file with utility logic.
  */
 import { formatDateTime } from '../../../lib/formatDateTime';
+import { DISCIPLINE_NAMES } from '../../../lib/disciplineNames';
 import { meetSideFromIds, formatSideCondensed, formatSideLines, type Side } from '../../../platform/domain/sides';
 
 /*
@@ -109,6 +110,29 @@ export function isCourtClosedNow(
     const t = minToMin(c.toTime) ?? 24 * 60;
     return nowMin >= f && nowMin < t;
   });
+}
+
+/**
+ * The event identity of a rendered meet match — "Men's Doubles 2" — or the
+ * raw stored code when the discipline prefix is not one this app names.
+ *
+ * D7: a shown match always states WHICH event it is; a spectator scanning a
+ * wall for their own event cannot get that from two names and a court
+ * number. The stored codes ('MS1', 'WD2') are storage shorthand, so the
+ * board expands the two-letter prefix through the one `DISCIPLINE_NAMES`
+ * map and keeps the rank digit as context. Returns `null` when the match
+ * carries no event at all, in which case nothing is rendered — never a
+ * placeholder.
+ */
+export function matchEventLabel(
+  match: { eventCode?: string | null; eventRank?: string | null } | null | undefined,
+): string | null {
+  const code = (match?.eventCode ?? match?.eventRank ?? '').trim();
+  if (!code) return null;
+  const name = DISCIPLINE_NAMES[code.slice(0, 2).toUpperCase()];
+  if (!name) return code;
+  const rank = code.slice(2).trim();
+  return rank ? `${name} ${rank}` : name;
 }
 
 /**

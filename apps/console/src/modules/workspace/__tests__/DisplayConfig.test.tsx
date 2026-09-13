@@ -2,7 +2,9 @@
  * Display · Board — the settings the page answers, in order: is the board
  * ON, what is its LINK, which courts does it show, does it show Next, then
  * appearance, then an explicit "Preview fullscreen" action that opens the
- * real published board (no inline iframe, no sample-data swatch).
+ * real published board, and an embedded frame of that SAME published URL
+ * sized to the settings column (D7 — preview and fullscreen are one saved
+ * config in one renderer; no sample-data swatch, no second renderer).
  *
  * The "Board sources" catalog is GONE (operator-visual-fixes P4): it was a
  * second, read-only rendering of module state. Board availability is the
@@ -76,13 +78,14 @@ describe('<DisplayConfig /> — Board sources + Preview fullscreen + Board layou
     expect(screen.getByRole('radiogroup', { name: 'Display mode' })).toBeInTheDocument();
   });
 
-  it('never renders an inline preview iframe or a sample-data swatch', async () => {
+  it('previews the same published board the fullscreen action opens, and no sample-data swatch', async () => {
     render(<DisplayConfig tid="t1" modules={MEET_ON} />, { wrapper: MemoryRouter });
-    await screen.findByRole('link', { name: /preview fullscreen/i });
-    expect(screen.queryByTestId('display-preview-iframe')).toBeNull();
-    expect(screen.queryByTestId('display-preview-frame')).toBeNull();
+    const link = await screen.findByRole('link', { name: /preview fullscreen/i });
+    const frame = screen.getByTestId('display-config-preview');
+    // One saved config, one renderer: the embedded preview and the
+    // fullscreen action are the same capability URL (D7).
+    expect(frame).toHaveAttribute('src', link.getAttribute('href'));
     expect(screen.queryByTestId('display-preview-caption')).toBeNull();
-    expect(document.querySelector('iframe')).toBeNull();
   });
 
   it('keeps the Preview fullscreen action for a bracket-only workspace while hiding Meet-only controls', async () => {

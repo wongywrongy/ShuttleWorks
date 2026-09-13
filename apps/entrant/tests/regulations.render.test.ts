@@ -77,9 +77,10 @@ describe('the regulations reader, unhydrated', () => {
     const html = await render();
 
     expect(html).not.toContain('Contact details are not published');
-    // The organizer field appears once, in the document header dl — not
-    // restated in a footer provenance line.
-    expect((html.match(/Kingsway BC/g) ?? []).length).toBe(1);
+    // The organizer is never restated in a footer provenance line. Since the
+    // 2026-09-12 refinement the compact frame band names no organizer at
+    // all on this page (the Overview does), so the count is at most one.
+    expect((html.match(/Kingsway BC/g) ?? []).length).toBeLessThanOrEqual(1);
   });
 
   it('turns an organizer-authored source citation into a readable link, verbatim otherwise', async () => {

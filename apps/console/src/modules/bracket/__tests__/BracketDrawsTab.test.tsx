@@ -614,14 +614,16 @@ describe("BracketDrawsTab — draw identity validation", () => {
     return screen.getByRole("dialog");
   }
 
-  it("uppercases both the draw ID and the discipline", async () => {
+  it("uppercases the draw ID and takes the discipline from the named list", async () => {
     mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
     const dialog = openNewDraw();
     fireEvent.change(within(dialog).getByPlaceholderText("MS"), {
       target: { value: " ws " },
     });
-    fireEvent.change(within(dialog).getByLabelText(/Discipline/i), {
-      target: { value: "wd" },
+    // Disciplines are picked by their meaningful name ("Women's Doubles"),
+    // not typed as a bare code.
+    fireEvent.change(within(dialog).getByLabelText("Discipline"), {
+      target: { value: "WD" },
     });
     fireEvent.click(
       within(dialog).getByRole("button", { name: /Create draw/i }),
@@ -634,12 +636,15 @@ describe("BracketDrawsTab — draw identity validation", () => {
     );
   });
 
-  it("refuses a discipline carrying digits or spaces", () => {
+  it("refuses a custom discipline carrying digits or spaces", () => {
     const dialog = openNewDraw();
     fireEvent.change(within(dialog).getByPlaceholderText("MS"), {
       target: { value: "WS" },
     });
-    fireEvent.change(within(dialog).getByLabelText(/Discipline/i), {
+    fireEvent.change(within(dialog).getByLabelText("Discipline"), {
+      target: { value: "__other__" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Custom code"), {
       target: { value: "W S1" },
     });
     fireEvent.click(
@@ -685,7 +690,7 @@ describe("BracketDrawsTab — draw identity validation", () => {
   });
 });
 
-describe("BracketDrawsTab — format picker card grid", () => {
+describe("BracketDrawsTab — supported-format selector", () => {
   function openNewDraw(id: string) {
     renderDraws();
     fireEvent.click(screen.getByTestId("bracket-new-draw"));
@@ -696,36 +701,84 @@ describe("BracketDrawsTab — format picker card grid", () => {
     return dialog;
   }
 
-  it("defaults to the single-elimination card selected", () => {
+  it("defaults to single elimination and explains the selected format", () => {
     renderDraws();
     fireEvent.click(screen.getByTestId("bracket-new-draw"));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByTestId("format-card-se")).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    const select = within(dialog).getByTestId("new-draw-format");
+    expect(select).toHaveValue("se");
+    // Exactly one explanation — the selected format's, not eight blurbs.
+    expect(within(dialog).getByText(/win and advance/i)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/everyone meets everyone/i)).toBeNull();
+  });
+
+  // Roadmap formats are not offered at creation at all (D6): an unpickable
+  // "Planned" card advertises rather than controls.
+  it("offers only supported formats, and no roadmap entries", () => {
+    renderDraws();
+    fireEvent.click(screen.getByTestId("bracket-new-draw"));
+    const dialog = screen.getByRole("dialog");
+    const options = within(
+      within(dialog).getByTestId("new-draw-format"),
+    ).getAllByRole("option");
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual([
+      "se",
+      "rr",
+      "de",
+      "compass",
+      "swiss",
+    ]);
+    expect(within(dialog).queryByText("Planned")).toBeNull();
+  });
+
+  // The consolation decision is a real generated structure: SE + plate IS
+  // the engine's monrad draw, so it goes out as format monrad.
+  it("attaches a first-round-losers plate and names who qualifies", async () => {
+    mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
+    const dialog = openNewDraw("WD");
+    expect(within(dialog).getByTestId("new-draw-consolation")).toHaveValue(
+      "off",
     );
-    expect(within(dialog).getByTestId("format-card-rr")).toHaveAttribute(
-      "aria-pressed",
-      "false",
+    fireEvent.change(within(dialog).getByLabelText(/Bracket size/i), {
+      target: { value: "8" },
+    });
+    fireEvent.change(within(dialog).getByTestId("new-draw-consolation"), {
+      target: { value: "plate" },
+    });
+    expect(
+      within(dialog).getByText(/Everyone beaten in round 1/i),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/Adds 3 matches/i)).toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /Create draw/i }),
+    );
+    await vi.waitFor(() =>
+      expect(mockEventUpsert).toHaveBeenCalledWith("WD", {
+        discipline: "MS",
+        format: "monrad",
+        bracket_size: 8,
+        config: { consolation: "plate" },
+        duration_slots: 1,
+        participants: [],
+      }),
     );
   });
 
-  it("renders unimplemented formats as disabled Planned roadmap cards", () => {
-    renderDraws();
-    fireEvent.click(screen.getByTestId("bracket-new-draw"));
-    const dialog = screen.getByRole("dialog");
-    for (const id of ["groups", "ladder"]) {
-      const card = within(dialog).getByTestId(`format-card-${id}`);
-      expect(card).toBeDisabled();
-      expect(card).toHaveAttribute("aria-disabled", "true");
-    }
-    expect(within(dialog).getAllByText("Planned")).toHaveLength(2);
+  // Formats with no losers' side to feed never show the option.
+  it("hides consolation for round robin", () => {
+    const dialog = openNewDraw("RR");
+    fireEvent.change(within(dialog).getByTestId("new-draw-format"), {
+      target: { value: "rr" },
+    });
+    expect(within(dialog).queryByTestId("new-draw-consolation")).toBeNull();
   });
 
   it("picking de + toggling grand-final reset sends config.grand_final_reset", async () => {
     mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
     const dialog = openNewDraw("MD");
-    fireEvent.click(within(dialog).getByTestId("format-card-de"));
+    fireEvent.change(within(dialog).getByTestId("new-draw-format"), {
+      target: { value: "de" },
+    });
     fireEvent.click(
       within(dialog).getByRole("checkbox", { name: /Grand final reset/i }),
     );
@@ -743,12 +796,11 @@ describe("BracketDrawsTab — format picker card grid", () => {
     );
   });
 
-  it("picking monrad sends the consolation choice into config", async () => {
+  it("full classification sends the every-place-decided config", async () => {
     mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
     const dialog = openNewDraw("WS");
-    fireEvent.click(within(dialog).getByTestId("format-card-monrad"));
-    fireEvent.change(within(dialog).getByLabelText(/Consolation/i), {
-      target: { value: "plate" },
+    fireEvent.change(within(dialog).getByTestId("new-draw-consolation"), {
+      target: { value: "full" },
     });
     fireEvent.click(
       within(dialog).getByRole("button", { name: /Create draw/i }),
@@ -757,7 +809,7 @@ describe("BracketDrawsTab — format picker card grid", () => {
       expect(mockEventUpsert).toHaveBeenCalledWith("WS", {
         discipline: "MS",
         format: "monrad",
-        config: { consolation: "plate" },
+        config: { consolation: "full" },
         duration_slots: 1,
         participants: [],
       }),
@@ -767,7 +819,9 @@ describe("BracketDrawsTab — format picker card grid", () => {
   it("picking swiss sends the round count into config", async () => {
     mockEventUpsert.mockResolvedValue({ ...makeBracketData() });
     const dialog = openNewDraw("XD");
-    fireEvent.click(within(dialog).getByTestId("format-card-swiss"));
+    fireEvent.change(within(dialog).getByTestId("new-draw-format"), {
+      target: { value: "swiss" },
+    });
     fireEvent.change(within(dialog).getByLabelText(/Swiss rounds/i), {
       target: { value: "5" },
     });

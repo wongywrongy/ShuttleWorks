@@ -25,17 +25,10 @@ from typing import Dict, FrozenSet
 
 from db.models import MatchStatus
 
-# The canonical persisted set, restated here for readers of this module
-# rather than sending them to ``db.models``.
-CANONICAL_STATUSES: FrozenSet[MatchStatus] = frozenset(
-    {
-        MatchStatus.SCHEDULED,
-        MatchStatus.CALLED,
-        MatchStatus.PLAYING,
-        MatchStatus.FINISHED,
-        MatchStatus.RETIRED,
-    }
-)
+# The shared graph defines the persisted set; retain enum values at this API.
+from core.state_machines import MATCH
+
+CANONICAL_STATUSES: FrozenSet[MatchStatus] = frozenset(MatchStatus(s) for s in MATCH.states)
 
 # The legacy wire spelling for each canonical status. ``started`` is the
 # historical spelling of ``playing``; every other canonical status keeps its

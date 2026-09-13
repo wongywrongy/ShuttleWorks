@@ -1,6 +1,7 @@
 """Authority, device enrollment, checkout, readiness, return and transfer API."""
 from sync.service import (  # compatibility-owned implementations
     begin_checkout,
+    checked_out_tournament_ids,
     enroll_device,
     mark_ready,
     planned_transfer,
@@ -18,8 +19,11 @@ def tournament_is_checked_out(session: Session, tournament_id: uuid.UUID) -> boo
     """Return whether checkout has frozen cloud-side tournament writes."""
     return _active_authority(session, tournament_id) is not None
 
+
+
 __all__ = [
     "begin_checkout",
+    "checked_out_tournament_ids",
     "enroll_device",
     "mark_ready",
     "planned_transfer",

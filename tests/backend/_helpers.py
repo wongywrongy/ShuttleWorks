@@ -29,6 +29,7 @@ _BACKEND_PACKAGE_PREFIXES = (
     "operations.",
     "display.",
     "entries.",
+    "competition.",
     "solve_rail.",
     "ops.",
     "recovery.",
@@ -47,6 +48,7 @@ _BACKEND_PACKAGE_NAMES = {
     "operations",
     "display",
     "entries",
+    "competition",
     "solve_rail",
     "ops",
     "recovery",
@@ -107,9 +109,8 @@ def isolate_test_database(tmp_path, monkeypatch) -> Path:
         sys.path.remove(_BACKEND_ROOT)
     sys.path.insert(0, _BACKEND_ROOT)
     purge_backend_modules()
-    from db.models import Base
     from db.session import engine
-    Base.metadata.create_all(engine)
+    upgrade_test_database(engine)
     return db_path
 
 
@@ -124,3 +125,56 @@ def seed_tournament(client, name: str = "Test") -> str:
     r = client.post("/tournaments", json={"name": name})
     assert r.status_code == 201, r.text
     return r.json()["id"]
+
+
+
+def submit_reviewed(client, url, *, data=None, headers=None, **kwargs):
+    """Exercise the public quote step before a test's intended submission.
+
+    Tests for missing/stale review deliberately call client.post directly.
+    A refused quote never grants a review fingerprint or changes the submit
+    assertion: authorization, CSRF and policy remain independently tested.
+    """
+    body = dict(data or {})
+    quote_headers = {**(headers or {}), "Accept": "application/json"}
+    quoted = client.post(url.replace("/submit/", "/quote/"), data=body,
+                         headers=quote_headers, follow_redirects=False)
+    if quoted.status_code == 200:
+        body["reviewedQuote"] = quoted.json().get("reviewedQuote", "")
+    return client.post(url, data=body, headers=headers or {}, **kwargs)
+
+
+def upgrade_test_database(engine) -> None:
+    """Build a fresh test schema through the same frozen revisions as startup.
+
+    Pass the actual connection so in-memory engines are supported too.
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(Path(_BACKEND_ROOT) / "alembic"))
+    with engine.connect() as connection:
+        cfg.attributes["connection"] = connection
+        command.upgrade(cfg, "head")
+
+
+def drop_test_database(engine) -> None:
+    """Remove a disposable test schema, including Alembic state and functions."""
+    from sqlalchemy import inspect
+    with engine.connect() as connection:
+        if engine.dialect.name == "postgresql":
+            connection.exec_driver_sql("DROP SCHEMA public CASCADE")
+            connection.exec_driver_sql("CREATE SCHEMA public")
+            connection.commit()
+        else:
+            raw = connection.connection.driver_connection
+            raw.execute("PRAGMA foreign_keys=OFF")
+            try:
+                for table in inspect(connection).get_table_names():
+                    quoted = connection.dialect.identifier_preparer.quote(table)
+                    connection.exec_driver_sql(f"DROP TABLE {quoted}")
+                connection.commit()
+            finally:
+                connection.rollback()
+                raw.execute("PRAGMA foreign_keys=ON")

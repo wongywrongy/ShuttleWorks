@@ -171,18 +171,10 @@ def _submit_and_confirm_receipt(client: SimClient, slug: str, event_id: str) -> 
         )
         return problems
 
-    submit = client.request(
-        "POST",
-        f"/e/api/submit/{slug}",
-        data={
-            "playerName": "Riley Park",
-            "gender": "F",
-            "events": [f"0:{event_id}"],
-            "acknowledged": "on",
-            "_csrf": form_csrf,
-        },
-        expect={303},
-    )
+    submit = client.submit_entry(slug, [
+        ("playerName", "Riley Park"), ("gender", "F"),
+        ("events", f"0:{event_id}"), ("acknowledged", "on"),
+    ])
     location = submit.headers.get("location", "")
     # V3-24-1: the receipt Location names the submission's SHORT REFERENCE -
     # eight characters of the unambiguous alphabet - not its UUID.

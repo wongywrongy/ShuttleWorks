@@ -53,7 +53,7 @@ function renderAdmin(path: string) {
 describe('Administration — one selection treatment', () => {
   it('marks the open tab with the shared active state, not a bespoke underline', () => {
     renderAdmin('/tournaments/t1/administration/backups');
-    const nav = screen.getByRole('navigation', { name: 'Workspace administration' });
+    const nav = screen.getByRole('navigation', { name: 'Workspace settings' });
     const open = within(nav).getByRole('link', { name: 'Backups' });
     expect(open).toHaveAttribute('aria-current', 'page');
     // `ActiveChoice` owns the fill; a hand-rolled `border-b-2` underline is
@@ -68,7 +68,7 @@ describe('Administration — one selection treatment', () => {
 
   it('routes each tab to the URL it names', () => {
     renderAdmin('/tournaments/t1/administration/lifecycle');
-    const nav = screen.getByRole('navigation', { name: 'Workspace administration' });
+    const nav = screen.getByRole('navigation', { name: 'Workspace settings' });
     expect(within(nav).getByRole('link', { name: 'Activity log' })).toHaveAttribute(
       'href',
       '/tournaments/t1/administration/activity',

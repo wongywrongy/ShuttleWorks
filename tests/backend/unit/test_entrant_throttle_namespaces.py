@@ -31,7 +31,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from core.config import settings
-from db.models import Base
 from core import throttle
 from identity import auth as auth_service
 
@@ -47,7 +46,8 @@ def session():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     Session = sessionmaker(
         bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
     )

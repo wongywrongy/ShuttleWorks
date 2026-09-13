@@ -123,10 +123,12 @@ export interface PlayerHistoryEntryDTO {
 }
 
 export interface PlayerPageDTO {
+  representation?: string | null;
   person: PersonReferenceDTO;
   club: string | null;
   events: PlayerEventDTO[];
   matches: PlayerMatchDTO[];
   /** Newest first, undated last; always at least the current tournament. */
   history?: PlayerHistoryEntryDTO[];
+  historyNextOffset?: number | null;
 }

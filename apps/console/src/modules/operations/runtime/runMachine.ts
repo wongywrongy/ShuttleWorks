@@ -1,15 +1,18 @@
 /**
- * runMachine — the Operations-owned match lifecycle contract.
+ * runMachine — Operations adapters for the shared match lifecycle contract.
  *
  * One state machine governs Run. Every surface (board, queue, inspector,
  * band) derives action availability from `can()` and never invents its own
  * status vocabulary. `late` is a derived flag (see deriveLate), never a state.
  */
+import stateMachines from '@scheduler/shared-contract/state-machines.json';
 import { STATE_WORD } from '../../../lib/stateWords';
 import type { MatchStatus } from '../../../platform/domain/match';
 
-export type RunStatus = 'scheduled' | 'called' | 'playing' | 'done';
+const MATCH = stateMachines.machines.match;
+export type RunStatus = keyof typeof MATCH.state_keys;
 export type RunActionKind = 'call' | 'start' | 'record' | 'postpone' | 'assign' | 'clearCourt';
+export type MatchEvent = keyof typeof MATCH.event_keys;
 
 /** Legal status→status edges. `assign` is a court change, not a status edge,
  *  so it is handled separately (keeps the match `scheduled`). `clearCourt` is
@@ -17,24 +20,20 @@ export type RunActionKind = 'call' | 'start' | 'record' | 'postpone' | 'assign' 
  *  match stays planned at its slot, so it too resolves to `scheduled`, and
  *  only from `scheduled` — a called or playing match leaves the court through
  *  `postpone`, which is a real status edge (OPR-0908-8). */
-const TRANSITIONS: Record<RunStatus, Partial<Record<RunActionKind, RunStatus>>> = {
-  scheduled: { call: 'called', assign: 'scheduled', clearCourt: 'scheduled' },
-  called: { start: 'playing', postpone: 'scheduled' },
-  playing: { record: 'done', postpone: 'scheduled' },
-  done: {},
-};
-
-export function transition(status: RunStatus, action: RunActionKind): RunStatus | null {
-  return TRANSITIONS[status][action] ?? null;
+export function transition(status: RunStatus, action: RunActionKind | MatchEvent): RunStatus | null {
+  if (action === 'assign' || action === 'clearCourt') {
+    return status === 'scheduled' ? status : null;
+  }
+  const edge = MATCH.transitions.find((t) => t.from_states.includes(status) && t.event === action);
+  return edge ? edge.to as RunStatus : null;
 }
-export function can(status: RunStatus, action: RunActionKind): boolean {
+export function can(status: RunStatus, action: RunActionKind | MatchEvent): boolean {
   return transition(status, action) !== null;
 }
 
 export function fromEngineStatus(s: MatchStatus): RunStatus {
   if (s === 'started') return 'playing';
-  if (s === 'finished') return 'done';
-  return s; // scheduled | called
+  return s; // scheduled | called | finished | retired
 }
 
 // Redirects to the one authority (contract §2.3/§2.4 D5): `playing` is
@@ -44,7 +43,8 @@ export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   scheduled: STATE_WORD.scheduled,
   called: STATE_WORD.called,
   playing: STATE_WORD.onCourt,
-  done: STATE_WORD.done,
+  finished: STATE_WORD.done,
+  retired: STATE_WORD.retired,
 };
 
 /**
@@ -94,4 +94,9 @@ export function deriveDriftSlots(input: {
   const { status, plannedSlot, span = 1, currentSlot } = input;
   if (status !== 'playing' || plannedSlot == null || currentSlot == null) return 0;
   return Math.max(0, currentSlot - (plannedSlot + span));
+}
+
+/** Finished is reopenable; both finished and retired leave the active queues. */
+export function isRunComplete(status: RunStatus): boolean {
+  return status === 'finished' || status === 'retired';
 }

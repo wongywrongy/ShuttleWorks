@@ -53,7 +53,9 @@
     "test:entrant": "npm --prefix apps/entrant run test:run",
     "test:entrant:unit": "npm --prefix apps/entrant run test:unit",
     "test:entrant:ssr": "npm --prefix apps/entrant run test:ssr",
-    "test:cov": "npm --prefix apps/console run test:cov"
+    "test:cov": "npm --prefix apps/console run test:cov",
+    "state-machines:check": "python3 tools/generate_state_machines.py --check",
+    "state-machines:generate": "python3 tools/generate_state_machines.py"
   },
   "devDependencies": {
     "jscpd": "^5.0.11",

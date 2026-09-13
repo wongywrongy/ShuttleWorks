@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
-from db.models import Base, EventOperation, SyncQuarantine, Tournament
+from db.models import EventOperation, SyncQuarantine, Tournament
 from sync.schemas import OperationEnvelope, SyncBatchRequest
 from sync.service import (
     ProtocolError,
@@ -24,7 +24,8 @@ from sync.service import (
 
 def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return Session(engine, expire_on_commit=False)
 
 
@@ -36,7 +37,7 @@ def _authority(session: Session) -> tuple[uuid.UUID, uuid.UUID, str]:
             id=tournament_id,
             name="Quarantine proof",
             kind="bracket",
-            data={"version": 2},
+            data={"version": 1},
         )
     )
     session.commit()
@@ -54,7 +55,7 @@ def _authority(session: Session) -> tuple[uuid.UUID, uuid.UUID, str]:
     return tournament_id, node_id, capability
 
 
-def _operation(tournament_id: uuid.UUID, node_id: uuid.UUID, *, sequence: int, schema: int = 3) -> OperationEnvelope:
+def _operation(tournament_id: uuid.UUID, node_id: uuid.UUID, *, sequence: int, schema: int = 1) -> OperationEnvelope:
     now = datetime.now(timezone.utc)
     return OperationEnvelope(
         operation_id=uuid.uuid4(),

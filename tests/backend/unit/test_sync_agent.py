@@ -10,14 +10,15 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from db.models import Base, SyncOutbox, Tournament
+from db.models import SyncOutbox, Tournament
 from sync import agent
 from sync.service import append_local_operation
 
 
 def _database(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     factory = sessionmaker(engine, expire_on_commit=False)
     monkeypatch.setattr(agent, "SessionLocal", factory)
     tournament_id = uuid.uuid4()
@@ -26,8 +27,8 @@ def _database(monkeypatch):
         session.add(
             Tournament(
                 id=tournament_id,
-                data={"version": 2},
-                schema_version=2,
+                data={"version": 1},
+                schema_version=1,
             )
         )
         session.commit()

@@ -108,6 +108,7 @@ class BracketResultService:
         score: Optional[dict] = None,
         reason: Optional[str] = None,
         operation_id: Optional[uuid.UUID] = None,
+        correction: bool = False,
     ) -> BracketResultOutcome:
         """Apply one result and return the hydrated post-commit view.
 
@@ -149,6 +150,10 @@ class BracketResultService:
 
         with bracket_unit_of_work(repo) as db:
             _ensure_tournament_exists(repo, tournament_id)
+
+            # All result writes serialize with the correction frontier on
+            # both supported databases, before hydration and version checks.
+            repo.brackets.lock_tournament(tournament_id)
             session = _hydrate_session(repo, tournament_id)
             if session is None:
                 raise HTTPException(
@@ -159,6 +164,16 @@ class BracketResultService:
             # The command UUID is the durable idempotency key for the new
             # operation path.  It is read from the existing snapshot for
             # compatibility with workspaces created before operation tables.
+            if operation_id is not None:
+                stored_operation = _get_event_operation(db, operation_id)
+                if stored_operation is not None:
+                    expected = {"winner_side": winner_side, "finished_at_slot": finished_at_slot,
+                                "walkover": walkover, "score": score, "reason": reason}
+                    if (stored_operation.tournament_id != tournament_id
+                            or stored_operation.aggregate_id != play_unit_id
+                            or any((stored_operation.payload or {}).get(key) != value
+                                   for key, value in expected.items())):
+                        raise HTTPException(409, "Command ID was already used for a different result")
             if operation_id is not None and self._is_replay(db, session, operation_id):
                 return BracketResultOutcome(session=session, replay=True)
 
@@ -189,13 +204,44 @@ class BracketResultService:
                         ),
                     )
 
+            from bracket.result_validation import validate_result
+
+            tournament = repo.tournaments.get_by_id(tournament_id)
+            config = (tournament.data or {}).get("config", {})
+            try:
+                validate_result(config, winner_side, score, walkover=walkover, reason=reason)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
             existing = session.state.results.get(play_unit_id)
-            if existing is not None:
+            correction_frontier = []
+            if correction:
+                if seen_version is None or existing is None:
+                    raise HTTPException(409, "Correction requires an existing result and its observed version")
+                from bracket.correction import prepare_correction
+
+                correction_frontier = prepare_correction(session, play_unit_id)
+                from db.models import Match, MatchState
+
+                for descendant in correction_frontier:
+                    operational = db.get(Match, (tournament_id, descendant))
+                    overlay = db.get(MatchState, (tournament_id, descendant))
+                    if (operational and operational.status != "scheduled") or (overlay and (overlay.status != "scheduled" or overlay.actual_start_time)):
+                        raise HTTPException(409, "A downstream match has been called or started; resolve it before correction.")
+                    if operational:
+                        operational.court_id = None
+                        operational.time_slot = None
+                        operational.version += 1
+                    if overlay:
+                        overlay.original_slot_id = None
+                        overlay.original_court_id = None
+            elif existing is not None:
                 exact = (
                     existing.winner_side.value == winner_side
                     and existing.finished_at_slot == finished_at_slot
                     and existing.walkover == walkover
                     and existing.score == score
+                    and existing.reason == reason
                 )
                 if not exact:
                     raise HTTPException(
@@ -221,6 +267,8 @@ class BracketResultService:
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+            affected = list(dict.fromkeys([*correction_frontier, *affected]))
+            repo.brackets.increment_match_version(tournament_id, pu.event_id, play_unit_id)
             if operation_id is not None:
                 session.applied_command_ids.add(str(operation_id))
 
@@ -331,6 +379,9 @@ class BracketResultService:
                 f"shuttleworks:event-node:{settings.database_url}",
             )
         actor_id = self.actor_id or LOCAL_DEV_USER_UUID
+        from bracket.brackets import _hydrate_session, _serialize_session
+
+        snapshot = _serialize_session(_hydrate_session(args["repo"], args["tournament_id"])).model_dump(mode="json")
         append_local_operation(
             args["repo"].session,
             tournament_id=args["tournament_id"],
@@ -345,6 +396,7 @@ class BracketResultService:
                 "walkover": args["walkover"],
                 "score": args["score"],
                 "reason": args["reason"],
+                "bracketSnapshot": snapshot,
             },
             expected_version=args.get("seen_version"),
             operation_id=args["operation_id"],
@@ -390,6 +442,10 @@ class BracketPinService:
         # lock or make unrelated event-node commands wait behind it.
         _ensure_tournament_exists(repo, tournament_id)
         session = _hydrate_session(repo, tournament_id)
+        from copy import deepcopy
+
+        baseline_versions = dict(session.match_versions) if session is not None else {}
+        baseline_assignments = deepcopy(session.state.assignments) if session is not None else {}
         if session is None:
             raise HTTPException(
                 status_code=404,
@@ -472,12 +528,18 @@ class BracketPinService:
         # A concurrent command may have claimed this UUID while solving. The
         # second check below makes the operation identity authoritative.
         with bracket_unit_of_work(repo) as db:
+
+            repo.brackets.lock_tournament(tournament_id)
             existing = db.get(EventOperation, operation_id)
             if existing is not None:
                 db.rollback()
                 return self._replay_or_reject(
                     repo, tournament_id, existing, play_unit_id, slot_id, court_id
                 )
+            current = _hydrate_session(repo, tournament_id)
+            if (current is None or current.match_versions != baseline_versions
+                    or current.state.assignments != baseline_assignments):
+                raise HTTPException(409, "The bracket changed while planning. Reload and try again.")
             # Include the command identity in the persisted compatibility
             # snapshot before writing metadata and appending the operation.
             session.applied_command_ids.add(str(operation_id))
@@ -588,6 +650,8 @@ class BracketMatchActionService:
 
         with bracket_unit_of_work(repo) as db:
             _ensure_tournament_exists(repo, tournament_id)
+
+            repo.brackets.lock_tournament(tournament_id)
             state = _hydrate_session(repo, tournament_id)
             if state is None:
                 raise HTTPException(
@@ -736,6 +800,8 @@ class BracketAssignmentService:
         operation_id = command_id or uuid.uuid4()
         with bracket_unit_of_work(repo) as db:
             _ensure_tournament_exists(repo, tournament_id)
+
+            repo.brackets.lock_tournament(tournament_id)
             state = _hydrate_session(repo, tournament_id)
             if state is None:
                 raise HTTPException(

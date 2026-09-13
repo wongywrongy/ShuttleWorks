@@ -1,8 +1,16 @@
+/**
+ * The Hub row is a table row: Tournament · Dates · Status · Open · Actions
+ * (D2). What is pinned here is that a long name or an unusual status cannot
+ * move the later columns, that Status is never blank, and that Open says and
+ * does the same thing on every row.
+ */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { WorkspaceRow } from '../WorkspaceRow';
 import type { TournamentSummaryDTO } from '../../../api/dto';
+
+const NOW = new Date('2026-07-30T10:00:00Z');
 
 const t: TournamentSummaryDTO = {
   id: 't1', name: 'Spring', status: 'active', kind: 'meet', tournamentDate: '2026-07-01',
@@ -13,91 +21,88 @@ const t: TournamentSummaryDTO = {
 
 const noop = () => {};
 
-describe('WorkspaceRow', () => {
-  it('upcoming: shows the primary next action from signals', () => {
-    render(
-      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
-    );
-    expect(screen.getByRole('button', { name: 'Add players' })).toBeInTheDocument();
-  });
-
-  it('undated: the action is "Set date" and calls onSetDate', () => {
-    const onSetDate = vi.fn();
-    const onOpen = vi.fn();
-    render(
-      <WorkspaceRow tournament={{ ...t, tournamentDate: null }} group="undated" selected={false} onSelect={noop} onOpen={onOpen} onSetDate={onSetDate} onSettings={noop} />,
-    );
-    const btn = screen.getByRole('button', { name: 'Set date' });
-    fireEvent.click(btn);
-    expect(onSetDate).toHaveBeenCalled();
-    expect(onOpen).not.toHaveBeenCalled();
-  });
-
-  it('past: the action is "View results"', () => {
-    render(
-      <WorkspaceRow tournament={t} group="past" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
-    );
-    expect(screen.getByRole('button', { name: 'View results' })).toBeInTheDocument();
-  });
-
-  it('past bracket: the action opens Draws first', () => {
-    const onOpen = vi.fn();
-    render(
+function row(
+  over: Partial<TournamentSummaryDTO> = {},
+  handlers: Partial<{ onSelect: () => void; onOpen: () => void; onSettings: () => void; onDelete: () => void }> = {},
+) {
+  return render(
+    <MemoryRouter>
       <WorkspaceRow
-        tournament={{ ...t, kind: 'bracket' }}
-        group="past"
+        tournament={{ ...t, ...over }}
+        now={NOW}
         selected={false}
-        onSelect={noop}
-        onOpen={onOpen}
-        onSetDate={noop}
-        onSettings={noop}
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'View draws' }));
-    expect(onOpen).toHaveBeenCalledWith('bracket/draws');
+        onSelect={handlers.onSelect ?? noop}
+        onOpen={handlers.onOpen ?? noop}
+        onSettings={handlers.onSettings ?? noop}
+        onDelete={handlers.onDelete}
+      />
+    </MemoryRouter>,
+  );
+}
+
+describe('WorkspaceRow', () => {
+  it('Open carries the same label on every row and never navigates on selection', () => {
+    const onOpen = vi.fn();
+    const onSelect = vi.fn();
+    row({}, { onOpen, onSelect });
+    const open = screen.getByTestId('row-open');
+    expect(open).toHaveAccessibleName('Open');
+    fireEvent.click(open);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    // Clicking the row selects it; it does not open the workspace.
+    fireEvent.click(screen.getByText('Spring'));
+    expect(onSelect).toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('states attention as ONE labelled dot, not a column of prose', () => {
-    render(
-      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
-    );
+  it('states a status on every row, including the ones with no lifecycle chip', () => {
+    const cases: [Partial<TournamentSummaryDTO>, string][] = [
+      [{ status: 'draft', tournamentDate: '2026-12-01' }, 'Draft'],
+      // An old DRAFT is still a draft: a passed date must not silently
+      // promote it to Completed.
+      [{ status: 'draft', tournamentDate: '2020-01-01' }, 'Draft'],
+      [{ status: 'active', tournamentDate: '2026-12-01' }, 'Upcoming'],
+      [{ status: 'active', tournamentDate: '2026-07-30' }, 'Live'],
+      [{ status: 'active', tournamentDate: '2026-01-01' }, 'Completed'],
+      [{ status: 'archived', signals: { ...t.signals!, phase: 'live' } }, 'Archived'],
+      [{ status: 'active', tournamentDate: null }, 'Upcoming'],
+    ];
+    for (const [over, label] of cases) {
+      const { unmount } = row(over);
+      expect(screen.getByTestId('row-status')).toHaveTextContent(label);
+      unmount();
+    }
+  });
+
+  it('keeps the date column stable and separate from the name', () => {
+    row({ name: 'Yunavero Club Open (2026)', tournamentDate: '2026-07-28', tournamentEndDate: '2026-08-03' });
+    // The stored name renders verbatim, with no appended date.
+    expect(screen.getByText('Yunavero Club Open (2026)')).toBeInTheDocument();
+    const date = screen.getByTestId('row-date');
+    expect(date).toHaveTextContent('2026-07-28 – 08-03');
+    expect(date.className).toMatch(/\bw-36\b/);
+  });
+
+  it('says "No date set" instead of leaving the date cell blank', () => {
+    row({ tournamentDate: null });
+    expect(screen.getByTestId('row-date')).toHaveTextContent('No date set');
+  });
+
+  it('falls back to Untitled when the workspace has no name', () => {
+    row({ name: '  ' });
+    expect(screen.getByText('Untitled')).toBeInTheDocument();
+  });
+
+  it('states attention as ONE labelled dot that opens the preview panel', () => {
+    const onSelect = vi.fn();
+    row({}, { onSelect });
     const dot = screen.getByTestId('row-attention');
     expect(dot.tagName).toBe('BUTTON');
-    // The reason is in the accessible name, not rendered as row text: the
-    // details belong to the inspector.
     expect(dot).toHaveAccessibleName(
       `Needs attention: ${t.signals!.attention[0].label}. Open details.`,
     );
+    // The reason is in the accessible name, not rendered as row text.
     expect(screen.queryByText(t.signals!.attention[0].label)).toBeNull();
-  });
-
-  it('names the additional issues in the dot label', () => {
-    render(
-      <WorkspaceRow
-        tournament={{
-          ...t,
-          signals: {
-            ...t.signals!,
-            attention: [
-              { code: 'NO_ROSTER', label: 'No players added yet' },
-              { code: 'ENTRIES_NOT_COMMITTED', label: 'Confirmed entries not on the roster' },
-            ],
-          },
-        }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
-    expect(screen.getByTestId('row-attention')).toHaveAccessibleName(
-      /No players added yet and 1 more issue/,
-    );
-  });
-
-  it('the dot is keyboard-reachable and opens the details', () => {
-    const onSelect = vi.fn();
-    render(
-      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={onSelect} onOpen={noop} onSetDate={noop} onSettings={noop} />,
-    );
-    const dot = screen.getByTestId('row-attention');
     dot.focus();
     expect(dot).toHaveFocus();
     fireEvent.click(dot);
@@ -105,197 +110,40 @@ describe('WorkspaceRow', () => {
   });
 
   it('renders no dot at all when nothing is wrong', () => {
-    render(
-      <WorkspaceRow
-        tournament={{ ...t, signals: { ...t.signals!, health: 'good', attention: [] } }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
+    row({ signals: { ...t.signals!, health: 'good', attention: [] } });
     expect(screen.queryByTestId('row-attention')).toBeNull();
-    expect(screen.queryByText('Needs attention')).toBeNull();
   });
 
-  it('shows enabled modules as glyphs with accessible names, on the right', () => {
-    render(
-      <WorkspaceRow
-        tournament={{
-          ...t,
-          modules: [
-            { moduleId: 'meet', status: 'enabled', config: null },
-            { moduleId: 'bracket', status: 'available', config: null },
-            { moduleId: 'display', status: 'enabled', config: null },
-          ],
-        }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
-    const glyphs = screen.getByTestId('row-modules');
-    expect(glyphs.querySelectorAll('[role="img"]')).toHaveLength(2);
-    expect(screen.getByRole('img', { name: 'Meet' })).toHaveTextContent('M');
-    expect(screen.getByRole('img', { name: 'Display' })).toHaveTextContent('D');
-    expect(screen.queryByRole('img', { name: 'Bracket' })).toBeNull();
+  it('carries no module glyph badges in the primary table', () => {
+    row({
+      modules: [
+        { moduleId: 'meet', status: 'enabled', config: null },
+        { moduleId: 'display', status: 'enabled', config: null },
+      ],
+    });
+    expect(screen.queryByTestId('row-modules')).toBeNull();
   });
 
-
-  // SP-UI-1: the next action is the row's call to action, not a metadata
-  // column. Pin the properties that make it read that way — the chevron is
-  // decorative and must not enter the accessible name.
-  it('the next action is a keyboard-focusable affordance whose name is the label alone', () => {
-    render(
-      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
-    );
-    const cta = screen.getByTestId('row-next-action');
-    expect(cta.tagName).toBe('BUTTON');
-    expect(cta).toHaveAccessibleName('Add players');
-    cta.focus();
-    expect(cta).toHaveFocus();
-  });
-
-  // R-D (SP-CONSOLE-3, Option A): LIVE is suppressed — the HealthDot and
-  // next action already say it — while Complete still badges; resting
-  // rows stay unbadged as before.
-  it('badges a complete row, and suppresses the chip on live and resting rows', () => {
-    const { rerender } = render(
-      <WorkspaceRow
-        tournament={{ ...t, signals: { ...t.signals!, phase: 'complete' } }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
-    expect(screen.getByTestId('row-lifecycle')).toHaveTextContent('Complete');
-    rerender(
-      <WorkspaceRow
-        tournament={{ ...t, signals: { ...t.signals!, phase: 'live' } }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
-    expect(screen.queryByTestId('row-lifecycle')).toBeNull();
-    // NEGATIVE CONTROL: setup/ready rows carry no pill.
-    rerender(
-      <WorkspaceRow
-        tournament={{ ...t, signals: { ...t.signals!, phase: 'ready' } }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
-    expect(screen.queryByTestId('row-lifecycle')).toBeNull();
-  });
-
-  it('an archived workspace never badges Live (shared precedence)', () => {
-    render(
-      <WorkspaceRow
-        tournament={{ ...t, status: 'archived', signals: { ...t.signals!, phase: 'live' } }}
-        group="past" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
-    expect(screen.getByTestId('row-lifecycle')).toHaveTextContent('Archived');
-  });
-
-  it('puts the name and its numeric date on the left, in that order', () => {
-    const { container } = render(
-      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} />,
-    );
-    const row = container.firstElementChild!;
-    expect(row.firstElementChild).toHaveTextContent('Spring');
-    expect(screen.getByTestId('row-date')).toHaveTextContent('2026-07-01');
-    const text = row.textContent ?? '';
-    expect(text.indexOf('Spring')).toBeLessThan(text.indexOf('2026-07-01'));
-  });
-
-  it('shows a multi-day event as a date range', () => {
-    render(
-      <WorkspaceRow
-        tournament={{ ...t, tournamentDate: '2026-07-28', tournamentEndDate: '2026-08-03' }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
-    expect(screen.getByTestId('row-date')).toHaveTextContent('2026-07-28 – 08-03');
-  });
-
-  // P5 (2026-09-08): the Hub renders the STORED name, unedited. It used to
-  // strip a trailing year that matched the event date, so the same workspace
-  // read one way in the Hub and another in the workspace header, the public
-  // tier and on the venue board. The redundant year is now removed where the
-  // name is WRITTEN (the seed generator plus `seed repair-names`), never at
-  // one render site, and a director-authored title is left exactly as typed.
-  it('renders the stored workspace name verbatim', () => {
-    render(
-      <WorkspaceRow
-        tournament={{ ...t, name: 'Yunavero Club Open (2026)', tournamentDate: '2026-07-01' }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
-    expect(screen.getByText('Yunavero Club Open (2026)')).toBeInTheDocument();
-  });
-
-  it('falls back to Untitled when the workspace has no name', () => {
-    render(
-      <WorkspaceRow
-        tournament={{ ...t, name: '  ' }}
-        group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop}
-      />,
-    );
-    expect(screen.getByText('Untitled')).toBeInTheDocument();
-  });
-
-  // 2026-08-11 design audit, T4: the menu was revealed only by
-  // `group-hover:opacity-100`. `:hover` never fires on a touch device, so on
-  // a tablet the row's only route to Settings and Delete did not exist — at
-  // any width. jsdom applies no stylesheet, so the rest state is asserted on
-  // the class that carries it; what is being pinned is that the resting
-  // opacity is not zero.
+  // 2026-08-11 design audit, T4: `:hover` never fires on a touch device, so
+  // a menu revealed only by `group-hover` did not exist on a tablet.
   it('the overflow menu is visible at rest, not only on hover', () => {
-    render(
-      <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} onDelete={noop} />,
-    );
+    row({}, { onDelete: noop });
     const trigger = screen.getByRole('button', { name: /more actions/i });
     const wrapper = trigger.closest('span[class]')!;
     expect(wrapper.className).not.toMatch(/\bopacity-0\b/);
     expect(wrapper.className).toMatch(/\bopacity-\d+\b/);
   });
 
-  it('Delete lives in the overflow menu, not inline', () => {
+  it('separates Delete from Settings in the actions menu', () => {
     const onDelete = vi.fn();
-    render(
-      <MemoryRouter>
-        <WorkspaceRow tournament={t} group="upcoming" selected={false} onSelect={noop} onOpen={noop} onSetDate={noop} onSettings={noop} onDelete={onDelete} />
-      </MemoryRouter>,
-    );
-    // No inline Delete button on the row surface.
+    row({}, { onDelete });
     expect(screen.queryByRole('button', { name: /^Delete/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
-    expect(screen.getByRole('menuitem', { name: 'Open administration' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: 'Open settings' })).toHaveAttribute(
       'href',
       '/tournaments/t1/administration/lifecycle',
     );
     fireEvent.click(screen.getByTestId('overflow-delete'));
     expect(onDelete).toHaveBeenCalled();
-  });
-
-  // V3-OC02.2: a completed bracket workspace with an unresolved entries
-  // reason used to offer "View draws", which opens nothing that fixes the
-  // problem the row is flagging.
-  it('offers "Review entries" instead of "View draws" when the leading reason concerns entries', () => {
-    const onOpen = vi.fn();
-    render(
-      <MemoryRouter>
-        <WorkspaceRow
-          tournament={{
-            ...t,
-            kind: 'bracket',
-            modules: [
-              ...t.modules!,
-              { moduleId: 'entries', status: 'enabled', config: null },
-            ],
-            signals: {
-              ...t.signals!,
-              attention: [{ code: 'ENTRIES_NOT_COMMITTED', label: 'Confirmed entries not on the roster' }],
-              phase: 'complete',
-            },
-          }}
-          group="past" selected={false} onSelect={noop} onOpen={onOpen} onSetDate={noop} onSettings={noop}
-        />
-      </MemoryRouter>,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Review entries' }));
-    expect(onOpen).toHaveBeenCalledWith('participants/entries');
   });
 });

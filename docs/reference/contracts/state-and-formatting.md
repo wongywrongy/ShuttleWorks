@@ -737,7 +737,7 @@ carries the venue-local pair this section asks for: `formatDayMonthTimeInZone` (
 `formatDayMonthInZone` / `formatDateInZone`, plus `formatInstantInZone` for an ISO instant (the
 schedule freshness line). Consequences worth stating:
 
-- **A deadline is stated to the minute**, converted — the Overview's Key dates row reads
+- **A deadline is stated to the minute**, converted — the Overview's Entries row (in Tournament details) reads
   `Closes 1 Aug, 00:30`, not `Closes 1 Aug`. Rounding a closing time to a friendlier one is the
   "never rounded" rule above, applied.
 - **Every rendered date on the tier is day-first and 24-hour.** The one `Intl` call that produced
@@ -969,6 +969,11 @@ player page, and Regulations.
   on a tournament-scoped player page.
 - **The frame stays reachable on a narrow screen.** The hero is compact enough that the page's
   primary content is not pushed below the fold at 320 px.
+- **Two anatomies, one source (2026-09-12).** The Overview wears the FULL band (organizer, display
+  title, long dates, status line, primary action); every other section wears the COMPACT band —
+  the same facts at a smaller step on two lines. Both are `tournamentFrameModel`'s decision
+  (`variant`), and the compact band drops the primary action when it would lead to the section the
+  reader is already in. The tab bar is one non-wrapping row that scrolls inside itself on a phone.
 
 ### 11.2 Missing data
 

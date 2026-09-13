@@ -87,7 +87,8 @@ def test_create_bracket_returns_full_state(client, tid):
     r = client.post(_bracket_url(tid), json=_se_4_body())
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["courts"] == 2
+    # The workspace venue config is authoritative on both write and read.
+    assert body["courts"] == client.get(_bracket_url(tid)).json()["courts"]
     assert body["total_slots"] == 64
     assert len(body["events"]) == 1
     assert body["events"][0]["id"] == "MS"

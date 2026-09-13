@@ -40,7 +40,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -48,7 +48,6 @@ from sqlalchemy.exc import IntegrityError
 from core.dependencies import require_tournament_access
 from core.error_codes import ErrorCode, http_error
 from core.schemas import (
-    EntryCommitResultDTO,
     EntryDeskRowDTO,
     EntryEventCreateDTO,
     EntryEventDTO,
@@ -56,17 +55,16 @@ from core.schemas import (
     EntryPagePublicationPatchDTO,
     EntryPagePublicSiteDTO,
     EntryPageUpsertDTO,
+    Representation,
 )
 from db.models import (
     Entry,
     EntryEvent,
     EntryPage,
-    MeetEvent,
     Submission,
 )
 from repositories import LocalRepository, get_repository
 from entries import lifecycle, money, retention, submissions
-from entries.entries import commit_entries
 from entries.entries_public import _get_record, _scalar_rows
 from entries.entry_fees import normalize_fee_schedule
 from core.limits import MAX_EVENTS, Identifier, Name, Notes, StrictModel
@@ -81,7 +79,9 @@ _CONFIRMABLE_FROM = lifecycle.PENDING
 
 
 def _set_entry_state(session, row: Entry, state: str) -> None:
-    row.state = state
+    if state != lifecycle.CONFIRMED:
+        raise lifecycle.LifecycleError("INVALID_TRANSITION", "Use the named lifecycle action.")
+    lifecycle.confirm(session, row)
 
 
 def _persist_import_batch(
@@ -103,6 +103,7 @@ def _persist_import_batch(
                     full_name=player.fullName,
                     gender=player.gender,
                     club=player.club,
+                    representation=player.representation,
                     birth_year=player.birthYear,
                     remarks=player.remarks,
                     events=events,
@@ -173,6 +174,7 @@ def _upsert_entry_page_record(
     row.regulations_text = body.regulationsText
     row.waiver_required = body.waiverRequired
     row.fee_schedule = fee_schedule
+    row.fee_currency = body.feeCurrency
     row.payment_instructions = body.paymentInstructions
     row.max_events_per_person = body.maxEventsPerPerson
     row.discipline_caps = discipline_caps
@@ -239,6 +241,9 @@ class EntryImportPlayerDTO(StrictModel):
     fullName: Name
     gender: str = Field(..., min_length=1, max_length=20)
     club: Optional[Name] = None
+    # D4 / O4: the controlled "Representing" code, or omitted for Unknown.
+    # An unlisted code is a 422 on the batch rather than a stored string.
+    representation: Representation = None
     birthYear: Optional[int] = Field(None, ge=1900, le=2200)
     remarks: Optional[Notes] = None
     eventIds: List[uuid.UUID] = Field(..., min_length=1, max_length=MAX_EVENTS)
@@ -355,32 +360,6 @@ def list_entries(
     )
     codes = _event_codes(repo, tournament_id)
     return [EntryDeskRowDTO.from_row(row, event_code=codes.get(row.entry_event_id)) for row in rows]
-
-
-@router.post(
-    "/{tournament_id}/entries/commit",
-    response_model=EntryCommitResultDTO,
-    dependencies=[Depends(require_tournament_access("operator"))],
-)
-def commit_entries_route(
-    tournament_id: uuid.UUID = Path(...),
-    entry_event_id: Optional[uuid.UUID] = Query(
-        None, description="Commit only this entry event (spec §5's event filter)."
-    ),
-    repo: LocalRepository = Depends(get_repository),
-):
-    """Run Seam A and return the per-entry summary.
-
-    Safe to press twice: the seam is idempotent by design (Q3 — entries
-    reopen, late arrivals are routine), so a double-click commits nothing
-    twice and answers with an empty ``committed`` list.
-
-    Declared **before** the ``{entry_id}`` route below only for reading
-    order; ``/entries/commit`` and ``/entries/{entry_id}/confirm`` are
-    different depths and cannot shadow each other.
-    """
-    result = commit_entries(repo, tournament_id, entry_event_id=entry_event_id)
-    return EntryCommitResultDTO(**result.as_dict())
 
 
 @router.post(
@@ -657,27 +636,17 @@ def withdraw_entry_at_the_desk(
 
 
 class SubmissionPaymentDTO(BaseModel):
-    """What the desk is told after marking a payment.
-
-    Deliberately small, and deliberately NOT the entry rows: the caller
-    re-reads the list, which is the same posture every other desk action
-    takes, and a partial row set here would be a second projection of the
-    desk that could disagree with the first.
-    """
-
     submissionId: str
-    paidAt: Optional[str] = None
-    #: Entries whose ``awaiting_payment`` reason changed. The number, not the
-    #: ids: the desk re-reads, and the count is what makes the toast honest
-    #: ("4 entries updated") rather than a claim the operator cannot check.
-    entriesUpdated: int = 0
+    paidCents: int
+    outstandingCents: Optional[int]
+    currency: Optional[str]
 
 
-class MarkPaidRequest(BaseModel):
-    """``note`` is free text for the director's own record — "Zelle, ref
-    4412", "cash at the desk". Never rendered publicly."""
-
-    note: Optional[str] = None
+class RecordPaymentRequest(BaseModel):
+    amountCents: int
+    currency: str = Field(min_length=3, max_length=3)
+    note: Optional[str] = Field(default=None, max_length=2000)
+    requestId: str = Field(min_length=1, max_length=100)
 
 
 def _get_submission(
@@ -691,62 +660,22 @@ def _get_submission(
     return row
 
 
-@router.post(
-    "/{tournament_id}/submissions/{submission_id}/paid",
-    response_model=SubmissionPaymentDTO,
-    dependencies=[Depends(require_tournament_access("operator"))],
-)
-def mark_submission_paid(
-    body: MarkPaidRequest = MarkPaidRequest(),
-    tournament_id: uuid.UUID = Path(...),
-    submission_id: uuid.UUID = Path(...),
+@router.post("/{tournament_id}/submissions/{submission_id}/payments", response_model=SubmissionPaymentDTO)
+def record_submission_payment(
+    body: RecordPaymentRequest,
+    tournament_id: uuid.UUID,
+    submission_id: uuid.UUID,
+    actor=Depends(require_tournament_access("operator")),
     repo: LocalRepository = Depends(get_repository),
 ):
-    """Record that this act was paid. **Clears one reason; confirms nothing.**
-
-    Invariant I4, and the one most likely to erode: an operator marking a
-    payment obviously wants the entry to go through, and a helpful edit that
-    also confirmed it would make payment a consequential automatic decision.
-    Confirmation stays a separate press.
-
-    Idempotent — a second call finds the timestamp already there and is not
-    an error. Two operators on a busy desk is a thing that happens.
-    """
     submission = _get_submission(repo, tournament_id, submission_id)
-    cleared = repo.execute_transaction(
-        money.mark_paid, submission, note=body.note
-    )
-    return SubmissionPaymentDTO(
-        submissionId=str(submission.id),
-        paidAt=submission.paid_at.isoformat() if submission.paid_at else None,
-        entriesUpdated=len(cleared),
-    )
-
-
-@router.post(
-    "/{tournament_id}/submissions/{submission_id}/unpaid",
-    response_model=SubmissionPaymentDTO,
-    dependencies=[Depends(require_tournament_access("operator"))],
-)
-def mark_submission_unpaid(
-    tournament_id: uuid.UUID = Path(...),
-    submission_id: uuid.UUID = Path(...),
-    repo: LocalRepository = Depends(get_repository),
-):
-    """Take a payment record back — the operator marked the wrong act.
-
-    The reason returns only where the act OWES money: un-marking a free act
-    must not invent a debt that never existed. A confirmed entry stays
-    confirmed; whether to un-confirm has consequences on a roster and belongs
-    to the ordinary desk actions, not to correcting a note.
-    """
-    submission = _get_submission(repo, tournament_id, submission_id)
-    flagged = repo.execute_transaction(money.mark_unpaid, submission)
-    return SubmissionPaymentDTO(
-        submissionId=str(submission.id),
-        paidAt=None,
-        entriesUpdated=len(flagged),
-    )
+    try:
+        repo.execute_transaction(money.record_payment, submission,
+            amount_cents=body.amountCents, currency=body.currency, note=body.note,
+            actor_id=str(actor.as_uuid()), request_id=body.requestId)
+    except ValueError as exc:
+        raise HTTPException(409, detail=str(exc)) from exc
+    return SubmissionPaymentDTO(submissionId=str(submission.id), **money.balance(submission))
 
 
 class RetentionSweepDTO(BaseModel):
@@ -1134,36 +1063,6 @@ def patch_entry_page_publication(
     return EntryPageDTO.from_row(row)
 
 
-def _meet_event_id(repo: LocalRepository, tournament_id: uuid.UUID, code: str) -> Optional[str]:
-    """The Meet division this entry event maps onto, resolved at creation.
-
-    **R-DM-5 requires a real mapping column, and a column nothing populates
-    is not a mapping — it is a comment with a type.** This is its writer
-    (ruling P7b-8). It is a LOOKUP rather than an operator choice, unlike
-    ``bracket_event_id``: a bracket event is a draw the director picks from
-    a list, while a Meet division IS the code space (``meet_events.id`` is
-    "MS", "XD"), so asking the operator to restate the code they just typed
-    would be a field with one correct answer.
-
-    ``None`` when the workspace has not declared that division — including
-    every workspace that has declared none, which is the ordinary state of
-    a fresh one. The commit seam falls back to the code for a ``None``
-    (``entries/entries.py::_plan_meet``), and that fallback is what keeps
-    both every entry event created before this slice and every event
-    created ahead of its division working. **Deliberately not a
-    reconciler:** nothing re-resolves this later, because ``meet_events``
-    rows are derived and routinely deleted, and a column that chased them
-    would flip an operator's mapping on a config edit.
-
-    There is no update route for ``code`` (R-DM-11(b): the code is the
-    entrant tier's public event key), so creation is the only moment this
-    can be written. If a rename route is ever added it must rewrite this
-    column with it.
-    """
-    found = repo.execute_query(_get_record, MeetEvent, (tournament_id, code))
-    return code if found is not None else None
-
-
 @router.post(
     "/{tournament_id}/entry-events",
     response_model=EntryEventDTO,
@@ -1218,8 +1117,7 @@ def create_entry_event(
         code=code,
         discipline=discipline,
         entry_type=body.entryType,
-        bracket_event_id=body.bracketEventId,
-        meet_event_id=_meet_event_id(repo, tournament_id, code),
+        competition_event_id=uuid.UUID(str(body.competitionEventId)) if body.competitionEventId else None,
         cap=body.cap,
         fee_cents=body.feeCents,
         gender_constraint=body.genderConstraint,
@@ -1227,5 +1125,8 @@ def create_entry_event(
         closes_at=_parse_moment(body.closesAt, "closesAt"),
         withdraws_until=_parse_moment(body.withdrawsUntil, "withdrawsUntil"),
     )
-    repo.execute_transaction(_add_record, row)
+    try:
+        repo.execute_transaction(_add_record, row)
+    except IntegrityError as exc:
+        raise HTTPException(409, detail="Event code must be unique and its competition target must exist in this tournament") from exc
     return EntryEventDTO.from_row(row)

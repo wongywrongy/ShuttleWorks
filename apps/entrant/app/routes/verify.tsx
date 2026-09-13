@@ -31,6 +31,7 @@ import { data } from 'react-router';
 import { useContext } from 'react';
 
 import { PlayShell } from '../components/PlayShell';
+import { safeNext } from '../lib/nextTarget';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { EntrantSessionContext } from '../lib/sessionContext';
@@ -56,6 +57,7 @@ const MAX_TOKEN = 200;
 
 export interface VerifyLoaderData {
   formCsrf: string;
+  next?: string;
   /** Verbatim from the query, length-clamped. Never parsed, never decoded. */
   token: string;
   verified: boolean;
@@ -74,6 +76,7 @@ export async function loader({ request }: { request: Request }) {
   const raw = url.searchParams.get('token') ?? '';
   const payload: VerifyLoaderData = {
     formCsrf: csrf.token,
+    next: safeNext(url.searchParams.get('next'), '/e/me/entries'),
     token: raw.length > MAX_TOKEN ? '' : raw,
     verified: url.pathname.endsWith(DONE_SUFFIX),
     failed: url.pathname.endsWith(FAILED_SUFFIX),
@@ -95,6 +98,8 @@ export const meta: Route.MetaFunction = () => [
 export default function VerifyPage({ loaderData }: Route.ComponentProps) {
   const { formCsrf, token, verified, failed, sent, mailFailed } = loaderData;
   const signedIn = useContext(EntrantSessionContext);
+  const next = safeNext(loaderData.next ?? null, '/e/me/entries');
+  const loginReturn = `/e/login?next=${encodeURIComponent(`/e/verify/failed?next=${encodeURIComponent(next)}`)}`;
 
   return (
     <PlayShell>
@@ -120,7 +125,7 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
               status.
             </Notice>
             <Button asChild className="justify-self-start">
-              <a href="/e/me/entries">See my entries</a>
+              <a href={signedIn ? next : `/e/login?next=${encodeURIComponent(next)}`}>{next === '/e/me/entries' ? 'See my entries' : 'Continue your entry'}</a>
             </Button>
           </div>
         ) : null}
@@ -137,11 +142,12 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
             {signedIn ? (
               <form method="post" action="/e/account/resend-verification">
                 <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+                <input type="hidden" name="next" value={next} />
                 <Button type="submit">Send a new confirmation email</Button>
               </form>
             ) : (
               <Button asChild variant="outline" className="justify-self-start">
-                <a href="/e/login?next=/e/verify/failed">Sign in to request a new link</a>
+                <a href={loginReturn}>Sign in to request a new link</a>
               </Button>
             )}
           </div>
@@ -158,11 +164,12 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
                 {signedIn ? (
                   <form method="post" action="/e/account/resend-verification">
                     <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+                <input type="hidden" name="next" value={next} />
                     <Button type="submit">Try again</Button>
                   </form>
                 ) : (
                   <Button asChild variant="outline" className="justify-self-start">
-                    <a href="/e/login?next=/e/verify/failed">Sign in to request a new link</a>
+                    <a href={loginReturn}>Sign in to request a new link</a>
                   </Button>
                 )}
               </>
@@ -177,7 +184,7 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
                   requesting another link.
                 </p>
                 <Button asChild variant="outline" className="justify-self-start">
-                  <a href="/e/me/entries">See my entries</a>
+                  <a href={signedIn ? next : `/e/login?next=${encodeURIComponent(next)}`}>{next === '/e/me/entries' ? 'See my entries' : 'Continue your entry'}</a>
                 </Button>
               </>
             )}
@@ -189,6 +196,7 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
             {token ? (
               <form method="post" action="/e/account/verify" className="grid gap-4">
                 <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+                <input type="hidden" name="next" value={next} />
                 <input type="hidden" name="token" value={token} />
                 <p className="text-sm text-muted-foreground">
                   Press the button to confirm this address.
@@ -209,6 +217,7 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
                 </p>
                 <form method="post" action="/e/account/resend-verification">
                   <input type="hidden" name={FORM_FIELD} value={formCsrf} />
+                <input type="hidden" name="next" value={next} />
                   <Button type="submit">Send a new confirmation email</Button>
                 </form>
               </>
@@ -219,7 +228,7 @@ export default function VerifyPage({ loaderData }: Route.ComponentProps) {
               <p className="text-sm text-muted-foreground">
                 Open the confirmation link from the email we sent you. If you
                 cannot find it,{' '}
-                <a className="text-accent underline underline-offset-4" href="/e/login">
+                <a className="text-accent underline underline-offset-4" href={loginReturn}>
                   sign in
                 </a>{' '}
                 and ask for a new one.

@@ -584,6 +584,10 @@ def test_the_same_submit_with_an_entrant_session_is_accepted(cloud_client, entry
     # field is the only thing that lets an unhydrated form post this write.
     token = client.get(f"/e/api/page/{entry_page['a']['slug']}").json()["viewer"]["formCsrf"]
 
-    r = _post_entry(client, entry_page["a"], _csrf=token)
+    from _helpers import submit_reviewed
+    r = submit_reviewed(client, f"/e/api/submit/{entry_page['a']['slug']}", data={
+        "playerName": "Alice Chen", "gender": "F", "events": f"0:{entry_page['a']['event']}",
+        "acknowledged": "on", "_csrf": token,
+    }, headers={"X-ShuttleWorks-CSRF": "1"}, follow_redirects=False)
     assert r.status_code == 303, r.text
     assert _entry_count(entry_page["a"]["tid"]) == 1

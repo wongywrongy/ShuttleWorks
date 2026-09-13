@@ -239,7 +239,7 @@ type DelayReason = 'player_not_present' | 'injury' | 'court_issue' | 'other';
 // Match State (for Match Desk operations)
 export interface MatchStateDTO {
   matchId: string;
-  status: 'scheduled' | 'called' | 'started' | 'finished';
+  status: 'scheduled' | 'called' | 'started' | 'finished' | 'retired';
   /** ISO-8601 UTC timestamp, e.g. "2026-04-19T18:05:37.000Z".
    *  Set the first time a match transitions to `called`. Used to show
    *  "Called Xm ago" and as an audit point in the match details. */
@@ -296,6 +296,12 @@ export interface PlayerDTO {
   availability: AvailabilityWindow[];
   minRestMinutes?: number | null; // If not provided, uses tournament config's defaultRestMinutes
   notes?: string;
+  /** D4 / O4 — the controlled "Representing" code (BWF/ISO alpha-3, uppercase,
+   *  e.g. `USA`, `ENG`, `TPE`). Absent/undefined IS Unknown; there is no
+   *  companion flag. Validated by the backend against `core/representation.py`
+   *  — an unlisted code is a 422 on the blob write. Not citizenship, not the
+   *  club. Render the display name via that mapping, `Unknown` when absent. */
+  representation?: string;
   status?: 'active' | 'withdrawn'; // Player status - defaults to 'active'
   withdrawalReason?: WithdrawalReason; // Reason if withdrawn
   withdrawnAt?: string; // Timestamp when withdrawn
@@ -330,6 +336,12 @@ export interface BracketPlayerDTO {
   id: string;
   name: string;
   notes?: string;
+  /** D4 / O4 — the controlled "Representing" code (BWF/ISO alpha-3, uppercase,
+   *  e.g. `USA`, `ENG`, `TPE`). Absent/undefined IS Unknown; there is no
+   *  companion flag. Validated by the backend against `core/representation.py`
+   *  — an unlisted code is a 422 on the blob write. Not citizenship, not the
+   *  club. Render the display name via that mapping, `Unknown` when absent. */
+  representation?: string;
   /** Per-player rest override in slots; unset = session `defaultRestSlots`. */
   restSlots?: number;
   /** POSITIVE (allowed) HH:mm windows — empty/unset means available all
@@ -895,7 +907,12 @@ export interface EntryDTO {
   remarks: string | null;
   listOptOut: boolean;
   /** Set once Seam A has materialized this entry as a roster player. */
-  committedPlayerId: string | null;
+  membershipId: string | null;
+  unitId?: string | null;
+  competitionEventId?: string | null;
+  membershipStatus?: string | null;
+  unitStatus?: string | null;
+  version?: number;
   submittedAt: string | null;
   withdrawnAt: string | null;
 }
@@ -917,25 +934,28 @@ export interface EntrySubmissionDTO {
   accountName: string | null;
   feeTotalCents: number | null;
   submittedAt: string | null;
+  feeCurrency?: string | null;
+  paidCents?: number;
+  outstandingCents?: number | null;
+  version?: number;
 }
 
 /** One committed entry: which entry became which roster player. */
-export interface EntryCommitOutcomeDTO {
-  id: string;
-  playerId: string;
+export interface EntryBindOutcomeDTO {
+  entryId: string;
+  membershipId: string;
+  unitId: string;
+  competitionEventId: string;
+  status: 'active' | 'withdrawn';
+  outcome: 'bound' | 'already_bound' | 'withdrawn' | 'moved';
 }
-
-/** One skipped entry + the stable reason code. Spec §5: partial success is
- *  reported per-entry, not rolled back — so this is a normal outcome, not an
- *  error body. Codes: `UNMAPPABLE_EVENT` | `DRAW_NOT_EDITABLE` |
- *  `STATE_CONFLICT` | `INVALID_PLAYER`. */
 export interface EntrySkipDTO {
-  id: string;
+  entryId: string;
   reason: string;
+  message: string;
 }
-
-export interface EntryCommitResultDTO {
-  committed: EntryCommitOutcomeDTO[];
+export interface EntryBindResultDTO {
+  bindings: EntryBindOutcomeDTO[];
   skipped: EntrySkipDTO[];
 }
 
@@ -1162,6 +1182,7 @@ export interface EntryPageDTO {
   regulationsVersion: number;
   regulationsUpdatedAt: string | null;
   feeSchedule: Record<string, number> | null;
+  feeCurrency?: string | null;
   paymentInstructions: string | null;
   maxEventsPerPerson: number | null;
   disciplineCaps: Record<string, unknown> | null;

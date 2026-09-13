@@ -76,9 +76,7 @@ from shared.match_vocabulary import LEGACY_TO_CANONICAL as _CANONICAL_LEGACY_MAP
 #
 # This redirects to ``shared.match_vocabulary.LEGACY_TO_CANONICAL``, the
 # bidirectional, total authority (it also carries ``retired``, which this
-# dict used to drop — D4). The legacy ``MatchStateStatusLiteral`` this route
-# accepts on input still only spells four values (it never accepted
-# ``retired``), so the extra key is simply unused here, not wrong.
+# dict used to drop — D4). The wire DTO preserves retirement as well.
 _LEGACY_TO_CANONICAL = dict(_CANONICAL_LEGACY_MAP)
 
 router = APIRouter(
@@ -102,7 +100,7 @@ MAX_IMPORT_BYTES = 20 * 1024 * 1024
 # legacy enum (still used by the frontend); the canonical
 # ``MatchStatus`` from ``db.models`` is the typed enum the new
 # arc speaks internally.
-MatchStateStatusLiteral = Literal["scheduled", "called", "started", "finished"]
+MatchStateStatusLiteral = Literal["scheduled", "called", "started", "finished", "retired"]
 
 
 class MatchScore(StrictModel):
@@ -125,7 +123,7 @@ class MatchStateDTO(StrictIgnoringModel):
     @field_validator("status", mode="before")
     @classmethod
     def coerce_unknown_status(cls, v):
-        if v in ("scheduled", "called", "started", "finished"):
+        if v in MatchStateStatusLiteral.__args__:
             return v
         return "scheduled"
 

@@ -65,13 +65,13 @@ export function ModuleUnavailablePanel({
       ) : null}
       {/* SP-OPCON-1 SWP-9: the primary action agrees with the message. When
           the copy says "enable this module", the featured button goes where
-          enabling happens (Administration · Modules) and says so — it does
+          enabling happens (Settings · Modules) and says so — it does
           not say "Go to Bracket" while the text asks for an enable. Leaving
           the workspace stays available as the quiet secondary. */}
       <div className="mt-2 flex items-center gap-2">
         {onOpenSettings && (reason === 'disabled' || reason === 'not-enabled') ? (
           <>
-            <Button onClick={onOpenSettings}>Enable in Administration · Modules</Button>
+            <Button onClick={onOpenSettings}>Enable in Settings · Modules</Button>
             <Button variant="ghost" onClick={onGoToPrimary}>
               Go to {primaryLabel}
             </Button>
@@ -79,7 +79,7 @@ export function ModuleUnavailablePanel({
         ) : (
           <>
             {/* V3-OC30.1: when this module is absent from the workspace's
-                type entirely, `onGoToPrimary` routes to Administration ·
+                type entirely, `onGoToPrimary` routes to Settings ·
                 Modules (see AppShell), not to `primaryLabel`'s own workflow —
                 so the button must say so, not repeat a label whose
                 destination it no longer shares. */}
@@ -88,7 +88,7 @@ export function ModuleUnavailablePanel({
             </Button>
             {onOpenSettings ? (
               <Button variant="ghost" onClick={onOpenSettings}>
-                Open Administration · Modules
+                Open Settings · Modules
               </Button>
             ) : null}
           </>

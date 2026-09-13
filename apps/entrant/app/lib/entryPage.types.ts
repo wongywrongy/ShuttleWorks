@@ -89,9 +89,14 @@ export interface EntryPageContentDTO {
    * Null = never edited since the field existed; render version-only. */
   regulationsUpdatedAt: string | null;
   paymentInstructions: string | null;
+  /** The effective scoring rules as one sentence, derived server-side from
+   * the workspace's structured rules — never parsed out of the regulations
+   * prose beside it. Null when scoring is not configured. */
+  scoringSummary?: string | null;
   /** String keys: this mirrors a JSON column, and JSON has no integer keys.
    * Normalized backend-side so the card cannot quote a tier the pricing drops. */
   feeSchedule: Record<string, number>;
+  feeCurrency?: string | null;
 }
 
 /** The TD's publication gates (SP-P7 §4) — how the tier tells "gated" from

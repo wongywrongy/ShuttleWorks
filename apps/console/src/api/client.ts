@@ -26,7 +26,7 @@ import type {
   TournamentSummaryDTO,
   WorkspaceModuleDTO,
   EntryDTO,
-  EntryCommitResultDTO,
+  EntryBindResultDTO,
   TournamentCreateDTO,
   TournamentUpdateDTO,
   TournamentMemberDTO,
@@ -838,44 +838,48 @@ class ApiClient {
    *
    *  Clears exactly one pending reason and never confirms an entry
    *  (invariant I4). Idempotent: a second press is not an error. */
-  async markSubmissionPaid(
-    tid: string,
-    submissionId: string,
-    note?: string,
-  ): Promise<{ submissionId: string; paidAt: string | null; entriesUpdated: number }> {
-    const r = await this.client.post(
-      `/tournaments/${tid}/submissions/${submissionId}/paid`,
-      note === undefined ? {} : { note },
-    );
+  async recordSubmissionPayment(
+    tid: string, submissionId: string,
+    payment: { amountCents: number; currency: string; note?: string; requestId: string },
+  ): Promise<{ submissionId: string; paidCents: number; outstandingCents: number | null; currency: string }> {
+    const r = await this.client.post(`/tournaments/${tid}/submissions/${submissionId}/payments`, payment);
     return r.data;
   }
 
-  /** Take a payment record back — the operator marked the wrong act. The
-   *  reason returns only where the act OWES money, and a confirmed entry
-   *  stays confirmed. */
-  async markSubmissionUnpaid(
-    tid: string,
-    submissionId: string,
-  ): Promise<{ submissionId: string; paidAt: string | null; entriesUpdated: number }> {
-    const r = await this.client.post(
-      `/tournaments/${tid}/submissions/${submissionId}/unpaid`,
-    );
-    return r.data;
+  async listRegistrationEvents(tid: string): Promise<{id: string; code: string; competitionEventId: string | null; version: number}[]> {
+    return (await this.client.get(`/tournaments/${tid}/competition/registration-events`)).data;
   }
 
-  /** Run Seam A: materialize every confirmed, uncommitted entry as a roster
-   *  player. Idempotent by design (spec §5) — pressing it twice commits
-   *  nothing twice — so the caller may re-run it freely as late entries
-   *  arrive. Partial success comes back per-entry in `skipped`. */
-  async commitEntries(
-    tid: string,
-    entryEventId?: string,
-  ): Promise<EntryCommitResultDTO> {
-    const r = await this.client.post<EntryCommitResultDTO>(
-      `/tournaments/${tid}/entries/commit`,
-      undefined,
-      { params: entryEventId ? { entry_event_id: entryEventId } : undefined },
-    );
+  async createCompetitionEvent(tid: string, body: {categoryCode: string; formatKey: string; bracketEventId?: string; meetEventId?: string}): Promise<{id: string; version: number}> {
+    return (await this.client.post(`/tournaments/${tid}/competition/events`, body)).data;
+  }
+
+  async setCompetitionDefault(tid: string, entryEventId: string, competitionEventId: string | null, expectedVersion: number): Promise<void> {
+    await this.client.put(`/tournaments/${tid}/competition/entry-events/${entryEventId}/default`, {competitionEventId, expectedVersion});
+  }
+
+  async listCompetitionEvents(tid: string): Promise<{ id: string; categoryCode: string }[]> {
+    return (await this.client.get(`/tournaments/${tid}/competition/events`)).data;
+  }
+
+  async listCompetitionUnits(tid: string): Promise<{ id: string; competitionEventId: string; status: string; version: number; label: string }[]> {
+    return (await this.client.get(`/tournaments/${tid}/competition/units`)).data;
+  }
+
+  async withdrawCompetitionUnit(tid: string, unitId: string, expectedVersion: number): Promise<void> {
+    await this.client.post(`/tournaments/${tid}/competition/units/${unitId}/withdraw`, {expectedVersion});
+  }
+
+  async rebindEntry(tid: string, entryId: string, body: {
+    competitionEventId: string; unitId?: string; expectedVersion: number; targetVersion?: number; requestId: string;
+  }): Promise<void> {
+    await this.client.post(`/tournaments/${tid}/competition/entries/${entryId}/rebind`, body);
+  }
+
+  async bindEntries(tid: string, entryEventId?: string, competitionEventId?: string): Promise<EntryBindResultDTO> {
+    const r = await this.client.post<EntryBindResultDTO>(`/tournaments/${tid}/competition/bind`, {
+      entryEventId, competitionEventId, requestId: crypto.randomUUID(),
+    });
     return r.data;
   }
 
@@ -1899,6 +1903,7 @@ class ApiClient {
     tid: string,
     body: {
       id: string;
+      kind?: 'record_result' | 'correct_result';
       play_unit_id: string;
       winner_side: 'A' | 'B';
       seen_version?: number;

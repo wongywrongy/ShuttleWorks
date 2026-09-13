@@ -188,7 +188,7 @@
       "label": "Tournament · Schedule and live",
       "examples": [
         {
-          "name": "Tournament · Schedule and live · More filters",
+          "name": "Tournament · Schedule and live · Event · Men's singles",
           "viewport": "desktop"
         }
       ]
@@ -204,7 +204,7 @@
       "label": "Entry form · Signed-in outcome",
       "examples": [
         {
-          "name": "Entry form · Signed-in outcome · Continue to account",
+          "name": "Entry form · Signed-in outcome · Review entry",
           "viewport": "desktop"
         }
       ]
@@ -274,6 +274,9 @@
     },
     {
       "label": "My entries (signed in)"
+    },
+    {
+      "label": "My settings (signed in)"
     },
     {
       "label": "Results tournament · Overview"

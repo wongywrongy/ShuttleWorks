@@ -39,8 +39,8 @@ export default function MyEntries({ loaderData }: Route.ComponentProps) {
                 belongs beside the actual list, not repeated ahead of a gate
                 that might not even show one. */}
             <p className="mt-1 text-sm text-muted-foreground">
-              Every tournament you have entered, newest first. The organizer
-              confirms each entry.
+              Every tournament you have entered, grouped into active and past.
+              The organizer confirms each entry.
             </p>
             <div id="my-entries-root" className="mt-6 grid gap-6">
               <p className="text-muted-foreground">Loading your entries.</p>
@@ -50,6 +50,16 @@ export default function MyEntries({ loaderData }: Route.ComponentProps) {
                 This page needs JavaScript to show your entries.
               </p>
             </noscript>
+            {/* Refinement 2026-09-12: the account's privacy controls moved to
+                their own page. One quiet link here keeps them one click away
+                for a reader who came looking for them at the old anchor. */}
+            <p className="mt-8 border-t border-rule-soft pt-4 text-sm text-muted-foreground">
+              Account and privacy controls are in{' '}
+              <a href="/e/me/settings" className="font-medium text-accent underline-offset-4 hover:underline">
+                Account settings
+              </a>
+              .
+            </p>
             <script type="module" src="/e/assets/my-entries.js" />
           </>
         ) : (

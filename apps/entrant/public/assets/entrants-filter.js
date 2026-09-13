@@ -66,6 +66,17 @@ export function matchField(query, name, club) {
   return '';
 }
 
+/**
+ * Does a row's `data-events` (space-separated public codes, as SSR wrote
+ * them) include the selected event? An empty selection keeps every row.
+ * Exact token match, never a substring: `MS` must not find `XMS`.
+ */
+export function rowHasEvent(events, event) {
+  const wanted = (event ?? '').trim().toUpperCase();
+  if (wanted === '') return true;
+  return (events ?? '').split(/\s+/).includes(wanted);
+}
+
 /** The boolean twin, kept as the module's original contract. */
 export function matches(query, name, club) {
   return matchField(query, name, club) !== '';
@@ -82,12 +93,14 @@ export function filterNoun(root) {
 const CLUB_RESTING = 'text-xs text-muted-foreground';
 const CLUB_PROMOTED = 'text-xs font-medium text-foreground';
 
-/** Apply a query to a rendered list; returns how many rows stay visible. */
-export function apply(scope, query) {
+/** Apply a query (and an event selection) to a rendered list; returns how
+ * many rows stay visible. `event` is a public code or `''` for every event —
+ * the same test the server ran over `?event=`. */
+export function apply(scope, query, event = '') {
   let visible = 0;
   for (const row of scope.querySelectorAll('[data-entrant]')) {
     const field = matchField(query, row.getAttribute('data-name'), row.getAttribute('data-club'));
-    const show = field !== '';
+    const show = field !== '' && rowHasEvent(row.getAttribute('data-events'), event);
     row.hidden = !show;
     // A query that matched the club and not the name needs the club to be
     // legible, or the result reads as an unexplained name.
@@ -114,7 +127,7 @@ export function apply(scope, query) {
   const count = scope.querySelector('[data-search-count]');
   if (count) {
     const noun = filterNoun(scope.querySelector('#entrants-filter-root'));
-    count.textContent = query.trim()
+    count.textContent = query.trim() || (event ?? '').trim()
       ? `${visible} ${visible === 1 ? 'result' : 'results'}`
       : `${visible} ${visible === 1 ? noun : `${noun}s`}`;
   }
@@ -143,13 +156,16 @@ export function boot(root) {
   const doc = root.ownerDocument;
   const input = root.querySelector('input[type="search"]');
   if (!input) return;
-  input.addEventListener('input', () => {
-    apply(doc, input.value);
-  });
-  // The server may already have filtered to `?q=`; re-applying it here is a
-  // no-op on the rendered rows and keeps the count line consistent with the
-  // register the script uses from the first keystroke on.
-  if (input.value.trim() !== '') apply(doc, input.value);
+  // The event select is the form's second filter (refinement 2026-09-12);
+  // absent on a one-event roster, where there is nothing to choose.
+  const select = root.querySelector('select[name="event"]');
+  const run = () => apply(doc, input.value, select ? select.value : '');
+  input.addEventListener('input', run);
+  if (select) select.addEventListener('change', run);
+  // The server may already have filtered to `?q=`/`?event=`; re-applying it
+  // here is a no-op on the rendered rows and keeps the count line consistent
+  // with the register the script uses from the first keystroke on.
+  if (input.value.trim() !== '' || (select && select.value !== '')) run();
 }
 
 if (typeof document !== 'undefined') {

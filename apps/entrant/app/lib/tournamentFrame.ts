@@ -20,7 +20,7 @@
  * as in `phase.ts`, so an SSR render is deterministic.
  */
 import type { EntryPageDTO } from './entryPage.types';
-import { capChipCountdown, formatDateLong } from './format';
+import { capChipCountdown, formatDateLong, formatDateRangeShort } from './format';
 import {
   chipState,
   ctaState,
@@ -51,12 +51,25 @@ export interface Crumb {
   href: string | null;
 }
 
+/**
+ * Two anatomies of the one frame (public refinement, 2026-09-12). Overview
+ * wears the FULL hero: organizer, display title, long dates, status line and
+ * the primary action. Every other section wears the COMPACT one — the same
+ * facts at a smaller step on fewer lines — so the content a reader came to
+ * that section for starts higher on the page.
+ */
+export type FrameVariant = 'full' | 'compact';
+
 export interface TournamentFrameModel {
   slug: string;
+  variant: FrameVariant;
   orgName: string | null;
   title: string;
   /** Dates and venue, joined once. §11.1: the hero states them, the route does not. */
   metaLine: string;
+  /** The same facts in the concise form the compact frame prints:
+   *  `31 Jul – 5 Aug 2026 · Asan Yi Sun-sin Gymnasium`. */
+  compactMetaLine: string;
   chip: ChipState;
   cta: CtaState;
   phaseAction: { label: string; href: string } | null;
@@ -169,8 +182,12 @@ export function tournamentFrameModel(
   // Carried verbatim from `tournament.tsx`: the hero's action is the
   // tournament's lifecycle action, and it is the same one at every depth
   // (§11.1 "depth does not cost identity" — a draw page keeps the live CTA).
-  const phaseAction =
-    phase === 'entries_open'
+  // One exception since the 2026-09-12 refinement: an action that leads to
+  // the section the reader is ALREADY in ("Follow live matches" on the
+  // Schedule, "View draws" on a draw) is dropped from that page — it would
+  // reload the page under them, and it read as a second navigation.
+  const rawPhaseAction =
+    cta.kind === 'enter'
       ? { label: 'Enter this tournament', href: `${base}/enter` }
       : phase === 'live' && has('draws')
         ? { label: 'Follow live matches', href: sectionHref(slug, 'schedule') }
@@ -183,6 +200,9 @@ export function tournamentFrameModel(
               : phase === 'announced'
                 ? { label: 'View tournament information', href: base }
                 : null;
+
+  const phaseAction =
+    rawPhaseAction && rawPhaseAction.href === sectionHref(slug, active) ? null : rawPhaseAction;
 
   const title = page.tournament.name ?? slug;
   const crumbs: Crumb[] = [{ label: 'Tournaments', href: '/e/' }];
@@ -203,9 +223,15 @@ export function tournamentFrameModel(
 
   return {
     slug,
+    variant: active === 'overview' ? 'full' : 'compact',
     orgName: page.org?.name === 'Local Workspace' ? null : (page.org?.name ?? null),
     title,
-    metaLine: [page.tournament.date ? formatDateLong(page.tournament.date) : null, page.venue?.name]
+    // P1/D2: metaLine renders date and venue without punctuation separators;
+    // HeroHeader will display them as separate prose lines or in a second row.
+    metaLine: [page.tournament.date ? [formatDateLong(page.tournament.date), page.tournament.endDate && page.tournament.endDate !== page.tournament.date ? formatDateLong(page.tournament.endDate) : null].filter(Boolean).join(' – ') : null, page.venue?.name]
+      .filter((part): part is string => Boolean(part))
+      .join(', '),
+    compactMetaLine: [formatDateRangeShort(page.tournament.date, page.tournament.endDate), page.venue?.name]
       .filter((part): part is string => Boolean(part))
       .join(' · '),
     chip,

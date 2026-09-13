@@ -125,7 +125,7 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/modules/operations/run/RunFinished.tsx',
-    line: 111,
+    line: 113,
     why:
       'a finished match\'s score line ("21–15, 19–21") is meaningful text on ' +
       'its own inside a list already headed "Finished" — the status tint is ' +

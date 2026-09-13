@@ -47,7 +47,7 @@ from urllib.parse import quote, urlencode
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from entries.entries_public import (
     _all_rows,
@@ -68,6 +68,7 @@ from entries.entries_public import (
 )
 from core.client_ip import client_ip
 from core.config import settings
+from core.constants import BOOTSTRAP_ORG_NAME
 from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
 from core.form_csrf import FORM_FIELD, PLAY_CSRF_COOKIE
@@ -85,6 +86,7 @@ from entries.entry_fees import PlayerSelection, compute_fee_total, normalize_fee
 from entries.entry_form import parse_players
 from entries.entry_policy import check_policy
 from entries.entries_site import PublicPersonIdentityDTO, PersonReferenceDTO
+from shared.scoring_rules import scoring_summary
 
 log = logging.getLogger("scheduler.entries.entries_json")
 
@@ -103,16 +105,59 @@ def _record_invite_mail_outcome(session, entry_id, tournament_id, sent: bool) ->
     across the boundary.
     """
     entry = session.get(Entry, (tournament_id, entry_id))
-    if entry is not None:
-        entry.partner_invite_mail_sent = sent
+    if entry is not None and entry.invitation is not None:
+        entry.invitation.mail_sent = sent
+
+
+def _reviewed_quote(page, parsed, total, basis) -> str:
+    import hashlib
+    import json
+
+    payload = [str(page.tournament_id), parsed, total, basis,
+               page.regulations_version, getattr(page, "fee_currency", None)]
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+
+class ReviewChanged(ValueError):
+    pass
 
 
 def _create_submission_and_charge(
     session,
     *,
     throttle_key: str,
+    reviewed_quote: str,
+    parsed: list,
     **submission_fields,
 ):
+    replayed = submission_service.replay(
+        session, submission_fields["tournament_id"],
+        submission_fields["idempotency_key"], submission_fields["account_id"],
+    )
+    if replayed is not None:
+        return replayed
+    page = submission_fields["page"]
+    # Serialize intake against other submissions on SQLite as well as
+    # PostgreSQL, then read policy and prices in the write transaction.
+    session.execute(update(EntryPage).where(EntryPage.tournament_id == page.tournament_id)
+                    .values(is_open=EntryPage.is_open))
+    session.refresh(page)
+    from sync.service import tournament_is_checked_out
+
+    if not page.is_open or tournament_is_checked_out(session, page.tournament_id):
+        raise ReviewChanged("Entries are closed")
+    grouped = []
+    for index, spec in enumerate(submission_fields["players"]):
+        for event in spec.events:
+            session.refresh(event, with_for_update=True)
+            if not _event_is_open(event, _utcnow()):
+                raise ReviewChanged("An event has closed")
+        grouped.append((str(parsed[index]["index"]), spec.events))
+    total, basis = compute_fee_total(page, [PlayerSelection(key, events) for key, events in grouped])
+    if check_policy(page, grouped) is not None or reviewed_quote != _reviewed_quote(page, parsed, total, basis):
+        raise ReviewChanged("Review the current price and regulations before submitting")
+    submission_fields["fee_total_cents"] = total
+    submission_fields["fee_basis"] = basis
     result = submission_service.create_submission(
         session,
         commit=False,
@@ -209,7 +254,7 @@ def _send_partner_invite(*, entry, token: str, tournament_name: str, inviter: st
     origin = settings.play_origin
     try:
         send_email(
-            to=entry.partner_email,
+            to=entry.invitation_email,
             subject=f"{inviter} entered you as their partner",
             body=(
                 f"{inviter} has entered you as their doubles partner at "
@@ -332,10 +377,15 @@ class PageDTO(BaseModel):
     # the row renders version-only.
     regulationsUpdatedAt: Optional[str] = None
     paymentInstructions: Optional[str] = None
+    # The effective scoring rules as one sentence, DERIVED from the stored
+    # structured rules (`shared.scoring_rules`) — never re-typed prose. The
+    # regulations text beside it stays director-authored.
+    scoringSummary: Optional[str] = None
     # String keys: this mirrors a JSON column, and a JSON object has no
     # integer keys. Read through ``normalize_fee_schedule`` so the card
     # cannot quote a tier the pricing drops.
     feeSchedule: Dict[str, int] = {}
+    feeCurrency: Optional[str] = None
 
 
 class PublicationDTO(BaseModel):
@@ -390,6 +440,26 @@ def _public_title(tournament) -> Optional[str]:
     if isinstance(override, str) and override.strip():
         return override.strip()
     return tournament.name
+
+
+def _published_scoring_summary(tournament) -> Optional[str]:
+    """The effective scoring rules as one derived sentence (D3).
+
+    Setup's ``rules`` section is the record; ``config`` is the mirror it
+    writes on save, and is the fallback for a workspace configured before
+    Setup existed. Nothing here reads the regulations prose.
+    """
+    data = tournament.data if isinstance(getattr(tournament, "data", None), dict) else {}
+    setup = data.get("setup")
+    section = setup.get("rules") if isinstance(setup, dict) else None
+    stored = section.get("data") if isinstance(section, dict) else None
+    if isinstance(stored, dict) and stored:
+        # The stored section is the whole record when it exists: `config` is
+        # only ever written to, never cleared, so merging it back would
+        # resurrect a cap the director has since removed.
+        return scoring_summary(stored)
+    config = data.get("config") if isinstance(data.get("config"), dict) else {}
+    return scoring_summary(config)
 
 
 class TournamentDTO(BaseModel):
@@ -553,7 +623,7 @@ def entry_page_projection(
                 else None
             ),
         ),
-        org=NamedDTO(name=org.name) if org is not None and org.name else None,
+        org=NamedDTO(name=org.name) if _public_org_name(org) else None,
         venue=(
             VenueDTO(name=page.venue_name, address=page.venue_address)
             if (page.venue_name or page.venue_address)
@@ -570,6 +640,8 @@ def entry_page_projection(
                 else None
             ),
             paymentInstructions=page.payment_instructions,
+            feeCurrency=page.fee_currency,
+            scoringSummary=_published_scoring_summary(tournament),
             feeSchedule={
                 str(count): cents
                 for count, cents in sorted(
@@ -687,6 +759,16 @@ def entrant_config() -> EntrantConfigDTO:
         turnstileSiteKey=settings.turnstile_site_key,
         authMode=settings.auth_mode,
     )
+
+
+def _public_org_name(org) -> Optional[str]:
+    """The organizer's public name, or ``None`` for the bootstrap
+    placeholder org (``AUTH_MODE=local``'s "Local Workspace"), which names
+    a machine's ownership fallback rather than anyone a reader could
+    contact. Omitted at the source so no public tier guards the string."""
+    if org is None or not org.name or org.name == BOOTSTRAP_ORG_NAME:
+        return None
+    return org.name
 
 
 class SeasonRowDTO(BaseModel):
@@ -836,7 +918,7 @@ def entry_page_list(
         rows.append(SeasonRowDTO(
             slug=page.slug,
             name=tournament.name,
-            organizer=org.name if org is not None and org.name else None,
+            organizer=_public_org_name(org),
             venueName=page.venue_name,
             date=(
                 str(tournament.tournament_date)
@@ -964,6 +1046,8 @@ class QuoteResponse(BaseModel):
     """
 
     totalCents: Optional[int] = None
+    reviewedQuote: Optional[str] = None
+    feeCurrency: Optional[str] = None
     feeBasis: dict = {}
     refusal: Optional[RefusalDTO] = None
 
@@ -978,6 +1062,12 @@ def _resolve_selections(repo: LocalRepository, tournament_id, parsed: List[dict]
     now = _utcnow()
     resolved: List[tuple] = []
     for spec in parsed:
+        from core.representation import normalize_representation
+
+        try:
+            spec["representation"] = normalize_representation(spec.get("representation"))
+        except ValueError as exc:
+            raise http_error(400, ErrorCode.INVALID_INPUT, str(exc)) from exc
         events = []
         for raw_id in spec["events"]:
             event = _lookup_event(repo, tournament_id, raw_id)
@@ -1094,7 +1184,7 @@ def entrant_or_back_to_form(
         raise
 
 
-def _echo_redirect(request: Request, slug: str, total, refusal) -> RedirectResponse:
+def _echo_redirect(request: Request, slug: str, total, refusal, reviewed_quote: str = "") -> RedirectResponse:
     """The unhydrated answer: **307** back to the form, so the typing rides
     in the BODY and never in a URL.
 
@@ -1147,7 +1237,7 @@ def _echo_redirect(request: Request, slug: str, total, refusal) -> RedirectRespo
     which is what makes the privacy property structural rather than a
     denylist somebody has to keep in step with the form.
     """
-    echoed = []
+    echoed = [("reviewedQuote", reviewed_quote)]
     if total is not None:
         echoed.append(("totalCents", str(total)))
     if refusal is not None:
@@ -1229,9 +1319,11 @@ async def quote_entry(
     # ``text/html`` in Accept means a navigation, not a fetch: browsers send
     # it on a native form post and never on `fetch(..., {headers: {}})`.
     if "text/html" in request.headers.get("accept", ""):
-        return _echo_redirect(request, page.slug, total, refusal)
+        return _echo_redirect(request, page.slug, total, refusal, _reviewed_quote(page, [spec for spec, _events in resolved], total, basis))
     return QuoteResponse(
         totalCents=total,
+        reviewedQuote=_reviewed_quote(page, [spec for spec, _events in resolved], total, basis),
+        feeCurrency=page.fee_currency,
         feeBasis=basis,
         refusal=(
             None
@@ -1289,11 +1381,23 @@ async def submit_entry_json(
     parameters because the payload is 1-N players each with 1-N events,
     which FastAPI's form binding cannot express.
     """
-    page, tournament = _resolve(repo, slug)
     form = await request.form()
 
     # 3 — the form CSRF token, before the body is read for anything else.
     require_form_csrf(request, form)
+
+    # A committed retry recovers its original receipt even when the price,
+    # deadline or checkout authority changed after the commit.
+    replay_key = idempotency_key or str(form.get("idempotencyKey") or "") or None
+    replay_page = repo.execute_query(
+        lambda session: session.scalars(select(EntryPage).where(EntryPage.slug == slug)).first()
+    )
+    if replay_page is not None and replay_key and len(replay_key) <= 64:
+        replayed = repo.execute_query(submission_service.replay, replay_page.tournament_id, replay_key, uuid.UUID(entrant.id))
+        if replayed is not None:
+            return _receipt_redirect(replay_page, replayed)
+
+    page, tournament = _resolve(repo, slug)
 
     # Checkout freezes entrant intake before the checkpoint is imported.
     # Otherwise an accepted cloud submission could be absent from the node's
@@ -1358,6 +1462,13 @@ async def submit_entry_json(
         page, [PlayerSelection(key, events) for key, events in grouped]
     )
 
+    reviewed = str(form.get("reviewedQuote") or "")
+    expected_review = _reviewed_quote(page, parsed, total, basis)
+    replay_key = idempotency_key or str(form.get("idempotencyKey") or "") or None
+    replayed = repo.execute_query(submission_service.replay, tournament.id, replay_key, uuid.UUID(entrant.id))
+    if replayed is None and reviewed != expected_review:
+        return _echo_redirect(request, page.slug, total, None, expected_review)
+
     # The key: header first (a hydrated fetch), hidden field second (an
     # unhydrated native form, which cannot send a header at all).
     #
@@ -1379,35 +1490,43 @@ async def submit_entry_json(
         raise refuse(422, "That submission's key is too long (64 characters).")
 
     # 7-9 — replay, flags and the write, all inside the submission service.
-    result = repo.execute_transaction(
-        _create_submission_and_charge,
-        throttle_key=throttle_key,
-        tournament_id=tournament.id,
-        page=page,
-        account_id=uuid.UUID(entrant.id),
-        players=[
-            submission_service.PlayerInput(
-                full_name=spec["name"],
-                gender=spec["gender"],
-                club=spec["club"],
-                birth_year=spec["birthYear"],
-                remarks=spec["remarks"],
-                events=events,
-                # E3: only the partners this block named for events it
-                # actually selected (``parse_partners`` already filtered).
-                partners=spec.get("partners") or {},
-            )
-            for spec, events in resolved
-        ],
-        fee_total_cents=total,
-        fee_basis=basis,
-        idempotency_key=key,
-        # E2 / spec §6: an unverified account's entries land in
-        # ``unverified`` and are promoted the moment the account verifies.
-        # Read from the resolved session rather than re-queried — the
-        # entrant dependency already has it.
-        email_verified=bool(entrant.email_verified),
-    )
+    try:
+        result = repo.execute_transaction(
+            _create_submission_and_charge,
+            throttle_key=throttle_key,
+            reviewed_quote=reviewed,
+            parsed=parsed,
+            tournament_id=tournament.id,
+            page=page,
+            account_id=uuid.UUID(entrant.id),
+            players=[
+                submission_service.PlayerInput(
+                    full_name=spec["name"],
+                    gender=spec["gender"],
+                    club=spec["club"],
+                    representation=spec.get("representation"),
+                    publish_representation=bool(spec.get("representation")),
+                    birth_year=spec["birthYear"],
+                    remarks=spec["remarks"],
+                    events=events,
+                    # E3: only the partners this block named for events it
+                    # actually selected (``parse_partners`` already filtered).
+                    partners=spec.get("partners") or {},
+                )
+                for spec, events in resolved
+            ],
+            fee_total_cents=total,
+            fee_basis=basis,
+            idempotency_key=key,
+            # E2 / spec §6: an unverified account's entries land in
+            # ``unverified`` and are promoted the moment the account verifies.
+            # Read from the resolved session rather than re-queried — the
+            # entrant dependency already has it.
+            email_verified=bool(entrant.email_verified),
+        )
+
+    except ReviewChanged:
+        return _echo_redirect(request, page.slug, None, None)
 
     # E3: the partner invites this act minted, mailed AFTER the commit. An
     # invite that arrives before the row it names is a race an entrant can
@@ -1460,6 +1579,10 @@ async def submit_entry_json(
     # entry has been given a puzzle instead of a receipt. A replay answers
     # the same submission and therefore the same reference, so the Location
     # is still byte-identical to the original's.
+    return _receipt_redirect(page, result)
+
+
+def _receipt_redirect(page, result):
     total_cents = result.submission.fee_total_cents
     query = "" if total_cents is None else f"?{urlencode({'totalCents': total_cents})}"
     reference = quote(result.submission.short_reference, safe="")

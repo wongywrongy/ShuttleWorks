@@ -148,7 +148,7 @@ describe('match-card contract — bracket node (§4.3)', () => {
     // slot index — one muted `from {reference}` line in a slot that keeps a
     // name's own height, so nothing jumps when the result lands.
     const html = renderNode(MC.unresolvedPredecessor);
-    expect(html).toContain('from QF1');
+    expect(html).toContain('TBD');
     expect(html).not.toContain('Winner of');
     expect(html).toContain('data-feeder-slot');
   });
@@ -213,7 +213,7 @@ describe('match-card contract — accessible summary (§6.1 "versus"/"and")', ()
     const html = renderNode(MC.unresolvedPredecessor);
     // One spelling, visible and accessible (P3): the phrase says where the
     // side comes from rather than asserting a winner that does not exist.
-    expect(html).toContain('Ada Lovelace versus from QF1');
+    expect(html).toContain('Ada Lovelace versus TBD');
   });
 
   it('MC-04: the pending partner is a term in the phrase, joined with "and"', () => {
@@ -239,7 +239,7 @@ describe('match-card contract — labels come from the discriminant (§2.1/§6.1
     // P3: both feeder takes read the same way on the public tier — the
     // structure says which half of SF 2 this side is, the line says where
     // it comes from, and neither claims an outcome nobody has recorded.
-    expect(html).toContain('from SF 2');
+    expect(html).toContain('TBD');
     expect(html).not.toContain('NONSENSE');
   });
 

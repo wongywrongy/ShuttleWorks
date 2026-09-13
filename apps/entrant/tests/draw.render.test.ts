@@ -488,7 +488,7 @@ describe("the elimination draw page", () => {
     expect(html).toContain("Bye");
     // public-visual-fixes P3: an unresolved side is an empty slot with a
     // muted feeder line naming the SHARED reference — never "Winner of".
-    expect(html).toContain("from SF2");
+    expect(html).toContain("TBD");
     expect(html).not.toContain("Winner of");
     expect(html).toContain("21");
     expect(html).not.toContain("demo-generated:");
@@ -587,7 +587,16 @@ describe("the elimination draw page", () => {
       "/e/spring-open/draws/MS?player=11111111-1111-4111-8111-111111111111",
     );
     expect(byId).toContain('data-pinned-person="11111111-1111-4111-8111-111111111111"');
-    expect(byId).toMatch(/found for[\s\S]{0,60}Ada Lovelace/);
+    // Refinement 2026-09-12: a resolved person is stated ONCE, in the path
+    // summary (name · count · profile · one clear), not as a search result.
+    const summary = byId.match(/<p[^>]*data-path-summary[\s\S]*?<\/p>/)?.[0] ?? '';
+    expect(summary).toMatch(/Path:[\s\S]{0,200}Ada Lovelace/);
+    expect(summary).toMatch(/\d+ match(?:es)?</);
+    expect(summary).toContain('href="/e/spring-open/players/11111111-1111-4111-8111-111111111111"');
+    expect(summary).toContain('Clear path');
+    expect(byId).not.toContain('found for');
+    expect(byId).not.toContain('Clear search');
+    expect((byId.match(/Clear path/g) ?? []).length).toBe(1);
 
     // A name: a search. It highlights and filters, but asserts no identity —
     // nobody's path is pinned and no full name is printed as if the reader
@@ -661,7 +670,7 @@ describe("the elimination draw page", () => {
     stubApi({ "/draws/MS": SE_DRAW });
     const bracket = await render("/e/spring-open/draws/MS?view=bracket");
     expect(bracket).toContain("data-feeder-slot");
-    expect(bracket).toContain("from SF2");
+    expect(bracket).toContain("TBD");
     expect(bracket).not.toContain("Winner of");
     // Never a machine identifier in visible prose (§4.3).
     expect(bracket).not.toMatch(/>sf2</);
@@ -790,6 +799,165 @@ describe("the elimination draw page", () => {
     expect(html).not.toContain("Match 1");
   });
 
+});
+
+/**
+ * Path selection across the shapes a real draw has (refinement 2026-09-12,
+ * checklist §5): a win then a loss, a bye, a doubles pair, an unplayed later
+ * round, and a person who is not in the draw. Built as an 8-draw so there
+ * is a round after the selected person's last match.
+ */
+function pathDraw() {
+  const side = (participantKey: string | null, extra: Record<string, unknown> = {}) => ({
+    participantKey,
+    placeholder: null,
+    bye: false,
+    feederNodeKey: null,
+    feederTake: null,
+    ...extra,
+  });
+  const feeder = (from: string) =>
+    side(null, { feederNodeKey: from, feederTake: "winner", unresolved: { kind: "winner_of", reference: from.toUpperCase() } });
+  const node = (nodeKey: string, sides: unknown[], result: unknown = null) => ({
+    nodeKey,
+    position: 1,
+    reference: `MS ${nodeKey.toUpperCase()}`,
+    shortReference: nodeKey.toUpperCase(),
+    sides,
+    result,
+    scheduledTime: null,
+    court: null,
+    playedOn: null,
+    localTime: null,
+    courtLabel: null,
+    sourceUrl: null,
+    sourceRef: null,
+  });
+  return {
+    ...SE_DRAW,
+    size: 8,
+    matchCoverage: { imported: 7, expected: 7, missing: 0 },
+    teams: [
+      { participantKey: "t1", persons: [ref("p1", "Ada Lovelace")], club: null, seed: 1 },
+      { participantKey: "t2", persons: [ref("p2", "Grace Hopper")], club: null, seed: null },
+      { participantKey: "t3", persons: [ref("p3", "Katherine Johnson")], club: null, seed: 2 },
+      // A doubles pair in a singles fixture is a shape test, not a rule: the
+      // pair selects by EITHER partner's id.
+      { participantKey: "t5", persons: [ref("d1", "Mary Jackson"), ref("d2", "Dorothy Vaughan")], club: null, seed: null },
+      { participantKey: "t6", persons: [ref("p6", "Annie Easley")], club: null, seed: null },
+      { participantKey: "t7", persons: [ref("p7", "Margaret Hamilton")], club: null, seed: null },
+      { participantKey: "t8", persons: [ref("p8", "Evelyn Boyd")], club: null, seed: null },
+    ],
+    segments: [
+      {
+        id: "MAIN",
+        label: "Draw",
+        rounds: [
+          {
+            label: "Quarterfinals",
+            matches: [
+              // p1 beats p2.
+              node("qf1", [side("t1"), side("t2")], { winnerSide: "A", score: [[21, 15], [21, 12]], walkover: false }),
+              // p3 has a bye: the bye side is settled, p3 advances.
+              node("qf2", [side("t3"), side(null, { bye: true })], { winnerSide: "A", score: null, walkover: false }),
+              // The doubles pair's match, unplayed.
+              node("qf3", [side("t5"), side("t6")]),
+              node("qf4", [side("t7"), side("t8")]),
+            ],
+          },
+          {
+            label: "Semifinals",
+            matches: [
+              // p3 beats p1 — p1's path ends here.
+              node("sf1", [side("t1", { feederNodeKey: "qf1", feederTake: "winner" }), side("t3", { feederNodeKey: "qf2", feederTake: "winner" })], { winnerSide: "B", score: [[18, 21], [19, 21]], walkover: false }),
+              node("sf2", [feeder("qf3"), feeder("qf4")]),
+            ],
+          },
+          {
+            label: "Final",
+            // p3 is standing in the final; nobody has played it.
+            matches: [node("f1", [side("t3", { feederNodeKey: "sf1", feederTake: "winner" }), feeder("sf2")])],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** The opening tag of one match slot, by node key. */
+function slotTag(html: string, nodeKey: string): string {
+  return html.match(new RegExp(`<div[^>]*data-node-key="${nodeKey}"[^>]*>`))?.[0] ?? "";
+}
+/** The connector overlay edge that arrives at `destination` from `feeder`. */
+function edgeTag(html: string, feeder: string): string {
+  return html.match(new RegExp(`<span[^>]*data-feeder-node="${feeder}"[^>]*>`))?.[0] ?? "";
+}
+const lit = (tag: string) => tag.includes("is-person-path");
+const sideOf = (tag: string) => tag.match(/data-selected-side="([ab])"/)?.[1] ?? null;
+
+describe("path selection (§5: wins, elimination, byes, doubles, later rounds)", () => {
+  const draw = pathDraw();
+  const render_ = (player: string) => {
+    stubApi({ "/draws/MS": draw });
+    return render(`/e/spring-open/draws/MS?view=path&player=${player}`);
+  };
+
+  it("a win then a loss lights the two matches played and the edge between them, and nothing after", async () => {
+    const html = await render_("p1");
+    expect(lit(slotTag(html, "qf1"))).toBe(true);
+    expect(sideOf(slotTag(html, "qf1"))).toBe("a");
+    // The upper feeder edge into SF1: p1 stands on SF1's side A.
+    expect(lit(edgeTag(html, "qf1"))).toBe(true);
+    expect(lit(slotTag(html, "sf1"))).toBe(true);
+    expect(sideOf(slotTag(html, "sf1"))).toBe("a");
+    // Eliminated: the final is not p1's, and neither is p3's feeder edge.
+    expect(lit(slotTag(html, "f1"))).toBe(false);
+    expect(lit(edgeTag(html, "sf1"))).toBe(false);
+    expect(lit(edgeTag(html, "qf2"))).toBe(false);
+    // The sibling branch is untouched: no over-highlighting of the whole
+    // brace (the old defect is gone, and this is the evidence).
+    expect(lit(slotTag(html, "qf2"))).toBe(false);
+    expect(lit(slotTag(html, "sf2"))).toBe(false);
+    expect(lit(slotTag(html, "qf3"))).toBe(false);
+    expect(html).toMatch(/data-path-summary[\s\S]*?2 matches/);
+  });
+
+  it("a bye counts as the match reached, and an unplayed later round lights only the slot the person stands in", async () => {
+    const html = await render_("p3");
+    expect(lit(slotTag(html, "qf2"))).toBe(true);
+    expect(sideOf(slotTag(html, "qf2"))).toBe("a");
+    expect(lit(slotTag(html, "sf1"))).toBe(true);
+    expect(sideOf(slotTag(html, "sf1"))).toBe("b");
+    expect(lit(edgeTag(html, "qf2"))).toBe(true);
+    // Actual participation: p3 is in the final's side A already; the
+    // opponent's feeder edge (from SF2) is potential, not lit.
+    expect(lit(slotTag(html, "f1"))).toBe(true);
+    expect(sideOf(slotTag(html, "f1"))).toBe("a");
+    expect(lit(edgeTag(html, "sf1"))).toBe(true);
+    expect(lit(edgeTag(html, "sf2"))).toBe(false);
+    expect(lit(slotTag(html, "qf1"))).toBe(false);
+  });
+
+  it("either partner of a doubles pair selects the pair's path, and only that pair's", async () => {
+    for (const partner of ["d1", "d2"]) {
+      const html = await render_(partner);
+      expect(lit(slotTag(html, "qf3"))).toBe(true);
+      expect(sideOf(slotTag(html, "qf3"))).toBe("a");
+      // Unplayed: nothing beyond the pair's own match.
+      expect(lit(slotTag(html, "sf2"))).toBe(false);
+      expect(lit(edgeTag(html, "qf3"))).toBe(false);
+      expect(lit(slotTag(html, "qf4"))).toBe(false);
+      expect(html).toMatch(/data-path-summary[\s\S]*?1 match</);
+    }
+  });
+
+  it("a person who is not in this draw lights nothing and names nobody", async () => {
+    const html = await render_("player-0000000000000000000000000000000000000000000000000000000000000000");
+    expect(html).not.toContain("has-person-path");
+    expect(html).not.toContain("is-person-path");
+    expect(html).not.toContain("data-path-summary");
+    expect(html).toContain("That player is not in this draw.");
+  });
 });
 
 describe("the round-robin draw page", () => {

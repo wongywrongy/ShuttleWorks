@@ -1,0 +1,58 @@
+{
+  "tournamentId": "4576799f-f4c8-4566-a129-47beec0751f7",
+  "matchesCompared": 155,
+  "resultsCompared": 103,
+  "mismatches": [],
+  "examples": [
+    {
+      "matchId": "T029-MS-R32-449a03430c08b624efae01005caa565ef43ff1e3ab821adcc52d2def96a2327d",
+      "winner": "A",
+      "sets": [
+        [
+          21,
+          18
+        ],
+        [
+          21,
+          12
+        ]
+      ],
+      "scheduledDate": "2026-07-28",
+      "scheduledTime": "09:00"
+    },
+    {
+      "matchId": "T029-MS-R32-a81c7fead06e0d0af9e6a95530db9c581416e7c0d099e89a77fa5ce55b995b00",
+      "winner": "A",
+      "sets": [
+        [
+          21,
+          18
+        ],
+        [
+          21,
+          10
+        ]
+      ],
+      "scheduledDate": "2026-07-28",
+      "scheduledTime": "09:00"
+    },
+    {
+      "matchId": "T029-MS-R32-ac79bd0966b3177c3d7b43001b274cc358dca1dd52b7d10c59b48bf9b1754cb7",
+      "winner": "A",
+      "sets": [
+        [
+          21,
+          10
+        ],
+        [
+          21,
+          12
+        ]
+      ],
+      "scheduledDate": "2026-07-28",
+      "scheduledTime": "09:00"
+    }
+  ],
+  "stableOperatorSnapshot": true,
+  "operatorSnapshotSHA256": "02e865da25324cca949dd9b62aec97c9973368faacbb746dd6154a842a9f4b2c"
+}

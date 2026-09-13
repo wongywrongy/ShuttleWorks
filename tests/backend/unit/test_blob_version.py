@@ -12,10 +12,8 @@ from db.blob_version import BlobVersionError, VersionedJSON
 
 
 def test_an_absent_version_reads_as_v1():
-    """R-DM-8(a): 'absent => v1'. Every blob in the database today is in
-    this state, so this is the compatibility promise the whole no-backfill
-    decision rests on."""
-    t = VersionedJSON(3, "v")
+    """An unstamped nonempty document is interpreted as version 1."""
+    t = VersionedJSON(1, "v")
     assert t.process_result_value({"players": []}, None) == {"players": []}
 
 
@@ -35,10 +33,20 @@ def test_a_newer_blob_raises_rather_than_mis_parsing():
     assert "2" in str(exc.value) and "1" in str(exc.value)
 
 
-def test_an_older_blob_is_readable():
-    """Older is fine - that is what 'lazily stamped on next write' means."""
+@pytest.mark.parametrize("stored", [0, 1, 4, True, "3", None])
+def test_only_the_exact_current_integer_version_is_readable(stored):
     t = VersionedJSON(3, "v")
-    assert t.process_result_value({"v": 1}, None) == {"v": 1}
+    with pytest.raises(BlobVersionError, match="Reset"):
+        t.process_result_value({"v": stored}, None)
+
+
+def test_missing_version_is_rejected_when_current_is_no_longer_one():
+    with pytest.raises(BlobVersionError):
+        VersionedJSON(2).process_result_value({"players": []}, None)
+
+
+def test_current_blob_is_readable():
+    assert VersionedJSON(1).process_result_value({"v": 1}, None) == {"v": 1}
 
 
 def test_an_empty_dict_is_left_alone_on_both_sides():

@@ -18,7 +18,7 @@ Commands:
   backup-dir            Print the backup directory
   up                    Build and start the demo
   update                Back up, rebuild current worktree, and restart without reseeding
-  rebuild               Back up, rebuild without cache, and restart
+  rebuild               Back up, rebuild images, quarantine data, and start fresh
   status                Show containers, URLs, state, and latest backup
   down                  Back up and stop the demo
   backup                Create and verify a database backup
@@ -645,6 +645,17 @@ show_image_provenance() {
   done < <(run_compose ps -aq)
 }
 
+quarantine_demo_state() {
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    quarantine="$demo_state_dir/quarantine-$stamp"
+    mkdir -m 0700 "$quarantine"
+    [[ ! -e "$postgres_dir" ]] || mv -- "$postgres_dir" "$quarantine/postgres"
+    [[ ! -e "$data_dir" ]] || mv -- "$data_dir" "$quarantine/data"
+    rm -f -- "$postgres_marker" "$legacy_backup_marker"
+    mkdir -m 0770 "$postgres_dir" "$data_dir"
+    echo "Demo state quarantined at $quarantine. The verified backup remains at $backup_root/latest."
+}
+
 case "$command_name" in
   ip)
     echo "$demo_ip"
@@ -676,8 +687,11 @@ EOF
     # rebuilding application images. The application build itself is forced
     # from a clean checkout so its OCI revision is reproducible.
     run_compose pull postgres
-    run_compose down --remove-orphans
     run_compose build --pull --no-cache backend entrant frontend
+    run_compose down --remove-orphans
+    # Pre-launch undo is a fresh schema. Preserve the old state for inspection
+    # after the verified backup and successful image build, then seed via Make.
+    quarantine_demo_state
     start_demo
     ;;
   status)
@@ -787,14 +801,7 @@ EOF
     }
     backup_if_present
     run_compose down --remove-orphans
-    stamp=$(date -u +%Y%m%dT%H%M%SZ)
-    quarantine="$demo_state_dir/quarantine-$stamp"
-    mkdir -m 0700 "$quarantine"
-    [[ ! -e "$postgres_dir" ]] || mv -- "$postgres_dir" "$quarantine/postgres"
-    [[ ! -e "$data_dir" ]] || mv -- "$data_dir" "$quarantine/data"
-    rm -f -- "$postgres_marker" "$legacy_backup_marker"
-    mkdir -m 0770 "$postgres_dir" "$data_dir"
-    echo "Demo state quarantined at $quarantine. The verified backup remains at $backup_root/latest."
+    quarantine_demo_state
     ;;
   *)
     echo "unknown demo command: $command_name" >&2

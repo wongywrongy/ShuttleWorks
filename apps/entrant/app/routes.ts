@@ -105,6 +105,10 @@ export default [
   // so no workspace can ever claim the segment. The document is an
   // anonymous SSR shell; identity happens browser-side (see the route).
   route('me/entries', 'routes/myEntries.tsx'),
+  // `/e/me/settings` — the account's own controls (download, erase), moved
+  // off the entries list on 2026-09-12. Same `me` reservation, same
+  // anonymous SSR shell, same browser-side identity.
+  route('me/settings', 'routes/mySettings.tsx'),
   // There is deliberately NO logout page. Signing out is a POST to
   // `/e/account/logout` (FastAPI's, R8-A) and the form that makes it lives in
   // the footer of `routes/enter.tsx` — the page a signed-in entrant is on,

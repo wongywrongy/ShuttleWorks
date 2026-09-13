@@ -18,6 +18,7 @@ hand-built imitation of it.
 
 from __future__ import annotations
 
+
 import json
 import uuid
 from types import SimpleNamespace
@@ -122,7 +123,7 @@ def _seed_person(
         submission = Submission(tournament_id=uuid.UUID(tid), account_id=account.id)
         player = EntryPlayer(
             tournament_id=uuid.UUID(tid),
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name=full_name,
             gender="X",
             club=club,
@@ -250,8 +251,8 @@ def bracket_page(client):
     ada = _seed_person(tid, "Ada Chen", "Riverside BC")
     bo = _seed_person(tid, "Bo Lee", "Northside SC")
     participants = [
-        {"id": f"entry-{ada}", "name": "Ada Chen", "seed": 1},
-        {"id": f"entry-{bo}", "name": "Bo Lee", "seed": 2},
+        {"id": f"entry-{ada}", "entryPlayerId": ada, "name": "Ada Chen", "seed": 1},
+        {"id": f"entry-{bo}", "entryPlayerId": bo, "name": "Bo Lee", "seed": 2},
         {"id": "P3", "name": "Cass Doe"},
         {"id": "P4", "name": "Dev Roy"},
     ]
@@ -605,6 +606,20 @@ def test_draw_players_are_published_draw_roster_people_with_profiles(client):
         ],
     }
     imported = client.post(f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF)
+    assert imported.status_code == 409, imported.text
+    assert imported.json()["error"] == "INVALID_ROSTER"
+    from db.models import BracketEvent, CompetitionUnit
+    from db.session import SessionLocal
+    from sqlalchemy import select
+    with SessionLocal() as db:
+        assert db.scalar(select(BracketEvent).where(BracketEvent.tournament_id == uuid.UUID(tid))) is None
+        assert db.scalar(select(CompetitionUnit).where(CompetitionUnit.tournament_id == uuid.UUID(tid))) is None
+    payload["roster"] = [
+        {"id": "P-A", "name": "Áda Chen"}, {"id": "P-B", "name": "Bo Lee"},
+        {"id": "P-C", "name": "Cass Doe"}, {"id": "P-D", "name": "Devon"},
+    ]
+    payload["events"][0]["participants"][1]["members"] = ["P-D", "P-C"]
+    imported = client.post(f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF)
     assert imported.status_code == 200, imported.text
 
     players = client.get("/e/api/page/roster-open/players").json()
@@ -635,9 +650,15 @@ def test_draw_players_are_published_draw_roster_people_with_profiles(client):
                 "club": None,
                 "eventCodes": ["MD"],
             },
+            {
+                "playerKey": "P-D",
+                "person": {"identity": {"id": "P-D", "name": "Devon"}, "resolution": "resolved", "label": None},
+                "club": None,
+                "eventCodes": ["MD"],
+            },
         ],
         "referencedPlayerCount": 4,
-        "missingNameCount": 1,
+        "missingNameCount": 0,
     }
     assert all("href" not in player for player in players["players"])
     for player in players["players"]:
@@ -665,9 +686,8 @@ def test_draw_players_are_published_draw_roster_people_with_profiles(client):
     detail = client.get("/e/api/page/roster-open/draws/MD").json()
     teams = {team["participantKey"]: team for team in detail["teams"]}
     assert [p["identity"]["name"] for p in teams["PAIR-1"]["persons"]] == ["Áda Chen", "Bo Lee"]
-    # Partial member resolution falls back to the whole source label; it is
-    # never split on punctuation into invented people.
-    assert [p["identity"]["name"] for p in teams["PAIR-2"]["persons"]] == ["Missing / Cass"]
+    # Composition comes from explicit people; source labels are not parsed.
+    assert [p["identity"]["name"] for p in teams["PAIR-2"]["persons"]] == ["Devon", "Cass Doe"]
 
 
 def _import_singles_draw(client, tid, event_id, participants, rounds):
@@ -1191,6 +1211,78 @@ def test_courts_reach_live_bracket_matches_assigned_directly(client, bracket_pag
     assert item["court"] == 1
 
 
+def test_live_bracket_match_publishes_running_score_only_with_results_on(client):
+    """Public refinement 2026-09-12: the schedule used to read a bracket
+    match's score from its recorded RESULT only, so a match on court never
+    carried the points the desk was recording on its Operations match state.
+    A live match now publishes ``liveScore`` from that state row — and only
+    with results published, because a running score is still a score."""
+    tid = _make_workspace(client, draws_published=True, entrants_published=True)
+    ada = _seed_person(tid, "Ada Chen", "Riverside BC")
+    bo = _seed_person(tid, "Bo Lee", "Northside SC")
+    participants = [
+        {"id": f"entry-{ada}", "entryPlayerId": ada, "name": "Ada Chen", "seed": 1},
+        {"id": f"entry-{bo}", "entryPlayerId": bo, "name": "Bo Lee", "seed": 2},
+        {"id": "P3", "name": "Cass Doe"},
+        {"id": "P4", "name": "Dev Roy"},
+    ]
+    state = _se4_bracket(client, tid, participants)
+    slug = "draws-open"
+    sf0 = _units_by_round(state)[0][0]
+    committed = client.post(
+        f"/tournaments/{tid}/bracket/schedule-next/commit",
+        json={"assignments": [{"play_unit_id": sf0["id"], "slot_id": 3, "court_id": 1}]},
+        headers=CSRF,
+    )
+    assert committed.status_code == 200, committed.text
+    started = client.post(
+        f"/tournaments/{tid}/bracket/match-action",
+        json={"id": str(uuid.uuid4()), "play_unit_id": sf0["id"], "action": "start"},
+        headers=CSRF,
+    )
+    assert started.status_code == 200, started.text
+
+    # No running score recorded yet: live, and nothing invented.
+    body = client.get(f"/e/api/page/{slug}/matches").json()
+    item = next(item for item in body["items"] if item["matchKey"] == f"MS:{sf0['id']}")
+    assert item["status"] == "live"
+    assert item["liveScore"] is None
+
+    # The desk records the points of the game in play on the match state.
+    from db.models import Match, MatchState
+    from db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        if session.get(Match, (uuid.UUID(tid), sf0["id"])) is None:
+            session.add(Match(tournament_id=uuid.UUID(tid), id=sf0["id"], court_id=1))
+        row = session.get(MatchState, (uuid.UUID(tid), sf0["id"]))
+        if row is None:
+            row = MatchState(tournament_id=uuid.UUID(tid), match_id=sf0["id"], status="playing")
+            session.add(row)
+        row.status = "playing"
+        row.score_side_a = 15
+        row.score_side_b = 12
+        session.commit()
+    finally:
+        session.close()
+
+    # Results off: the running score is withheld with everything else.
+    body = client.get(f"/e/api/page/{slug}/matches").json()
+    item = next(item for item in body["items"] if item["matchKey"] == f"MS:{sf0['id']}")
+    assert item["status"] == "live"
+    assert item["liveScore"] is None
+    assert item["score"] is None
+
+    _set_flags(tid, results_published=True)
+    body = client.get(f"/e/api/page/{slug}/matches").json()
+    item = next(item for item in body["items"] if item["matchKey"] == f"MS:{sf0['id']}")
+    assert item["status"] == "live"
+    assert item["liveScore"] == [15, 12]
+    # A running figure, never a recorded game.
+    assert item["score"] is None
+
+
 def test_courts_reach_live_bracket_matches_assigned_via_solver_commit(client):
     """V3-PE09.1 root cause investigation: a match started straight off a
     solver-committed round (never touching the direct /assign endpoint,
@@ -1203,8 +1295,8 @@ def test_courts_reach_live_bracket_matches_assigned_via_solver_commit(client):
     ada = _seed_person(tid, "Ada Chen", "Riverside BC")
     bo = _seed_person(tid, "Bo Lee", "Northside SC")
     participants = [
-        {"id": f"entry-{ada}", "name": "Ada Chen", "seed": 1},
-        {"id": f"entry-{bo}", "name": "Bo Lee", "seed": 2},
+        {"id": f"entry-{ada}", "entryPlayerId": ada, "name": "Ada Chen", "seed": 1},
+        {"id": f"entry-{bo}", "entryPlayerId": bo, "name": "Bo Lee", "seed": 2},
         {"id": "P3", "name": "Cass Doe"},
         {"id": "P4", "name": "Dev Roy"},
     ]
@@ -1291,7 +1383,7 @@ def test_rr_standings_ride_the_detail_with_history_pills(client):
     for pu in [p for p in state["play_units"] if p["event_id"] == "WS"]:
         if pu["side_a"] and pu["side_b"]:
             winner = "A" if "A" in (pu["side_a"] or []) else "A"
-            _record(client, tid, pu, winner=winner, score={"sets": [{"sideA": 21, "sideB": 10}]})
+            _record(client, tid, pu, winner=winner, score={"sets": [{"sideA": 21, "sideB": 10}] * 2})
         state = client.get(f"/tournaments/{tid}/bracket", headers=CSRF).json()
 
     detail = client.get("/e/api/page/rr-open/draws/WS").json()
@@ -1339,7 +1431,7 @@ def test_an_unknown_person_and_a_garbage_key_answer_identically(client, bracket_
 
 def test_the_player_page_header_events_and_upcoming_matches(client, bracket_page):
     body = client.get(f"/e/api/page/{bracket_page['slug']}/players/{bracket_page['ada']}").json()
-    assert set(body) == {"person", "club", "events", "matches", "history"}
+    assert set(body) == {"person", "club", "events", "matches", "history", "representation", "historyNextOffset"}
     assert set(body["person"]) == {"identity", "resolution", "label"}
     assert body["person"]["identity"]["name"] == "Ada Chen"
     assert body["club"] == "Riverside BC"
@@ -1513,7 +1605,7 @@ def test_mixed_visibility_hides_the_opted_out_event_everywhere(client):
         )
         player = EntryPlayer(
             tournament_id=uuid.UUID(tid),
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name="Ada Visible Once",
             gender="X",
             club="Privacy BC",
@@ -1523,14 +1615,12 @@ def test_mixed_visibility_hides_the_opted_out_event_everywhere(client):
             code="MS",
             discipline="Men's Singles",
             entry_type="singles",
-            meet_event_id="MS",
         )
         ws = EntryEvent(
             tournament_id=uuid.UUID(tid),
             code="WS",
             discipline="Women's Singles",
             entry_type="singles",
-            meet_event_id="WS",
         )
         session.add_all([submission, player, ms, ws])
         session.flush()
@@ -1620,7 +1710,7 @@ def test_mixed_visibility_hides_the_opted_out_event_everywhere(client):
 # ---- profile v1: identity + tournament history (public-visual-fixes P2) ---
 
 
-def _seed_person_for(tid, account_id, full_name, club=None, state="confirmed", event_code="MS", list_opt_out=False):
+def _seed_person_for(tid, account_id, full_name, club=None, state="confirmed", event_code="MS", list_opt_out=False, birth_year=1990):
     """``_seed_person`` pinned to a GIVEN entrant account.
 
     The account is the canonical identity a public history is joined on, so
@@ -1651,8 +1741,9 @@ def _seed_person_for(tid, account_id, full_name, club=None, state="confirmed", e
         submission = Submission(tournament_id=uuid.UUID(tid), account_id=account_id)
         player = EntryPlayer(
             tournament_id=uuid.UUID(tid),
-            account_id=account_id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account_id)],
             full_name=full_name,
+            birth_year=birth_year,
             gender="X",
             club=club,
         )
@@ -1816,7 +1907,7 @@ def test_history_is_never_a_name_match_across_accounts(client):
     assert [row["slug"] for row in body["history"]] == ["spring-open"]
 
 
-def test_history_matches_a_name_across_case_spacing_and_accents(client):
+def test_history_uses_the_same_case_and_edge_space_normalization_as_adoption(client):
     """The same human's name is stored twice by two desks; a leading space
     or a folded accent must not fork one person into two profiles."""
     account = _an_account()
@@ -1827,7 +1918,7 @@ def test_history_matches_a_name_across_case_spacing_and_accents(client):
         client, name="Winter Classic", slug="winter-classic", entrants_published=True
     )
     here = _seed_person_for(first, account, "Rasmus Kjær")
-    there = _seed_person_for(second, account, "  rasmus  kjær ")
+    there = _seed_person_for(second, account, "  rasmus kjær ")
 
     body = client.get(f"/e/api/page/spring-open/players/{here}").json()
     assert [row["playerKey"] for row in body["history"]] == [here, there]
@@ -1858,7 +1949,7 @@ def test_a_namespaced_bracket_event_still_links_its_entry_backed_people(client):
                 "discipline": "Men's Singles",
                 "format": "se",
                 "participants": [
-                    {"id": f"entry-{ada}", "name": "Ada Chen", "seed": 1},
+                    {"id": f"entry-{ada}", "entryPlayerId": ada, "name": "Ada Chen", "seed": 1},
                     {"id": "P2", "name": "Bo Lee"},
                 ],
                 "duration_slots": 1,
@@ -1903,7 +1994,7 @@ def test_the_directory_reads_club_from_the_same_gate_as_the_name(client):
         client,
         tid,
         [
-            {"id": f"entry-{ada}", "name": "Ada Chen", "seed": 1},
+            {"id": f"entry-{ada}", "entryPlayerId": ada, "name": "Ada Chen", "seed": 1},
             {"id": f"entry-{withheld}", "name": "Quiet Kid", "seed": 2},
             {"id": "P3", "name": "Cass Doe"},
             {"id": "P4", "name": "Dev Roy"},

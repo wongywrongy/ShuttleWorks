@@ -1,5 +1,5 @@
 /**
- * Hub views: **Upcoming · Live · Past**.
+ * Hub views: **Active · Past**.
  *
  * The strip used to hold eight overlapping lifecycle/status facets (All,
  * Active, Entries, Setup, Ready, Live, Complete, Shared, Needs attention,
@@ -18,35 +18,34 @@
  *     inside the default view (and reachable from search), because it is an
  *     edge case, not a fourth thing a director thinks about.
  *
- * The default view is the COMBINED `Live + Upcoming` — the operationally
- * relevant half of the list. Past is the archive view.
+ * The Hub offers ONE single-select pair of views: **Active** (live +
+ * upcoming + undated — the operationally relevant half of the list) and
+ * **Past** (the archive). Each chip's count is the size of the set that view
+ * actually shows, so a count can never describe a different list than the one
+ * the click produces.
  *
  * Pure + `now`-injected so it is unit-testable.
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
 
-/** The three named views, plus the combined default. */
-export type HubViewId = 'current' | 'upcoming' | 'live' | 'past';
+/** The two named views. */
+export type HubViewId = 'active' | 'past';
 
 export interface HubView {
-  id: Exclude<HubViewId, 'current'>;
+  id: HubViewId;
   label: string;
 }
 
 /** The chips, left to right, in the order an event travels. */
 export const HUB_VIEWS: HubView[] = [
-  { id: 'upcoming', label: 'Upcoming' },
-  { id: 'live', label: 'Live' },
+  { id: 'active', label: 'Active' },
   { id: 'past', label: 'Past' },
 ];
 
-export const HUB_VIEW_IDS: ReadonlySet<string> = new Set([
-  'current',
-  ...HUB_VIEWS.map((v) => v.id),
-]);
+export const HUB_VIEW_IDS: ReadonlySet<string> = new Set(HUB_VIEWS.map((v) => v.id));
 
-/** The default view: Live and Upcoming together (plus the undated group). */
-export const DEFAULT_HUB_VIEW: HubViewId = 'current';
+/** The default view: everything that has not finished. */
+export const DEFAULT_HUB_VIEW: HubViewId = 'active';
 
 /** Where a workspace sits in time. `undated` is not a view — see the module
  *  docstring. */
@@ -103,31 +102,26 @@ export function timeBucketOf(
   return 'live';
 }
 
-/** Whether a workspace belongs in a view. `current` = Live + Upcoming, and
+/** Whether a workspace belongs in a view. `active` = live + upcoming, and
  *  carries the undated group so those workspaces stay reachable. */
 export function matchesView(
   t: TournamentSummaryDTO,
   view: HubViewId,
   now: Date = new Date(),
 ): boolean {
-  const bucket = timeBucketOf(t, now);
-  if (view === 'current') return bucket !== 'past';
-  return bucket === view;
+  const past = timeBucketOf(t, now) === 'past';
+  return view === 'past' ? past : !past;
 }
 
-/** Per-view counts over a list (the chips' badges). The undated workspaces
- *  belong to no chip; the default view's group header counts them. */
+/** Per-view counts over a list (the chips' badges). Each count is the size of
+ *  the set its own view shows — undated workspaces are counted by Active,
+ *  which is where they appear. */
 export function viewCounts(
   list: TournamentSummaryDTO[],
   now: Date = new Date(),
-): Record<HubTimeBucket, number> {
-  const counts: Record<HubTimeBucket, number> = {
-    live: 0,
-    upcoming: 0,
-    past: 0,
-    undated: 0,
-  };
-  for (const t of list) counts[timeBucketOf(t, now)] += 1;
+): Record<HubViewId, number> {
+  const counts: Record<HubViewId, number> = { active: 0, past: 0 };
+  for (const t of list) counts[matchesView(t, 'past', now) ? 'past' : 'active'] += 1;
   return counts;
 }
 

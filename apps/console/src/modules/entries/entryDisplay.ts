@@ -118,6 +118,9 @@ export interface EntryGroup {
   accountEmail: string | null;
   feeTotalCents: number | null;
   entries: EntryDTO[];
+  feeCurrency: string | null;
+  paidCents: number;
+  outstandingCents: number | null;
 }
 
 /** Band the desk list by the act each entry arrived on.
@@ -143,6 +146,9 @@ export function groupBySubmission(entries: readonly EntryDTO[]): EntryGroup[] {
         accountEmail: entry.submission?.accountEmail ?? null,
         feeTotalCents: entry.submission?.feeTotalCents ?? null,
         entries: [],
+        feeCurrency: entry.submission?.feeCurrency ?? null,
+        paidCents: entry.submission?.paidCents ?? 0,
+        outstandingCents: entry.submission?.outstandingCents ?? null,
       };
       byKey.set(key, group);
       groups.push(group);

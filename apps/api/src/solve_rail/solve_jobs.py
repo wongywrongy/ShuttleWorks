@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Sequence
 
 from sqlalchemy import delete, func, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from db.models import SolveJob, SolveJobStatus, TournamentMember
 from core.telemetry.context import normalize_trace_carrier
@@ -52,39 +52,17 @@ TERMINAL_STATUSES: tuple[str, ...] = (
 
 # Every legal edge of the job state machine. ``queued`` re-entry from
 # claimed/running is the lease-reap / retry path.
-VALID_TRANSITIONS: dict[str, frozenset[str]] = {
-    SolveJobStatus.QUEUED.value: frozenset(
-        {SolveJobStatus.CLAIMED.value, SolveJobStatus.CANCELLED.value}
-    ),
-    SolveJobStatus.CLAIMED.value: frozenset(
-        {
-            SolveJobStatus.RUNNING.value,
-            SolveJobStatus.QUEUED.value,
-            SolveJobStatus.FAILED.value,
-            SolveJobStatus.CANCELLED.value,
-        }
-    ),
-    SolveJobStatus.RUNNING.value: frozenset(
-        {
-            SolveJobStatus.SUCCEEDED.value,
-            SolveJobStatus.INFEASIBLE.value,
-            SolveJobStatus.FAILED.value,
-            SolveJobStatus.QUEUED.value,
-            SolveJobStatus.CANCELLED.value,
-        }
-    ),
-    SolveJobStatus.SUCCEEDED.value: frozenset(),
-    SolveJobStatus.FAILED.value: frozenset(),
-    SolveJobStatus.INFEASIBLE.value: frozenset(),
-    SolveJobStatus.CANCELLED.value: frozenset(),
-}
+from core.state_machines import SOLVE_JOB
+from core.state_machine import TransitionError, apply
+
+VALID_TRANSITIONS = {state: frozenset(SOLVE_JOB.targets(state)) for state in SOLVE_JOB.states}
 
 
-class SolveJobTransitionError(ValueError):
+class SolveJobTransitionError(TransitionError, ValueError):
     """An illegal state-machine edge was attempted."""
 
     def __init__(self, current: str, target: str) -> None:
-        super().__init__(f"illegal solve-job transition {current!r} -> {target!r}")
+        super().__init__("INVALID_TRANSITION", f"illegal solve-job transition {current!r} -> {target!r}")
         self.current = current
         self.target = target
 
@@ -151,9 +129,13 @@ def assert_valid_transition(current: str, target: str) -> None:
         raise SolveJobTransitionError(current, target)
 
 
-def _transition(job: SolveJob, target: str) -> None:
+def _transition(job: SolveJob, target: str, *, actor="system") -> None:
     assert_valid_transition(job.status, target)
-    job.status = target
+    transition = next(t for t in SOLVE_JOB.transitions if job.status in t.from_states and t.to == target)
+    session = object_session(job)
+    record = apply(SOLVE_JOB, job, transition.event, actor, guards={}, session=session)
+    if session is not None:
+        record.persist(session)
 
 
 def is_terminal(status: str) -> bool:
@@ -247,7 +229,7 @@ def cancel(session: Session, job: SolveJob) -> SolveJob:
     """
     if is_terminal(job.status):
         return job
-    _transition(job, SolveJobStatus.CANCELLED.value)
+    _transition(job, SolveJobStatus.CANCELLED.value, actor="operator")
     job.finished_at = _utcnow()
     return job
 
@@ -326,7 +308,16 @@ def claim_next(
         # Lost a race with another claimer between select and update
         # (SQLite path only) — treat as "nothing available this tick".
         return None
-    return session.get(SolveJob, job_id)
+    job = session.get(SolveJob, job_id)
+    # The guarded SQL owns the claim race. Build the history only after winning;
+    # an adapter retains its real source without undoing the atomic SQL update.
+    from types import SimpleNamespace
+    subject = SimpleNamespace(id=job.id, tournament_id=job.tournament_id,
+                              status="queued", __tablename__="solve_jobs",
+                              machine_version=job.machine_version)
+    apply(SOLVE_JOB, subject, "claim", "system", guards={}, session=session,
+          actor_id=worker_id).persist(session)
+    return job
 
 
 def mark_running(session: Session, job: SolveJob) -> SolveJob:

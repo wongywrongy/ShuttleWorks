@@ -195,7 +195,23 @@ export interface Filters {
    */
   year: number | 'all' | null;
   q: string;
+  /**
+   * The lifecycle slice of the listing (public refinement 2026-09-12):
+   * `all` is the whole season, `live` is what is being played now, `upcoming`
+   * is what is still to come, `past` is what has finished. A filter over the
+   * one continuous season, not a second page shape: the month grouping and
+   * the ordering are unchanged under every value.
+   */
+  show?: ShowFilter;
+  /** 1-based page of the listing; the listing is bounded per page. */
+  page?: number;
 }
+
+export type ShowFilter = 'all' | 'upcoming' | 'live' | 'past';
+export const SHOW_FILTERS: readonly ShowFilter[] = Object.freeze(['all', 'upcoming', 'live', 'past']);
+
+/** How many rows one page of the calendar lists before the reader pages. */
+export const SEASON_PAGE_SIZE = 40;
 
 /** A month header plus its rows (§2.4). `key` is `year-monthIndex`. */
 export interface MonthGroup {
@@ -467,6 +483,8 @@ export function rowMatches(row: SeasonRow, q: string): boolean {
  */
 export function parseFilters(params: URLSearchParams): Filters {
   const year = params.get('year');
+  const show = params.get('show');
+  const page = Number(params.get('page') ?? '1');
   return {
     year:
       year === 'all'
@@ -475,6 +493,8 @@ export function parseFilters(params: URLSearchParams): Filters {
           ? Number(year)
           : null,
     q: params.get('q') ?? '',
+    show: SHOW_FILTERS.includes(show as ShowFilter) ? (show as ShowFilter) : 'all',
+    page: Number.isInteger(page) && page > 1 ? page : 1,
   };
 }
 
@@ -487,6 +507,8 @@ export function filtersToParams(filters: Filters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.q.trim() !== '') params.set('q', filters.q);
   if (filters.year !== null) params.set('year', String(filters.year));
+  if (filters.show && filters.show !== 'all') params.set('show', filters.show);
+  if ((filters.page ?? 1) > 1) params.set('page', String(filters.page));
   return params;
 }
 
@@ -563,12 +585,26 @@ function groupByMonth(rows: readonly SeasonRow[]): MonthGroup[] {
   return groups;
 }
 
+/**
+ * Is this tournament being played right now? A publication fact from the
+ * server's own status, never date arithmetic: `in_progress_live` has draws
+ * to follow, `in_progress` is in its window with nothing published yet.
+ */
+export function isLiveRow(row: SeasonRow): boolean {
+  return row.status === 'in_progress_live' || row.status === 'in_progress';
+}
+
 /** One season, as the page renders it (P5). */
 export interface SeasonModel {
   /** The season on screen; `null` = every season at once. */
   season: number | null;
   /** Every season the published list contains, most recent first. */
   years: number[];
+  /** The lifecycle slice on screen. */
+  show: ShowFilter;
+  /** Rows being played now, listed once at the top — never again under a
+   *  month header, and never in a separate banner (refinement 2026-09-12). */
+  live: SeasonRow[];
   /** Ascending month sections — the full-weight half of the page. */
   upcoming: MonthGroup[];
   /** Active tournaments whose date the organizer has not set yet. */
@@ -577,10 +613,17 @@ export interface SeasonModel {
   past: MonthGroup[];
   /** Past tournaments with no recorded date. */
   pastUndated: SeasonRow[];
-  /** How many rows this page lists. */
+  /** How many rows the season, the search and the slice keep — across
+   *  every page. */
   listedCount: number;
   /** How many rows the wire carried, before the season and the search. */
   publishedCount: number;
+  /** Counts per slice for the season and search on screen, so the slice
+   *  controls can say what each one holds. */
+  counts: Record<ShowFilter, number>;
+  /** 1-based page on screen, and how many pages the listing spans. */
+  page: number;
+  pageCount: number;
 }
 
 const byDateAsc = (a: SeasonRow, b: SeasonRow) =>
@@ -613,17 +656,58 @@ export function seasonModel(
     const date = parseIsoDate(row.date);
     return date === null || date.getUTCFullYear() === season;
   });
-  const upcomingRows = inSeason.filter((row) => !isPast(row, now));
+  const liveRows = inSeason.filter((row) => !isPast(row, now) && isLiveRow(row));
+  const upcomingRows = inSeason.filter((row) => !isPast(row, now) && !isLiveRow(row));
   const pastRows = inSeason.filter((row) => isPast(row, now));
+  const counts: Record<ShowFilter, number> = {
+    all: inSeason.length,
+    live: liveRows.length,
+    upcoming: upcomingRows.length,
+    past: pastRows.length,
+  };
+  const show: ShowFilter = filters.show ?? 'all';
+  // The whole ordered listing for this slice: now, then what is to come
+  // (ascending, undated last), then what has finished (descending, undated
+  // last). The page is a WINDOW over this one sequence, so the month
+  // grouping below runs over consecutive rows exactly as before.
+  const ordered: { row: SeasonRow; half: 'live' | 'upcoming' | 'past' }[] = [
+    ...(show === 'all' || show === 'live'
+      ? [...liveRows].sort(byDateAsc).map((row) => ({ row, half: 'live' as const }))
+      : []),
+    ...(show === 'all' || show === 'upcoming'
+      ? [
+          ...[...upcomingRows.filter(dated)].sort(byDateAsc),
+          ...[...upcomingRows.filter((row) => !dated(row))].sort(bySlug),
+        ].map((row) => ({ row, half: 'upcoming' as const }))
+      : []),
+    ...(show === 'all' || show === 'past'
+      ? [
+          ...[...pastRows.filter(dated)].sort(byDateDesc),
+          ...[...pastRows.filter((row) => !dated(row))].sort(bySlug),
+        ].map((row) => ({ row, half: 'past' as const }))
+      : []),
+  ];
+  const pageCount = Math.max(1, Math.ceil(ordered.length / SEASON_PAGE_SIZE));
+  const page = Math.min(Math.max(1, filters.page ?? 1), pageCount);
+  const window = ordered.slice((page - 1) * SEASON_PAGE_SIZE, page * SEASON_PAGE_SIZE);
+  const half = (which: 'live' | 'upcoming' | 'past') =>
+    window.filter((item) => item.half === which).map((item) => item.row);
+  const upcomingWindow = half('upcoming');
+  const pastWindow = half('past');
   return {
     season,
     years: seasonYears(rows),
-    upcoming: groupByMonth([...upcomingRows.filter(dated)].sort(byDateAsc)),
-    upcomingUndated: [...upcomingRows.filter((row) => !dated(row))].sort(bySlug),
-    past: groupByMonth([...pastRows.filter(dated)].sort(byDateDesc)),
-    pastUndated: [...pastRows.filter((row) => !dated(row))].sort(bySlug),
-    listedCount: inSeason.length,
+    show,
+    live: half('live'),
+    upcoming: groupByMonth(upcomingWindow.filter(dated)),
+    upcomingUndated: upcomingWindow.filter((row) => !dated(row)),
+    past: groupByMonth(pastWindow.filter(dated)),
+    pastUndated: pastWindow.filter((row) => !dated(row)),
+    listedCount: ordered.length,
     publishedCount: rows.length,
+    counts,
+    page,
+    pageCount,
   };
 }
 
@@ -672,7 +756,9 @@ export function actionCell(row: SeasonRow, past: boolean): ActionCell {
   if (past) return results();
   switch (row.status) {
     case 'in_progress_live':
-      return { kind: 'live', label: 'Follow live', href: `${page}?tab=draws` };
+      // The live schedule is where "follow" leads (refinement 2026-09-12):
+      // the draws index says who is in, the schedule says who is on court.
+      return { kind: 'live', label: 'Follow live', href: `${page}/schedule` };
     case 'in_progress':
       return { kind: 'text', label: 'In progress' };
     case 'entries_open':

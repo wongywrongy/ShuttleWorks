@@ -21,7 +21,8 @@
 import { forwardRef } from 'react';
 import { getEventColor } from '../lib/eventColors';
 
-type MatchChipState = 'scheduled' | 'called' | 'playing' | 'done';
+import type stateMachines from '@scheduler/shared-contract/state-machines.json';
+type MatchChipState = keyof typeof stateMachines.machines.match.state_keys;
 type MatchChipSource = 'meet' | 'bracket';
 type MatchChipTone = 'discipline' | 'state';
 
@@ -33,7 +34,8 @@ const STATE_RING: Record<MatchChipState, string> = {
   scheduled: '',
   called: 'ring-2 ring-inset ring-status-called',
   playing: 'ring-2 ring-inset ring-status-live',
-  done: 'ring-2 ring-inset ring-status-done',
+  finished: 'ring-2 ring-inset ring-status-done',
+  retired: 'ring-2 ring-inset ring-status-done',
 };
 
 // ── fill per state — "3b muted-solid" (state tone) ────────────────────────
@@ -43,7 +45,8 @@ const STATE_FILL: Record<MatchChipState, string> = {
   scheduled: 'bg-card border-border text-ink-3 hover:brightness-110',
   called: 'bg-status-called-solid border-status-called-border text-status-called-ink hover:brightness-110',
   playing: 'bg-status-live-solid border-status-live-border text-status-live-ink hover:brightness-110',
-  done: 'bg-surface-band border-rule-soft text-muted-foreground hover:brightness-110',
+  finished: 'bg-surface-band border-rule-soft text-muted-foreground hover:brightness-110',
+  retired: 'bg-surface-band border-rule-soft text-muted-foreground hover:brightness-110',
 };
 
 export interface MatchChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -107,7 +110,7 @@ export const MatchChip = forwardRef<HTMLButtonElement, MatchChipProps>(function 
   // A finished match reads muted + checked on the state-tone board —
   // NOT struck-through (strikethrough is the "cancelled" idiom; a played
   // match is a completed one).
-  const doneLabel = tone === 'state' && state === 'done' && !selected;
+  const doneLabel = tone === 'state' && (state === 'finished' || state === 'retired') && !selected;
 
   return (
     <button

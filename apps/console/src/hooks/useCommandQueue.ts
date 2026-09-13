@@ -50,7 +50,7 @@ const ACTION_TO_LEGACY_STATUS: Record<
   call_to_court: 'called',
   start_match: 'started',
   finish_match: 'finished',
-  retire_match: 'finished',
+  retire_match: 'retired',
   uncall: 'scheduled',
   assign_court: 'scheduled',
   postpone_match: 'scheduled',
@@ -64,7 +64,7 @@ const CANONICAL_TO_LEGACY_STATUS: Record<
   called: 'called',
   playing: 'started',
   finished: 'finished',
-  retired: 'finished',
+  retired: 'retired',
 };
 
 /**

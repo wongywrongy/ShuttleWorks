@@ -17,6 +17,8 @@ The claims this file exists to hold, in the order they matter:
 """
 from __future__ import annotations
 
+from _helpers import submit_reviewed
+
 import uuid
 from urllib.parse import quote
 
@@ -225,10 +227,10 @@ def test_the_stored_invite_is_a_hash_not_the_token(client, world, mailbox):
     _, token = out["invites"][0]
 
     row = _entry(world["tid"], out["entry_id"])
-    assert row.partner_invite_hash
-    assert token not in row.partner_invite_hash
-    assert len(row.partner_invite_hash) == 64
-    assert row.partner_invite_expires_at is not None
+    assert row.invitation.token_hash
+    assert token not in row.invitation.token_hash
+    assert len(row.invitation.token_hash) == 64
+    assert row.invitation.expires_at is not None
 
 
 # ---- the preview ---------------------------------------------------------
@@ -275,7 +277,7 @@ def test_an_unknown_token_is_the_same_404_as_an_expired_one(client, world, mailb
     session = SessionLocal()
     try:
         row = session.get(Entry, (uuid.UUID(world["tid"]), uuid.UUID(out["entry_id"])))
-        row.partner_invite_expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+        row.invitation.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
         session.commit()
     finally:
         session.close()
@@ -365,7 +367,9 @@ def test_the_preview_asks_for_a_birth_year_only_when_an_OPEN_event_is_age_bracke
 
 
 def _accept(client, token, **over):
-    body = {"fullName": "Sam Ali", "gender": "F", **over}
+    preview = client.get(f"/e/api/partner-invites/{token}").json()
+    body = {"fullName": "Sam Ali", "gender": "F", "acknowledged": True,
+            "reviewedQuote": preview.get("reviewedQuote"), **over}
     return client.post(f"/e/api/partner-invites/{token}/accept", json=body, headers=CSRF)
 
 
@@ -418,11 +422,11 @@ def test_acceptance_builds_the_partner_s_own_record_and_links_both_halves(
     theirs = _entry(world["tid"], partner_entry_id)
 
     # Linked both ways: either half can find the other.
-    assert str(mine.partner_entry_id) == partner_entry_id
-    assert str(theirs.partner_entry_id) == out["entry_id"]
+    assert str(mine.paired_entry_id) == partner_entry_id
+    assert str(theirs.paired_entry_id) == out["entry_id"]
     # The partner question is answered on the nominator's half.
     assert "awaiting_partner" not in mine.pending_reasons
-    assert mine.partner_accepted_at is not None
+    assert mine.invitation_accepted_at is not None
     # And the partner's own record is theirs: their name, their account.
     assert theirs.player_name == "Sam Ali"
     assert theirs.state == "pending"
@@ -671,7 +675,8 @@ def test_a_pair_conflict_still_only_flags_after_the_seam_builds_teams(
     nothing it was not certain about.
     """
     from db.session import SessionLocal
-    from entries.entries import commit_entries
+    from competition.service import bind
+    from competition.roster import ensure_event
     from repositories.local import LocalRepository
 
     _verified_entrant(client, mailbox, "alex@example.com")
@@ -695,7 +700,13 @@ def test_a_pair_conflict_still_only_flags_after_the_seam_builds_teams(
     session = SessionLocal()
     try:
         repo = LocalRepository(session)
-        result = commit_entries(repo, tid)
+        from db.models import EntryEvent
+        for registration in session.query(EntryEvent).filter_by(tournament_id=tid):
+            target = ensure_event(session, tid, registration.code, size=2 if registration.entry_type == "doubles" else 1)
+            registration.competition_event_id = target.id
+        session.commit()
+        result = bind(session, tid)
+        session.commit()
         document = repo.tournaments.get_by_id(tid).data or {}
     finally:
         session.close()
@@ -703,13 +714,13 @@ def test_a_pair_conflict_still_only_flags_after_the_seam_builds_teams(
     # A flag is not a refusal at the seam either: the conflicted halves are
     # on the roster like everybody else, and the flag is still there for the
     # operator afterwards.
-    assert result.skipped == []
+    assert result["skipped"] == []
     assert {first["entry_id"], second["entry_id"]} <= {
-        c.entry_id for c in result.committed
+        c["entryId"] for c in result["bindings"]
     }
     for entry_id in (first["entry_id"], second["entry_id"]):
         row = _entry(world["tid"], entry_id)
-        assert row.committed_player_id is not None
+        assert row.membership is not None
         assert "pair_conflict" in row.pending_reasons
 
     # Nothing was paired on. Backstop rather than the load-bearing claim:
@@ -768,7 +779,7 @@ def _form_token(client, slug):
 
 
 def _submit_with_partner(client, world, *, partner_email):
-    return client.post(
+    return submit_reviewed(client,
         "/e/api/submit/pairs-open",
         data={
             "playerName": "Alex Kim",
@@ -797,9 +808,9 @@ def test_a_sent_invite_records_success_and_reaches_my_entries(
     try:
         entry = session.query(Entry).filter(
             Entry.tournament_id == uuid.UUID(world["tid"]),
-            Entry.partner_email == "sam@example.com",
+            Entry.invitations.any(recipient_email="sam@example.com"),
         ).one()
-        assert entry.partner_invite_mail_sent is True
+        assert entry.invitation_mail_sent is True
     finally:
         session.close()
 
@@ -838,9 +849,9 @@ def test_a_failed_invite_is_recorded_and_reported_honestly(
     try:
         entry = session.query(Entry).filter(
             Entry.tournament_id == uuid.UUID(world["tid"]),
-            Entry.partner_email == "sam@example.com",
+            Entry.invitations.any(recipient_email="sam@example.com"),
         ).one()
-        assert entry.partner_invite_mail_sent is False
+        assert entry.invitation_mail_sent is False
     finally:
         session.close()
 
@@ -859,7 +870,7 @@ def test_an_entry_with_no_invite_attempt_never_claims_a_failure(
     `NULL` and the DTO's fail-calm default (`is False`) covers it the same
     way an outright success does."""
     _verified_entrant(client, mailbox, "alex@example.com")
-    r = client.post(
+    r = submit_reviewed(client,
         "/e/api/submit/pairs-open",
         data={
             "playerName": "Alex Kim",

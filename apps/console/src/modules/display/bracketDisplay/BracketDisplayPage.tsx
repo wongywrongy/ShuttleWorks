@@ -218,6 +218,10 @@ export function BracketDisplayPage({
             isFullscreen={isFullscreen}
             showNext={board.showNext}
             showScores={board.showScores}
+            /* The bracket board used to ignore the operator's accent
+               entirely, so the setting had a demonstrated effect on one of
+               the two boards (D7). It reaches restrained chrome only. */
+            accent={board.accent}
           />
         )}
       </main>

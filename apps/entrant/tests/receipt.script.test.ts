@@ -24,7 +24,6 @@ function receipt(over: Partial<SubmissionReceipt> = {}): SubmissionReceipt {
     status: "submitted",
     feeTotalCents: 5500,
     paymentState: "required",
-    paymentNote: null,
     paymentInstructions: "Bank transfer on the day.",
     events: [
       {
@@ -58,15 +57,16 @@ function mount() {
 describe("receipt decisions", () => {
   it("reports transaction and external payment states without inventing a currency", () => {
     expect(receiptStatus("confirmed")).toEqual({
-      label: "Confirmed",
+      label: "Entry confirmed",
       tone: "done",
     });
-    expect(paymentSummary(receipt())).toBe("Payment required · 55.00");
+    expect(paymentSummary(receipt())).toBe("Amount due 55.00 (currency not stated)");
+    expect(paymentSummary(receipt({ feeCurrency: "GBP" }))).toBe("Amount due GBP 55.00");
     expect(paymentSummary(receipt({ paymentState: "recorded" }))).toBe(
-      "Payment recorded · 55.00",
+      "Paid 55.00 (currency not stated)",
     );
     expect(paymentSummary(receipt({ paymentState: "not_required" }))).toBe(
-      "No payment required",
+      "No payment due",
     );
   });
 
@@ -76,7 +76,7 @@ describe("receipt decisions", () => {
     // The UUID is not a second reference the entrant has to reconcile.
     expect(text).not.toContain("44444444-4444-4444-8444-444444444444");
     expect(text).toContain(
-      "XD · Mixed Doubles · Ada Chen with Sam Ali · awaiting",
+      "XD Mixed Doubles, Ada Chen with Sam Ali (Awaiting confirmation)",
     );
     expect(text).toContain("Payment instructions\nBank transfer on the day.");
   });
@@ -104,14 +104,17 @@ describe("receipt DOM", () => {
       }),
     );
 
-    expect(root.textContent).toContain("<img src=x onerror=alert(1)>");
+    // The tournament title belongs to the SSR header; private participant text is still escaped here.
+    expect(root.textContent).not.toContain("<img src=x onerror=alert(1)>");
     expect(root.textContent).toContain("<script>alert(2)</script>");
     expect(root.querySelector("img")).toBeNull();
     expect(root.querySelector("script")).toBeNull();
-    expect(root.textContent).toContain("Payment required · 55.00");
+    expect(root.textContent).toContain("Amount due 55.00 (currency not stated)");
+    // One card: status, events and total share a container (refinement 2026-09-12).
+    expect(root.querySelectorAll("section").length).toBe(2);
     expect(
       [...root.querySelectorAll("button")].map((node) => node.textContent),
-    ).toEqual(["Copy reference", "Print receipt", "Download receipt"]);
+    ).toEqual(["Print receipt", "Download receipt"]);
   });
 
   it("turns 401 into a context-preserving sign-in action", async () => {

@@ -33,12 +33,17 @@ export function TabBar({
     href: tab.href,
     current: tab.id === active,
   }));
-  // `overflow-x-auto` on a wrapper, not the group: five short labels fit
-  // 390px, and if a locale ever does not, the strip scrolls INSIDE itself
-  // (R11 — the page never scrolls sideways).
+  // ONE row, always (public refinement 2026-09-12): the five labels fit a
+  // 390px viewport on one line, and anything narrower scrolls this strip
+  // INSIDE itself rather than dropping "Documents" onto a second line under
+  // the others (R11 — the page never scrolls sideways). `-mx-4 px-4` lets
+  // the scroll region reach the page gutters so the last tab is never cut
+  // at the content edge, and `scroll-px-4` keeps a scrolled-to tab clear of
+  // that gutter. The selected tab is visible on arrival at every phone
+  // width the tier supports; this document ships no script to scroll it.
   return (
-    <div className="overflow-x-auto">
-      <SegmentedNav label="Tournament sections" segments={segments} />
+    <div className="-mx-4 overflow-x-auto px-4 scroll-px-4">
+      <SegmentedNav label="Tournament sections" segments={segments} wrap={false} />
     </div>
   );
 }

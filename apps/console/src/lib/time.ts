@@ -272,6 +272,7 @@ const STATUS_BADGE: Record<MatchStateDTO['status'], string> = {
   called: 'bg-status-called-bg text-status-called',
   started: 'bg-status-live-bg text-status-live',
   finished: 'bg-status-done-bg text-status-done',
+  retired: 'bg-status-done-bg text-status-done',
 };
 
 export function getStatusColor(status: MatchStateDTO['status']): string {

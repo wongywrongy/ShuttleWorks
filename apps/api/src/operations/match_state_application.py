@@ -80,6 +80,13 @@ class MatchStateApplication:
         actor_id: uuid.UUID,
     ):
         try:
+            from types import SimpleNamespace
+            from operations.match_state import transition_match_in_session
+            previous = self.repo.matches.get(tournament_id, match_id)
+            subject = SimpleNamespace(id=match_id, tournament_id=tournament_id,
+                                      status=previous.status if previous else "scheduled",
+                                      machine_version=previous.machine_version if previous else 1,
+                                      __tablename__="matches")
             canonical = self.repo.matches.set_status(
                 tournament_id,
                 match_id,
@@ -87,6 +94,7 @@ class MatchStateApplication:
                 expected_version=expected_version,
                 commit=False,
             )
+            self.repo.stage(transition_match_in_session, subject, target_status, actor_id=actor_id)
             state = self.repo.match_states.upsert(tournament_id, match_id, fields, commit=False)
             _append_if_event_node(
                 self.repo,
@@ -114,6 +122,13 @@ class MatchStateApplication:
         actor_id: uuid.UUID,
     ):
         try:
+            from types import SimpleNamespace
+            from operations.match_state import transition_match_in_session
+            previous = self.repo.matches.get(tournament_id, match_id)
+            subject = SimpleNamespace(id=match_id, tournament_id=tournament_id,
+                                      status=previous.status if previous else "scheduled",
+                                      machine_version=previous.machine_version if previous else 1,
+                                      __tablename__="matches")
             self.repo.match_states.delete(tournament_id, match_id, commit=False)
             canonical = self.repo.matches.set_status(
                 tournament_id,
@@ -122,6 +137,7 @@ class MatchStateApplication:
                 expected_version=expected_version,
                 commit=False,
             )
+            self.repo.stage(transition_match_in_session, subject, MatchStatus.SCHEDULED, actor_id=actor_id)
             _append_if_event_node(
                 self.repo,
                 tournament_id=tournament_id,

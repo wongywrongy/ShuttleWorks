@@ -57,11 +57,13 @@ import {
   type BracketPairingCommand,
 } from "./pairingMutation";
 import {
-  DRAW_FORMATS,
+  CREATABLE_FORMATS,
+  consolationPoliciesFor,
   descriptorFor,
+  type ConsolationPolicy,
   type FormatConfigField,
-  type FormatDescriptor,
 } from "./formatRegistry";
+import { DISCIPLINE_NAMES } from "../../lib/disciplineNames";
 
 /** One draws-table row — a draw plus everything its cells need, computed
  *  once so renderRow stays a pure projection. */
@@ -892,54 +894,105 @@ function FormatConfigFields({
   );
 }
 
-/** One selectable card in the New-draw format grid. Unimplemented formats
- *  render dimmed + disabled with a "Planned" tag — the roadmap affordance. */
-function FormatCard({
-  descriptor,
-  selected,
+/**
+ * Compact supported-format selector for the New-draw modal (D6/O8).
+ *
+ * A select over `CREATABLE_FORMATS` plus ONE short explanation of the
+ * selected format. Roadmap formats are not offered here at all — an
+ * unpickable "Planned" card is an advertisement, not a control — and
+ * monrad is reached through the Consolation option below rather than as a
+ * rival card.
+ */
+function FormatSelect({
+  format,
   onPick,
 }: {
-  descriptor: FormatDescriptor;
-  selected: boolean;
-  onPick: () => void;
+  format: string;
+  onPick: (id: string) => void;
 }) {
-  const Glyph = descriptor.glyph;
+  const descriptor = descriptorFor(format) ?? CREATABLE_FORMATS[0];
   return (
-    <button
-      type="button"
-      onClick={onPick}
-      disabled={!descriptor.implemented}
-      aria-disabled={!descriptor.implemented}
-      aria-pressed={selected}
-      data-testid={`format-card-${descriptor.id}`}
-      className={`${INTERACTIVE_BASE} rounded-sm border p-2.5 text-left transition-[border-color,background-color] duration-fast ease-brand ${
-        selected
-          ? "border-accent bg-accent/10"
-          : "border-border bg-bg-elev hover:border-accent/40"
-      } ${descriptor.implemented ? "" : "cursor-not-allowed opacity-40"}`}
-    >
-      <span className="flex items-center gap-2">
-        <Glyph
-          className={`h-5 w-5 shrink-0 ${selected ? "text-accent" : "text-muted-foreground"}`}
-        />
-        <span className="min-w-0 break-words text-sm font-semibold">
-          {descriptor.label}
-        </span>
-        {!descriptor.implemented && (
-          <span className="ml-auto shrink-0 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-            Planned
-          </span>
-        )}
-      </span>
+    <label className="block">
+      <span className={FIELD_LABEL_CLASS}>Format</span>
+      <select
+        value={descriptor.id}
+        aria-label="Format"
+        data-testid="new-draw-format"
+        onChange={(e) => onPick(e.target.value)}
+        className={FIELD_INPUT_CLASS}
+      >
+        {CREATABLE_FORMATS.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.label}
+          </option>
+        ))}
+      </select>
       <span className="mt-1 block text-xs text-muted-foreground">
         {descriptor.blurb}
       </span>
-      <span className={`mt-1.5 block ${EYEBROW_CLASS} text-accent`}>
+      <span className={`mt-0.5 block ${EYEBROW_CLASS} text-accent`}>
         {descriptor.matchesHint}
       </span>
-    </button>
+    </label>
   );
 }
+
+/**
+ * Explicit consolation configuration for a compatible main format.
+ *
+ * Starts Off. Every option names which losing entrants qualify, and each
+ * maps onto a generator the backend already runs end to end — there is no
+ * decorative toggle here. The extra-match count is shown only when it is
+ * calculable, i.e. when the director has fixed a bracket size (otherwise the
+ * field size follows the entrant list, which is filled in afterwards).
+ */
+function ConsolationSection({
+  policies,
+  value,
+  bracketSize,
+  onChange,
+}: {
+  policies: ConsolationPolicy[];
+  value: ConsolationPolicy["value"];
+  bracketSize: number | undefined;
+  onChange: (value: ConsolationPolicy["value"]) => void;
+}) {
+  const policy =
+    policies.find((p) => p.value === value) ?? policies[0];
+  const extra =
+    bracketSize && bracketSize >= 2 && policy.extraMatches
+      ? policy.extraMatches(bracketSize)
+      : undefined;
+  return (
+    <label className="block">
+      <span className={FIELD_LABEL_CLASS}>Consolation</span>
+      <select
+        value={policy.value}
+        aria-label="Consolation"
+        data-testid="new-draw-consolation"
+        onChange={(e) => onChange(e.target.value as ConsolationPolicy["value"])}
+        className={FIELD_INPUT_CLASS}
+      >
+        {policies.map((p) => (
+          <option key={p.value} value={p.value}>
+            {p.label}
+          </option>
+        ))}
+      </select>
+      <span className="mt-1 block text-xs text-muted-foreground">
+        {policy.eligibility}
+        {extra !== undefined && extra > 0
+          ? ` Adds ${extra} match${extra === 1 ? "" : "es"} beyond the ${bracketSize}-place main draw.`
+          : ""}
+      </span>
+    </label>
+  );
+}
+
+/** Discipline choices: the meaningful name leads, the code rides as
+ *  secondary text. "Other" keeps the free-text path for a director whose
+ *  event isn't one of the five BWF disciplines. */
+const DISCIPLINE_OTHER = "__other__";
 
 /** What the New-draw layer hands back on Create: identity + format plus the
  *  format's column-target knobs and (when set) the config blob. */
@@ -952,10 +1005,10 @@ interface NewDrawSubmitBody extends ColumnFieldValues {
 
 /**
  * Create-a-draw layer. Opens over the Draws surface so creation never
- * sends the operator to a separate page. Names the event (ID +
- * discipline) and picks the draw format from the registry card grid —
- * glyph, blurb, and the guaranteed-matches hint directors choose by —
- * then tunes the format's knobs; participants are entered in-grid
+ * sends the operator to a separate page. Names the event (meaningful
+ * discipline first, the event code as its identifier), picks a SUPPORTED
+ * format from the compact selector, optionally attaches a consolation
+ * policy, then tunes the format's knobs; participants are entered in-grid
  * afterward, then the draw is generated.
  */
 function NewDrawModal({
@@ -972,19 +1025,31 @@ function NewDrawModal({
   const [id, setId] = useState("");
   const [discipline, setDiscipline] = useState("MS");
   const [format, setFormat] = useState<string>("se");
+  const [consolation, setConsolation] =
+    useState<ConsolationPolicy["value"]>("off");
   const [errors, setErrors] = useState<{ id?: string; discipline?: string }>(
     {},
   );
   const [values, setValues] = useState<FieldValues>(() =>
     defaultFieldValues(descriptorFor("se")?.fields ?? []),
   );
-  const descriptor = descriptorFor(format) ?? DRAW_FORMATS[0];
+  const descriptor = descriptorFor(format) ?? CREATABLE_FORMATS[0];
   const titleId = "new-draw-title";
+  const policies = consolationPoliciesFor(descriptor.id);
+  // Undefined for formats that take no consolation policy — the payload
+  // then keeps the format's own id and config untouched.
+  const policy: ConsolationPolicy | undefined =
+    policies.find((p) => p.value === consolation) ?? policies[0];
+  const knownDiscipline = discipline in DISCIPLINE_NAMES;
 
-  const pickFormat = (d: FormatDescriptor) => {
-    if (!d.implemented) return;
+  const pickFormat = (formatId: string) => {
+    const d = descriptorFor(formatId);
+    if (!d || !d.implemented) return;
     setFormat(d.id);
     setValues(defaultFieldValues(d.fields));
+    // A policy belongs to the format it was chosen under; carrying "plate"
+    // onto round robin would send a config key that format cannot honour.
+    if (consolationPoliciesFor(d.id).length === 0) setConsolation("off");
   };
 
   const submit = () => {
@@ -1015,12 +1080,18 @@ function NewDrawModal({
       return;
     }
     const { column, config } = splitFieldPayload(descriptor.fields, values);
+    // The consolation policy decides the format that is actually generated:
+    // "single elimination + a plate" IS the engine's monrad draw (identical
+    // main bracket, plus real consolation play units), so the decision rides
+    // through generation, feeder references, scheduler dependencies, result
+    // correction and the published draw with nothing extra to wire.
+    const merged = { ...config, ...policy?.config };
     onCreate({
       id: code,
       discipline: disciplineResult.code,
-      format: descriptor.id,
+      format: policy?.format ?? descriptor.id,
       ...column,
-      ...(config ? { config } : {}),
+      ...(Object.keys(merged).length > 0 ? { config: merged } : {}),
     });
   };
 
@@ -1070,17 +1141,46 @@ function NewDrawModal({
           </label>
           <label className="block">
             <span className={FIELD_LABEL_CLASS}>Discipline</span>
-            <input
-              type="text"
-              value={discipline}
+            {/* The name a director reads is the discipline, not its code —
+                so the five real disciplines are named in full and the code
+                stays secondary. "Other" keeps the free-text path. */}
+            <select
+              value={knownDiscipline ? discipline : DISCIPLINE_OTHER}
+              aria-label="Discipline"
               onChange={(e) => {
-                setDiscipline(e.target.value);
+                setDiscipline(
+                  e.target.value === DISCIPLINE_OTHER ? "" : e.target.value,
+                );
                 setErrors((prev) => ({ ...prev, discipline: undefined }));
               }}
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-              aria-invalid={errors.discipline ? true : undefined}
-              className={`${FIELD_INPUT_CLASS} uppercase placeholder:normal-case`}
-            />
+              className={FIELD_INPUT_CLASS}
+            >
+              {Object.entries(DISCIPLINE_NAMES).map(([code, name]) => (
+                <option key={code} value={code}>
+                  {name}
+                </option>
+              ))}
+              <option value={DISCIPLINE_OTHER}>Other…</option>
+            </select>
+            {knownDiscipline ? (
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {discipline}
+              </span>
+            ) : (
+              <input
+                type="text"
+                value={discipline}
+                placeholder="e.g. U19"
+                onChange={(e) => {
+                  setDiscipline(e.target.value);
+                  setErrors((prev) => ({ ...prev, discipline: undefined }));
+                }}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                aria-label="Custom code"
+                aria-invalid={errors.discipline ? true : undefined}
+                className={`${FIELD_INPUT_CLASS} mt-1 uppercase placeholder:normal-case`}
+              />
+            )}
             {errors.discipline && (
               <span
                 role="alert"
@@ -1092,18 +1192,20 @@ function NewDrawModal({
           </label>
         </div>
 
-        <div>
-          <span className={FIELD_LABEL_CLASS}>Format</span>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {DRAW_FORMATS.map((d) => (
-              <FormatCard
-                key={d.id}
-                descriptor={d}
-                selected={d.id === descriptor.id}
-                onPick={() => pickFormat(d)}
-              />
-            ))}
-          </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FormatSelect format={descriptor.id} onPick={pickFormat} />
+          {policies.length > 0 && (
+            <ConsolationSection
+              policies={policies}
+              value={consolation}
+              bracketSize={
+                typeof values.bracket_size === "number"
+                  ? values.bracket_size
+                  : undefined
+              }
+              onChange={setConsolation}
+            />
+          )}
         </div>
 
         {descriptor.fields.length > 0 && (

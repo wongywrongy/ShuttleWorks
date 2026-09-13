@@ -31,6 +31,12 @@ export interface Segment {
 // real running page: this alone (with the `SeasonControls.tsx` popover fix
 // alongside it) closes Discovery's 320/390px horizontal-scroll defect.
 const GROUP = 'inline-flex flex-wrap gap-4 border-b border-rule-soft';
+// The single-row shape (`wrap={false}`): `flex-nowrap` and `min-w-full` so
+// the rule under the group spans the whole scroll region, with every item
+// `shrink-0` so a narrow viewport scrolls the region instead of squeezing
+// the labels. Labels still wrap INSIDE an item if a locale needs it — this
+// is a row of whole items, not `white-space: nowrap`.
+const GROUP_ROW = 'flex min-w-full flex-nowrap gap-4 border-b border-rule-soft [&>a]:shrink-0';
 // P7: the shared navigation control carries the same visible focus as every
 // other action on the tier (`ACTION_LINK`'s outline) — it had none, so a
 // keyboard reader tabbing across the tournament sections, the schedule days
@@ -47,15 +53,24 @@ export function SegmentedNav({
   segments,
   className = '',
   currentAttr = 'page',
+  wrap = true,
 }: {
   label: string;
   segments: readonly Segment[];
   className?: string;
   /** `aria-current` value for the active item: `page` for navigation, `true` for a view. */
   currentAttr?: 'page' | 'true';
+  /**
+   * `false` keeps the group on ONE line and lets its items keep their own
+   * width, for a caller that puts the group inside its own horizontal
+   * scroll region (the tournament tab bar on a phone). The default wraps,
+   * which is right for a group that has no scroll region of its own.
+   */
+  wrap?: boolean;
 }) {
+  const group = wrap ? GROUP : GROUP_ROW;
   return (
-    <nav aria-label={label} className={className === '' ? GROUP : `${GROUP} ${className}`}>
+    <nav aria-label={label} className={className === '' ? group : `${group} ${className}`}>
       {segments.map((segment, index) => {
         const classes = `${ITEM} ${index === 0 ? '' : `${DIVIDER} `}${
           segment.current ? SEGMENT_ACTIVE : SEGMENT_IDLE

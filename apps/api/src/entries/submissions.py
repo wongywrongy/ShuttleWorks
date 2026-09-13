@@ -53,6 +53,8 @@ document than the one they read.
 
 from __future__ import annotations
 
+from db.models import PlayerRepresentative
+
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -63,6 +65,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from core.representation import normalize_representation
 from db import short_reference
 from db.models import Entry, EntryPlayer, Submission
 from entries import lifecycle, money, partners
@@ -104,6 +107,10 @@ class PlayerInput:
     full_name: str
     gender: str
     club: Optional[str] = None
+    # D4 / O4: the controlled "Representing" code, already normalized by the
+    # DTO edge (``core.representation``). ``None`` is Unknown.
+    representation: Optional[str] = None
+    publish_representation: Optional[bool] = None
     birth_year: Optional[int] = None
     remarks: Optional[str] = None
     events: Sequence[Any] = ()
@@ -313,7 +320,7 @@ def same_person(
         select(EntryPlayer)
         .where(
             EntryPlayer.tournament_id == tournament_id,
-            EntryPlayer.account_id == account_id,
+            EntryPlayer.representatives.any(account_id=account_id),
             EntryPlayer.birth_year == spec.birth_year,
             func.lower(EntryPlayer.full_name) == spec.full_name.strip().lower(),
             EntryPlayer.erased_at.is_(None),
@@ -345,7 +352,7 @@ def has_unresolvable_namesake(
         select(EntryPlayer.id)
         .where(
             EntryPlayer.tournament_id == tournament_id,
-            EntryPlayer.account_id == account_id,
+            EntryPlayer.representatives.any(account_id=account_id),
             func.lower(EntryPlayer.full_name) == spec.full_name.strip().lower(),
             EntryPlayer.erased_at.is_(None),
             EntryPlayer.id != exclude_id,
@@ -382,10 +389,12 @@ def adopt_or_mint(
     if player is None:
         player = EntryPlayer(
             tournament_id=tournament_id,
-            account_id=account_id,
+            representatives=[PlayerRepresentative(account_id=account_id)],
             full_name=spec.full_name.strip(),
             gender=spec.gender.strip(),
             club=(spec.club or "").strip() or None,
+            representation=normalize_representation(spec.representation),
+            representation_public=spec.publish_representation is True,
             birth_year=spec.birth_year,
             remarks=(spec.remarks or "").strip() or None,
         )
@@ -393,9 +402,14 @@ def adopt_or_mint(
         session.flush()
         return player, False
     club = (spec.club or "").strip() or None
+    representation = normalize_representation(spec.representation)
     remarks = (spec.remarks or "").strip() or None
     if blank_clears or club is not None:
         player.club = club
+    if blank_clears or representation is not None:
+        player.representation = representation
+        if spec.publish_representation is not None:
+            player.representation_public = spec.publish_representation
     if blank_clears or remarks is not None:
         player.remarks = remarks
     return player, True
@@ -416,6 +430,7 @@ def create_submission(
     idempotency_key: Optional[str] = None,
     email_verified: bool = True,
     commit: bool = True,
+    blank_clears: bool = True,
 ) -> SubmissionResult:
     """Record one act: a submission, its players, and one entry per event.
 
@@ -448,6 +463,7 @@ def create_submission(
             idempotency_key=idempotency_key,
             email_verified=email_verified,
             commit=commit,
+            blank_clears=blank_clears,
         )
     except IntegrityError:
         # The other half of the retry race — see the module docstring. The
@@ -478,6 +494,7 @@ def _write(
     idempotency_key: Optional[str],
     email_verified: bool = True,
     commit: bool = True,
+    blank_clears: bool = True,
 ) -> SubmissionResult:
     now = _utcnow()
     submission = Submission(
@@ -503,6 +520,7 @@ def _write(
         regulations_version_accepted=getattr(page, "regulations_version", None),
         fee_total_cents=fee_total_cents,
         fee_basis=fee_basis,
+        fee_currency=getattr(page, "fee_currency", None),
     )
     session.add(submission)
     session.flush()
@@ -520,10 +538,12 @@ def _write(
         # its entries, not here, so this row is free to hold the newest
         # description of the person (a club change mid-season is the person
         # updating themselves, not history being rewritten).
-        player, adopted = adopt_or_mint(session, tournament_id, account_id, spec)
+        player, adopted = adopt_or_mint(session, tournament_id, account_id, spec, blank_clears=blank_clears)
         flag_person = not adopted and has_unresolvable_namesake(
             session, tournament_id, account_id, spec, exclude_id=player.id
         )
+        from entries.entry_policy import assert_representative
+        assert_representative(session, tournament_id, player.id, account_id)
         created_players.append(player)
 
         events = _distinct(spec.events)
@@ -559,10 +579,14 @@ def _write(
                 entry_event_id=event.id,
                 submission_id=submission.id,
                 entry_player_id=player.id,
-                state=state,
+                state=landing,
+                id=uuid.uuid4(),
                 pending_reasons=reasons,
                 fee_cents=share,
             )
+            if state == lifecycle.WAITLISTED:
+                lifecycle.transition_entry(entry, "waitlist_at_cap", "system", session=session,
+                                           context={"event": event})
             session.add(entry)
             session.flush()
             created_entries.append(entry)
@@ -654,3 +678,24 @@ def _split(cents: Optional[int], event_count: int) -> list[Optional[int]]:
     shares = [base] * event_count
     shares[0] += cents - base * event_count
     return shares
+
+
+def delete_draft(session, submission):
+    """Submitted history is retained even after cancellation."""
+    if submission.status != 'draft':
+        raise ValueError('Only draft submissions may be deleted')
+    if submission.payments:
+        raise ValueError('A submission with ledger records cannot be deleted')
+    session.delete(submission)
+
+
+def cancel_submission(session, submission):
+    from db.models import EntryEvent
+    """Cancellation withdraws live entries; it never invents a refund."""
+    if submission.status != 'submitted':
+        raise ValueError('Only submitted records may be cancelled')
+    for entry in money.entries_of(session, submission):
+        if entry.state in lifecycle.LIVE_STATES:
+            event = session.get(EntryEvent, (entry.tournament_id, entry.entry_event_id))
+            lifecycle.withdraw(session, entry, event, by_operator=True)
+    submission.status = 'cancelled'

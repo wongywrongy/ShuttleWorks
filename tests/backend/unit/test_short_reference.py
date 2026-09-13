@@ -24,7 +24,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from db import short_reference
-from db.models import Base, EntrantAccount, Submission, Tournament
+from db.models import EntrantAccount, Submission, Tournament
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _RECEIPT_ROUTE = _REPO_ROOT / "apps" / "entrant" / "app" / "routes" / "receipt.tsx"
@@ -38,7 +38,8 @@ def session():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     s = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
     try:
         yield s

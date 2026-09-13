@@ -73,12 +73,12 @@ def test_rollback_requires_signed_older_candidate_and_matching_bundle(tmp_path: 
         )
 
 
-def test_previous_release_compatibility_subset_remains_verifiable(tmp_path: Path) -> None:
+def test_same_schema_release_remains_verifiable(tmp_path: Path) -> None:
     bundle, key = _bundle(tmp_path, "2.3.0")
     metadata = build_update_metadata(bundle, version="2.3.0", source_revision="e" * 40)
     metadata["compatibility"] = {
-        "operationSchemas": [1, 2],
-        "checkpointSchemas": [1, 2],
+        "operationSchemas": [1],
+        "checkpointSchemas": [1],
     }
     signature = sign_update_metadata(metadata, key)
     assert verify_rollback_candidate(

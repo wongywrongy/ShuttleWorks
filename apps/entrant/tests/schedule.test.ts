@@ -163,14 +163,49 @@ describe("Schedule / Live", () => {
 
   // ---- public-visual-fixes P3 -----------------------------------------
 
-  it("names the match with the SHARED reference on one compact line", () => {
+  it("names the match with the SHARED reference, in its own column of the row", () => {
     // §6.1: a whole-day schedule is a MIXED-event view, so the event code
     // stays — the same string the operator's match list shows. The old bare
-    // "Match n" is gone from the tier entirely.
+    // "Match n" is gone from the tier entirely. Refinement 2026-09-12: the
+    // listing is aligned ROWS, so the reference sits in the event column and
+    // the time and court in the first column, not on one joined footer line.
     return render().then((html) => {
-      expect(html).toContain("MS SF1 · Scheduled 10:30 · Court 1");
+      const row = html.match(/<li data-match-row[\s\S]*?<\/li>/)?.[0] ?? "";
+      expect(row).not.toBe("");
+      expect(row).toContain("MS SF1");
+      expect(row).toContain("10:30");
+      expect(row).toContain("Court 1");
+      expect(row).toContain("MS · Semifinals");
+      expect(html).not.toContain("MS SF1 · Scheduled 10:30 · Court 1");
       expect(html).not.toMatch(/>Match \d/);
+      // The column header aligns with the rows and is decoration.
+      expect(html).toMatch(/aria-hidden="true" class="hidden [^"]*md:grid[^"]*"[^>]*>[\s\S]*?Time · court/);
+      // No card grid remains in the main listing.
+      expect(html).not.toContain('data-match-variant="card"');
     });
+  });
+
+  it("renders the games beside each side, and the running points of a live game in play", async () => {
+    const running = {
+      ...MATCHES,
+      items: [{ ...MATCHES.items[0], score: null, liveScore: [15, 12] }],
+    };
+    const html = await render("/e/spring-open/schedule", running);
+    const cells = [...html.matchAll(/data-live-score[^>]*>(\d+)</g)].map((m) => m[1]);
+    expect(cells).toEqual(["15", "12"]);
+    expect(html).toContain("In play 15\u201312");
+    // With recorded games the ledger, not the running figure, is shown.
+    const withGames = await render();
+    expect(withGames).not.toContain("data-live-score");
+    expect(withGames).toMatch(/text-right text-foreground">21</);
+    expect(withGames).toMatch(/text-right text-foreground">19</);
+    // A live match with no score of any kind invents none.
+    const bare = await render("/e/spring-open/schedule", {
+      ...MATCHES,
+      items: [{ ...MATCHES.items[0], score: null }],
+    });
+    expect(bare).not.toContain("data-live-score");
+    expect(bare).toMatch(/text-status-live">On court/);
   });
 
   it("makes no promise to update scores it cannot update", async () => {
@@ -262,20 +297,31 @@ describe("Schedule / Live", () => {
 
   // ---- public-visual-fixes P7 -----------------------------------------
 
-  it("puts the day, the organisation and the search in ONE sticky row", async () => {
+  it("puts the days, the organisation, the search and the filters in ONE sticky band", async () => {
     const html = await render();
     const row =
       html.match(/<div class="sticky top-0[\s\S]*?<\/form>/)?.[0] ?? "";
     expect(row).not.toBe("");
-    // The three controls the critique asked for, in that order, in one band.
+    // The controls the critique asked for, in that order, in one band: the
+    // days on their own single-row strip (short labels, a count each), then
+    // the organisation, the search and the secondary filters.
     expect(row).toContain('aria-label="Schedule days"');
-    expect(row).toContain('aria-label="Schedule organization"');
-    expect(row).toContain('name="player"');
-    // The remaining facets fold into a disclosure rather than a second card.
-    expect(row).toContain("More filters");
+    expect(row).toMatch(/Sat 12 Sep<span class="ms-2 tabular-nums[^"]*">1</);
+    expect(row).not.toContain("Saturday, September 12 · 1 match");
+    expect(row.indexOf('aria-label="Schedule days"')).toBeLessThan(row.indexOf('aria-label="Schedule organization"'));
+    expect(row.indexOf('aria-label="Schedule organization"')).toBeLessThan(row.indexOf('name="player"'));
+    // The secondary filters are a disclosure that is OPEN in the document
+    // (a reader without script sees them; the script closes it on a phone
+    // when none is active) and inline from md: up (summary hidden).
+    expect(row).toMatch(/<details data-schedule-more="true" open=""/);
+    expect(row).toMatch(/<summary[^>]*md:hidden[^>]*>[\s\S]*?Filters/);
+    expect(row).not.toContain("More filters");
     expect(row).toContain('name="event"');
     expect(row).toContain('name="court"');
     expect(row).toContain('name="state"');
+    // An active secondary filter is counted in the summary label.
+    const active = await render("/e/spring-open/schedule?event=MS&state=live");
+    expect(active).toContain("Filters · 2");
     // Exactly one control card: the old day/organisation band plus filter
     // grid was two stacked panels.
     expect(html.match(/data-schedule-filters/g)).toHaveLength(1);

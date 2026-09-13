@@ -16,7 +16,6 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
 from db.models import (
-    Base,
     CloudEventProjection,
     EventOperation,
     EventOperationSequence,
@@ -64,12 +63,14 @@ def concurrent_db(request, tmp_path):
         with engine.begin() as connection:
             connection.execute(text("PRAGMA journal_mode=WAL"))
             connection.execute(text("PRAGMA busy_timeout=20000"))
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     try:
         yield engine, Session
     finally:
-        Base.metadata.drop_all(engine)
+        from _helpers import drop_test_database
+        drop_test_database(engine)
         engine.dispose()
 
 
@@ -293,7 +294,7 @@ def test_concurrent_overlapping_batches_advance_cursor_contiguously(
             expected_version=None,
             occurred_at_local=now,
             accepted_at_node=now,
-            schema_version=3,
+            schema_version=1,
         )
         for sequence in (1, 2)
     ]
@@ -366,8 +367,8 @@ def test_authority_projection_recovery_and_tenant_isolation_share_dialect_contra
         [
             User(id=owner_id, email=f"{owner_id}@example.test"),
             User(id=foreign_id, email=f"{foreign_id}@example.test"),
-            Tournament(id=tournament_id, name="Dialect lifecycle", data={"version": 2}),
-            Tournament(id=other_tournament_id, name="Other tenant", data={"version": 2}),
+            Tournament(id=tournament_id, name="Dialect lifecycle", data={"version": 1}),
+            Tournament(id=other_tournament_id, name="Other tenant", data={"version": 1}),
             TournamentMember(
                 tournament_id=tournament_id,
                 user_id=owner_id,
@@ -414,7 +415,7 @@ def test_authority_projection_recovery_and_tenant_isolation_share_dialect_contra
     backup_hash = "d" * 64
     recovery_checkpoint = checkpoint_package(
         session.get(Tournament, tournament_id),
-        schema_version=3,
+        schema_version=1,
         session=session,
     )
     recovery_checkpoint["recovery"] = {

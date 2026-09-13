@@ -91,9 +91,8 @@ const NON_TEXT_OPACITY: Record<string, string[]> = {
   ],
   'apps/console/src/modules/bracket/BracketDrawsTab.tsx': [
     'hover:opacity-90', // solid bg-primary button fill dims on hover — a background, not text.
-    // Unimplemented-format card: real `disabled` + `aria-disabled` control,
-    // whole-card inert dimming (roadmap "Planned" affordance), not a text fade.
-    'opacity-40',
+    // (The roadmap-card `opacity-40` entry went with the card grid itself —
+    // O8 removed unpickable formats from the creation path.)
   ],
   'apps/console/src/modules/bracket/BracketScoreEntry.tsx': [
     'hover:opacity-90', // solid bg-primary button fill dims on hover — a background, not text.
@@ -111,9 +110,9 @@ const NON_TEXT_OPACITY: Record<string, string[]> = {
     'opacity-60', // whole-subtree stale-data dimming when the poll freshness is 'stale'.
   ],
   'apps/console/src/modules/hub/WorkspaceRow.tsx': [
-    // Next-action chevron: 0% at rest, 100% on hover — decorative hover
-    // reveal, fully opaque whenever interactive, not a resting text fade.
-    'opacity-0',
+    // The next-action chevron's hover reveal ('opacity-0' /
+    // 'group-hover:opacity-100') is gone with the next-action CTA itself
+    // (D2: one Open button per row).
     'group-hover:opacity-100',
     // Overflow-menu wrapper: quiet (60%) at rest so the row's edit/delete
     // affordance doesn't compete with the name at a glance, full opacity on
@@ -140,6 +139,16 @@ const NON_TEXT_OPACITY: Record<string, string[]> = {
     'focus-visible:opacity-100',
     'group-hover/cell:opacity-100',
   ],
+  'apps/console/src/modules/operations/plan/PlanCourtQueues.tsx': [
+    // Lane movement controls: 0% at rest, 100% when the row is selected or
+    // takes keyboard focus (hover is a convenience on top) - a hover-reveal
+    // affordance that is fully opaque whenever it is interactive, and stays
+    // in the tab order throughout. Icon buttons, not body text.
+    'opacity-0',
+    'opacity-100',
+    'group-hover:opacity-100',
+    'group-focus-within:opacity-100',
+  ],
   'apps/console/src/modules/operations/run/RunQueue.tsx': [
     // Row selection toggle: 0% at rest, 100% selected/hover/focus — a
     // hover-reveal affordance, fully opaque whenever interactive.
@@ -148,11 +157,6 @@ const NON_TEXT_OPACITY: Record<string, string[]> = {
     'focus-visible:opacity-100',
     'group-hover:opacity-100',
     'group-focus-within:opacity-100',
-  ],
-  'apps/console/src/modules/operations/run/ScoreEditor.tsx': [
-    // Whole-row dimming for a set beyond the already-decided match outcome;
-    // both score inputs in the row carry a real `disabled` attribute. Not text.
-    'opacity-40',
   ],
   'apps/console/src/modules/workspace/displayConfig/DisplayLayoutEditor.tsx': [
     'opacity-50', // aria-disabled dependent-control section dimming (grid-columns row), not text.

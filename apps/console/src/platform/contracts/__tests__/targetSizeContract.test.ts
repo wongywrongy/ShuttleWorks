@@ -192,7 +192,7 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/components/MatchChip.tsx',
-    line: 113,
+    line: 116,
     why:
       'className is an array joined at runtime (`[...].join`), not a literal ' +
       'string the scan can read — MatchChip is a full match card, never a ' +
@@ -238,7 +238,7 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
   },
   {
     file: 'apps/console/src/components/ActiveChoice.tsx',
-    line: 98,
+    line: 113,
     why:
       'ActiveChoice is the console\'s single shared selection primitive — a ' +
       '"known-sized shared component" per the plan\'s explicit exception. Its ' +
@@ -269,11 +269,6 @@ const ALLOWED: readonly { file: string; line: number; why: string }[] = [
     file: 'apps/console/src/components/control-plane/DenseDataTable.tsx',
     line: 814,
     why: 'Numbered page button uses the module-level CONTROL (min-h-9), which the static scan cannot resolve.',
-  },
-  {
-    file: 'apps/console/src/modules/hub/WorkspaceInspector.tsx',
-    line: 327,
-    why: 'View-all link is an intentional inline text affordance with no literal size class.',
   },
   {
     file: 'apps/console/src/modules/operations/run/MeetMatchControls.tsx',

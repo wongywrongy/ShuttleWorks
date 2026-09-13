@@ -2,11 +2,11 @@ import { identityFixture } from './identityFixture';
 /**
  * PlanCourtQueues — the default Plan view (P2).
  *
- * What this holds: each court is an ordered lane of uniform cells with the
- * estimated time BENEATH each cell; no raw slot label anywhere; a keyboard
- * move action exists on every movable cell and runs the SAME validated
- * schedule command path the pointer drag does — validate first, write only
- * on a feasible answer.
+ * What this holds: each court is an ordered lane of compact ROWS whose clock
+ * time says WHICH clock it is (Scheduled / Started); no raw slot label
+ * anywhere; a keyboard move action exists on every movable row and runs the
+ * SAME validated schedule command path the pointer drag does — validate
+ * first, write only on a feasible answer.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -33,7 +33,7 @@ vi.mock('../../../store/tournamentStore', () => ({
   useTournamentStore: (selector: (s: unknown) => unknown) => selector({ players: [] }),
 }));
 
-import { PlanCourtQueues, targetSlotFor } from '../plan/PlanCourtQueues';
+import { PlanCourtQueues, targetSlotFor, crossesDayBoundary } from '../plan/PlanCourtQueues';
 import { STATE_WORD } from '../../../lib/stateWords';
 import type { OpsBlock } from '../opsBlock';
 
@@ -78,7 +78,7 @@ beforeEach(() => {
 });
 
 describe('PlanCourtQueues', () => {
-  it('renders one ordered lane per court with the estimate beneath each cell', () => {
+  it('renders one ordered lane per court with a LABELLED clock on each row', () => {
     renderQueues([
       blk({ id: 'second', court: 1, slot: 2 }),
       blk({ id: 'first', court: 1, slot: 0 }),
@@ -91,17 +91,19 @@ describe('PlanCourtQueues', () => {
       'plan-queue-cell-meet:first',
       'plan-queue-cell-meet:second',
     ]);
-    // The estimate rides under the cell, as a wall-clock time.
-    expect(lane1).toHaveTextContent('~9:00');
-    expect(lane1).toHaveTextContent('~9:30');
-    expect(screen.getByTestId('plan-queue-lane-2')).toHaveTextContent('~9:15');
+    // The clock is named, not decorated with a tilde: a bare time beside a
+    // court cannot say whether it is the plan or what actually happened.
+    expect(lane1).toHaveTextContent('Scheduled 9:00');
+    expect(lane1).toHaveTextContent('Scheduled 9:30');
+    expect(screen.getByTestId('plan-queue-lane-2')).toHaveTextContent('Scheduled 9:15');
   });
 
-  it('never prints a raw slot index — with no configured clock the estimate is omitted', () => {
+  it('never prints a raw slot index — with no configured clock the time is omitted', () => {
     renderQueues([blk({ id: 'a', court: 1, slot: 152 })], () => '');
     const lane = screen.getByTestId('plan-queue-lane-1');
     expect(lane).not.toHaveTextContent('S152');
     expect(lane).not.toHaveTextContent('152');
+    expect(lane).not.toHaveTextContent('Scheduled');
   });
 
   it('the keyboard move action validates first and pins on a feasible answer', async () => {
@@ -140,8 +142,48 @@ describe('PlanCourtQueues', () => {
     expect(mockPinAndResolve).not.toHaveBeenCalled();
   });
 
+  it('separates the recorded start from the planned slot', () => {
+    renderQueues([blk({ id: 'live', court: 1, slot: 0, status: 'started', started: true, actualStartSlot: 2 })]);
+    expect(screen.getByTestId('plan-queue-planned-meet:live')).toHaveTextContent('Scheduled 9:00');
+    expect(screen.getByTestId('plan-queue-actual-meet:live')).toHaveTextContent('Started 9:30');
+  });
+
+  it('marks the day boundary when the lane clock wraps past midnight', () => {
+    // A lane is sorted by slot, so a DECREASING clock is the wrap, not a
+    // re-ordering — and the operator is told so instead of reading it as a
+    // schedule that goes backwards.
+    renderQueues(
+      [blk({ id: 'late', court: 1, slot: 0 }), blk({ id: 'early', court: 1, slot: 1 })],
+      (s) => (s === 0 ? '23:45' : '00:15'),
+    );
+    expect(screen.getByTestId('plan-queue-day-break-1')).toHaveTextContent('Next day');
+  });
+
+  it('reveals the movement controls on selection and keyboard focus, never on hover alone', () => {
+    const { rerender } = renderQueues([blk({ id: 'a', court: 1, slot: 0 })]);
+    const controls = screen.getByTestId('plan-queue-controls-meet:a');
+    // Present and focusable at all times — opacity, not `hidden`, is what
+    // changes, so Tab still reaches the buttons.
+    expect(controls.className).toContain('group-focus-within:opacity-100');
+    expect(controls.className).toContain('opacity-0');
+    expect(screen.getByTestId('plan-queue-later-meet:a')).toBeInTheDocument();
+
+    rerender(
+      <PlanCourtQueues
+        blocks={[blk({ id: 'a', court: 1, slot: 0 })]}
+        courtCount={2}
+        selectedKey="meet:a"
+        onSelect={vi.fn()}
+        meet={meet}
+        onBracketData={vi.fn()}
+        formatSlot={(s) => `9:${String(s * 15).padStart(2, '0')}`}
+      />,
+    );
+    expect(screen.getByTestId('plan-queue-controls-meet:a').className).toContain('opacity-100');
+  });
+
   it('a finished match is inert: no move actions on history', () => {
-    renderQueues([blk({ id: 'done', court: 1, slot: 0, status: 'finished', done: true })]);
+    renderQueues([blk({ id: 'finished', court: 1, slot: 0, status: 'finished', done: true })]);
     expect(screen.queryByTestId('plan-queue-later-meet:done')).toBeNull();
     expect(screen.queryByTestId('plan-queue-next-court-meet:done')).toBeNull();
   });
@@ -186,14 +228,14 @@ describe('PlanCourtQueues', () => {
     expect(disclosure).toHaveTextContent('1 completed on Court 1');
     expect(disclosure).toContainElement(screen.getByTestId('plan-queue-cell-meet:old'));
 
-    // The upcoming list is its own bounded, keyboard-focusable scroll region,
-    // so a long court cannot push later courts off the page.
+    // The upcoming list is NOT its own scroll pane: the lanes stack and the
+    // page scrolls, so every court is reachable with one scroll instead of
+    // six cramped inner windows.
     const list = screen.getByTestId('plan-queue-list-1');
     expect(list).toContainElement(screen.getByTestId('plan-queue-cell-meet:next'));
     expect(list).not.toContainElement(screen.getByTestId('plan-queue-cell-meet:old'));
-    expect(list.getAttribute('tabindex')).toBe('0');
-    expect(list.className).toContain('overflow-y-auto');
-    expect(list.className).toMatch(/max-h-/);
+    expect(list.className).not.toContain('overflow-y-auto');
+    expect(list.className).not.toMatch(/max-h-/);
   });
 
   it('a move from the upcoming list still targets the position it holds in the FULL lane', async () => {
@@ -225,6 +267,14 @@ describe('PlanCourtQueues', () => {
     expect(screen.getByTestId('plan-queue-cell-meet:live').textContent).toContain(
       STATE_WORD.onCourt,
     );
+  });
+});
+
+describe('crossesDayBoundary', () => {
+  it('is true only when the later printed time reads earlier on the clock', () => {
+    expect(crossesDayBoundary('23:45', '00:15')).toBe(true);
+    expect(crossesDayBoundary('09:00', '09:30')).toBe(false);
+    expect(crossesDayBoundary('', '09:30')).toBe(false);
   });
 });
 

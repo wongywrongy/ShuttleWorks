@@ -14,7 +14,13 @@ rejects our own output is an outage, not a control.
 import uuid
 from datetime import timezone
 from typing import Annotated, List, Literal, Optional, Dict, Any
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 from enum import Enum
 from core.limits import (
     MAX_ASSIGNMENTS,
@@ -41,6 +47,7 @@ from core.limits import (
     StrictModel,
     Timestamp,
 )
+from core.representation import normalize_representation
 from core.time_utils import now_iso
 
 
@@ -49,6 +56,13 @@ HHMMTime = Annotated[
     str,
     StringConstraints(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$"),
 ]
+
+# The controlled "Representing" code (D4 / O4). ``None`` is Unknown — there
+# is no separate flag — and an unlisted code is a 422 rather than a stored
+# string, which is the whole point of a controlled vocabulary. The vocabulary
+# and the normalizer live in ``core.representation``.
+Representation = Annotated[Optional[str], BeforeValidator(normalize_representation)]
+
 
 # Upper bounds for the abstract solver grid. The grid is slots x courts,
 # both small by construction — a day divided into intervals, and a venue's
@@ -259,6 +273,16 @@ class PlayerDTO(StrictModel):
     # If not provided, uses config.defaultRestMinutes
     minRestMinutes: Optional[int] = Field(None, ge=0, le=1440)
     notes: Optional[Notes] = None
+    # The event's "Representing" code (D4 / O4) — the association this
+    # person competes for HERE. Per-workspace by design: a roster row is
+    # tournament-scoped, so last season's code stays on last season's
+    # workspace and this one records what was true at this event. Never
+    # citizenship, never the club (``notes``/``groupId`` carry those), and
+    # never a solver input. ``None`` renders as Unknown.
+    #
+    # ADDITIVE ONLY - no ``CURRENT_TOURNAMENT_SCHEMA_VERSION`` bump; an
+    # older reader ignores an unknown optional key.
+    representation: Representation = None
     # ---- Entries provenance (SP-E1-1, spec §5 Seam A) ----------------
     # Half of the commit seam's back-reference pair: the ``entries.id``
     # this player was materialized from. ``entries.committed_player_id``
@@ -321,6 +345,16 @@ class BracketPlayerDTO(StrictModel):
     name: Annotated[str, StringConstraints(min_length=1, max_length=200)]
     notes: Optional[Notes] = None
     restSlots: Optional[int] = Field(default=None, ge=0, le=MAX_SLOT_INDEX)
+    # The event's "Representing" code (D4 / O4) — the association this
+    # person competes for HERE. Per-workspace by design: a roster row is
+    # tournament-scoped, so last season's code stays on last season's
+    # workspace and this one records what was true at this event. Never
+    # citizenship, never the club (``notes`` carries the club), and
+    # never a solver input. ``None`` renders as Unknown.
+    #
+    # ADDITIVE ONLY - no ``CURRENT_TOURNAMENT_SCHEMA_VERSION`` bump; an
+    # older reader ignores an unknown optional key.
+    representation: Representation = None
     availability: List[AvailabilityWindow] = Field(
         default_factory=list, max_length=MAX_WINDOWS
     )
@@ -741,6 +775,10 @@ class EntrySubmissionDTO(BaseModel):
     accountName: Optional[str] = None
     feeTotalCents: Optional[int] = None
     submittedAt: Optional[str] = None
+    feeCurrency: Optional[str] = None
+    paidCents: int = 0
+    outstandingCents: Optional[int] = None
+    version: int = 1
 
     @classmethod
     def from_row(cls, row) -> Optional["EntrySubmissionDTO"]:
@@ -760,6 +798,10 @@ class EntrySubmissionDTO(BaseModel):
             accountEmail=getattr(account, "email", None),
             accountName=getattr(account, "display_name", None),
             feeTotalCents=row.fee_total_cents,
+            feeCurrency=row.fee_currency,
+            paidCents=row.paid_cents,
+            outstandingCents=row.outstanding_cents,
+            version=row.version,
             submittedAt=row.submitted_at.isoformat() if row.submitted_at else None,
         )
 
@@ -810,7 +852,12 @@ class EntryDeskRowDTO(BaseModel):
     partnerEntryId: Optional[str] = None
     remarks: Optional[str] = None
     listOptOut: bool = False
-    committedPlayerId: Optional[str] = None
+    membershipId: Optional[str] = None
+    unitId: Optional[str] = None
+    competitionEventId: Optional[str] = None
+    membershipStatus: Optional[str] = None
+    unitStatus: Optional[str] = None
+    version: int = 1
     submittedAt: Optional[str] = None
     withdrawnAt: Optional[str] = None
 
@@ -825,33 +872,37 @@ class EntryDeskRowDTO(BaseModel):
             submission=EntrySubmissionDTO.from_row(row.submission),
             playerName=row.player_name,
             entryPlayerId=str(row.entry_player_id) if row.entry_player_id else None,
-            partnerEntryId=str(row.partner_entry_id) if row.partner_entry_id else None,
+            partnerEntryId=str(row.paired_entry_id) if row.paired_entry_id else None,
             remarks=row.remarks,
             listOptOut=bool(row.list_opt_out),
-            committedPlayerId=row.committed_player_id,
+            membershipId=str(row.membership.id) if row.membership else None,
+            unitId=str(row.membership.unit_id) if row.membership else None,
+            competitionEventId=str(row.membership.competition_event_id) if row.membership else None,
+            membershipStatus=row.membership.status if row.membership else None,
+            unitStatus=row.membership.unit.status if row.membership else None,
+            version=row.version,
             submittedAt=row.submitted_at.isoformat() if row.submitted_at else None,
             withdrawnAt=row.withdrawn_at.isoformat() if row.withdrawn_at else None,
         )
 
 
-class EntryCommitOutcomeDTO(BaseModel):
-    """One committed entry: which entry, which roster player it became."""
-    id: str
-    playerId: str
+class EntryBindOutcomeDTO(BaseModel):
+    entryId: str
+    membershipId: str
+    unitId: str
+    competitionEventId: str
+    status: Literal['active', 'withdrawn']
+    outcome: Literal['bound', 'already_bound', 'withdrawn', 'moved']
 
 
 class EntrySkipDTO(BaseModel):
-    """One skipped entry and the stable reason code for the skip.
-
-    Spec §5: partial success is reported per-entry, not rolled back
-    wholesale — so this list is a normal outcome, not an error body.
-    """
-    id: str
+    entryId: str
     reason: str
+    message: str
 
 
-class EntryCommitResultDTO(BaseModel):
-    committed: List[EntryCommitOutcomeDTO] = Field(default_factory=list)
+class EntryBindResultDTO(BaseModel):
+    bindings: List[EntryBindOutcomeDTO] = Field(default_factory=list)
     skipped: List[EntrySkipDTO] = Field(default_factory=list)
 
 
@@ -882,6 +933,7 @@ class EntryPageUpsertDTO(StrictModel):
     # accepts is a tier the pricing will honour", which only
     # ``entries.entry_fees.normalize_fee_schedule`` can answer.
     feeSchedule: Optional[dict] = None
+    feeCurrency: Optional[str] = Field(None, pattern=r"^[A-Z]{3}$")
     paymentInstructions: Optional[Notes] = None
 
     # ---- R14 §4 entry policy -------------------------------------------
@@ -927,6 +979,7 @@ class EntryPageDTO(BaseModel):
     regulationsVersion: int
     regulationsUpdatedAt: Optional[str] = None
     feeSchedule: Optional[dict] = None
+    feeCurrency: Optional[str] = Field(None, pattern=r"^[A-Z]{3}$")
     paymentInstructions: Optional[str] = None
     maxEventsPerPerson: Optional[int] = None
     disciplineCaps: Optional[dict] = None
@@ -963,6 +1016,7 @@ class EntryPageDTO(BaseModel):
             drawsPublished=bool(row.draws_published),
             resultsPublished=bool(row.results_published),
             feeSchedule=row.fee_schedule,
+            feeCurrency=row.fee_currency,
             paymentInstructions=row.payment_instructions,
             maxEventsPerPerson=row.max_events_per_person,
             disciplineCaps=row.discipline_caps,
@@ -1011,7 +1065,7 @@ class EntryEventCreateDTO(StrictModel):
     code: Code
     discipline: Name
     entryType: Literal["singles", "doubles"] = "singles"
-    bracketEventId: Optional[Identifier] = None
+    competitionEventId: Optional[uuid.UUID] = None
     cap: Optional[int] = Field(None, ge=1, le=MAX_PLAYERS)
     feeCents: Optional[int] = Field(None, ge=0, le=100_000_000)
     # R12: the form's default event filter. A ``Literal`` for
@@ -1033,7 +1087,8 @@ class EntryEventDTO(BaseModel):
     code: str
     discipline: str
     entryType: str
-    bracketEventId: Optional[str] = None
+    competitionEventId: Optional[str] = None
+    version: int = 1
     cap: Optional[int] = None
     feeCents: Optional[int] = None
     genderConstraint: Optional[str] = None
@@ -1048,7 +1103,8 @@ class EntryEventDTO(BaseModel):
             code=row.code,
             discipline=row.discipline,
             entryType=row.entry_type,
-            bracketEventId=row.bracket_event_id,
+            competitionEventId=str(row.competition_event_id) if row.competition_event_id else None,
+            version=row.version,
             cap=row.cap,
             feeCents=row.fee_cents,
             genderConstraint=row.gender_constraint,
@@ -1243,7 +1299,7 @@ class BracketCommandRequest(StrictModel):
     """
 
     id: uuid.UUID
-    kind: Literal["record_result"]
+    kind: Literal["record_result", "correct_result"]
     play_unit_id: Identifier
     winner_side: Literal["A", "B"]
     seen_version: Optional[int] = Field(None, ge=0)

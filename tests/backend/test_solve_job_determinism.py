@@ -24,7 +24,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from db.models import Base, SolveJob, Tournament
+from db.models import SolveJob, Tournament
 from solve_rail import solve_jobs
 from solve_rail.solve_runner import run_solve_subprocess
 from solve_rail.solve_worker import SolveWorker
@@ -93,7 +93,8 @@ def _run_one_job_through_the_full_path(captured: list):
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     Session = sessionmaker(
         bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
     )

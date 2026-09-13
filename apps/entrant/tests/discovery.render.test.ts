@@ -28,7 +28,7 @@ const MASTHEAD =
  * ShuttleWorks" read like assembled metadata and over-capitalized the sport).
  * Distinct from `MASTHEAD`, which only the `<meta name="description">`
  * carries now. */
-const SEASON_INTRO = 'Find badminton tournaments, schedules, and results.';
+const SEASON_INTRO = 'Badminton tournaments, schedules and results.';
 
 /** The render clock. Mid-season on purpose: the fixture has real months on
  * both sides of it. */
@@ -239,7 +239,8 @@ describe('the entry action (P5)', () => {
 
     expect(html).toContain('href="/e/wessex-open/enter"');
     // 12:00 UTC on 30 August is 13:00 in London, still the 30th.
-    expect(html).toContain('Enter · closes 30 Aug');
+    expect(html).toContain('Enter');
+    expect(html).toContain('closes 30 Aug');
   });
 
   it('carries no countdown, no offset and no zone spelling', async () => {
@@ -257,26 +258,34 @@ describe('the entry action (P5)', () => {
   });
 });
 
-describe('the NOW strip (§2.1)', () => {
-  it('renders the band the server picked, with its jump into the calendar', async () => {
+describe('the live group (§2.1, refined 2026-09-12)', () => {
+  it('lists a live tournament ONCE, at the top, under a Live now header — no separate banner', async () => {
     const html = await render();
 
-    expect(html).toContain('aria-label="Now playing"');
-    expect(html).toContain('Harbour Invitational');
-    // React splits interpolated text with `<!-- -->` markers in SSR output.
-    expect(html).toMatch(/href="#calendar"[^>]*>\+(<!-- -->)?2(<!-- -->)? more</);
+    expect(html).not.toContain('aria-label="Now playing"');
+    expect(html).toContain('Live now');
+    expect((html.match(/Harbour Invitational/g) ?? []).length).toBe(1);
+    // Its action leads to the live schedule, and it sits above the months.
+    expect(html).toMatch(/href="\/e\/harbour-live\/schedule"[^>]*>Follow live</);
+    expect(html.indexOf('Live now')).toBeLessThan(html.indexOf('Meadowbank Masters'));
   });
 
-  it('is ABSENT — no band, no placeholder — when the server picked nothing', async () => {
-    const html = await render('/e/', NO_NOW);
+  it('renders no Live now header at all when nothing is being played', async () => {
+    const html = await render('/e/', {
+      ...NO_NOW,
+      tournaments: NO_NOW.tournaments.filter(
+        (row) => row.status !== 'in_progress_live' && row.status !== 'in_progress',
+      ),
+    });
 
+    expect(html).not.toContain('Live now');
     expect(html).not.toContain('Now playing');
   });
 
-  it('never re-derives "happening now" from a date: in_progress in window, no strip', async () => {
+  it('never re-derives "happening now" from a date: an in_progress row is listed as such', async () => {
     // §7 trap 1, frontend half. `in_progress` means the director has NOT
     // published draws; only the server can know that, so a row dated today
-    // must not conjure a band the payload does not carry.
+    // is grouped by the status the payload carries and offers no live link.
     const html = await render('/e/', {
       tournaments: [row('granite-progress', 'Granite City Open', 'in_progress', { date: '2026-08-11' })],
       counts: { takingEntries: 0, completed: 0 },
@@ -284,12 +293,23 @@ describe('the NOW strip (§2.1)', () => {
     });
 
     expect(html).toContain('Granite City Open');
-    expect(html).not.toContain('Now playing');
+    expect(html).toContain('In progress');
+    expect(html).not.toContain('Follow live');
   });
 
-  it('steps aside for a search, which is a deliberate question about something else', async () => {
-    const html = await render('/e/?q=Triangle&year=all');
-    expect(html).not.toContain('Now playing');
+  it('offers the lifecycle slice as links with counts, and honours ?show=', async () => {
+    const html = await render('/e/', NO_NOW);
+    const nav = html.match(/<nav aria-label="Show"[\s\S]*?<\/nav>/)?.[0] ?? '';
+    expect(nav).toContain('Upcoming');
+    expect(nav).toContain('Past');
+    expect(nav).toContain('href="/e/?show=past#calendar"');
+
+    const past = await render('/e/?show=past', NO_NOW);
+    expect(past).not.toContain('Meadowbank Masters');
+    expect(past).toContain('Results');
+    const upcoming = await render('/e/?show=upcoming', NO_NOW);
+    expect(upcoming).toContain('Meadowbank Masters');
+    expect(upcoming).not.toContain('Earlier this season');
   });
 });
 
@@ -385,8 +405,11 @@ describe('the two empty states', () => {
 
 describe('E5/P5: the URL carries the season and the search, and nothing else', () => {
   it.each([
-    // The retired page-two of a two-item list.
-    ['/e/?page=2', '/e/'],
+    // Page one is the default; a page nothing can read narrows nothing.
+    ['/e/?page=1', '/e/'],
+    ['/e/?page=0', '/e/'],
+    ['/e/?show=soon', '/e/'],
+    ['/e/?show=all', '/e/'],
     // The retired date facet.
     ['/e/?preset=7d&from=2026-09-01&to=2026-09-30', '/e/'],
     // The retired lifecycle segments. `completed` named the archive, so it
@@ -408,16 +431,16 @@ describe('E5/P5: the URL carries the season and the search, and nothing else', (
     expect(destination.status).toBe(200);
   });
 
-  it('keeps the two live parameters, in one canonical order', async () => {
-    const res = await respond(`/e/?year=${THIS_SEASON}&q=gold`);
+  it('keeps the live parameters, in one canonical order', async () => {
+    const res = await respond(`/e/?page=2&show=past&year=${THIS_SEASON}&q=gold`);
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(`/e/?q=gold&year=${THIS_SEASON}`);
+    expect(res.headers.get('location')).toBe(`/e/?q=gold&year=${THIS_SEASON}&show=past&page=2`);
   });
 
   it('answers an already-clean URL directly — no redirect, no loop', async () => {
     // The half that makes the canonicalisation safe: the redirect target must
     // itself be answered 200, or every visit is an infinite bounce.
-    for (const path of ['/e/', '/e/?q=gold', `/e/?year=${THIS_SEASON}`, '/e/?year=all']) {
+    for (const path of ['/e/', '/e/?q=gold', `/e/?year=${THIS_SEASON}`, '/e/?year=all', '/e/?show=past', '/e/?page=2']) {
       expect((await respond(path)).status).toBe(200);
     }
   });

@@ -36,6 +36,8 @@ export function TournamentFrame({
       orgName={frame.orgName}
       title={frame.title}
       metaLine={frame.metaLine}
+      compactMetaLine={frame.compactMetaLine}
+      variant={frame.variant}
       chip={frame.chip}
       cta={frame.cta}
       phaseAction={frame.phaseAction}

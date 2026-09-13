@@ -40,13 +40,13 @@ EXPECTED = {
     PlayerMatchSideDTO: {"persons", "placeholder", "winner", "seed", "unresolved"},  # v3 pkg 29: the discriminated Side.unresolved (contract §2.1)
     PlayerMatchDTO: {"eventCode", "roundLabel", "sides", "score", "decided", "scheduledTime", "court", "playedOn", "localTime", "courtLabel", "status", "durationMinutes", "updatedAt", "scoresPublished", "reference", "shortReference", "scheduledDate"},  # v3 pkg 29; public-visual-fixes P3: the shared match reference (state-and-formatting §6.1); operator/public remediation P7: the APPROVED day beside the approved time and court
     PlayerHistoryEntryDTO: {"slug", "tournamentName", "date", "endDate", "playerKey", "current", "eventCodes", "drawsPublished", "resultsPublished", "events", "expanded"},  # public-visual-fixes P2 (profile v1); operator/public remediation P6: cross-tournament history carries its per-event detail where it is expanded
-    PlayerPageDTO: {"person", "club", "events", "matches", "history"},  # public-visual-fixes P2
+    PlayerPageDTO: {"person", "club", "events", "matches", "history", "historyNextOffset", "representation"},  # public-visual-fixes P2
     ScheduleDayFacetDTO: {"day", "count"},
     ScheduleSideDTO: {"participantKey", "persons", "placeholder", "unresolved"},  # v3 pkg 29
-    ScheduleMatchDTO: {"matchKey", "source", "eventCode", "discipline", "roundLabel", "status", "scheduledDate", "scheduledTime", "court", "sides", "score", "walkover", "updatedAt", "reference", "shortReference", "winnerSide"},  # public-visual-fixes P3: the shared match reference + the authoritative outcome
+    ScheduleMatchDTO: {"matchKey", "source", "eventCode", "discipline", "roundLabel", "status", "scheduledDate", "scheduledTime", "court", "sides", "score", "walkover", "updatedAt", "reference", "shortReference", "winnerSide", "liveScore"},  # public-visual-fixes P3: the shared match reference + the authoritative outcome
     ScheduleFacetsDTO: {"days", "events", "courts", "states"},
-    MyEntryLineDTO: {"eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner", "partnerInviteMailFailed", "shortReference"},  # v3 pkg 24: delivery flag, no person data. pkg 30 (V3-24-1): the reference of the act this line came from - this account's own name for its own submission, no person data
-    MyTournamentCardDTO: {"slug", "tournamentName", "orgName", "entrantsPublished", "resultsPublished", "date", "venueName", "status", "feeTotalCents", "submittedAt", "events", "submissionId", "withdrawsUntil", "shortReference"},  # v3 pkg 30 (V3-24-1)
+    MyEntryLineDTO: {"pendingReasons", "eventCode", "discipline", "player", "state", "entryId", "canWithdraw", "resultBadge", "partner", "partnerInviteMailFailed", "shortReference"},  # v3 pkg 24: delivery flag, no person data. pkg 30 (V3-24-1): the reference of the act this line came from - this account's own name for its own submission, no person data
+    MyTournamentCardDTO: {"isPast", "feeCurrency", "slug", "tournamentName", "orgName", "entrantsPublished", "resultsPublished", "date", "venueName", "status", "feeTotalCents", "submittedAt", "events", "submissionId", "withdrawsUntil", "shortReference"},  # v3 pkg 30 (V3-24-1)
     ReceiptEntryLineDTO: {"eventCode", "discipline", "player", "partner", "state"},
 }
 

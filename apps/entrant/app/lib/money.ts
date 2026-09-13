@@ -18,3 +18,20 @@
 export function formatCents(cents: number | null): string {
   return cents === null ? '' : (cents / 100).toFixed(2);
 }
+
+/**
+ * An amount WITH its currency where the organizer stated one — `GBP 20.00`
+ * — and the bare figure where they did not (public refinement 2026-09-12).
+ *
+ * The code goes before the figure, as an ISO-4217 code reads, and no symbol
+ * is ever derived from it: a symbol is a locale decision this tier does not
+ * make. The caller that prints a bare figure is responsible for saying,
+ * once, that the currency is not stated — this helper only formats.
+ * `null` cents is still `''`, never `0.00` (see `formatCents`).
+ */
+export function formatMoney(cents: number | null, currency: string | null | undefined): string {
+  const figure = formatCents(cents);
+  if (figure === '') return '';
+  const code = (currency ?? '').trim().toUpperCase();
+  return code === '' ? figure : `${code} ${figure}`;
+}

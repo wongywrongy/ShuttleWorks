@@ -7,6 +7,7 @@
  * border-border, text-2xs uppercase, text-sm font-semibold tabular-nums).
  * The `late` count is tinted with `text-status-warning` when non-zero.
  */
+import { STATE_WORD } from '../../../lib/stateWords';
 import type { RunSummary } from '../runtime/runModel';
 
 interface Props {
@@ -69,7 +70,7 @@ export function RunSummaryBand({ summary, scope }: Props) {
     >
       <StatItem
         testId="run-band-done"
-        label={scope ? `done · ${scope}` : 'done'}
+        label={scope ? `${STATE_WORD.done} · ${scope}` : STATE_WORD.done}
         value={`${done} / ${total}`}
         tone={done === total && total > 0 ? 'text-status-done' : 'text-foreground'}
       />

@@ -28,6 +28,10 @@ import {
   Section,
   SelectInput,
 } from '../../platform/engine-config/SettingsControls';
+import {
+  effectiveRulesSentence,
+  type ScoringValue,
+} from '../../platform/engine-config/ScoringFields';
 
 /** The one sentence the product uses for a generated draw's structure. */
 export const GENERATED_DRAW_LOCK =
@@ -81,6 +85,19 @@ export function BracketDrawDefaults() {
   }, [adopt, tid]);
 
   const generated = (data?.events ?? []).some((event) => event.status && event.status !== 'draft');
+
+  // Scoring is Setup's, not a per-draw setting: the engine stores one set of
+  // rules per workspace and has no per-draw override to offer. Stating the
+  // effective defaults here — read-only, with a route to their one editor —
+  // answers "what will this draw be played to?" without inventing a second
+  // owner for the value.
+  const scoring: ScoringValue = {
+    scoringFormat: textOf(draft, 'scoring') === 'simple' ? 'simple' : 'badminton',
+    pointsPerSet: numberOf(draft, 'pointsPerSet') || 21,
+    setsToWin: numberOf(draft, 'setsToWin') || 2,
+    deuceEnabled: draft?.deuceEnabled !== false,
+    pointCap: numberOf(draft, 'pointCap') || null,
+  };
 
   const update = (field: string, value: unknown) => {
     setSaved(false);
@@ -149,6 +166,22 @@ export function BracketDrawDefaults() {
           last
         />
       ) : null}
+      <Row
+        label="Scoring"
+        readOnly
+        control={
+          <span className="flex flex-wrap items-center justify-end gap-2 text-xs">
+            <span className="text-muted-foreground">{effectiveRulesSentence(scoring)}</span>
+            <Link
+              to={`/tournaments/${tid}/setup/scoring`}
+              className="border border-border px-2 py-1 font-medium text-foreground hover:bg-muted"
+            >
+              Edit defaults
+            </Link>
+          </span>
+        }
+        last
+      />
       <div className="flex justify-end pt-4">
         <FormActions
           dirty={dirty}

@@ -66,7 +66,12 @@ from core.dependencies import (
     require_pre_checkout_configuration_write,
     require_tournament_access,
 )
-from core.schemas import BracketCommandRequest, BracketPlayerDTO, TournamentConfig
+from core.schemas import (
+    BracketCommandRequest,
+    BracketPlayerDTO,
+    Representation,
+    TournamentConfig,
+)
 from repositories import LocalRepository, get_repository
 from scheduler_core.domain.models import (
     SolverOptions,
@@ -245,6 +250,12 @@ class ParticipantIn(StrictModel):
     # StrictModel forbade the extra and turned every such import into a 422.
     personId: Optional[Identifier] = None
     personSource: Optional[Annotated[str, StringConstraints(max_length=200)]] = None
+    # D4 / O4: the "Representing" code, echoed on the read the same way the
+    # keys above are - a field that leaves on the read and is absent on the
+    # write is erased by the console's first roster edit. Rides in ``meta``
+    # rather than a column; ``BracketParticipant`` has always said that is
+    # where a country belongs. An unlisted code is a 422.
+    representation: Representation = None
 
 
 class EventIn(StrictModel):
@@ -293,6 +304,9 @@ class ParticipantOut(BaseModel):
     # the read and is absent on the write is erased on the first edit.
     personId: Optional[str] = None
     personSource: Optional[str] = None
+    # D4 / O4 — the "Representing" code from participant metadata; None is
+    # Unknown.
+    representation: Optional[str] = None
 
 
 class BracketSlotOut(BaseModel):
@@ -1188,8 +1202,8 @@ def _persist_event(
         seeded_count=seeded_count,
         rr_rounds=rr_rounds,
         config=config or {},
-        status=meta.status,
-        commit=commit,
+        status="draft",
+        commit=False,
     )
     repo.brackets.bulk_create_participants(
         tournament_id,
@@ -1204,8 +1218,9 @@ def _persist_event(
             }
             for p in draw.participants.values()
         ],
-        commit=commit,
+        commit=False,
     )
+    repo.brackets.set_event_status(tournament_id, event_id, meta.status, commit=False)
     match_dicts: List[dict] = []
     for round_index, round_pu_ids in enumerate(draw.rounds):
         for match_index, pu_id in enumerate(round_pu_ids):
@@ -1268,7 +1283,7 @@ def _participant_out(participant: Participant) -> ParticipantOut:
         name=participant.name,
         members=(
             list(participant.member_ids)
-            if participant.type == ParticipantType.TEAM and participant.member_ids
+            if participant.member_ids
             else None
         ),
         seed=metadata.get("seed"),
@@ -1276,6 +1291,9 @@ def _participant_out(participant: Participant) -> ParticipantOut:
         sourceEntryId=(metadata.get("sourceEntryId") if isinstance(metadata, dict) else None),
         personId=(metadata.get("personId") if isinstance(metadata, dict) else None),
         personSource=(metadata.get("personSource") if isinstance(metadata, dict) else None),
+        representation=(
+            metadata.get("representation") if isinstance(metadata, dict) else None
+        ),
     )
 
 
@@ -1878,7 +1896,7 @@ def create_bracket(
             Participant(
                 id=p.id,
                 name=p.name,
-                type=(ParticipantType.TEAM if p.members else ParticipantType.PLAYER),
+                type=(ParticipantType.TEAM if len(p.members or []) > 1 else ParticipantType.PLAYER),
                 member_ids=list(p.members or []),
                 metadata={
                     # F-DM-09, generation half: this construction dropped
@@ -1890,6 +1908,11 @@ def create_bracket(
                     **({"entryPlayerId": p.entryPlayerId} if p.entryPlayerId else {}),
                     **({"personId": p.personId} if p.personId else {}),
                     **({"personSource": p.personSource} if p.personSource else {}),
+                    **(
+                        {"representation": p.representation}
+                        if p.representation
+                        else {}
+                    ),
                 },
             )
             for p in ev.participants
@@ -1992,6 +2015,7 @@ def create_bracket(
             time_limit_seconds=body.time_limit_seconds,
             commit=False,
         )
+        session_obj = _hydrate_session(repo, tournament_id)
         snapshot = _serialize_session(session_obj).model_dump(mode="json")
         _append_lifecycle_operation(
             repo,
@@ -2408,45 +2432,46 @@ def upsert_event(
             detail=f"event {event_id!r} is started; cannot edit",
         )
 
-    # For a Generated event, wipe out its assignments from the session
-    # blob before the delete so they don't become orphan references.
-    # We do this by hydrating the session, removing the assignments for
-    # this event's play units, and persisting before deleting the event.
-    if existing is not None and existing.status == "generated":
-        session = _hydrate_session(repo, tournament_id)
-        if session is not None:
-            # Remove assignments belonging to this event.
-            event_pu_ids = [
-                pu_id for pu_id, pu in session.state.play_units.items() if pu.event_id == event_id
-            ]
-            for pu_id in event_pu_ids:
-                session.state.assignments.pop(pu_id, None)
-            _persist_session_metadata(repo, tournament_id, session=session)
+    with repo.transaction():
+        # For a Generated event, wipe out its assignments from the session
+        # blob before the delete so they don't become orphan references.
+        # We do this by hydrating the session, removing the assignments for
+        # this event's play units, and persisting before deleting the event.
+        if existing is not None and existing.status == "generated":
+            session = _hydrate_session(repo, tournament_id)
+            if session is not None:
+                # Remove assignments belonging to this event.
+                event_pu_ids = [
+                    pu_id for pu_id, pu in session.state.play_units.items() if pu.event_id == event_id
+                ]
+                for pu_id in event_pu_ids:
+                    session.state.assignments.pop(pu_id, None)
+                _persist_session_metadata(repo, tournament_id, session=session, commit=False)
 
-    # Validate + default the format-specific config before persisting so a
-    # bad blob fails loudly at upsert time, not at generate time.
-    spec = get_format(body.format)
-    if spec is None:  # unreachable — FormatId validated; defensive
-        raise HTTPException(status_code=400, detail=f"unknown format {body.format!r}")
-    try:
-        normalized_config = spec.normalize_config(dict(body.config or {}), len(body.participants))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        # Validate + default the format-specific config before persisting so a
+        # bad blob fails loudly at upsert time, not at generate time.
+        spec = get_format(body.format)
+        if spec is None:  # unreachable — FormatId validated; defensive
+            raise HTTPException(status_code=400, detail=f"unknown format {body.format!r}")
+        try:
+            normalized_config = spec.normalize_config(dict(body.config or {}), len(body.participants))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
-    repo.brackets.delete_event(tournament_id, event_id)
-    repo.brackets.create_event(
-        tournament_id,
-        event_id,
-        discipline=body.discipline,
-        format=body.format,
-        duration_slots=body.duration_slots,
-        bracket_size=body.bracket_size,
-        seeded_count=body.seeded_count,
-        rr_rounds=body.rr_rounds,
-        config=normalized_config,
-        status="draft",
-    )
-    if body.participants:
+        repo.brackets.delete_event(tournament_id, event_id, commit=False)
+        repo.brackets.create_event(
+            tournament_id,
+            event_id,
+            discipline=body.discipline,
+            format=body.format,
+            duration_slots=body.duration_slots,
+            bracket_size=body.bracket_size,
+            seeded_count=body.seeded_count,
+            rr_rounds=body.rr_rounds,
+            config=normalized_config,
+            status="draft",
+            commit=False,
+        )
         repo.brackets.bulk_create_participants(
             tournament_id,
             event_id,
@@ -2454,7 +2479,7 @@ def upsert_event(
                 {
                     "id": p.id,
                     "name": p.name,
-                    "type": "TEAM" if p.members else "PLAYER",
+                    "type": "TEAM" if len(p.members or []) > 1 else "PLAYER",
                     "member_ids": list(p.members or []),
                     # The source here is the wire ``ParticipantIn``, which
                     # has no free-form ``meta``. Preserve the explicit person
@@ -2470,17 +2495,24 @@ def upsert_event(
                                 if p.personSource
                                 else {}
                             ),
+                            **(
+                                {"representation": p.representation}
+                                if p.representation
+                                else {}
+                            ),
                         }
                     ),
                 }
                 for p in body.participants
             ],
+            commit=False,
         )
-    session = _hydrate_session(repo, tournament_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="no bracket session for this tournament")
-    response_cache.invalidate(tournament_id)
-    return _serialize_session(session)
+
+        session = _hydrate_session(repo, tournament_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="no bracket session for this tournament")
+        response_cache.invalidate(tournament_id)
+        return _serialize_session(session)
 
 
 @router.patch(
@@ -2721,7 +2753,7 @@ def generate_event_route(
         # Persist the RESOLVED config the draw was generated with (e.g.
         # Swiss rounds defaulted from the participant count).
         config=resolved_config,
-        status="generated",
+        status="draft",
         commit=False,
     )
     # 3. Re-persist participants.
@@ -2740,6 +2772,7 @@ def generate_event_route(
         ],
         commit=False,
     )
+    repo.brackets.set_event_status(tournament_id, event_id, "generated", commit=False)
     # 4. Persist matches.
     match_dicts: List[dict] = []
     for round_index, round_pu_ids in enumerate(draw.rounds):
@@ -3092,6 +3125,7 @@ def submit_bracket_command(
         score=body.score,
         reason=body.reason,
         operation_id=body.id,
+        correction=body.kind == "correct_result",
     )
 
     # CRITICAL: this is the one user-visible staleness case — the command
@@ -3373,71 +3407,73 @@ def import_tournament_json(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # Validation is intentionally complete before destructive replacement.
-    # Repository methods currently commit per operation, so this does not make
-    # an infrastructure failure mid-write transactional, but a malformed
-    # import can never erase the existing bracket.
-    if repo.brackets.list_events(tournament_id):
-        _clear_bracket(repo, tournament_id)
+    with repo.transaction():
+        # The replacement and its canonical roster share one commit boundary.
+        if repo.brackets.list_events(tournament_id):
+            _clear_bracket(repo, tournament_id, commit=False)
 
-    # Build session metadata from the slot the parser constructed.
-    events_meta: Dict[str, EventMeta] = {}
-    for ev_id, draw in slot.draws.items():
-        meta = slot.events.get(ev_id)
-        events_meta[ev_id] = EventMeta(
-            id=ev_id,
-            discipline=meta.discipline if meta else ev_id,
-            format=meta.format if meta else "se",
-            duration_slots=meta.duration_slots if meta else 1,
-            bracket_size=meta.bracket_size if meta else None,
-            participant_count=len(draw.participants),
-            status=meta.status if meta else "draft",
-            config=dict(meta.config) if meta else dict(draw.event.parameters),
+        # Build session metadata from the slot the parser constructed.
+        events_meta: Dict[str, EventMeta] = {}
+        for ev_id, draw in slot.draws.items():
+            meta = slot.events.get(ev_id)
+            events_meta[ev_id] = EventMeta(
+                id=ev_id,
+                discipline=meta.discipline if meta else ev_id,
+                format=meta.format if meta else "se",
+                duration_slots=meta.duration_slots if meta else 1,
+                bracket_size=meta.bracket_size if meta else None,
+                participant_count=len(draw.participants),
+                status=meta.status if meta else "draft",
+                config=dict(meta.config) if meta else dict(draw.event.parameters),
+            )
+        session = BracketSession(
+            state=slot.state,
+            draws=slot.draws,
+            events=events_meta,
+            config=slot.config,
+            rest_between_rounds=slot.rest_between_rounds,
+            start_time=slot.start_time,
+            roster_names=_roster_names_for(repo, tournament_id),
         )
-    session = BracketSession(
-        state=slot.state,
-        draws=slot.draws,
-        events=events_meta,
-        config=slot.config,
-        rest_between_rounds=slot.rest_between_rounds,
-        start_time=slot.start_time,
-        roster_names=_roster_names_for(repo, tournament_id),
-    )
 
-    for ev_id, draw in slot.draws.items():
-        meta = events_meta[ev_id]
-        _persist_event(
+        _persist_session_metadata(repo, tournament_id, session=session,
+            time_limit_seconds=body.time_limit_seconds, roster=body.roster, commit=False)
+        for ev_id, draw in slot.draws.items():
+            meta = events_meta[ev_id]
+            _persist_event(
+                repo,
+                tournament_id,
+                event_id=ev_id,
+                meta=meta,
+                draw=draw,
+                state=slot.state,
+                seeded_count=0,
+                rr_rounds=None,
+                config=meta.config,
+                commit=False,
+            )
+        for pu_id, result in slot.state.results.items():
+            ev_id = slot.state.play_units[pu_id].event_id
+            repo.brackets.record_result(
+                tournament_id,
+                ev_id,
+                pu_id,
+                winner_side=result.winner_side.value,
+                score=result.score,
+                finished_at_slot=result.finished_at_slot,
+                walkover=result.walkover,
+                reason=result.reason,
+                commit=False,
+            )
+        _persist_session_metadata(
             repo,
             tournament_id,
-            event_id=ev_id,
-            meta=meta,
-            draw=draw,
-            state=slot.state,
-            seeded_count=0,
-            rr_rounds=None,
-            config=meta.config,
+            session=session,
+            time_limit_seconds=body.time_limit_seconds,
+            commit=False,
         )
-    for pu_id, result in slot.state.results.items():
-        ev_id = slot.state.play_units[pu_id].event_id
-        repo.brackets.record_result(
-            tournament_id,
-            ev_id,
-            pu_id,
-            winner_side=result.winner_side.value,
-            score=result.score,
-            finished_at_slot=result.finished_at_slot,
-            walkover=result.walkover,
-            reason=result.reason,
-        )
-    _persist_session_metadata(
-        repo,
-        tournament_id,
-        session=session,
-        time_limit_seconds=body.time_limit_seconds,
-        roster=body.roster,
-    )
     response_cache.invalidate(tournament_id)
-    return _serialize_session(session)
+    return _serialize_session(_hydrate_session(repo, tournament_id))
 
 
 @router.post(
@@ -3466,9 +3502,6 @@ async def import_tournament_csv(
     is the raw CSV; session config comes in as query params.
     """
     _ensure_tournament_exists(repo, tournament_id)
-    if repo.brackets.list_events(tournament_id):
-        _clear_bracket(repo, tournament_id)
-
     payload = (await request.body()).decode("utf-8", errors="replace")
     try:
         slot = parse_csv_payload(
@@ -3506,38 +3539,44 @@ async def import_tournament_csv(
         roster_names=_roster_names_for(repo, tournament_id),
     )
 
-    for ev_id, draw in slot.draws.items():
-        _persist_event(
+    with repo.transaction():
+        if repo.brackets.list_events(tournament_id):
+            _clear_bracket(repo, tournament_id, commit=False)
+        for ev_id, draw in slot.draws.items():
+            _persist_event(
+                repo,
+                tournament_id,
+                event_id=ev_id,
+                meta=events_meta[ev_id],
+                draw=draw,
+                state=slot.state,
+                seeded_count=0,
+                rr_rounds=None,
+                config=events_meta[ev_id].config,
+                commit=False,
+            )
+        for pu_id, result in slot.state.results.items():
+            ev_id = slot.state.play_units[pu_id].event_id
+            repo.brackets.record_result(
+                tournament_id,
+                ev_id,
+                pu_id,
+                winner_side=result.winner_side.value,
+                score=result.score,
+                finished_at_slot=result.finished_at_slot,
+                walkover=result.walkover,
+                reason=result.reason,
+                commit=False,
+            )
+        _persist_session_metadata(
             repo,
             tournament_id,
-            event_id=ev_id,
-            meta=events_meta[ev_id],
-            draw=draw,
-            state=slot.state,
-            seeded_count=0,
-            rr_rounds=None,
-            config=events_meta[ev_id].config,
+            session=session,
+            time_limit_seconds=time_limit_seconds,
+            commit=False,
         )
-    for pu_id, result in slot.state.results.items():
-        ev_id = slot.state.play_units[pu_id].event_id
-        repo.brackets.record_result(
-            tournament_id,
-            ev_id,
-            pu_id,
-            winner_side=result.winner_side.value,
-            score=result.score,
-            finished_at_slot=result.finished_at_slot,
-            walkover=result.walkover,
-            reason=result.reason,
-        )
-    _persist_session_metadata(
-        repo,
-        tournament_id,
-        session=session,
-        time_limit_seconds=time_limit_seconds,
-    )
     response_cache.invalidate(tournament_id)
-    return _serialize_session(session)
+    return _serialize_session(_hydrate_session(repo, tournament_id))
 
 
 @router.get("/export.json", response_model=TournamentOut, dependencies=[_VIEWER])

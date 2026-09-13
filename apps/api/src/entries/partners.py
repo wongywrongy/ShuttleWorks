@@ -43,18 +43,19 @@ Nothing here commits; callers own the transaction boundary.
 """
 from __future__ import annotations
 
+from db.models import PartnerInvitation
+
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from db.models import Entry, Submission
+from db.models import Entry, EntryEvent, EntryPage
 from entries import lifecycle
-from entries.entry_policy import NEEDS_REVIEW_PERSON
 from identity.auth import _hash_token, normalize_email
 
 #: Set on an entry whose named partner has not accepted yet. Cleared on
@@ -107,11 +108,22 @@ def nominate(session: Session, entry: Entry, email: str) -> Optional[str]:
     except Exception:
         return None
 
+    # Revoke the previous live token before issuing another.
+    for invitation in entry.invitations:
+        if invitation.status == "accepted":
+            raise InvitationUnavailable("This entry already has an accepted partner")
+        if invitation.status == "sent":
+            invitation.status = "revoked"
+            invitation.token_hash = None
+    session.flush()
     token = secrets.token_urlsafe(_TOKEN_BYTES)
-    entry.partner_email = normalized
-    entry.partner_invite_hash = _hash_token(token)
-    entry.partner_invite_expires_at = _utcnow() + timedelta(days=invite_ttl_days())
+    invitation = PartnerInvitation(tournament_id=entry.tournament_id,
+        inviting_entry_id=entry.id, recipient_email=normalized,
+        token_hash=_hash_token(token), expires_at=_utcnow() + timedelta(days=invite_ttl_days()),
+        status="sent")
+    entry.invitations.append(invitation)
     entry.pending_reasons = _with(entry.pending_reasons, AWAITING_PARTNER)
+    session.flush()
     return token
 
 
@@ -128,14 +140,15 @@ def resolve(session: Session, token: str) -> Optional[Entry]:
     """
     if not token:
         return None
-    entry = session.scalars(
-        select(Entry).where(Entry.partner_invite_hash == _hash_token(token))
-    ).first()
-    if entry is None or entry.partner_accepted_at is not None:
+    invitation = session.scalars(select(PartnerInvitation).where(
+        PartnerInvitation.token_hash == _hash_token(token),
+        PartnerInvitation.status == "sent",
+        PartnerInvitation.expires_at > _utcnow(),
+    )).first()
+    if invitation is None:
         return None
-    if entry.partner_invite_expires_at is None:
-        return None
-    if _aware(entry.partner_invite_expires_at) <= _utcnow():
+    entry = session.get(Entry, (invitation.tournament_id, invitation.inviting_entry_id))
+    if entry is None:
         return None
     # An invite to an entry that is no longer live is dead with it: the
     # nominator withdrew, or an operator rejected it, and accepting would
@@ -162,7 +175,7 @@ def conflicting(session: Session, entry: Entry, email: str) -> list[Entry]:
         select(Entry).where(
             Entry.tournament_id == entry.tournament_id,
             Entry.entry_event_id == entry.entry_event_id,
-            Entry.partner_email == normalized,
+            Entry.invitations.any(PartnerInvitation.recipient_email == normalized),
             Entry.state.in_(sorted(lifecycle.LIVE_STATES)),
         )
     )
@@ -173,6 +186,10 @@ def flag_conflict(*entries: Entry) -> None:
     """Mark every entry in an ambiguous pairing. Never resolves one."""
     for entry in entries:
         entry.pending_reasons = _with(entry.pending_reasons, PAIR_CONFLICT)
+
+
+class InvitationUnavailable(ValueError):
+    """The invitation was consumed, expired, or withdrawn before acceptance."""
 
 
 def accept(
@@ -187,6 +204,8 @@ def accept(
     birth_year: Optional[int] = None,
     fee_total_cents: Optional[int] = None,
     fee_basis: Optional[dict] = None,
+    acknowledged: bool = False,
+    reviewed_quote: Optional[str] = None,
 ) -> Entry:
     """The invited principal accepts: build their half and link the pair.
 
@@ -209,73 +228,68 @@ def accept(
     """
     # Local import: ``submissions`` imports this module at top level, so a
     # module-level import here would be a cycle.
-    from entries.submissions import (
-        PlayerInput,
-        adopt_or_mint,
-        has_unresolvable_namesake,
-    )
+    from entries.submissions import PlayerInput, create_submission
+    from entries.entries_public import _event_is_open, _utcnow as event_now
+    from entries.entry_fees import PlayerSelection, compute_fee_total
+    from entries.entries_json import _reviewed_quote
+    from sync.service import tournament_is_checked_out
 
+    invitation = entry.invitation
+    now = _utcnow()
+    if invitation is None or not invitation.token_hash or entry.state not in lifecycle.LIVE_STATES:
+        raise InvitationUnavailable("Invitation is no longer available")
+    invitation_id = invitation.id
+    expected_hash = invitation.token_hash
+    session.execute(update(EntryPage).where(EntryPage.tournament_id == entry.tournament_id)
+                    .values(is_open=EntryPage.is_open))
+    claimed = session.execute(update(PartnerInvitation).where(
+        PartnerInvitation.tournament_id == entry.tournament_id,
+        PartnerInvitation.id == invitation_id,
+        PartnerInvitation.token_hash == expected_hash,
+        PartnerInvitation.status == "sent",
+        PartnerInvitation.expires_at > now,
+    ).values(status="revoked", token_hash=None).execution_options(synchronize_session=False))
+    if claimed.rowcount != 1:
+        raise InvitationUnavailable("Invitation is no longer available")
+    entry = session.get(Entry, (entry.tournament_id, entry.id), populate_existing=True)
+    if entry.state not in lifecycle.LIVE_STATES:
+        raise InvitationUnavailable("Invitation is no longer available")
+    invitation = session.get(PartnerInvitation, (entry.tournament_id, invitation_id), populate_existing=True)
+
+    page = session.get(EntryPage, entry.tournament_id, populate_existing=True)
+    event = session.get(EntryEvent, (entry.tournament_id, entry.entry_event_id), populate_existing=True, with_for_update=True)
+    if (page is None or event is None or not page.is_open
+            or not _event_is_open(event, event_now())
+            or tournament_is_checked_out(session, entry.tournament_id)):
+        raise InvitationUnavailable("This event is no longer accepting entries")
+    from entries.entry_policy import check_policy
+
+    if check_policy(page, [("partner", [event])]) is not None:
+        raise InvitationUnavailable("This entry selection is not permitted")
+    total, basis = compute_fee_total(page, [PlayerSelection("partner", [event])])
+    if not acknowledged or reviewed_quote != _reviewed_quote(page, [str(event.id)], total, basis):
+        raise InvitationUnavailable("Review the current fee and regulations before accepting")
     spec = PlayerInput(
-        full_name=full_name.strip()[:200],
-        gender=gender.strip()[:20],
+        full_name=full_name.strip()[:200], gender=gender.strip()[:20],
         club=(club or "").strip()[:200] or None,
         remarks=(remarks or "").strip()[:2000] or None,
-        birth_year=birth_year,
+        birth_year=birth_year, events=[event],
     )
-    partner_player, adopted = adopt_or_mint(
-        session,
-        entry.tournament_id,
-        account_id,
-        spec,
-        # The accept form asks for a name, a gender and (optionally) a club
-        # — never remarks. A blank here means "this form did not ask", so it
-        # must not wipe what the person recorded on their own earlier entry.
-        blank_clears=False,
+    result = create_submission(
+        session, tournament_id=entry.tournament_id, page=page,
+        account_id=account_id, players=[spec], fee_total_cents=total,
+        fee_basis=basis, commit=False, blank_clears=False,
     )
-    # Mirrors ``submissions._write``: the fork is flagged, never merged
-    # (I4). Carried from P3, where the entry-form path got this and the
-    # invite path did not — the same two rows arriving by a different door
-    # were silent.
-    flag_person = not adopted and has_unresolvable_namesake(
-        session, entry.tournament_id, account_id, spec, exclude_id=partner_player.id
-    )
-    partner_submission = Submission(
-        tournament_id=entry.tournament_id,
-        account_id=account_id,
-        fee_total_cents=fee_total_cents,
-        fee_basis=fee_basis,
-        # The partner agreed to the regulations at the moment they accepted,
-        # against the version live then — the same record Q11 requires of
-        # every other submission, because this one IS a submission.
-        regulations_accepted_at=_utcnow(),
-    )
-    session.add(partner_submission)
-    session.flush()
-
-    partner_entry = Entry(
-        tournament_id=entry.tournament_id,
-        entry_event_id=entry.entry_event_id,
-        submission_id=partner_submission.id,
-        entry_player_id=partner_player.id,
-        # Lands in the same state its nominator is in, minus the partner
-        # question. Not ``confirmed``: an operator confirms entries, and a
-        # partner accepting is not an operator.
-        state=lifecycle.PENDING,
-        pending_reasons=[NEEDS_REVIEW_PERSON] if flag_person else [],
-        partner_entry_id=entry.id,
-        partner_email=entry.contact_email,
-        partner_accepted_at=_utcnow(),
-    )
-    session.add(partner_entry)
-    session.flush()
-
-    entry.partner_entry_id = partner_entry.id
-    entry.partner_accepted_at = _utcnow()
+    partner_entry = result.entries[0]
+    invitation.accepted_entry_id = partner_entry.id
+    invitation.accepted_at = now
+    invitation.status = "accepted"
+    invitation.token_hash = None
     entry.pending_reasons = _without(entry.pending_reasons, AWAITING_PARTNER)
-    # The token is spent. Clearing the hash is what makes acceptance
-    # single-use rather than merely idempotent-looking.
-    entry.partner_invite_hash = None
-    entry.partner_invite_expires_at = None
+    partner_entry.pending_reasons = _without(partner_entry.pending_reasons, AWAITING_PARTNER)
+    session.flush()
+    session.expire(entry, ["invitations", "accepted_invitations"])
+    session.expire(partner_entry, ["invitations", "accepted_invitations"])
 
     # A conflict discovered only now — somebody else accepted first, or the
     # named address entered on their own in the meantime — flags both halves

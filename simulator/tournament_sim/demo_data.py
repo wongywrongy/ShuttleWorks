@@ -31,6 +31,11 @@ Genders and clubs only reach the database through the **Entries** pipeline
 (``entry_players`` carries both); Meet's ``PlayerDTO`` and Bracket's
 ``BracketPlayerDTO`` have no such columns, so on a roster the club rides in
 ``notes``. That asymmetry is the product's, not this file's.
+
+**Representation** (D4 / O4) is the exception, because it IS a first-class
+field on both the entrant row and the roster row. It is derived from the
+club by ``representation_for_club`` and only where the club names a place —
+two clubs stay Unknown on purpose, so the demo shows that state too.
 """
 from __future__ import annotations
 
@@ -607,6 +612,47 @@ assert len({person[0] for person in PLAYERS}) == len(PLAYERS), (
 )
 
 
+# ---- representation (D4 / O4) --------------------------------------------
+# The demo's "Representing" backfill, derived from the ONE fact the pool
+# already carries about where a person plays: the club. Every mapped club
+# names a US city or state, so the code is USA and it is verifiable by
+# reading the club name — not guessed from a surname, which is the mapping
+# this deliberately does not make.
+#
+# Two clubs are unmapped on purpose and their members stay Unknown:
+# "Synergy Badminton Academy" and "Peninsula Shuttle Club" name no place, so
+# there is nothing to verify. That is not an oversight to tidy up later — a
+# demo in which every single row is filled in would never show an operator
+# what the honest Unknown state looks like.
+CLUB_REPRESENTATION: dict[str, str] = {
+    "Austin Badminton Club": "USA",
+    "Balboa Badminton Club": "USA",
+    "Bay Badminton Center": "USA",
+    "Bellevue Badminton Club": "USA",
+    "California Badminton": "USA",
+    "Chicago Badminton Club": "USA",
+    "Dallas Badminton Academy": "USA",
+    "Fremont Badminton Academy": "USA",
+    "Houston Shuttle Club": "USA",
+    "Lewisville Badminton Club": "USA",
+    "Michigan Badminton Club": "USA",
+    "Milpitas Youth BC": "USA",
+    "Music City Shuttlers": "USA",
+    "Nashville Badminton Association": "USA",
+    "Orange County Badminton": "USA",
+    "Portland Feathers BC": "USA",
+    "San Antonio Racquet Club": "USA",
+    "San Diego Badminton Club": "USA",
+    "Seattle Smash BC": "USA",
+    "Tacoma Badminton Club": "USA",
+}
+
+
+def representation_for_club(club: Optional[str]) -> Optional[str]:
+    """The verifiable representation for a club, or ``None`` for Unknown."""
+    return CLUB_REPRESENTATION.get(club or "")
+
+
 def eligible(
     *,
     gender: Optional[str] = None,
@@ -733,6 +779,7 @@ def make_meet_blob(seed: int, spec: dict) -> tuple[dict, dict[str, float]]:
                 "ranks": [],
                 "availability": [],
                 "notes": person_club,
+                "representation": representation_for_club(person_club),
             }
             players[pid] = row
             ratings[pid] = 1200.0 + rating_rng.uniform(-250.0, 250.0)

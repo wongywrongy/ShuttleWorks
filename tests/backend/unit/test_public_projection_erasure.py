@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import uuid
 from datetime import datetime, timezone
 
@@ -51,19 +52,19 @@ def test_erased_people_are_absent_from_entrants_and_reserves(tmp_path, monkeypat
         )
         visible_confirmed = EntryPlayer(
             tournament_id=tournament_id,
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name="Visible Confirmed",
             gender="X",
         )
         visible_reserve = EntryPlayer(
             tournament_id=tournament_id,
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name="Visible Reserve",
             gender="X",
         )
         erased = EntryPlayer(
             tournament_id=tournament_id,
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name="(erased)",
             gender="X",
             erased_at=datetime.now(timezone.utc),
@@ -174,7 +175,7 @@ def test_mixed_event_visibility_is_scoped_without_parsing_rank_names(
         submission = Submission(tournament_id=tournament_id, account_id=account.id)
         player = EntryPlayer(
             tournament_id=tournament_id,
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name="Ada Visible Once",
             gender="X",
             club="Privacy BC",
@@ -184,14 +185,12 @@ def test_mixed_event_visibility_is_scoped_without_parsing_rank_names(
             code="MS",
             discipline="Men's Singles",
             entry_type="singles",
-            meet_event_id="MS",
         )
         ws = EntryEvent(
             tournament_id=tournament_id,
             code="WS",
             discipline="Women's Singles",
             entry_type="singles",
-            meet_event_id="WS",
         )
         session.add_all([submission, player, ms, ws])
         session.flush()

@@ -1,3 +1,4 @@
+import stateMachines from '@scheduler/shared-contract/state-machines.json';
 /**
  * The client match-state machine must MIRROR the backend contract
  * (`backend/services/match_state.py::VALID_TRANSITIONS`). Interaction-audit
@@ -16,12 +17,12 @@ import {
 
 describe('matchTransitions — mirrors the backend contract', () => {
   it('pins the table (client `started` === backend `playing`)', () => {
-    expect(VALID_TRANSITIONS).toEqual({
-      scheduled: ['called', 'scheduled'],
-      called: ['started', 'scheduled', 'called'],
-      started: ['finished', 'scheduled', 'started'],
-      finished: ['started', 'finished'],
-    });
+    for (const state of stateMachines.machines.match.states) {
+      const wire = (value: string) => value === 'playing' ? 'started' : value;
+      const targets = stateMachines.machines.match.transitions
+        .filter((t) => t.from_states.includes(state)).map((t) => wire(t.to));
+      expect(VALID_TRANSITIONS[wire(state) as keyof typeof VALID_TRANSITIONS]).toEqual([...targets, wire(state)]);
+    }
   });
 
   it('permits the transitions the backend permits', () => {

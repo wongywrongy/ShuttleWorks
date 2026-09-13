@@ -224,6 +224,68 @@ def test_monrad_full_n6_byes():
     assert p7_8_final.walkover is True
 
 
+# ---- 4b. Plate consolation: only REAL first-round losers qualify (O8) --------
+
+
+def test_monrad_plate_n8_every_entrant_plays_twice():
+    """A full 8-draw plate: all four R0 losers enter, everyone plays twice."""
+    draw = generate_monrad(
+        _participants(8), event_id="E", play_unit_id_prefix="E",
+        consolation="plate",
+    )
+    state = _register(draw)
+    _play_all(state, draw)
+    assert set(state.results) == set(draw.play_units)
+
+    plate_entrants = set()
+    for pu_id in draw.segments[1].rounds[0]:
+        pu = state.play_units[pu_id]
+        plate_entrants.update((pu.side_a or []) + (pu.side_b or []))
+    r0_losers = set()
+    for pu_id in draw.segments[0].rounds[0]:
+        pu = state.play_units[pu_id]
+        result = state.results[pu_id]
+        loser = pu.side_b if result.winner_side == WinnerSide.A else pu.side_a
+        r0_losers.update(loser or [])
+    assert plate_entrants == r0_losers
+    assert len(plate_entrants) == 4
+    # 7 main + 3 plate: the plate adds exactly bracket_size/2 - 1 matches,
+    # which is what the New-draw modal quotes to the director.
+    assert len(draw.play_units) == 7 + 3
+
+
+def test_monrad_plate_n6_byes_are_not_losers():
+    """A bye's "loser" is nobody: it never takes a plate place.
+
+    N=6 in a bracket of 8 gives two first-round byes. Their walkover
+    "losers" cascade as BYE, so the plate is contested by the two REAL
+    first-round losers alone — not padded with phantom entrants.
+    """
+    draw = generate_monrad(
+        _participants(6), event_id="E", play_unit_id_prefix="E",
+        consolation="plate",
+    )
+    state = _register(draw)
+    _play_all(state, draw)
+    assert set(state.results) == set(draw.play_units)
+
+    # Both plate semifinals are walkovers (one side fed by a bye match).
+    for pu_id in draw.segments[1].rounds[0]:
+        assert state.results[pu_id].walkover is True
+    plate_final_id = draw.segments[1].rounds[-1][0]
+    final = state.play_units[plate_final_id]
+    real_r0_losers = set()
+    for pu_id in draw.segments[0].rounds[0]:
+        pu = state.play_units[pu_id]
+        if not pu.side_a or not pu.side_b:
+            continue  # a bye — nobody lost it
+        result = state.results[pu_id]
+        loser = pu.side_b if result.winner_side == WinnerSide.A else pu.side_a
+        real_r0_losers.update(loser or [])
+    assert set((final.side_a or []) + (final.side_b or [])) == real_r0_losers
+    assert state.results[plate_final_id].walkover is False
+
+
 # ---- 5. Registry config -------------------------------------------------------
 
 

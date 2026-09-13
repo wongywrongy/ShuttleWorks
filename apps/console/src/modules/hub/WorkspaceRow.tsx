@@ -1,39 +1,43 @@
 /**
  * A single workspace row in the Hub's dense list.
  *
- * The row reads left → right as **who / when**, then **what it runs / what to
- * do next**:
+ * The Hub answers one question — *which tournament do I want to open?* — so
+ * the row is a plain table row in one fixed column order (D2):
  *
- *   [•] Name  2026-07-28 → 08-03            M B D   Open live day   ⋯
+ *   [•] Tournament                2026-07-28 – 08-03   Live    [Open]   ⋯
  *
- * Left: an attention DOT (only when something is wrong) and the workspace
- * name, followed by the numeric event date. The dot replaced a column of
- * multi-line attention prose — a paragraph per row, wrapping, on the one
- * surface whose job is to say *which* workspace needs the director. The dot
- * says THAT; the inspector says what, in full. It is a real button with an
- * accessible label, so touch and keyboard reach it (a bare tinted span reached
- * neither).
+ * - **Tournament** is flexible width and carries the stored name verbatim,
+ *   with no appended date (the Dates column owns that).
+ * - **Dates** has a stable width, so a long name or a missing status can never
+ *   shift it.
+ * - **Status** is readable text — Draft / Upcoming / Live / Completed /
+ *   Archived, never blank (see workspaceStatus.ts for the precedence).
+ * - **Open** has the SAME label and the same destination on every row (the
+ *   workspace Overview). It used to be a per-row "next action" whose words and
+ *   landing surface changed row to row, which made the one thing a list is for
+ *   — a predictable click — unpredictable.
+ * - **Actions** holds Settings and, separated, the destructive Delete.
  *
- * Right: module glyphs (each with an accessible name), the plain-language next
- * action, and the overflow menu. Destructive actions never sit inline.
+ * The attention DOT stays on the name: it says THAT something is wrong without
+ * spending a column on prose, and the preview panel says what.
+ *
+ * Selecting the row opens the preview panel; it never navigates.
  */
 import type { TournamentSummaryDTO } from '../../api/dto';
+import { Button } from '@scheduler/design-system';
 import {
   OverflowMenu,
   COL_PRIORITY_CLASS,
   type OverflowItem,
 } from '../../components/control-plane';
-import { lifecycleChip } from '../../platform/domain/lifecycle';
-import { modulesForWorkspace, modulesFromDto } from '../../platform/domain/moduleModel';
 import { attentionReasons, workspaceHealth } from './hubSignals';
-import { rowActionFor } from './nextAction';
-import { type HubGroupId } from './hubGrouping';
 import { formatEventRange } from './workspaceLabel';
+import { workspaceStatusClass, workspaceStatusLabel } from './workspaceStatus';
 
 /** The attention dot. Silent when nothing is wrong — a calm list is the point.
  *  When something is, it is a focusable control whose accessible name states
  *  the leading reason and how many more there are; activating it opens the
- *  inspector, where every reason is listed. */
+ *  preview panel, where the exception is named. */
 function AttentionDot({
   tournament,
   onOpenDetails,
@@ -66,76 +70,33 @@ function AttentionDot({
   );
 }
 
-/** Enabled-module glyphs. One letter each, every one with an accessible name —
- *  a lone "M" is meaningless to a screen reader and to a new operator. */
-function ModuleGlyphs({ tournament }: { tournament: TournamentSummaryDTO }) {
-  const modules = (
-    tournament.modules ? modulesFromDto(tournament.modules) : modulesForWorkspace(tournament.kind)
-  ).filter((m) => m.status === 'enabled');
-  if (modules.length === 0) return null;
-  return (
-    <span
-      data-testid="row-modules"
-      aria-label="Enabled modules"
-      className={['flex shrink-0 items-center gap-1', COL_PRIORITY_CLASS[3]].join(' ')}
-    >
-      {modules.map((m) => (
-        <span
-          key={m.id}
-          role="img"
-          aria-label={m.label}
-          title={m.label}
-          className="flex h-4 w-4 items-center justify-center rounded-xs bg-surface-chip text-2xs font-semibold uppercase text-muted-foreground"
-        >
-          {m.label.slice(0, 1)}
-        </span>
-      ))}
-    </span>
-  );
-}
-
 interface RowProps {
   tournament: TournamentSummaryDTO;
-  group: HubGroupId;
-  /** False when NO visible row has a date — the whole date slot is hidden
-   *  instead of rendering a rail of muted em-dashes (2026-07 cleanup). */
-  showDate?: boolean;
+  /** "Now", injected so the derived status is testable and matches the list. */
+  now: Date;
   selected: boolean;
-  /** False when every visible row would carry the SAME lifecycle chip — the
-   *  view already states it once, so repeating it per row is decoration. */
-  showLifecycleBadge?: boolean;
   onSelect: () => void;
-  onOpen: (segment?: string) => void;
-  onSetDate: () => void;
+  onOpen: () => void;
   onSettings: () => void;
   onDelete?: () => void;
 }
 
 export function WorkspaceRow({
   tournament,
-  group,
-  showDate = true,
+  now,
   selected,
-  showLifecycleBadge = true,
   onSelect,
   onOpen,
-  onSetDate,
   onSettings,
   onDelete,
 }: RowProps) {
-  const action = rowActionFor(tournament, group);
-  const badge = showLifecycleBadge
-    ? lifecycleChip(tournament.signals?.phase, tournament.status)
-    : null;
   const dateLabel = formatEventRange(tournament);
-  // "Set date" (and any reason-coded setup step) is the attention-y next
-  // action — it warms to amber; Open/View results stay quiet.
-  const attention = action.kind === 'set-date';
+  const status = workspaceStatusLabel(tournament, now);
 
   const overflowItems: OverflowItem[] = [
     {
       key: 'settings',
-      label: 'Open administration',
+      label: 'Open settings',
       to: `/tournaments/${encodeURIComponent(tournament.id)}/administration/lifecycle`,
       onSelect: onSettings,
     },
@@ -145,9 +106,9 @@ export function WorkspaceRow({
   ];
 
   return (
-    // A plain clickable region for selecting the row (populates the inspector).
-    // Not a role=button/option: it embeds interactive children (the action
-    // text-button + overflow menu), which ARIA forbids inside a widget role.
+    // A plain clickable region for selecting the row (populates the preview
+    // panel). Not a role=button/option: it embeds interactive children (Open
+    // and the overflow menu), which ARIA forbids inside a widget role.
     <div
       onClick={onSelect}
       className={[
@@ -158,56 +119,44 @@ export function WorkspaceRow({
           : 'hover:bg-muted/40',
       ].join(' ')}
     >
-      {/* NAME + DATE lead: the two facts the director scans a Hub for. */}
+      {/* TOURNAMENT — flexible; the stored name, unedited, with no date. */}
       <span className="flex min-w-[12rem] flex-1 items-center gap-2.5">
         <AttentionDot tournament={tournament} onOpenDetails={onSelect} />
         <span className="min-w-0 break-words text-2sm font-semibold text-foreground">
           {(tournament.name ?? '').trim() || 'Untitled'}
         </span>
-        {showDate && dateLabel ? (
-          <span
-            data-testid="row-date"
-            className="shrink-0 text-2xs sw-num text-muted-foreground"
-          >
-            {dateLabel}
-          </span>
-        ) : null}
-        {badge ? (
-          <span data-testid="row-lifecycle" className="shrink-0 text-xs text-muted-foreground">
-            {badge.text}
-          </span>
-        ) : null}
       </span>
 
-      <ModuleGlyphs tournament={tournament} />
+      {/* DATES — stable width, so neither a long name nor a long status can
+          move it. `sw-num` keeps the digits aligned down the column. */}
+      <span
+        data-testid="row-date"
+        className={['w-36 shrink-0 text-2xs sw-num', dateLabel ? 'text-muted-foreground' : 'text-ink-faint', COL_PRIORITY_CLASS[2]].join(' ')}
+      >
+        {dateLabel ?? 'No date set'}
+      </span>
 
-      {/* NEXT ACTION — the point of the control-plane model, so it reads as
-          the row's call to action rather than as another metadata column. */}
-      <button
-        type="button"
-        data-testid="row-next-action"
+      {/* STATUS — always a word, never a blank cell. */}
+      <span
+        data-testid="row-status"
+        className={`w-24 shrink-0 text-xs ${workspaceStatusClass(status)}`}
+      >
+        {status}
+      </span>
+
+      {/* OPEN — one label, one destination, on every row. */}
+      <Button
+        size="xs"
+        variant="outline"
+        data-testid="row-open"
         onClick={(e) => {
           e.stopPropagation();
-          if (action.kind === 'set-date') onSetDate();
-          else onOpen(action.segment);
+          onOpen();
         }}
-        className={[
-          'flex w-40 shrink-0 items-center justify-between gap-1 rounded-sm px-2 py-1 text-left text-xs',
-          'transition-colors duration-fast ease-brand',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-          attention
-            ? 'text-status-warning group-hover:bg-status-warning/10'
-            : 'text-accent group-hover:bg-action-selected-bg group-hover:text-action-selected-foreground',
-        ].join(' ')}
+        className="shrink-0"
       >
-        <span className="min-w-0 break-words">{action.label}</span>
-        <span
-          aria-hidden
-          className="shrink-0 opacity-0 transition-opacity duration-fast ease-brand group-hover:opacity-100"
-        >
-          &rsaquo;
-        </span>
-      </button>
+        Open
+      </Button>
 
       {/* Quiet at rest, not absent: `:hover` never fires on a touch device. */}
       <span className="opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

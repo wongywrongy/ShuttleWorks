@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from db.models import Base, Match, Tournament
+from db.models import Match, Tournament
 from ops.seed_repair import canonical_tournament_name, run
 
 
@@ -41,7 +41,7 @@ def _document(title: str) -> dict:
         },
         "bracketPlayers": [
             {"id": "player-1", "name": "Aaron Chia"},
-            {"id": "entry-9", "name": "Hsu Yin-hui", "personId": "P0500"},
+            {"id": "roster-9", "name": "Hsu Yin-hui", "personId": "P0500"},
             {"id": "player-3", "name": "Nobody From The Table"},
         ],
     }
@@ -53,7 +53,8 @@ def fixture_db(tmp_path):
     path = tmp_path / "fixture.db"
     url = f"sqlite:///{path}"
     engine = create_engine(url, future=True)
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     session = sessionmaker(bind=engine, future=True)()
     session.add_all(
         [
@@ -206,7 +207,7 @@ def test_person_ids_are_backfilled_additively_and_only_once(fixture_db, manifest
     assert roster["player-1"]["personSource"] == "bwf-recent:0123456789ab"
     # An existing id is never re-keyed, and a name absent from the reviewed
     # table is left without one rather than given an invented value.
-    assert roster["entry-9"]["personId"] == "P0500"
+    assert roster["roster-9"]["personId"] == "P0500"
     assert "personId" not in roster["player-3"]
 
     second = run(manifest_path=manifest, database_url=url, person_map_path=person_map)

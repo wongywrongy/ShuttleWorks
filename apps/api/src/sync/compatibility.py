@@ -9,11 +9,10 @@ these predicates at every protocol boundary.
 """
 from __future__ import annotations
 
-# The current release plus the previous two protocol releases.  Do not replace
-# these tuples with a range check; removing a release is an intentional
-# compatibility decision and should be visible in review.
-SUPPORTED_OPERATION_SCHEMA_VERSIONS: tuple[int, ...] = (1, 2, 3)
-SUPPORTED_CHECKPOINT_SCHEMA_VERSIONS: tuple[int, ...] = (1, 2, 3)
+# Current-only until the first external install (GA). Keep the explicit
+# allow-list and quarantine boundaries; the N-2 window activates at GA.
+SUPPORTED_OPERATION_SCHEMA_VERSIONS: tuple[int, ...] = (1,)
+SUPPORTED_CHECKPOINT_SCHEMA_VERSIONS: tuple[int, ...] = (1,)
 
 CURRENT_OPERATION_SCHEMA_VERSION = SUPPORTED_OPERATION_SCHEMA_VERSIONS[-1]
 CURRENT_CHECKPOINT_SCHEMA_VERSION = SUPPORTED_CHECKPOINT_SCHEMA_VERSIONS[-1]

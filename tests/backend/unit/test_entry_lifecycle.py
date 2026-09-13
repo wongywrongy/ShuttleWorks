@@ -22,7 +22,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from db.models import (
-    Base,
     EntrantAccount,
     Entry,
     EntryEvent,
@@ -47,7 +46,8 @@ def session():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     s = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
     try:
         yield s
@@ -367,11 +367,22 @@ def test_a_committed_entry_keeps_its_roster_link_when_withdrawn(session, world):
     """
     entry = _submit(session, world).entries[0]
     entry.state = lifecycle.CONFIRMED
-    entry.committed_player_id = "roster-player-7"
+    from competition.catalog import seed_catalog, catalog_id
+    from competition.service import bind
+    from db.models import CompetitionEvent
+    seed_catalog(session)
+    target = CompetitionEvent(tournament_id=world["tid"], category_code="MS", format_version_id=catalog_id("singles/1"))
+    session.add(target); session.flush()
+    world["events"]["MS"].competition_event_id = target.id
+    session.commit()
+    bind(session, world["tid"]); session.commit()
+    session.refresh(entry)
+    membership_id = entry.membership.id
 
     lifecycle.withdraw(session, entry, world["events"]["MS"])
 
-    assert entry.committed_player_id == "roster-player-7"
+    assert entry.membership.id == membership_id
+    assert entry.membership.status == "withdrawn"
     assert lifecycle.committed_and_withdrawn([entry]) == [entry]
 
 
@@ -417,6 +428,8 @@ def test_promote_moves_a_waitlisted_entry_to_pending_and_clears_over_cap(
 ):
     _submit(session, world, event_codes=("WS",), name="First In")
     entry = _submit(session, world, event_codes=("WS",), name="Second In").entries[0]
+    entry.player.gender = "M"
+    world["events"]["WS"].gender_constraint = "female"
     entry.pending_reasons = [lifecycle.OVER_CAP, "gender_mismatch"]
 
     lifecycle.promote(entry)

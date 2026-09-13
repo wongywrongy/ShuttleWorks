@@ -11,15 +11,24 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { bootScheduleFilters } from '../public/assets/schedule-filters.js';
+import {
+  activeFilterCount,
+  bootScheduleFilters,
+  filterSummaryLabel,
+  syncFilterDisclosure,
+} from '../public/assets/schedule-filters.js';
 
 function form(): HTMLFormElement {
   document.body.innerHTML = `
     <form data-schedule-filters method="get" action="/e/spring-open/schedule">
       <input type="hidden" name="organization" value="time" />
-      <select name="event"><option value="">All events</option><option value="MS">MS</option></select>
       <input type="search" name="player" />
-      <button type="submit" class="sr-only">Apply filters</button>
+      <details data-schedule-more open>
+        <summary><span data-schedule-more-label>Filters</span></summary>
+        <select name="event"><option value="">All events</option><option value="MS">MS</option></select>
+        <select name="court"><option value="">All courts</option><option value="1">Court 1</option></select>
+        <button type="submit" class="sr-only">Apply filters</button>
+      </details>
     </form>
   `;
   return document.querySelector('[data-schedule-filters]') as HTMLFormElement;
@@ -56,5 +65,45 @@ describe('bootScheduleFilters', () => {
     element.requestSubmit = undefined;
     expect(() => bootScheduleFilters(element)).not.toThrow();
     expect(() => bootScheduleFilters(null)).not.toThrow();
+  });
+});
+
+describe('the phone-width filter disclosure (refinement 2026-09-12)', () => {
+  it('counts the active secondary filters and spells the summary from them', () => {
+    const element = form();
+    expect(activeFilterCount(element)).toBe(0);
+    expect(filterSummaryLabel(0)).toBe('Filters');
+    (element.querySelector('select[name="event"]') as HTMLSelectElement).value = 'MS';
+    expect(activeFilterCount(element)).toBe(1);
+    expect(filterSummaryLabel(1)).toBe('Filters · 1');
+  });
+
+  it('closes the disclosure on a phone only when nothing in it is active, and never on a wide screen', () => {
+    const narrowIdle = form();
+    syncFilterDisclosure(narrowIdle, true);
+    expect((narrowIdle.querySelector('[data-schedule-more]') as HTMLDetailsElement).open).toBe(false);
+    expect(narrowIdle.querySelector('[data-schedule-more-label]')?.textContent).toBe('Filters');
+
+    const narrowActive = form();
+    (narrowActive.querySelector('select[name="event"]') as HTMLSelectElement).value = 'MS';
+    syncFilterDisclosure(narrowActive, true);
+    expect((narrowActive.querySelector('[data-schedule-more]') as HTMLDetailsElement).open).toBe(true);
+    expect(narrowActive.querySelector('[data-schedule-more-label]')?.textContent).toBe('Filters · 1');
+
+    const wide = form();
+    syncFilterDisclosure(wide, false);
+    expect((wide.querySelector('[data-schedule-more]') as HTMLDetailsElement).open).toBe(true);
+  });
+
+  it('boots the disclosure from the width the page reports, and the fallback stays open without it', () => {
+    const element = form();
+    element.requestSubmit = vi.fn();
+    bootScheduleFilters(element, () => ({ matches: true }));
+    expect((element.querySelector('[data-schedule-more]') as HTMLDetailsElement).open).toBe(false);
+
+    const noMedia = form();
+    noMedia.requestSubmit = vi.fn();
+    bootScheduleFilters(noMedia);
+    expect((noMedia.querySelector('[data-schedule-more]') as HTMLDetailsElement).open).toBe(true);
   });
 });

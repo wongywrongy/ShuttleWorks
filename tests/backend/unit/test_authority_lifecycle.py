@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 import pytest
 from db.models import (
     AuthorityTransition,
-    Base,
     EventOperation,
     SyncCheckpoint,
     SyncInbox,
@@ -30,7 +29,8 @@ from sync.service import (
 
 def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return Session(engine, expire_on_commit=False)
 
 
@@ -55,8 +55,8 @@ def _tournament(session: Session) -> uuid.UUID:
         Tournament(
             id=tournament_id,
             name="Lifecycle proof",
-            data={"version": 2},
-            schema_version=2,
+            data={"version": 1},
+            schema_version=1,
         )
     )
     session.commit()
@@ -85,7 +85,7 @@ def _recovery_checkpoint(
     replayed_operation_ids: list[str],
 ) -> dict[str, object]:
     checkpoint = checkpoint_package(
-        session.get(Tournament, tournament_id), schema_version=3, session=session
+        session.get(Tournament, tournament_id), schema_version=1, session=session
     )
     checkpoint["recovery"] = {
         "sourceAuthorityEpoch": authority_epoch,
@@ -121,7 +121,7 @@ def _receipt(
             payload={"winnerSide": "A"},
             occurred_at_local=now,
             accepted_at_node=now,
-            schema_version=3,
+            schema_version=1,
         )
     )
     session.add(

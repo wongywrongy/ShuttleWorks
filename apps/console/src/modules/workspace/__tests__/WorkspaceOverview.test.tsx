@@ -147,7 +147,11 @@ describe('WorkspaceOverview', () => {
         setup: { configured: true, roster: true, scheduled: true, results: true },
       });
       renderOverview(s);
-      expect(screen.getByTestId('overview-ready-summary')).toHaveTextContent(/setup complete/i);
+      // The summary names exactly what it counted — the setup STEPS — rather
+      // than claiming the workspace as a whole is complete (D2).
+      expect(screen.getByTestId('overview-ready-summary')).toHaveTextContent(
+        /setup steps done · 4 of 4/i,
+      );
       expect(screen.queryByTestId('overview-checklist')).toBeNull();
       screen.getByRole('button', { name: 'Open live day' }).click();
       expect(navigate).toHaveBeenCalledWith('/tournaments/t1/operations/live');

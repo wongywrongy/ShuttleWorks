@@ -102,6 +102,7 @@ def compute_fee_total(
     )
     return total, {
         "basis": basis,
+        **({"currency": page.fee_currency} if getattr(page, "fee_currency", None) else {}),
         # String keys, because this dict is written to a JSON column and a
         # JSON object has no integer keys: storing ``{1: 4000}`` would read
         # back as ``{"1": 4000}`` and a later equality check against the

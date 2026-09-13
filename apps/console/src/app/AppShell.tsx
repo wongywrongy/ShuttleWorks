@@ -87,7 +87,7 @@ export function resolveActivePane(
     primary,
     primaryLabel:
       active?.status === 'coming-soon'
-        ? 'Administration · Modules'
+        ? 'Settings · Modules'
         : primary === 'display'
           ? 'Displays'
           : primary === 'entries'
@@ -321,7 +321,7 @@ export function AppShell() {
                   : undefined
               }
               // SWP-9/DC-2: no second enable path — the panel's primary
-              // action routes to Administration · Modules, the one owner of
+              // action routes to Settings · Modules, the one owner of
               // module enablement (where cloud-only gating is explained too).
             />
           )}

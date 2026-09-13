@@ -270,3 +270,11 @@ absent because the current code does not implement them**:
 - [System overview](/explanation/architecture/system-overview) · [Data flow](/explanation/architecture/data-flow)
 - [What a module contract is](/reference/contracts/) · [Quality attributes](/explanation/architecture/quality-attributes)
 - [Operational scenarios](/explanation/architecture/operational-scenarios)
+
+## Registration and competition
+
+- **Unit:** one side eligible to compete in an event: one singles player or a doubles pair.
+- **Membership:** a player's tournament-scoped seat in a unit. Its source entry is optional only for manual roster additions. Withdrawal retains the row.
+- **Bind:** realize confirmed registration entries as units and memberships. Membership existence records binding; it is not an entry state.
+- **Draw instance:** one numbered revision of an event's draw. Draw-slot and match-side references are deferred to the next competition specification.
+- **Tournament player:** the tournament-scoped human stored in `entry_players`; accounts act for players through `player_representatives`.
