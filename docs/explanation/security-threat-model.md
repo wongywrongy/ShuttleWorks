@@ -41,3 +41,10 @@ boundary changes. CI checks its coverage and verifies that every entry has an
 owner and executable or inspectable evidence. That check does not replace a
 penetration test, hostile-LAN exercise, live-event rehearsal, or production
 risk review; those remain Phase 5 exit criteria.
+
+The register's `principles` array tracks exactly R1–R12 with `enforcedBy` and
+`evidence` paths, owner, dated review, verdict and residual debt. CI rejects
+missing/duplicate rules, malformed evidence and unsupported PASS claims. The
+[baseline review](../reviews/security-golden-rules-2026-09-13.md) is preserved;
+the [implementation review](../reviews/security-remediation-2026-09-13.md) records
+later changes and distinguishes synthetic checks from operational rehearsals.
