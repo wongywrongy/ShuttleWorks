@@ -101,6 +101,8 @@ test('security controls use immutable action references and cover all required s
   assert.match(security, /format: spdx-json/)
   assert.match(security, /npm-audit:/)
   assert.match(security, /python-audit:/)
+  assert.match(security, /source-secrets:/)
+  assert.match(security, /python3 tools\/check-source-secrets\.py/)
   assert.match(security, /severity:\s*HIGH,CRITICAL/)
   assert.match(security, /limit-severities-for-sarif:\s*true/)
   assert.match(security, /ignore-unfixed:\s*false/)
@@ -119,7 +121,7 @@ test('stable aggregate checks cover every CI and security job', () => {
     assert.match(ci, new RegExp(`\\n\\s*- ${job}\\n`))
   }
   assert.match(security, /required-security:\s*\n\s*name: Required security/)
-  for (const job of ['codeql', 'dependency-review', 'npm-audit', 'python-audit', 'container-scan', 'sbom']) {
+  for (const job of ['codeql', 'dependency-review', 'npm-audit', 'python-audit', 'container-scan', 'source-secrets', 'sbom']) {
     assert.match(security, new RegExp(`\\n\\s*- ${job}\\n`))
   }
 })

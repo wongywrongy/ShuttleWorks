@@ -3,7 +3,16 @@
 Every pull request and push to main runs the security workflow. It performs CodeQL
 analysis for the Python and TypeScript surfaces, reviews changed dependency
 files, audits runtime dependencies, scans each container for high and critical
-CVEs, and publishes an SPDX source SBOM as a workflow artifact.
+CVEs, scans the checked-out commit for secrets, and publishes an SPDX source SBOM
+as a workflow artifact.
+
+Run `python3 tools/check-source-secrets.py` from the repository on Linux with
+Docker available to reproduce the source-secret gate. It uses a digest-pinned
+image and the [Trivy secret scanner](https://trivy.dev/docs/latest/scanner/secret/)
+built-in rules and exclusions. An unissued synthetic token must be detected and
+an empty control must pass before the committed tree is scanned. Matched values
+are never printed or uploaded; only file, line and rule identifiers leave the
+temporary report. This scan does not inspect uncommitted files or Git history.
 
 Release publication remains gated on the latest completed successful CI and
 security runs for the exact source commit. A missing, queued, stale, cancelled,
