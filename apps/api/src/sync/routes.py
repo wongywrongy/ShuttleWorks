@@ -60,6 +60,9 @@ class SyncHTTPError(Exception):
 
 def sync_error_response(_request, exc: SyncHTTPError) -> JSONResponse:  # noqa: ANN001
     error = exc.protocol_error
+    if error.status_code == 404:
+        from core.error_codes import resource_not_found
+        return JSONResponse(status_code=404, content={"detail": resource_not_found().detail})
     return JSONResponse(status_code=error.status_code, content=error.body())
 
 

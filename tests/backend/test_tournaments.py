@@ -632,7 +632,7 @@ def test_role_matrix_operator_can_read_write_but_not_delete(client):
     assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 200
     assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 200
     # DELETE / restore are owner-only.
-    assert client.delete(f"/tournaments/{tid}").status_code == 403
+    assert client.delete(f"/tournaments/{tid}").status_code == 404
 
 
 def test_role_matrix_viewer_can_read_but_not_write(client):
@@ -642,9 +642,9 @@ def test_role_matrix_viewer_can_read_but_not_write(client):
     assert client.get(f"/tournaments/{tid}").status_code == 200
     assert client.get(f"/tournaments/{tid}/state").status_code in (200, 204)
     # Writes blocked.
-    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 403
-    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 403
-    assert client.delete(f"/tournaments/{tid}").status_code == 403
+    assert client.put(f"/tournaments/{tid}/state", json=_basic_state("v")).status_code == 404
+    assert client.patch(f"/tournaments/{tid}", json={"status": "active"}).status_code == 404
+    assert client.delete(f"/tournaments/{tid}").status_code == 404
 
 
 def test_role_matrix_non_member_gets_404_everywhere(client):
@@ -671,7 +671,7 @@ def test_role_matrix_owner_only_for_restore(client):
     _set_role("operator", tid)
     assert client.get(f"/tournaments/{tid}/state/backups").status_code == 200
     assert client.post(f"/tournaments/{tid}/state/backup").status_code == 200
-    assert client.post(f"/tournaments/{tid}/state/restore/{target}").status_code == 403
+    assert client.post(f"/tournaments/{tid}/state/restore/{target}").status_code == 404
 
     # Owner restore succeeds.
     _set_role("owner", tid)

@@ -185,12 +185,10 @@ def test_a_member_reaches_their_own_workspace(client, two_tenants):
     assert r.json()["name"] == "owned"
 
 
-def test_an_insufficient_role_is_403_because_membership_is_already_known(
+def test_an_insufficient_role_uses_the_uniform_resource_denial(
     client, two_tenants
 ):
-    """403 is reserved for a caller who already knows the workspace exists.
-    Pinned so the entrant work cannot quietly turn a 404 into a 403 by
-    introducing a principal the role lookup half-recognizes."""
+    """Role denial reveals neither role nor the existence of the resource."""
     from db.models import TournamentMember, User
     from db.session import SessionLocal
     from sqlalchemy import select
@@ -215,5 +213,5 @@ def test_an_insufficient_role_is_403_because_membership_is_already_known(
     # The stranger's session is the live one on the client (registered last).
     r = client.delete(f"/tournaments/{two_tenants}", headers=CSRF)
 
-    assert r.status_code == 403
+    assert r.status_code == 404
     assert client.get(f"/tournaments/{two_tenants}").status_code == 200

@@ -14,6 +14,8 @@ path-param name convention.
 """
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 from tests.backend._helpers import isolate_test_database
@@ -88,6 +90,34 @@ def _workspace_operations(app):
     return ops
 
 
+def test_missing_foreign_role_and_unpublished_are_byte_identical(harness):
+    """Four independent denial causes, observed through the real application."""
+    from sqlalchemy import select
+    from db.models import EntryPage, TournamentMember, User
+    from db.session import SessionLocal
+
+    _, client, tid = harness
+    missing = client.patch(f"/tournaments/{uuid.uuid4()}", json={"name": "x"}, headers=CSRF)
+    foreign = client.patch(f"/tournaments/{tid}", json={"name": "x"}, headers=CSRF)
+    registered = client.post(
+        "/auth/register", json={"email": "limited@example.com", "password": GOOD_PW},
+    )
+    assert registered.status_code == 201
+    with SessionLocal() as session:
+        user = session.scalar(select(User).where(User.email == "limited@example.com"))
+        session.add(TournamentMember(tournament_id=uuid.UUID(tid), user_id=user.id, role="viewer"))
+        session.add(EntryPage(tournament_id=uuid.UUID(tid), slug="four-way", is_open=False))
+        session.commit()
+    insufficient = client.patch(f"/tournaments/{tid}", json={"name": "x"}, headers=CSRF)
+    unpublished = client.get("/e/api/page/four-way")
+    responses = [missing, foreign, insufficient, unpublished]
+    assert {response.status_code for response in responses} == {404}
+    assert len({response.content for response in responses}) == 1
+    assert {response.headers["content-type"] for response in responses} == {"application/json"}
+    # Positive control: the viewer still reads its allowed workspace.
+    assert client.get(f"/tournaments/{tid}").status_code == 200
+
+
 def _probe_all(client, app, tid, headers):
     failures = []
     for method, path in _workspace_operations(app):
@@ -135,9 +165,8 @@ def test_anonymous_bootstrap_gets_uniform_404_everywhere(harness):
     assert not failures, f"bootstrap leak on: {failures}"
 
 
-def test_member_role_gates_still_403_not_404(harness):
-    """A real member with an insufficient role keeps 403 — they already
-    know the workspace exists; only *existence* is tenant-secret."""
+def test_member_role_denial_is_indistinguishable_from_absence(harness):
+    """Membership does not change the denial envelope."""
     app, client, tid = harness
     # victim signs back in and invites a viewer
     client.post(
@@ -156,8 +185,11 @@ def test_member_role_gates_still_403_not_404(harness):
     assert client.post(f"/invites/{token}/accept", headers=CSRF).status_code == 200
     # Viewer can read…
     assert client.get(f"/tournaments/{tid}").status_code == 200
-    # …but writes are 403 (insufficient role), not 404.
+    # …but writes use the same denial as an unknown workspace.
     r = client.patch(
         f"/tournaments/{tid}", json={"name": "nope"}, headers=CSRF
     )
-    assert r.status_code == 403
+    assert r.status_code == 404
+
+    missing = client.patch(f"/tournaments/{uuid.uuid4()}", json={"name": "nope"}, headers=CSRF)
+    assert r.content == missing.content

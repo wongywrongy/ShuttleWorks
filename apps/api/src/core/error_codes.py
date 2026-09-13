@@ -16,6 +16,14 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException
 
 
+def resource_not_found() -> HTTPException:
+    """One resource-denial envelope, independent of the reason or resource type."""
+    return HTTPException(
+        status_code=404,
+        detail={"code": "TOURNAMENT_NOT_FOUND", "message": "Tournament not found"},
+    )
+
+
 class ErrorCode(str, Enum):
     # State persistence
     STATE_TOO_NEW = "STATE_TOO_NEW"

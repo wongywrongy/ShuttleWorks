@@ -473,7 +473,7 @@ def test_a_cap_of_zero_events_per_person_is_refused(client, workspace):
 
 def test_a_viewer_cannot_write_the_entry_page(client, workspace):
     _login(client, "viewer@example.com")
-    assert _put_page(client, workspace).status_code == 403
+    assert _put_page(client, workspace).status_code == 404
     assert _page_row(workspace) is None
 
 
@@ -481,7 +481,7 @@ def test_an_operator_can_write_the_same_entry_page(client, workspace):
     """Negative control for the 403: identical request, only the role
     differs. Without it the refusal would pass against a broken route."""
     _login(client, "viewer@example.com")
-    assert _put_page(client, workspace).status_code == 403
+    assert _put_page(client, workspace).status_code == 404
 
     _login(client, "op@example.com")
     assert _put_page(client, workspace).status_code == 200
@@ -723,14 +723,14 @@ def test_a_readable_withdrawal_deadline_is_the_negative_control(client, workspac
 
 def test_a_viewer_cannot_create_an_entry_event(client, workspace):
     _login(client, "viewer@example.com")
-    assert _post_event(client, workspace).status_code == 403
+    assert _post_event(client, workspace).status_code == 404
     assert _events(workspace) == []
 
 
 def test_an_operator_can_create_the_same_entry_event(client, workspace):
     """Negative control for the 403 above."""
     _login(client, "viewer@example.com")
-    assert _post_event(client, workspace).status_code == 403
+    assert _post_event(client, workspace).status_code == 404
 
     _login(client, "op@example.com")
     assert _post_event(client, workspace).status_code == 201
