@@ -248,10 +248,6 @@ function DateTimeRow({
 function ImagePreview({ field, url }: { field: 'logoUrl' | 'bannerUrl'; url: string }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    setFailed(false);
-    setAttempt(0);
-  }, [url]);
   return (
     <figure className="min-w-0">
       <figcaption className="mb-2 text-xs font-medium text-foreground">
@@ -489,6 +485,22 @@ function ScoringPage({ drafts, onChange }: PageEditorProps) {
   );
 }
 
+/** Inline validation for the three optional link fields: absent is fine,
+ *  present-and-unusable is not. Stated as the operator types rather than
+ *  only at Save, and never as a silently dropped value. */
+function linkError(value: string): string | undefined {
+  if (!value.trim()) return undefined;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return 'Use an http or https address.';
+    }
+    return undefined;
+  } catch {
+    return 'That is not a complete web address. Include https://.';
+  }
+}
+
 function PublicSitePage({ tid, drafts, onChange }: PageEditorProps) {
   const info = drafts['public-info'];
   const logoUrl = textOf(info, 'logoUrl');
@@ -531,14 +543,30 @@ function PublicSitePage({ tid, drafts, onChange }: PageEditorProps) {
           hint="Optional. Use it when the full regulations live in a document elsewhere."
           type="url"
           value={textOf(info, 'regulationsUrl')}
+          error={linkError(textOf(info, 'regulationsUrl'))}
           onChange={(e) => onChange('public-info', 'regulationsUrl', e.target.value)}
         />
-        <FieldRow label="Logo image link" type="url" value={logoUrl} onChange={(e) => onChange('public-info', 'logoUrl', e.target.value)} />
-        <FieldRow label="Banner image link" type="url" value={bannerUrl} onChange={(e) => onChange('public-info', 'bannerUrl', e.target.value)} last />
+        <FieldRow
+          label="Logo image link"
+          hint="Optional. A direct https link to an image file. The preview below is a check, not the field."
+          type="url"
+          value={logoUrl}
+          error={linkError(logoUrl)}
+          onChange={(e) => onChange('public-info', 'logoUrl', e.target.value)}
+        />
+        <FieldRow
+          label="Banner image link"
+          hint="Optional. A direct https link to an image file."
+          type="url"
+          value={bannerUrl}
+          error={linkError(bannerUrl)}
+          onChange={(e) => onChange('public-info', 'bannerUrl', e.target.value)}
+          last
+        />
         {logoUrl || bannerUrl ? (
           <div className="grid gap-4 border-t border-border/60 pt-4 sm:grid-cols-2" aria-label="Publication image preview">
-            {logoUrl ? <ImagePreview field="logoUrl" url={logoUrl} /> : null}
-            {bannerUrl ? <ImagePreview field="bannerUrl" url={bannerUrl} /> : null}
+            {logoUrl ? <ImagePreview key={`logo-${logoUrl}`} field="logoUrl" url={logoUrl} /> : null}
+            {bannerUrl ? <ImagePreview key={`banner-${bannerUrl}`} field="bannerUrl" url={bannerUrl} /> : null}
           </div>
         ) : null}
       </PropertyPanel>
@@ -687,7 +715,11 @@ function SetupEditor({ tid }: { tid: string }) {
       const status = (failure as { status?: number; response?: { status?: number } })?.response?.status
         ?? (failure as { status?: number })?.status;
       const done = written.length ? `${written.length} of ${pending.length} changed sections were saved. ` : '';
-      setError(status === 409
+      const detail = (failure as { response?: { data?: { detail?: { code?: string; message?: string } } } })?.response?.data?.detail;
+      const locked = detail?.code === 'CONFIG_LOCKED' || detail?.code === 'EVENT_CHECKED_OUT' || detail?.code === 'DRAW_STARTED';
+      setError(locked
+        ? `${done}${detail?.message ?? 'Setup is locked for the current event authority.'} Your remaining edits are still here.`
+        : status === 409
         ? `${done}This page changed elsewhere. Reload before saving again.`
         : `${done}The remaining changes were not saved. Your edits are still here; check the connection and try again.`);
       setSaved(false);

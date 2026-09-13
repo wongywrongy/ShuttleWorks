@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from db.models import AuthSession, Base, User
+from db.models import AuthSession, User
 from core import throttle
 from identity import auth as auth_service
 from identity.auth import AuthError
@@ -39,14 +39,16 @@ def db(request):
     if request.param == "postgres" and not POSTGRES_URL:
         pytest.skip("TEST_POSTGRES_URL not set")
     engine = _make_engine(request.param)
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     Session = sessionmaker(
         bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
     )
     try:
         yield engine, Session
     finally:
-        Base.metadata.drop_all(engine)
+        from _helpers import drop_test_database
+        drop_test_database(engine)
         engine.dispose()
 
 

@@ -103,17 +103,16 @@ export async function loader({
   const { slug, reference } = params;
   if (!slug || !reference || !REFERENCE.test(reference)) throw notFound();
 
-  let projection: EntryPageDTO;
+  let projection: EntryPageDTO | null = null;
   try {
     projection = await apiGet<EntryPageDTO>(`/e/api/page/${encodeURIComponent(slug)}`);
   } catch (err) {
-    if (err instanceof ApiError && err.status === 404) throw notFound();
-    throw err;
+    if (!(err instanceof ApiError && err.status === 404)) throw err;
   }
 
   return {
     page: {
-      tournamentName: projection.tournament.name,
+      tournamentName: projection?.tournament.name ?? null,
     },
     slug,
     reference,
@@ -168,21 +167,41 @@ export default function Receipt({ loaderData }: Route.ComponentProps) {
           </h1>
           <p id="receipt-intro" className="text-sm text-muted-foreground">
             Receipt details load after this page checks your account.
-            Keep the reference below if you need to ask the organizer about it.
           </p>
+          {/* P8/D8: the tournament and the reference are stated ONCE, here,
+              in the page header — and nowhere else. They are the two facts
+              the entrant needs even when the account-scoped read below fails
+              (not signed in, wrong account, offline), so they are
+              server-rendered; and because they are here, `receipt.js` no
+              longer repeats them or its second Copy reference button. The
+              reference is selectable text (`select-all`), so the copy control
+              is a convenience rather than the only way to get the string. */}
+          <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
+            <div className="grid gap-0.5">
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Tournament
+              </dt>
+              <dd className="text-foreground">{page.tournamentName}</dd>
+            </div>
+            <div className="grid gap-0.5">
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Reference
+              </dt>
+              <dd className="flex flex-wrap items-baseline gap-3 break-all">
+                <code className="select-all text-base tabular-nums text-foreground">
+                  {reference}
+                </code>
+                <button
+                  type="button"
+                  data-copy-reference={reference}
+                  className="text-sm text-accent underline underline-offset-4"
+                >
+                  Copy
+                </button>
+              </dd>
+            </div>
+          </dl>
         </header>
-
-        <SectionCard title="Your entry" variant="eyebrow">
-          <p>
-            <span className="text-muted-foreground">Tournament</span>{' '}
-            {page.tournamentName}
-          </p>
-          <p className="break-all">
-            <span className="text-muted-foreground">Reference</span>{' '}
-            <code className="tabular-nums">{reference}</code>
-            <button type="button" data-copy-reference={reference} className="ms-2 text-accent underline underline-offset-4">Copy reference</button>
-          </p>
-        </SectionCard>
 
         <section
           id="receipt-details-root"

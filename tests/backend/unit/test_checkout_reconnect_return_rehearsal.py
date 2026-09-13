@@ -16,7 +16,8 @@ from sqlalchemy.orm import sessionmaker
 
 def _factory(base) -> sessionmaker:
     engine = create_engine("sqlite:///:memory:")
-    base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return sessionmaker(engine, expire_on_commit=False)
 
 
@@ -100,8 +101,8 @@ def test_checkout_reconnect_drain_rebuild_and_audited_return(monkeypatch, tmp_pa
                 id=tournament_id,
                 org_id=org_id,
                 name="Rehearsal",
-                data={"version": 2},
-                schema_version=2,
+                data={"version": 1},
+                schema_version=1,
             )
         )
         cloud.commit()

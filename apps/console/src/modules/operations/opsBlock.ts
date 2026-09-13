@@ -102,11 +102,11 @@ export function meetToOpsBlocks(
     const staleTiming =
       config != null && slot != null && hasStaleActualTiming({ slotId: slot }, st, config);
     const actualStartSlot =
-      !staleTiming && (status === 'started' || status === 'finished')
+      !staleTiming && (status === 'started' || status === 'finished' || status === 'retired')
         ? meetActualSlot(st?.actualStartTime, config)
         : undefined;
     const actualEndSlot =
-      !staleTiming && status === 'finished'
+      !staleTiming && (status === 'finished' || status === 'retired')
         ? meetActualSlot(st?.actualEndTime, config)
         : undefined;
     return {
@@ -130,11 +130,11 @@ export function meetToOpsBlocks(
       sidesUnresolved: !meetSideResolved(m.sideA) || !meetSideResolved(m.sideB),
       playerIds: meetPlayerIds(m),
       score:
-        status === 'finished' && st?.score
+        (status === 'finished' || status === 'retired') && st?.score
           ? { sideA: st.score.sideA, sideB: st.score.sideB, sets: st.sets }
           : undefined,
-      done: status === 'finished',
-      started: status === 'started' || status === 'finished',
+      done: status === 'finished' || status === 'retired',
+      started: status === 'started' || status === 'finished' || status === 'retired',
       actualStartSlot,
       actualEndSlot,
     };

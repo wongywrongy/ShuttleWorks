@@ -45,8 +45,8 @@ if TYPE_CHECKING:
 _SCORE_RE = re.compile(r"^\s*(\d+)\s*[-–]\s*(\d+)\s*$")
 _DEFAULT_RUN_DIR = Path(".local-testing/demo/data/import-runs")
 _EVENTS = ("MS", "WS", "MD", "WD", "XD")
-_SEED_FORMAT_VERSION = 3
-_DEMO_GENERATOR_VERSION = 5
+_SEED_FORMAT_VERSION = 4
+_DEMO_GENERATOR_VERSION = 6
 _DEMO_DEFAULT_COURT_COUNT = 8
 _DEMO_LIVE_COURT_COUNT = 6
 _DEMO_INTERVAL_MINUTES = 30
@@ -1177,6 +1177,15 @@ def complete_demo_historical_draws(dataset: Dataset) -> Dataset:
     for tournament in dataset.tournaments:
         for event in _EVENTS:
             generated_people[event].clear()
+            # Reserve every supplied entrant before inventing opponents.
+            # A final's second side may otherwise be picked as a synthetic
+            # opponent while constructing the first semifinal.
+            generated_people[event].update(
+                person_key(name)
+                for row in existing
+                if row.tournament_id == tournament.id and row.event == event
+                for name in (*row.side_a, *row.side_b)
+            )
             required = required_rounds(tournament, event)
             # Work backwards from the final.  Every synthetic predecessor is
             # assigned a winner equal to an unmatched concrete side in its
@@ -2196,6 +2205,12 @@ def _demo_setup_sections(
             "setsToWin": 2,
             "pointsPerSet": 21,
             "deuceEnabled": True,
+            # The published regulations say "a two-point advantage required
+            # from 20-all and a cap at 30". The configuration carried no cap,
+            # so the prose and the rules the engine plays to disagreed. The
+            # CONFIGURATION was corrected (standard badminton, and no recorded
+            # score in the fixture exceeds 30); the prose is unchanged.
+            "pointCap": 30,
             "defaultRestMinutes": 30,
             "drawSize": 32,
             "seedCount": 8,
@@ -2774,6 +2789,9 @@ def apply(
                 opens_at, closes_at = _demo_entry_window(
                     tournament, row.event, demo_start, demo_seed=demo_seed
                 )
+                competition_event = client.competition_event(
+                    tid, row.event, row.event, doubles=row.event in {"MD", "WD", "XD"}
+                )
                 created = client.create_entry_event(
                     tid,
                     {
@@ -2784,7 +2802,7 @@ def apply(
                         # discipline.
                         "discipline": _EVENT_NAMES.get(row.event, row.event_label),
                         "entryType": "doubles" if row.event in {"MD", "WD", "XD"} else "singles",
-                        "bracketEventId": row.event,
+                        "competitionEventId": competition_event["id"],
                         "opensAt": opens_at,
                         "closesAt": closes_at,
                     },

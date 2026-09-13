@@ -8,7 +8,7 @@
  * three-game result, a walkover, and a not-yet-started match.
  */
 import type { ReactElement } from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { DrawView, bracketCardHeight } from '../DrawView';
@@ -135,5 +135,35 @@ describe('bracket node geometry — the score no longer buys a row', () => {
     // in a scored draw. Height is now name lines + the one control.
     expect(bracketCardHeight(1, false)).toBeLessThan(bracketCardHeight(2, false));
     expect(bracketCardHeight(2, false)).toBeLessThan(bracketCardHeight(2, true));
+  });
+});
+
+/**
+ * C12 / O7 — the node must never grow an editor inside itself. The control
+ * opens the shared Record result dialog instead, and the node's own box is
+ * unchanged while it is open.
+ */
+describe('bracket node result entry — a dialog, never an in-node form', () => {
+  it('opens the Record result dialog with real names, blank games and no in-node form', () => {
+    renderDrawView(
+      <DrawView data={DRAW} eventId="MS" onChange={vi.fn()} refresh={async () => {}} />,
+    );
+    const node = document.querySelector('[data-cell="r0m0"]') as HTMLElement;
+    const heightBefore = node.getAttribute('style');
+
+    fireEvent.click(within(node).getByRole('button', { name: 'Enter score' }));
+
+    const dialog = screen.getByRole('dialog');
+    // The editor is NOT inside the node — that was the collision.
+    expect(node.querySelector('[data-testid="draw-result-form"]')).toBeNull();
+    expect(node.getAttribute('style')).toBe(heightBefore);
+    // Real participant names, and no fabricated 0 in an unplayed game.
+    const gameOne = within(dialog).getByLabelText('Game 1 score for Ana Silva') as HTMLInputElement;
+    expect(gameOne.value).toBe('');
+    expect(within(dialog).getByLabelText('Game 1 score for Ben Ito')).toBeInTheDocument();
+    // Nothing is committable until the games decide a winner.
+    expect(
+      (within(dialog).getByTestId('draw-result-form-submit') as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 });

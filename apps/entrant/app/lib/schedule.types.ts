@@ -56,6 +56,11 @@ export interface ScheduleMatchDTO {
   court: number | null;
   sides: ScheduleSideDTO[];
   score: number[][] | null;
+  /** The points of the game IN PLAY, `[a, b]`, as the desk last recorded
+   *  them (public refinement 2026-09-12). Present only on a live match whose
+   *  match state carries a running score with results published; absent
+   *  otherwise, and never a claim about a finished game. */
+  liveScore?: [number, number] | null;
   walkover: boolean;
   updatedAt: string | null;
 }

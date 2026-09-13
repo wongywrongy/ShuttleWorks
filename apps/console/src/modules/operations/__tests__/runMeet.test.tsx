@@ -254,7 +254,7 @@ describe('RunFinished — undo-finish', () => {
     key: 'meet:m1',
     id: 'm1',
     source: 'meet',
-    status: 'done',
+    status: 'finished',
     court: 2,
     plannedSlot: 3,
   });
@@ -262,7 +262,13 @@ describe('RunFinished — undo-finish', () => {
     key: 'bracket:pu1',
     id: 'pu1',
     source: 'bracket',
-    status: 'done',
+    status: 'finished',
+  });
+
+  it('shows retired matches without offering Undo finish', () => {
+    render(<RunFinished matches={[{ ...doneMeet, status: 'retired' }]} meetOps={mkOps()} />);
+    expect(screen.getByTestId('run-finished')).toHaveTextContent('Retired');
+    expect(screen.queryByTestId('run-finished-undo-m1')).not.toBeInTheDocument();
   });
 
   it('renders nothing while no match is done', () => {

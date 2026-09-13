@@ -32,6 +32,11 @@ import { Button } from '@scheduler/design-system';
 import { apiClient } from '../../../api/client';
 import type { BoardSettingsDTO } from '../../../api/dto';
 import { FieldRow, Row, Section, Toggle } from '../../../platform/engine-config/SettingsControls';
+import {
+  BoardBanner,
+  BoardMark,
+  resolveBoardAccent,
+} from '../../display/publicDisplay/boardChrome';
 
 /** Longest edge, in CSS pixels, an uploaded board image is re-encoded to. */
 const MAX_IMAGE_EDGE = 640;
@@ -140,7 +145,16 @@ function ImageField({
   );
 }
 
-export function BoardAppearance({ tid }: { tid: string }) {
+export function BoardAppearance({
+  tid,
+  scopeLabel = 'Applies to this workspace\u2019s venue board.',
+}: {
+  tid: string;
+  /** Which board(s) these settings reach, in words. D7: a settings group
+   *  states its own scope rather than leaving the operator to infer it from
+   *  which modules happen to be on. */
+  scopeLabel?: string;
+}) {
   const [draft, setDraft] = useState<BoardSettingsDTO | null>(null);
   const [saved, setSaved] = useState<BoardSettingsDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -205,11 +219,19 @@ export function BoardAppearance({ tid }: { tid: string }) {
     }
   };
 
+  const discard = () => setDraft(saved);
+
   return (
     <>
     {/* What the board CARRIES, above what it looks like — the two questions
-        an operator opens this page with. */}
+        an operator opens this page with.
+
+        Both sections below are ONE DRAFT (D7): nothing typed or toggled here
+        reaches the wall until "Apply to board" at the foot of Appearance. */}
     <Section title="Board content">
+      <p className="pt-2 text-xs text-muted-foreground">
+        {scopeLabel} Drafted here. Nothing changes on the wall until you apply it.
+      </p>
       <Row
         // Default OFF, on every board (match-card contract §4.4). The board's
         // job is the match on the court now; a preview is opt-in.
@@ -235,6 +257,7 @@ export function BoardAppearance({ tid }: { tid: string }) {
       />
     </Section>
     <Section title="Appearance">
+      <p className="pt-2 text-xs text-muted-foreground">{scopeLabel}</p>
       <FieldRow
         label="Board title"
         value={draft.title ?? ''}
@@ -275,16 +298,46 @@ export function BoardAppearance({ tid }: { tid: string }) {
           </span>
         }
       />
-      <div className="flex items-center gap-3 pt-3">
+      {/* The draft, in the board's OWN chrome — the same `BoardBanner` /
+          `BoardMark` components and the same accent resolver the published
+          boards render, so what is previewed is what the wall will show.
+          Sized to this container, not to a window. */}
+      <div className="border-b border-border/60 py-3 last:border-b-0">
+        <span className="text-sm font-medium text-foreground">Preview</span>
+        <div
+          data-testid="board-appearance-preview"
+          className="mt-2 overflow-hidden rounded-sm border border-border bg-background text-foreground"
+        >
+          <BoardBanner bannerUrl={draft.bannerUrl} />
+          <div className="border-t-4 px-3 py-2" style={{ borderTopColor: resolveBoardAccent(accent || null) }}>
+            <BoardMark
+              logoUrl={draft.logoUrl}
+              title={draft.title?.trim() || 'The tournament\u2019s name'}
+            />
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 pt-3">
         <Button size="sm" onClick={() => void save()} disabled={busy || !dirty || !accentValid}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? 'Applying\u2026' : 'Apply to board'}
         </Button>
+        {dirty ? (
+          <Button size="sm" variant="ghost" onClick={discard} disabled={busy}>
+            Discard changes
+          </Button>
+        ) : null}
         {error ? (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
+          <p role="alert" data-testid="board-apply-status" className="text-xs text-destructive">
+            Failed. {error}
           </p>
-        ) : !dirty && saved ? (
-          <p className="text-xs text-muted-foreground">Saved.</p>
+        ) : dirty ? (
+          <p data-testid="board-apply-status" className="text-xs text-muted-foreground">
+            Draft, not on the board yet.
+          </p>
+        ) : saved ? (
+          <p role="status" data-testid="board-apply-status" className="text-xs text-muted-foreground">
+            Saved. The board shows this.
+          </p>
         ) : null}
       </div>
     </Section>

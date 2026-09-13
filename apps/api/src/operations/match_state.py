@@ -27,9 +27,10 @@ import sys
 import uuid
 from typing import TYPE_CHECKING, Iterable, List, Set, Union
 
-from db.models import MatchStatus
+from db.models import MatchState, MatchStatus
+from core.time_utils import now_iso
 from shared.court_occupancy import derive_court_states
-from shared.match_vocabulary import occupies_court_now
+from shared.match_vocabulary import CANONICAL_TO_LEGACY, occupies_court_now
 
 if TYPE_CHECKING:
     from repositories.local import LocalRepository
@@ -44,18 +45,49 @@ def _conflict_error_class():
     return mod.ConflictError
 
 
+from core.state_machines import MATCH
+from core.state_machine import apply
+
 VALID_TRANSITIONS: dict[MatchStatus, list[MatchStatus]] = {
-    MatchStatus.SCHEDULED: [MatchStatus.CALLED],
-    MatchStatus.CALLED: [MatchStatus.PLAYING, MatchStatus.SCHEDULED],
-    MatchStatus.PLAYING: [MatchStatus.FINISHED, MatchStatus.RETIRED, MatchStatus.SCHEDULED],
-    # FINISHED is re-openable — and only back to PLAYING. The Run surface
-    # offers "Undo finish" for the live-day mis-tap; without this edge every
-    # press 409'd behind a misleading "version mismatch" toast. Re-opening a
-    # match drops it from standings again, which is the intended correction.
-    # RETIRED stays terminal: a retirement is adjudicated, not mis-tapped.
-    MatchStatus.FINISHED: [MatchStatus.PLAYING],
-    MatchStatus.RETIRED: [],
+    state: [MatchStatus(target) for target in MATCH.targets(state.value)]
+    for state in MatchStatus
 }
+
+
+def transition_match(row, target, *, session, actor_id=None):
+    target = _coerce(target).value
+    if row.status == target:
+        return None
+    assert_valid_transition(str(row.id), row.status, target)
+    transition = next(t for t in MATCH.transitions if row.status in t.from_states and t.to == target)
+    record = apply(MATCH, row, transition.event, "operator", guards={}, session=session, actor_id=actor_id)
+    if session is not None:
+        record.persist(session)
+    return record
+
+
+def transition_match_in_session(session, row, target, *, actor_id=None):
+    return transition_match(row, target, session=session, actor_id=actor_id)
+
+
+def mirror_command_state(session, tournament_id: uuid.UUID, match_id: str, target_status: MatchStatus) -> None:
+    """Project an applied command into the wire-state row in the same transaction."""
+    state_row = session.get(MatchState, (tournament_id, match_id))
+    if state_row is None:
+        state_row = MatchState(tournament_id=tournament_id, match_id=match_id)
+        session.add(state_row)
+    state_row.status = CANONICAL_TO_LEGACY[target_status]
+    stamp = now_iso()
+    if target_status == MatchStatus.CALLED:
+        state_row.called_at = stamp
+    elif target_status == MatchStatus.PLAYING:
+        state_row.actual_start_time = state_row.actual_start_time or stamp
+    elif target_status in (MatchStatus.FINISHED, MatchStatus.RETIRED):
+        state_row.actual_end_time = state_row.actual_end_time or stamp
+    else:
+        state_row.called_at = None
+        state_row.actual_start_time = None
+        state_row.actual_end_time = None
 
 
 LOCKED_STATUSES: Set[MatchStatus] = {

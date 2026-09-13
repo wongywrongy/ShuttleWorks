@@ -1,3 +1,4 @@
+import { validBracketSets } from '../../lib/bracketScores';
 /**
  * Bracket-owned run controls supplied to the shared MatchInspector.
  * F-UNI-13/F-UNI-14: this module owns bracket writes, never match-detail
@@ -15,7 +16,7 @@ import type { BracketTournamentDTO } from '../../api/bracketDto';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { useBracketResultQueue } from '../../hooks/useBracketResultQueue';
-import { BracketScoreEntry } from './BracketScoreEntry';
+import { ResultEntryForm, effectiveScoringRules } from '../../components/control-plane';
 import { BracketInlineNotice } from './BracketInlineNotice';
 import { applyOptimisticResult } from './optimisticResult';
 import { WinnerButton } from './WinnerButton';
@@ -43,7 +44,6 @@ export function BracketMatchControls({ data, onChange, matchId }: Props) {
   const api = useBracketApi();
   const config = useTournamentStore((s) => s.config);
   const setsMode = (config?.scoringFormat ?? 'badminton') === 'badminton';
-  const setsToWin = config?.setsToWin ?? 2;
 
   // Result writes route through the idempotent command queue (SP-F3):
   // optimistic apply, then commit behind a UUID + version optimistic
@@ -95,20 +95,29 @@ export function BracketMatchControls({ data, onChange, matchId }: Props) {
         {/* Record result — available when started and no result yet. In
             Sets mode the operator enters a set-by-set score (captured into
             BracketResult.score); in Simple mode the plain win buttons stay. */}
-        {assignment?.started && !result && setsMode && (
+        {(assignment?.started || result) && setsMode && (
           <div className="w-full space-y-2">
-            <BracketScoreEntry
-              setsToWin={setsToWin}
-              labelA={labelA}
-              labelB={labelB}
-              onRecord={(winner, sets) => {
+            <ResultEntryForm
+              sideALabel={labelA}
+              sideBLabel={labelB}
+              rules={effectiveScoringRules(config)}
+              initialSets={validBracketSets(result)}
+              initialOutcome={result?.reason ?? (result?.walkover ? 'walkover' : 'played')}
+              submitLabel={result ? 'Correct result' : 'Record result'}
+              outcomes={['played', 'walkover', 'retired', 'forfeit']}
+              error={conflict}
+              onCancel={() => setConflict(null)}
+              onSubmit={async (value) => {
                 setConflict(null);
-                void submitResult({
+                await submitResult({
                   matchId,
-                  winnerSide: winner,
+                  correction: !!result,
+                  winnerSide: value.winner,
                   seenVersion: pu.version ?? 1,
-                  finishedAtSlot: assignment.slot_id + assignment.duration_slots,
-                  score: sets.length > 0 ? { sets } : null,
+                  finishedAtSlot: assignment ? assignment.slot_id + assignment.duration_slots : null,
+                  walkover: value.outcome === 'walkover',
+                  reason: value.outcome === 'played' ? null : value.outcome,
+                  score: value.sets.length > 0 ? { sets: value.sets } : null,
                 });
               }}
             />

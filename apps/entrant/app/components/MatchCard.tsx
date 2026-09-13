@@ -47,11 +47,15 @@ import { PersonGroup } from './PersonGroup';
 import { personRefModel } from '../../public/assets/person-ref.js';
 
 export type MatchCardData = PlayerMatchDTO & {
+  /** The running points of the game in play (`ScheduleMatchDTO.liveScore`);
+   *  read by `MatchRow` only. */
+  liveScore?: [number, number] | null;
   playedOn?: string | null;
   localTime?: string | null;
   courtLabel?: string | null;
   sourceUrl?: string | null;
   sourceRef?: string | null;
+  outcomeReason?: 'walkover' | 'retired' | 'forfeit' | null;
 };
 
 export type MatchCardVariant = 'card' | 'canvas' | 'bracket-node';
@@ -210,7 +214,7 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
   // §4.2 (P3): a small LEADING cue for the states a reader must not miss,
   // instead of a trailing word on every card repeating what the time, the
   // score or the section heading already said.
-  const cue = isExceptionalState(match.status) ? stateLabel : null;
+  const cue = match.outcomeReason === 'forfeit' ? 'Forfeit' : match.outcomeReason === 'retired' ? 'Retired' : match.outcomeReason === 'walkover' ? 'Walkover' : isExceptionalState(match.status) ? stateLabel : null;
   const reference = match.reference ?? null;
 
   if (variant === 'bracket-node') {

@@ -1,4 +1,4 @@
-"""Rolling protocol compatibility and competing-authority gates."""
+"""Current-only protocol compatibility and competing-authority gates."""
 from __future__ import annotations
 
 import json
@@ -11,7 +11,6 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from db.models import (
-    Base,
     EventOperation,
     SyncCheckpoint,
     SyncQuarantine,
@@ -37,14 +36,15 @@ FIXTURES = ROOT / "tests/backend/fixtures/sync_compatibility"
 
 def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return Session(engine, expire_on_commit=False)
 
 
 def _authority(session: Session) -> tuple[uuid.UUID, uuid.UUID, str]:
     tournament_id = uuid.uuid4()
     node_id = uuid.uuid4()
-    session.add(Tournament(id=tournament_id, name="Compatibility proof", data={"version": 2}))
+    session.add(Tournament(id=tournament_id, name="Compatibility proof", data={"version": 1}))
     session.commit()
     authority, capability, checkpoint = begin_checkout(
         session, tournament_id=tournament_id, node_id=node_id
@@ -85,21 +85,21 @@ def test_matrix_is_machine_readable_and_matches_runtime_policy() -> None:
     assert matrix["current"]["checkpointSchema"] == CURRENT_CHECKPOINT_SCHEMA_VERSION
     assert tuple(matrix["supported"]["operationSchemas"]) == SUPPORTED_OPERATION_SCHEMA_VERSIONS
     assert tuple(matrix["supported"]["checkpointSchemas"]) == SUPPORTED_CHECKPOINT_SCHEMA_VERSIONS
-    assert matrix["policy"] == "current-plus-two"
+    assert matrix["policy"] == "current-only-until-ga"
     assert matrix["evidence"]["externalDeploymentProof"] is False
     assert matrix["evidence"]["binaryRollingReleaseProof"] is False
     assert [
         case["operationSchema"] for case in matrix["repositoryPolicyCases"]
-    ] == [3, 2, 1]
+    ] == [1]
 
 
 @pytest.mark.parametrize("version", SUPPORTED_OPERATION_SCHEMA_VERSIONS)
-def test_current_and_previous_operation_versions_are_supported(version: int) -> None:
+def test_current_operation_versions_are_supported(version: int) -> None:
     assert supports_operation_schema(version)
 
 
 @pytest.mark.parametrize("version", SUPPORTED_CHECKPOINT_SCHEMA_VERSIONS)
-def test_current_and_previous_checkpoint_versions_are_supported(version: int) -> None:
+def test_current_checkpoint_versions_are_supported(version: int) -> None:
     assert supports_checkpoint_schema(version)
 
 
@@ -107,7 +107,7 @@ def test_current_and_previous_checkpoint_versions_are_supported(version: int) ->
 def test_checkout_emits_each_supported_checkpoint_version(version: int) -> None:
     session = _session()
     tournament_id = uuid.uuid4()
-    session.add(Tournament(id=tournament_id, name="Checkpoint version proof", data={"version": 2}))
+    session.add(Tournament(id=tournament_id, name="Checkpoint version proof", data={"version": 1}))
     session.commit()
     authority, _capability, checkpoint = begin_checkout(
         session, tournament_id=tournament_id, node_id=uuid.uuid4(), schema_version=version
@@ -134,11 +134,11 @@ def test_archived_checkpoint_fixture_imports_without_partial_state(version: int)
     assert target.get(Tournament, uuid.UUID(checkpoint["tournamentId"])) is not None
 
 
-def test_archived_operation_fixtures_roll_forward_and_replay_across_adjacent_versions() -> None:
+def test_current_operation_fixture_ingests_and_replays_idempotently() -> None:
     session = _session()
     tournament_id = uuid.UUID("00000000-0000-4000-8000-000000000001")
     node_id = uuid.UUID("00000000-0000-4000-8000-000000000002")
-    session.add(Tournament(id=tournament_id, name="Rolling operation proof", data={"version": 2}))
+    session.add(Tournament(id=tournament_id, name="Rolling operation proof", data={"version": 1}))
     session.commit()
     authority, capability, _ = begin_checkout(
         session, tournament_id=tournament_id, node_id=node_id
@@ -152,7 +152,7 @@ def test_archived_operation_fixtures_roll_forward_and_replay_across_adjacent_ver
         checkpoint_hash=authority.checkpoint_hash,
     )
     envelopes = []
-    for sequence, version in enumerate((3, 2, 1), start=1):
+    for sequence, version in enumerate((1,), start=1):
         raw = json.loads(
             (FIXTURES / "operations" / f"operation-v{version}.json").read_text()
         )
@@ -175,8 +175,7 @@ def test_archived_operation_fixtures_roll_forward_and_replay_across_adjacent_ver
                 operations=[envelope],
             ),
         )[1:] == (1, 0)
-    # At-least-once replay of an older adjacent-version operation is a
-    # duplicate, not a stale-version failure or a second write.
+    # At-least-once replay must not apply the same operation twice.
     assert ingest_batch(
         session,
         tournament_id=tournament_id,
@@ -184,9 +183,9 @@ def test_archived_operation_fixtures_roll_forward_and_replay_across_adjacent_ver
         batch=SyncBatchRequest(
             node_id=node_id,
             authority_epoch=1,
-            operations=[envelopes[1]],
+            operations=[envelopes[0]],
         ),
-    ) == (3, 0, 1)
+    ) == (1, 0, 1)
 
 
 @pytest.mark.parametrize("version", SUPPORTED_OPERATION_SCHEMA_VERSIONS)
@@ -205,12 +204,12 @@ def test_ingest_accepts_each_supported_operation_version(version: int) -> None:
     ) == (1, 1, 0)
 
 
-@pytest.mark.parametrize("version", (0, 4, 99, True, "3"))
+@pytest.mark.parametrize("version", (0, 2, 99, True, "1"))
 def test_unknown_operation_versions_are_not_supported(version: object) -> None:
     assert not supports_operation_schema(version)
 
 
-@pytest.mark.parametrize("version", (0, 4, 99, True, "3"))
+@pytest.mark.parametrize("version", (0, 2, 99, True, "1"))
 def test_unknown_checkpoint_versions_are_not_supported(version: object) -> None:
     assert not supports_checkpoint_schema(version)
 
@@ -218,14 +217,14 @@ def test_unknown_checkpoint_versions_are_not_supported(version: object) -> None:
 def test_unsupported_checkpoint_version_is_rejected_before_checkout() -> None:
     session = _session()
     tournament_id = uuid.uuid4()
-    session.add(Tournament(id=tournament_id, name="Unsupported checkpoint", data={"version": 2}))
+    session.add(Tournament(id=tournament_id, name="Unsupported checkpoint", data={"version": 1}))
     session.commit()
     with pytest.raises(ProtocolError) as raised:
         begin_checkout(
             session,
             tournament_id=tournament_id,
             node_id=uuid.uuid4(),
-            schema_version=4,
+            schema_version=2,
         )
     assert raised.value.code == "unsupported_checkpoint_schema"
     assert session.scalar(select(TournamentAuthority)) is None
@@ -242,7 +241,7 @@ def test_unsupported_operation_version_is_quarantined_before_application() -> No
             batch=SyncBatchRequest(
                 node_id=node_id,
                 authority_epoch=1,
-                operations=[_operation(tournament_id, node_id, schema=4)],
+                operations=[_operation(tournament_id, node_id, schema=2)],
             ),
         )
     assert raised.value.code == "unsupported_operation_schema"
@@ -258,7 +257,7 @@ def test_competing_checkout_is_rejected_and_stale_epoch_cannot_sync() -> None:
     tournament_id = uuid.uuid4()
     first_node = uuid.uuid4()
     second_node = uuid.uuid4()
-    session.add(Tournament(id=tournament_id, name="Authority proof", data={"version": 2}))
+    session.add(Tournament(id=tournament_id, name="Authority proof", data={"version": 1}))
     session.commit()
     authority, capability, checkpoint = begin_checkout(
         session, tournament_id=tournament_id, node_id=first_node
@@ -277,7 +276,7 @@ def test_competing_checkout_is_rejected_and_stale_epoch_cannot_sync() -> None:
     stale = SyncBatchRequest(
         node_id=second_node,
         authority_epoch=authority.epoch + 1,
-        operations=[_operation(tournament_id, second_node, schema=3, epoch=authority.epoch + 1)],
+        operations=[_operation(tournament_id, second_node, schema=1, epoch=authority.epoch + 1)],
     )
     with pytest.raises(ProtocolError) as stale_error:
         ingest_batch(session, tournament_id=tournament_id, capability=capability, batch=stale)

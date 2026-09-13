@@ -86,9 +86,9 @@ describe('BracketEventsField — manual roster assignment keeps the person key',
     open('mixed', onCommitEvent);
 
     fireEvent.click(screen.getByTestId('event-toggle-XD'));
-    fireEvent.change(screen.getByTestId('partner-select-XD'), {
-      target: { value: 'p-bruno' },
-    });
+    // The picker proposes; only its explicit confirm commits.
+    fireEvent.click(screen.getByTestId('partner-option-p-bruno'));
+    expect(onCommitEvent).not.toHaveBeenCalled();
     await act(async () => {
       fireEvent.click(screen.getByTestId('partner-confirm-XD'));
     });
@@ -102,6 +102,27 @@ describe('BracketEventsField — manual roster assignment keeps the person key',
         entryPlayerId: 'ep-ana',
       },
     ]);
+  });
+
+  it('keeps the picker draft when it is cancelled and reopened', () => {
+    // D4: "Preserve draft state when cancelling". The dialog is a bounded
+    // transaction, not a place the operator's search goes to die.
+    const onCommitEvent = vi.fn().mockResolvedValue(undefined);
+    open('mixed', onCommitEvent);
+    fireEvent.click(screen.getByTestId('event-toggle-XD'));
+    fireEvent.change(screen.getByTestId('partner-search-XD'), {
+      target: { value: 'bru' },
+    });
+    fireEvent.click(screen.getByTestId('partner-option-p-bruno'));
+    fireEvent.click(screen.getByTestId('partner-cancel-XD'));
+    expect(screen.queryByTestId('partner-picker-XD')).toBeNull();
+    expect(onCommitEvent).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('event-toggle-XD'));
+    expect(screen.getByTestId('partner-search-XD')).toHaveValue('bru');
+    expect(screen.getByTestId('partner-preview-XD')).toHaveTextContent(
+      'Ana / Bruno',
+    );
   });
 
   it('omits entryPlayerId for a roster player that has no person key', async () => {
@@ -183,9 +204,12 @@ describe('BracketEventsField — manual roster assignment keeps the person key',
     );
     fireEvent.click(screen.getByTestId('events-category-doubles'));
     fireEvent.click(screen.getByTestId('partner-change-MD'));
-    fireEvent.change(screen.getByTestId('partner-select-MD'), {
-      target: { value: 'p-cleo' },
-    });
+    // Bruno holds the pair being changed, so he is offered, not blocked; the
+    // preview names the pair the confirm would write.
+    fireEvent.click(screen.getByTestId('partner-option-p-cleo'));
+    expect(screen.getByTestId('partner-preview-MD')).toHaveTextContent(
+      'Ana / Cleo',
+    );
     await act(async () => {
       fireEvent.click(screen.getByTestId('partner-confirm-MD'));
     });

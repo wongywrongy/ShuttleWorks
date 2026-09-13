@@ -44,7 +44,7 @@ import logging
 import re
 import uuid
 from typing import Optional, Type
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.exceptions import RequestValidationError
@@ -319,6 +319,18 @@ def next_target(raw: Optional[str], fallback: str) -> str:
     reasoning lives only in a docstring.
     """
     value = str(raw or "")
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return fallback
+    # Only verification recovery may wrap one plain entrant destination.
+    # Nested destinations, extra query keys and external origins are refused.
+    if parts.path in {"/e/verify", "/e/verify/failed"} and parts.query and not parts.scheme and not parts.netloc and not parts.fragment:
+        query = parse_qs(parts.query, keep_blank_values=True)
+        targets = query.get("next", [])
+        if set(query) == {"next"} and len(targets) == 1 and _SAFE_NEXT.fullmatch(targets[0]) and ".." not in targets[0]:
+            return parts.path + "?" + urlencode({"next": targets[0]})
+        return fallback
     if ".." in value or not _SAFE_NEXT.match(value):
         return fallback
     parts = urlsplit(value)
@@ -559,10 +571,12 @@ def _mail(to: str, subject: str, body: str) -> bool:
         return False
 
 
-def _send_verification(account, token: str) -> bool:
+def _send_verification(account, token: str, next_path: str = "") -> bool:
     # PUBLIC tier (SP-HOST-1 D-9). An entrant has no console account and no
     # Access seat; a verify link on the operator host is unopenable.
     origin = settings.play_origin
+    return_to = next_target(next_path, "")
+    query = urlencode({"token": token, **({"next": return_to} if return_to else {})})
     return _mail(
         account.email,
         f"Confirm your email for {PRODUCT_NAME} entries",
@@ -570,7 +584,7 @@ def _send_verification(account, token: str) -> bool:
             f"Welcome to {PRODUCT_NAME}.\n\n"
             "Confirm this address so tournament organisers can accept your "
             "entries:\n\n"
-            f"{origin}/e/verify?token={token}\n\n"
+            f"{origin}/e/verify?{query}\n\n"
             f"The link is good for {int(settings.verify_token_ttl_days)} days. "
             "If you did not create an account, ignore this message — nothing "
             "will happen without this confirmation."
@@ -664,7 +678,7 @@ def signup(
             # Mailed AFTER the commit, deliberately: a link that arrives
             # before the row it names is a race an entrant can lose by being
             # fast, and re-sending is cheap while un-sending is impossible.
-            _send_verification(account, verify_token)
+            _send_verification(account, verify_token, next_target(next_raw, ""))
         except (AuthError, IntegrityError):
             # The case-insensitive unique index winning a race with the
             # check above. Same answer as the found branch — the outcome
@@ -837,6 +851,7 @@ def logout(
 )
 def verify(
     request: Request,
+    next_raw: str = Depends(form_next),
     body: VerifyRequest = Depends(verify_body),
     repo: LocalRepository = Depends(get_repository),
 ):
@@ -865,7 +880,7 @@ def verify(
     if account is None:
         if is_form_post(request):
             return RedirectResponse(
-                url=_VERIFY_FAILED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+                url=_VERIFY_FAILED_PAGE + ("?" + urlencode({"next": next_target(next_raw, "")}) if next_target(next_raw, "") else ""), status_code=status.HTTP_303_SEE_OTHER
             )
         raise http_error(
             status.HTTP_400_BAD_REQUEST,
@@ -878,7 +893,7 @@ def verify(
     )
     if is_form_post(request):
         return RedirectResponse(
-            url=_VERIFIED_PAGE, status_code=status.HTTP_303_SEE_OTHER
+            url=_VERIFIED_PAGE + ("?" + urlencode({"next": next_target(next_raw, "")}) if next_target(next_raw, "") else ""), status_code=status.HTTP_303_SEE_OTHER
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -891,6 +906,7 @@ def verify(
 def resend_verification(
     request: Request,
     response: Response,
+    next_raw: str = Depends(form_next),
     csrf_checked: None = Depends(logout_form_csrf),
     entrant: AuthEntrant = Depends(get_current_entrant),
     repo: LocalRepository = Depends(get_repository),
@@ -919,9 +935,10 @@ def resend_verification(
         token = repo.execute_transaction(
             entrant_service.issue_verification_token, account
         )
-        sent_ok = _send_verification(account, token)
+        sent_ok = _send_verification(account, token, next_target(next_raw, ""))
     if is_form_post(request):
         target = _VERIFY_SENT_PAGE if sent_ok else f"{_VERIFY_SENT_PAGE}?ok=0"
+        target += ("&" if "?" in target else "?") + urlencode({"next": next_target(next_raw, "")})
         return RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
     response.status_code = status.HTTP_202_ACCEPTED
     return {"status": "accepted", "mailSent": sent_ok}

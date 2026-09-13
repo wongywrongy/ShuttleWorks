@@ -15,9 +15,10 @@ and 412 (precondition_failed).
 from __future__ import annotations
 
 from typing import Optional
+from core.state_machine import TransitionError
 
 
-class ConflictError(Exception):
+class ConflictError(TransitionError):
     """Raised when a match write would violate the state machine or
     optimistic-concurrency invariants.
 
@@ -45,7 +46,7 @@ class ConflictError(Exception):
         current_version: Optional[int] = None,
         seen_version: Optional[int] = None,
     ) -> None:
-        super().__init__(message)
+        super().__init__("conflict", message)
         self.match_id = match_id
         self.message = message
         self.current_status = current_status

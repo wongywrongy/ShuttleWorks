@@ -1,0 +1,164 @@
+erDiagram
+    TOURNAMENT ||--o{ TOURNAMENT_PLAYER : registers
+    ENTRANT_ACCOUNT ||--o{ PLAYER_REPRESENTATIVE : acts_as
+    TOURNAMENT_PLAYER ||--o{ PLAYER_REPRESENTATIVE : authorizes
+    ENTRANT_ACCOUNT ||--o{ SUBMISSION : submits
+    TOURNAMENT ||--o{ SUBMISSION : receives
+    SUBMISSION ||--o{ ENTRY : contains
+    SUBMISSION ||--o{ PAYMENT : records
+    TOURNAMENT_PLAYER ||--o{ ENTRY : enters
+    ENTRY_EVENT ||--o{ ENTRY : accepts
+    ENTRY ||--o{ PARTNER_INVITATION : invites
+    ENTRY o|--o{ PARTNER_INVITATION : accepts
+    COMPETITION_EVENT o|--o{ ENTRY_EVENT : default_target
+    SCORING_PROFILE_VERSION ||--o{ EVENT_FORMAT_VERSION : scores
+    EVENT_FORMAT_VERSION ||--o{ COMPETITION_EVENT : defines
+    TOURNAMENT ||--o{ COMPETITION_EVENT : hosts
+    COMPETITION_EVENT ||--o{ COMPETITION_UNIT : contains
+    COMPETITION_UNIT ||--o{ UNIT_MEMBERSHIP : seats
+    TOURNAMENT_PLAYER ||--o{ UNIT_MEMBERSHIP : competes
+    ENTRY o|--o| UNIT_MEMBERSHIP : binds
+    COMPETITION_EVENT ||--o{ DRAW_INSTANCE : revises
+    COMPETITION_UNIT ||--o{ BRACKET_PARTICIPANT : projects
+    TOURNAMENT ||--o{ COMPETITION_AUDIT : records
+
+    TOURNAMENT_PLAYER {
+        uuid tournament_id PK, FK
+        uuid id PK
+        string full_name
+        string gender
+        int birth_year
+        string club
+        string representation
+        boolean representation_public
+        string remarks
+        datetime erased_at
+        int version
+    }
+    PLAYER_REPRESENTATIVE {
+        uuid tournament_id PK, FK
+        uuid player_id PK, FK
+        uuid account_id PK, FK
+        string role
+    }
+    SUBMISSION {
+        uuid tournament_id PK, FK
+        uuid id PK
+        uuid account_id FK
+        string status "draft, submitted, cancelled"
+        int fee_total_cents
+        string fee_currency
+        json fee_basis
+        int version
+    }
+    ENTRY {
+        uuid tournament_id PK, FK
+        uuid id PK
+        uuid submission_id FK
+        uuid entry_event_id FK
+        uuid entry_player_id FK
+        string state "six registration states"
+        json pending_reasons "derived cache"
+        int version
+    }
+    ENTRY_EVENT {
+        uuid tournament_id PK, FK
+        uuid id PK
+        string code "unique within tournament"
+        uuid competition_event_id FK "nullable default target"
+        int version
+    }
+    PARTNER_INVITATION {
+        uuid tournament_id PK, FK
+        uuid id PK
+        uuid inviting_entry_id FK
+        uuid accepted_entry_id FK "nullable"
+        string recipient_email
+        string token_hash "nullable, unique"
+        datetime expires_at
+        datetime accepted_at
+        boolean mail_sent
+        string status "sent, accepted, expired, revoked"
+    }
+    PAYMENT {
+        uuid tournament_id PK, FK
+        uuid id PK
+        uuid submission_id FK
+        int amount_cents "signed, nonzero"
+        string currency
+        string actor_id
+        string request_id "unique per submission"
+        string note
+        datetime recorded_at
+    }
+    EVENT_FORMAT_VERSION {
+        uuid id PK
+        string format_key
+        int version "unique with format_key"
+        int roster_min
+        int roster_max
+        string gender_rule
+        uuid scoring_profile_version_id FK
+        boolean published
+    }
+    SCORING_PROFILE_VERSION {
+        uuid id PK
+        string profile_key
+        int version "unique with profile_key"
+        json rules
+        boolean published
+    }
+    COMPETITION_EVENT {
+        uuid tournament_id PK, FK
+        uuid id PK
+        string category_code "unique within tournament"
+        uuid format_version_id FK
+        string gender_category
+        string age_group
+        string level
+        string bracket_event_id "projection target"
+        string meet_event_id "projection target"
+        int version
+    }
+    COMPETITION_UNIT {
+        uuid tournament_id PK, FK
+        uuid id PK
+        uuid competition_event_id FK
+        string status "pending, confirmed, withdrawn"
+        int version
+    }
+    UNIT_MEMBERSHIP {
+        uuid tournament_id PK, FK
+        uuid id PK
+        uuid unit_id FK
+        uuid competition_event_id FK
+        uuid player_id FK
+        uuid entry_id FK "nullable only for manual origin"
+        int slot
+        string origin "entry, manual"
+        string status "active, withdrawn"
+    }
+    DRAW_INSTANCE {
+        uuid tournament_id PK, FK
+        uuid id PK
+        uuid competition_event_id FK
+        int revision "unique within event"
+        string status
+        json config
+    }
+    BRACKET_PARTICIPANT {
+        uuid tournament_id PK, FK
+        string bracket_event_id PK
+        string id PK
+        uuid unit_id FK
+        json member_ids "derived projection"
+    }
+    COMPETITION_AUDIT {
+        uuid tournament_id PK, FK
+        uuid id PK
+        string action
+        string actor_id
+        string request_id
+        json payload
+        datetime created_at
+    }

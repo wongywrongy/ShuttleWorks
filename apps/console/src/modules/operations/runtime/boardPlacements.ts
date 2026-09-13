@@ -1,3 +1,4 @@
+import { isRunComplete } from './runMachine';
 /**
  * boardPlacements — the pure OpsBlock → GanttTimeline placement model.
  *
@@ -28,7 +29,7 @@ export interface BoardChip {
   /** Positioned block for `GanttTimeline`; `placement.span` is the rendered width. */
   placement: Placement;
   source: 'meet' | 'bracket';
-  state: RunStatus; // 'scheduled' | 'called' | 'playing' | 'done'
+  state: RunStatus; // 'scheduled' | 'called' | 'playing' | 'finished' | 'retired'
   late: boolean;
   /** Slots a playing chip has run past its planned end (>0 ⇒ overrun). */
   overrunSlots: number;
@@ -182,7 +183,7 @@ export function buildLiveChips(blocks: OpsBlock[], currentSlot: number, running 
       // Anchor at the ACTUAL start (fall back to the planned slot); grow live.
       startSlot = b.actualStartSlot ?? plannedSlot;
       span = Math.max(1, currentSlot - startSlot);
-    } else if (state === 'done') {
+    } else if (isRunComplete(state)) {
       // Span the ACTUAL played length; fall back to the planned span if either
       // actual endpoint is missing.
       startSlot = b.actualStartSlot ?? plannedSlot;

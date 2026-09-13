@@ -26,6 +26,7 @@ suite.
 """
 from __future__ import annotations
 
+
 import json
 import re
 import uuid
@@ -185,7 +186,7 @@ def _add_entry(tid, event_id, **kwargs):
         submission = Submission(tournament_id=uuid.UUID(tid), account_id=account.id)
         player = EntryPlayer(
             tournament_id=uuid.UUID(tid),
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name=kwargs.pop("player_name", "Seeded Player"),
             gender=kwargs.pop("gender", "F"),
             club=kwargs.pop("club", None),

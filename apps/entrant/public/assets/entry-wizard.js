@@ -1,29 +1,18 @@
-/**
- * Small, route-scoped enhancement for the entry form.
- *
- * The server still renders one complete native form. This module adds a
- * focused chapter-at-a-time view for visitors who have JavaScript, while
- * keeping the same POST, CSRF token, idempotency key, and browser validation
- * path. A same-tab session draft carries the journey through account pages
- * and reloads, but disappears when the tab closes; server-issued hidden
- * fields are never copied to storage.
- */
+/** Route-scoped enhancement for the entry form: turns the one native form the server renders into its two stages (Entry details, Review), shows partner fields only for ticked doubles events, keeps a same-tab session draft through the account pages, and marks a quote stale once the selection changes. */
 
 import { createPersonRef } from './person-ref.js';
 
 const DRAFT_PREFIX = 'shuttleworks:entry-draft:';
-const STEP_ORDER = ['eligibility', 'account', 'participant', 'events', 'partner', 'review'];
-const STEP_DONE = 'border-action-selected-bg bg-action-selected-bg text-action-primary'.split(' ');
-const STEP_ACTIVE = 'border-accent bg-accent text-accent-ink'.split(' ');
+const STAGE_DONE = 'border-action-selected-bg bg-action-selected-bg text-action-primary'.split(' ');
+const STAGE_ACTIVE = 'border-accent bg-accent text-accent-ink'.split(' ');
 const DRAFT_FIELDS = new Set([
   'playerName',
   'gender',
-  'club',
+  'club', 'representation',
   'birthYear',
   'remarks',
   'events',
   'showAllEvents',
-  'acknowledged',
 ]);
 
 function slugFor(form) {
@@ -35,117 +24,113 @@ function draftKey(form) {
   return `${DRAFT_PREFIX}${slugFor(form)}`;
 }
 
-function controlsFor(root, step) {
-  return [...root.querySelectorAll(`[data-entry-wizard-controls="${step}"]`)];
-}
-
-function hasPartnerFields(root) {
-  return root.querySelector('[data-entry-section="partner"] input') !== null;
-}
-
 function setHidden(element, hidden) {
   element.hidden = hidden;
   if (hidden) element.setAttribute('aria-hidden', 'true');
   else element.removeAttribute('aria-hidden');
 }
 
-function showStep(root, step) {
-  const form = root;
-  const shell = root.parentElement || root;
-  const partnerStep = hasPartnerFields(root);
-  const effective = step === 'partner' && !partnerStep ? 'review' : step;
+// A quote describes one selection. After events, the show-every-event box, a
+// partner address or the gender change, the bar is marked stale and asks for
+// a fresh quote. UX only: the server's `reviewedQuote` hash refuses a stale
+// quote at submit, and "Review entry" always re-quotes first.
+const STALE_COPY = 'Selection changed. Update the total to see the new quote.';
 
-  const eligibility = root.parentElement?.querySelector('[data-entry-wizard-panel="eligibility"]');
-  const account = root.parentElement?.querySelector('[data-entry-wizard-panel="account"]');
-  const review = root.querySelector('[data-entry-wizard-panel="review"]');
-  if (eligibility) setHidden(eligibility, effective !== 'eligibility');
-  if (account) setHidden(account, effective !== 'account');
-  if (review) setHidden(review, effective !== 'review');
+function quoteExists(root) {
+  const reviewed = root.querySelector('input[name="reviewedQuote"]');
+  return Boolean((reviewed && reviewed.value) || root.querySelector('[data-quote-figure]'));
+}
 
-  for (const panel of root.querySelectorAll('[data-entry-section]')) {
-    const kind = panel.getAttribute('data-entry-section');
-    const visible = effective === 'review' || effective === kind || (effective === 'partner' && kind === 'events');
-    setHidden(panel, !visible);
+function markQuoteStale(root) {
+  if (!quoteExists(root)) return;
+  const bar = root.querySelector('#total');
+  if (!bar) return;
+  bar.dataset.quoteStale = 'true';
+  const figure = bar.querySelector('[data-quote-figure]');
+  if (figure) setHidden(figure, true);
+  const status = bar.querySelector('[data-quote-status]');
+  if (status) {
+    status.textContent = STALE_COPY;
+    status.hidden = false;
   }
-  for (const controls of shell.querySelectorAll('[data-entry-wizard-controls]')) {
+  // A stale quote must not be posted as reviewed. Clearing the hash here
+  // mirrors what the server would decide anyway.
+  const reviewed = root.querySelector('input[name="reviewedQuote"]');
+  if (reviewed) reviewed.value = '';
+}
+
+function selectionChanged(target) {
+  if (!(target instanceof Element)) return false;
+  const name = target.getAttribute('name') || '';
+  return name === 'events' || name === 'showAllEvents' || name.startsWith('partner:') || name === 'gender';
+}
+
+/** Partner fields belong to the events that are ticked, and to no others. */
+function syncPartnerFields(root) {
+  const ticked = new Set(
+    [...root.querySelectorAll('input[name="events"]:checked')].map((box) => box.value),
+  );
+  for (const field of root.querySelectorAll('[data-entry-partner-for]')) {
+    setHidden(field, !ticked.has(field.getAttribute('data-entry-partner-for')));
+  }
+}
+
+function showStage(root, stage, scroll) {
+  const effective = stage === 'review' ? 'review' : 'details';
+  const shell = root.parentElement || root;
+
+  let active = null;
+  for (const panel of root.querySelectorAll('[data-entry-stage]')) {
+    const current = panel.getAttribute('data-entry-stage') === effective;
+    setHidden(panel, !current);
+    if (current) active = panel;
+  }
+  for (const controls of root.querySelectorAll('[data-entry-wizard-controls]')) {
     setHidden(controls, controls.getAttribute('data-entry-wizard-controls') !== effective);
   }
-  for (const element of root.querySelectorAll('[data-entry-wizard-only]')) {
-    setHidden(element, element.getAttribute('data-entry-wizard-only') !== effective);
-  }
-  const submitBar = root.querySelector('[data-entry-submit-bar]');
-  if (submitBar) setHidden(submitBar, effective !== 'review');
 
-  let done = true;
-  for (const item of root.parentElement?.querySelectorAll('[data-entry-step]') || []) {
-    const link = item.querySelector('[data-wizard-step-link]');
-    const current = item.getAttribute('data-entry-step') === effective;
-    if (current) done = false;
-    item.toggleAttribute('data-current', current);
-    if (link) {
-      if (current) link.setAttribute('aria-current', 'step');
-      else link.removeAttribute('aria-current');
+  // One forward action per stage on the total bar too: pricing belongs to the
+  // stage where events are chosen, submitting to the stage that shows the
+  // quote it commits to.
+  const quote = root.querySelector('[data-entry-bar-quote]');
+  const submit = root.querySelector('[data-entry-bar-submit]');
+  if (quote) setHidden(quote, effective !== 'details');
+  if (submit) setHidden(submit, effective !== 'review');
+
+  const nav = shell.querySelector('[data-entry-stage-nav]');
+  if (nav) {
+    setHidden(nav, false);
+    let done = true;
+    for (const item of nav.querySelectorAll('[data-entry-stage-item]')) {
+      const current = item.getAttribute('data-entry-stage-item') === effective;
+      if (current) done = false;
+      if (current) item.setAttribute('aria-current', 'step');
+      else item.removeAttribute('aria-current');
+      const number = item.querySelector('[data-entry-stage-number]');
+      if (number) {
+        number.classList.remove(...STAGE_DONE, ...STAGE_ACTIVE);
+        number.classList.add(...(current ? STAGE_ACTIVE : done ? STAGE_DONE : []));
+      }
     }
-    const number = item.querySelector(':scope > a > span, :scope > span > span');
-    if (number) {
-      number.classList.remove(...STEP_DONE, ...STEP_ACTIVE);
-      number.classList.add(...(current ? STEP_ACTIVE : done ? STEP_DONE : []));
-    }
   }
-  root.dataset.entryStep = effective;
-  const target = effective === 'eligibility'
-    ? eligibility
-    : effective === 'account'
-      ? account
-      : effective === 'review'
-        ? review
-        : root.querySelector(`[data-entry-section="${effective}"]`);
-  if (target && typeof target.scrollIntoView === 'function') {
-    target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+
+  root.dataset.entryStage = effective;
+  if (scroll && active) {
+    if (typeof active.scrollIntoView === 'function') active.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    const heading = active.querySelector('h2, h3');
+    if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
   }
 }
 
-function nextStep(current, root) {
-  const start = STEP_ORDER.indexOf(current);
-  for (let index = start + 1; index < STEP_ORDER.length; index += 1) {
-    if (STEP_ORDER[index] !== 'partner' || hasPartnerFields(root)) return STEP_ORDER[index];
-  }
-  return 'review';
-}
-
-function backStep(current, root) {
-  const start = STEP_ORDER.indexOf(current);
-  for (let index = start - 1; index >= 0; index -= 1) {
-    if (STEP_ORDER[index] !== 'partner' || hasPartnerFields(root)) return STEP_ORDER[index];
-  }
-  return 'eligibility';
-}
-
-function validForStep(root, step) {
-  if (step !== 'participant') return true;
-  for (const field of root.querySelectorAll('[data-entry-section="participant"] input, [data-entry-section="participant"] select, [data-entry-section="participant"] textarea')) {
+/** The details stage's own validity, checked before it is hidden. */
+function detailsAreValid(root) {
+  const stage = root.querySelector('[data-entry-stage="details"]');
+  if (!stage) return true;
+  for (const field of stage.querySelectorAll('input, select, textarea')) {
+    if (field.hidden || field.closest('[hidden]')) continue;
     if (typeof field.reportValidity === 'function' && !field.reportValidity()) return false;
   }
   return true;
-}
-
-function makeButton(label, action, value) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = action === 'next'
-    ? 'inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover'
-    : 'inline-flex min-h-10 items-center justify-center rounded-md border border-rule-control px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-sunken';
-  button.dataset[`wizard${action === 'next' ? 'Next' : 'Back'}`] = value;
-  button.textContent = label;
-  return button;
-}
-
-function addPanelControl(panel, label, action, value) {
-  const controls = document.createElement('div');
-  controls.className = 'mt-2 flex flex-wrap gap-2';
-  controls.dataset.entryWizardControls = value;
-  controls.append(makeButton(label, action, value));
-  panel.append(controls);
 }
 
 function valuesFor(form) {
@@ -155,7 +140,7 @@ function valuesFor(form) {
     if (field.type === 'submit' || field.type === 'button') continue;
     if (field.type === 'checkbox' && !field.checked) continue;
     if (!result[field.name]) result[field.name] = [];
-    result[field.name].push(field.type === 'checkbox' ? 'on' : field.value);
+    result[field.name].push(field.value);
   }
   return result;
 }
@@ -182,7 +167,7 @@ function restoreDraft(form, root) {
   } catch {
     return;
   }
-  if (!raw || hasMeaningfulValues(form)) return;
+  if (!raw) return;
   let saved;
   try {
     saved = JSON.parse(raw);
@@ -190,16 +175,41 @@ function restoreDraft(form, root) {
     return;
   }
   if (!saved || typeof saved !== 'object') return;
-  for (const field of form.elements) {
-    if (!field.name || !Object.prototype.hasOwnProperty.call(saved, field.name)) continue;
-    const values = Array.isArray(saved[field.name]) ? saved[field.name] : [];
-    if (field.type === 'checkbox') field.checked = values.includes(field.value) || values.includes('on');
-    else field.value = values.shift() ?? '';
-  }
+  const hasEcho = hasMeaningfulValues(form);
+  const current = valuesFor(form);
+  const keys = new Set([...Object.keys(saved), ...Object.keys(current)]);
+  const different = [...keys].some(name => name !== 'acknowledged' && JSON.stringify(saved[name] ?? []) !== JSON.stringify(current[name] ?? []));
+  if (hasEcho && !different) return;
+  const applyDraft = () => {
+    const remaining = Object.fromEntries(Object.entries(saved).map(([name, values]) => [name, Array.isArray(values) ? [...values] : []]));
+    for (const field of form.elements) {
+      if (!DRAFT_FIELDS.has(field.name) && !field.name.startsWith('partner:')) continue;
+      const values = remaining[field.name] ?? [];
+      if (field.type === 'checkbox') field.checked = values.includes(field.value);
+      else if (Object.prototype.hasOwnProperty.call(remaining, field.name)) field.value = values.shift() ?? '';
+    }
+    const review = form.querySelector('input[name="reviewedQuote"]');
+    if (review) review.value = '';
+    const consent = form.querySelector('input[name="acknowledged"]');
+    if (consent) consent.checked = false;
+    root.dataset.entryInitialStage = 'details';
+    syncPartnerFields(root);
+    renderReview(root);
+    showStage(root, 'details', true);
+  };
+  if (!hasEcho) applyDraft();
   const notice = document.createElement('p');
   notice.className = 'text-sm text-muted-foreground';
   notice.setAttribute('role', 'status');
-  notice.textContent = 'Your saved entry draft was restored on this device.';
+  notice.textContent = hasEcho ? 'A different saved entry draft is available on this device.' : 'Your saved entry draft was restored on this device.';
+  if (hasEcho) {
+    const restore = document.createElement('button');
+    restore.type = 'button';
+    restore.className = 'ml-2 text-accent underline underline-offset-4';
+    restore.textContent = 'Restore saved draft';
+    restore.addEventListener('click', () => { applyDraft(); notice.remove(); });
+    notice.append(restore);
+  }
   const clear = document.createElement('button');
   clear.type = 'button';
   clear.className = 'ml-2 text-accent underline underline-offset-4';
@@ -212,98 +222,126 @@ function restoreDraft(form, root) {
   root.parentElement?.insertBefore(notice, root);
 }
 
+/** One `<dt>`/`<dd>` pair on the review summary. */
+function addRow(list, term, build) {
+  const dt = document.createElement('dt');
+  dt.className = 'text-xs text-muted-foreground';
+  dt.textContent = term;
+  const dd = document.createElement('dd');
+  dd.className = 'font-medium text-foreground';
+  build(dd);
+  list.append(dt, dd);
+}
+
+/** The review summary: who is being entered, into what, with whom. */
 function renderReview(root) {
   const summary = root.querySelector('[data-entry-review-summary]');
   if (!summary) return;
   while (summary.firstChild) summary.removeChild(summary.firstChild);
+
   const list = document.createElement('dl');
-  list.className = 'grid gap-2 sm:grid-cols-2';
-  const form = root;
-  const names = [...form.querySelectorAll('input[name="playerName"]')];
-  const selected = [...form.querySelectorAll('input[name="events"]:checked')];
-  const playerTerm = document.createElement('dt');
-  playerTerm.className = 'text-xs text-muted-foreground';
-  playerTerm.textContent = 'Players';
-  const playerDetail = document.createElement('dd');
-  playerDetail.className = 'flex flex-wrap gap-x-2 font-medium text-foreground';
-  const enteredNames = names.map((field) => field.value.trim()).filter(Boolean);
-  if (enteredNames.length === 0) {
-    playerDetail.appendChild(createPersonRef(document, {
-      slug: '', identity: null, state: 'dead', label: 'No name entered',
-    }));
-  } else {
-    enteredNames.forEach((name, index) => {
-      if (index > 0) {
-        const separator = document.createElement('span');
-        separator.className = 'text-muted-foreground';
-        separator.textContent = ',';
-        playerDetail.appendChild(separator);
-      }
-      playerDetail.appendChild(createPersonRef(document, {
-        slug: '', identity: { id: null, name }, state: 'dead',
+  list.className = 'grid gap-2 sm:grid-cols-[10rem_minmax(0,1fr)]';
+  const blocks = [...root.querySelectorAll('[data-entry-player-block]')];
+  const sources = blocks.length > 0 ? blocks : [root];
+
+  let entered = 0;
+  sources.forEach((block, index) => {
+    const nameField = block.querySelector('input[name="playerName"]');
+    const name = (nameField?.value ?? '').trim();
+    const selected = [...block.querySelectorAll('input[name="events"]:checked')];
+    if (name === '' && selected.length === 0) return;
+    entered += 1;
+
+    addRow(list, name === '' ? `Player ${index + 1}` : 'Player', (dd) => {
+      dd.className = 'flex flex-wrap gap-x-2 font-medium text-foreground';
+      dd.appendChild(createPersonRef(document, {
+        slug: '',
+        identity: name === '' ? null : { id: null, name },
+        state: 'dead',
+        label: name === '' ? 'No name entered' : undefined,
       }));
     });
-  }
 
-  const eventTerm = document.createElement('dt');
-  eventTerm.className = 'text-xs text-muted-foreground';
-  eventTerm.textContent = 'Events';
-  const eventDetail = document.createElement('dd');
-  eventDetail.className = 'font-medium text-foreground';
-  eventDetail.textContent = selected
-    .map((field) => field.closest('label')?.textContent?.replace(/\s+/g, ' ').trim() || field.value)
-    .join(', ') || 'No events selected';
-  list.append(playerTerm, playerDetail, eventTerm, eventDetail);
-  summary.append(list);
-  for (const [label, target] of [['Edit participant details', 'participant'], ['Edit events and partner', 'events']]) {
-    const link = document.createElement('a');
-    link.href = `#entry-${target}`;
-    link.dataset.wizardStepLink = target;
-    link.className = 'text-accent underline underline-offset-4';
-    link.textContent = label;
-    summary.append(link);
+    addRow(list, 'Events', (dd) => {
+      dd.textContent = selected
+        .map((field) => field.closest('label')?.textContent?.replace(/\s+/g, ' ').trim() || field.value)
+        .join(', ') || 'No events selected';
+    });
+
+    const partners = [...block.querySelectorAll('[data-entry-partner-for]')]
+      .filter((field) => !field.hidden)
+      .map((field) => field.querySelector('input')?.value.trim())
+      .filter((value) => value);
+    if (partners.length > 0) {
+      addRow(list, 'Partner invitations', (dd) => {
+        dd.textContent = partners.join(', ');
+      });
+    }
+  });
+
+  if (entered === 0) {
+    addRow(list, 'Players', (dd) => {
+      dd.textContent = 'Nothing entered yet.';
+    });
   }
+  summary.append(list);
+}
+
+/** Guard the submission against a second local click. */
+function guardSubmit(root) {
+  root.addEventListener('submit', (event) => {
+    saveDraft(root);
+    const submitter = event.submitter;
+    // The quote round trip and "Add another player" are ordinary round
+    // trips: they come straight back to this page and must stay pressable.
+    if (submitter && submitter.hasAttribute('formaction')) return;
+    if (root.dataset.entrySubmitting === 'true') {
+      event.preventDefault();
+      return;
+    }
+    root.dataset.entrySubmitting = 'true';
+    // After the browser has serialised the form: a disabled control is not
+    // submitted, and this one may still be the submitter.
+    window.setTimeout(() => {
+      for (const button of root.querySelectorAll('[data-entry-bar-submit] button')) {
+        button.disabled = true;
+        button.textContent = 'Submitting…';
+      }
+    }, 0);
+  });
+
+  window.addEventListener('pageshow', () => {
+    delete root.dataset.entrySubmitting;
+    for (const button of root.querySelectorAll('[data-entry-bar-submit] button')) {
+      button.disabled = false;
+      if (button.textContent === 'Submitting…') button.textContent = 'Submit entry';
+    }
+  });
 }
 
 export function initEntryWizard(root = document.querySelector('[data-entry-wizard]')) {
   if (!root || root.dataset.entryWizardReady === 'true') return;
   root.dataset.entryWizardReady = 'true';
   const form = root;
-  const eligibility = root.parentElement?.querySelector('[data-entry-wizard-panel="eligibility"]');
-  const account = root.parentElement?.querySelector('[data-entry-wizard-panel="account"]');
-  if (eligibility) addPanelControl(eligibility, 'Continue to account', 'next', 'eligibility');
-  if (account) addPanelControl(account, 'Continue to participant details', 'next', 'account');
 
   restoreDraft(form, root);
-  const initial = root.dataset.entryInitialStep || 'eligibility';
-  showStep(root, initial);
+  syncPartnerFields(root);
+  renderReview(root);
+  showStage(root, root.dataset.entryInitialStage || 'details', false);
 
   const shell = root.parentElement || root;
   shell.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target : null;
-    const stepLink = target?.closest('[data-wizard-step-link]');
-    if (stepLink) {
-      const step = stepLink.getAttribute('data-wizard-step-link');
-      if (step && STEP_ORDER.includes(step) && (step !== 'partner' || hasPartnerFields(root))) {
-        event.preventDefault();
-        if (step === 'review') renderReview(root);
-        showStep(root, step);
-      }
+    if (target?.closest('[data-wizard-next]')) {
+      event.preventDefault();
+      if (!detailsAreValid(root)) return;
+      const quoteButton = root.querySelector('[data-entry-bar-quote] button');
+      if (quoteButton) form.requestSubmit(quoteButton);
       return;
     }
-    const next = target?.closest('[data-wizard-next]')?.getAttribute('data-wizard-next');
-    if (next) {
+    if (target?.closest('[data-wizard-back]')) {
       event.preventDefault();
-      if (!validForStep(form, next)) return;
-      const destination = nextStep(next, root);
-      renderReview(root);
-      showStep(root, destination);
-      return;
-    }
-    const back = target?.closest('[data-wizard-back]')?.getAttribute('data-wizard-back');
-    if (back) {
-      event.preventDefault();
-      showStep(root, backStep(back, root));
+      showStage(root, 'details', true);
     }
   });
 
@@ -312,8 +350,12 @@ export function initEntryWizard(root = document.querySelector('[data-entry-wizar
     window.clearTimeout(timer);
     timer = window.setTimeout(() => saveDraft(form), 250);
   });
-  root.addEventListener('change', () => saveDraft(form));
-  form.addEventListener('submit', () => saveDraft(form));
+  root.addEventListener('change', (event) => {
+    syncPartnerFields(root);
+    if (selectionChanged(event.target)) markQuoteStale(root);
+    saveDraft(form);
+  });
+  guardSubmit(root);
 }
 
 if (typeof document !== 'undefined') initEntryWizard();

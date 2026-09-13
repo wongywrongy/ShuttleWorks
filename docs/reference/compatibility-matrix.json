@@ -1,38 +1,36 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "format": "shuttleworks.compatibility.v1",
-  "policy": "current-plus-two",
+  "policy": "current-only-until-ga",
   "current": {
-    "operationSchema": 3,
-    "checkpointSchema": 3
+    "operationSchema": 1,
+    "checkpointSchema": 1
   },
   "supported": {
-    "operationSchemas": [1, 2, 3],
-    "checkpointSchemas": [1, 2, 3]
+    "operationSchemas": [
+      1
+    ],
+    "checkpointSchemas": [
+      1
+    ]
   },
   "repositoryPolicyCases": [
     {
       "cloudBuild": "current",
       "nodeProtocolGeneration": "current",
-      "operationSchema": 3,
-      "checkpointSchema": 3
-    },
-    {
-      "cloudBuild": "current",
-      "nodeProtocolGeneration": "previous-1",
-      "operationSchema": 2,
-      "checkpointSchema": 2
-    },
-    {
-      "cloudBuild": "current",
-      "nodeProtocolGeneration": "previous-2",
       "operationSchema": 1,
       "checkpointSchema": 1
     }
   ],
   "unsupported": {
-    "operationSchemas": [0, 4],
-    "checkpointSchemas": [0, 4]
+    "operationSchemas": [
+      0,
+      2
+    ],
+    "checkpointSchemas": [
+      0,
+      2
+    ]
   },
   "evidence": {
     "scope": "repository compatibility gate",

@@ -160,8 +160,9 @@ to a broad bind.
 
 ### Rebuild from the latest committed revision
 
-The demo application images are built from the checkout, so a durable demo
-rebuild is a release-like operation. Confirm the revision first:
+Pre-launch, this command resets and reseeds the owner-controlled demo under the
+[migration policy](../reference/migration-and-versioning-policy.md). Run it only
+when resuming the recorded demo cutover. Confirm the committed revision first:
 
 ```bash
 git status --short
@@ -174,8 +175,10 @@ make demo-status
 `demo-rebuild` refuses a dirty checkout. It creates and verifies a backup before
 stopping the stack, pulls the current `postgres:16-alpine` and base images,
 rebuilds the backend, entrant, and frontend with `--pull --no-cache`, and
-recreates all four demo containers. The dedicated Postgres bind mount is
-preserved; rebuilding never reseeds or resets the database.
+quarantines the old Postgres/data directories, creates a fresh schema, and
+recreates all four demo containers. Make then imports the simulator seed and
+its outcome/bye fixtures. The verified backup and quarantined directories
+retain the previous state for inspection.
 
 Images built by `demo-rebuild` carry the selected Git revision in the OCI
 revision label. Backup metadata records the revision, worktree state, and

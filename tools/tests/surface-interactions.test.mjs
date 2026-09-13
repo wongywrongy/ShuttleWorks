@@ -120,3 +120,14 @@ test('selected capture opens the requested menu without exploring revealed contr
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test('review allows only the pure quote and its bounded native echo, never submission', async () => {
+  const { isReadOnlyCaptureRequest } = await import('../surface-interactions.mjs');
+  const origin = 'http://127.0.0.1:5177';
+  assert.equal(isReadOnlyCaptureRequest('POST', origin+'/e/api/quote/demo', origin), true);
+  assert.equal(isReadOnlyCaptureRequest('POST', origin+'/e/demo/enter?reviewedQuote='+'a'.repeat(64), origin), true);
+  assert.equal(isReadOnlyCaptureRequest('POST', origin+'/e/api/submit/demo', origin), false);
+  assert.equal(isReadOnlyCaptureRequest('POST', origin+'/e/api/partner-invites/token/accept', origin), false);
+  assert.equal(isReadOnlyCaptureRequest('POST', 'https://foreign.example/e/api/quote/demo', origin), false);
+});

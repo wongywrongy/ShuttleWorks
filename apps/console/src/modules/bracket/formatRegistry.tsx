@@ -7,9 +7,15 @@
  * renderer family DrawView dispatches on (S8), and the per-format
  * configuration fields the picker + Configure layer render dynamically.
  *
- * `implemented: false` formats stay visible in the picker as disabled
- * "Planned" cards — the roadmap affordance from
- * docs/explanation/architecture/draw-formats.md §UI direction.
+ * `implemented: false` formats are DISPLAY-ONLY: they keep their label and
+ * renderer so an existing draw still renders, but they are absent from the
+ * creation path (O8/D6 — the New-draw modal offers supported formats only,
+ * never a roadmap card a director cannot pick).
+ *
+ * `creatable: false` marks a format that IS shipped but is not its own
+ * entry in the chooser because a plainer choice reaches it: `monrad` is
+ * what "single elimination + consolation" generates (see
+ * CONSOLATION_POLICIES).
  *
  * Field `target` decides where a value lands in the upsert/patch body:
  * 'column' → a top-level DTO key (seeded_count / bracket_size / rr_rounds),
@@ -47,6 +53,8 @@ export interface FormatDescriptor {
   matchesHint: string;
   glyph: (props: { className?: string }) => JSX.Element;
   implemented: boolean;
+  /** Absent/true → offered in the New-draw format chooser. */
+  creatable?: boolean;
   renderer: 'bracket' | 'grid' | 'segments' | 'swiss';
   fields: FormatConfigField[];
 }
@@ -263,6 +271,9 @@ export const DRAW_FORMATS: FormatDescriptor[] = [
     matchesHint: 'Every place decided, everyone keeps playing',
     glyph: MonradGlyph,
     implemented: true,
+    // Reached from the chooser as "Single elimination + Consolation", so it
+    // is not a second card competing with SE for the same director.
+    creatable: false,
     renderer: 'segments',
     fields: [
       SEEDED_COUNT_FIELD,
@@ -330,6 +341,96 @@ export const DRAW_FORMATS: FormatDescriptor[] = [
     fields: [],
   },
 ];
+
+/** The formats the New-draw chooser offers: shipped, and not reached
+ *  through another format's option (monrad is reached via consolation). */
+export const CREATABLE_FORMATS: FormatDescriptor[] = DRAW_FORMATS.filter(
+  (d) => d.implemented && d.creatable !== false,
+);
+
+// ---------------------------------------------------------------------------
+// Consolation (D6/O8)
+// ---------------------------------------------------------------------------
+
+/**
+ * One consolation policy a director can attach to a compatible MAIN format.
+ *
+ * Consolation is deliberately NOT the same idea as double elimination (a
+ * second life inside one championship) or as full placement classification —
+ * each policy below names exactly which losers qualify, and each maps onto a
+ * generator the engine already runs end to end (generation, feeder
+ * references, scheduler dependencies, result correction, published draws).
+ * There is no policy here the backend cannot generate.
+ */
+export interface ConsolationPolicy {
+  value: 'off' | 'plate' | 'full';
+  label: string;
+  /** Which losing entrants qualify — the sentence shown under the choice. */
+  eligibility: string;
+  /** Format actually generated for this policy. */
+  format: DrawFormatId;
+  /** Extra keys merged into the event's `config` blob. */
+  config?: Record<string, unknown>;
+  /** Extra matches beyond the main draw, given a known bracket size. */
+  extraMatches?: (bracketSize: number) => number;
+}
+
+/** Matches in a knockout over `size` entrants. */
+function knockoutMatches(size: number): number {
+  return Math.max(0, size - 1);
+}
+
+/** Monrad full-classification recursion (mirrors `_plan_children` in
+ *  apps/api/src/bracket/formats/monrad.py): every round but a bracket's
+ *  final spawns a child bracket over that round's losers. */
+function fullClassificationExtras(size: number): number {
+  let total = 0;
+  const rounds = Math.log2(size);
+  for (let r = 0; r < rounds - 1; r += 1) {
+    const childSize = size >> (r + 1);
+    if (childSize < 2) continue;
+    total += knockoutMatches(childSize) + fullClassificationExtras(childSize);
+  }
+  return total;
+}
+
+export const CONSOLATION_POLICIES: ConsolationPolicy[] = [
+  {
+    value: 'off',
+    label: 'Off',
+    eligibility: 'A loss ends the entrant’s event. Main draw only.',
+    format: 'se',
+  },
+  {
+    value: 'plate',
+    label: 'First-round losers play a plate',
+    eligibility:
+      'Everyone beaten in round 1 enters one knockout plate, so every entrant plays at least twice. A bye is not a loss and creates no plate entrant.',
+    format: 'monrad',
+    config: { consolation: 'plate' },
+    extraMatches: (size) => knockoutMatches(size / 2),
+  },
+  {
+    value: 'full',
+    label: 'Every place decided (full classification)',
+    eligibility:
+      'Losers keep playing in classification brackets until every finishing place is decided. Places left with no real entrant (byes, withdrawals) stay undecided.',
+    format: 'monrad',
+    config: { consolation: 'full' },
+    extraMatches: fullClassificationExtras,
+  },
+];
+
+/** Main formats that accept a consolation policy. Single elimination is the
+ *  only one today: the engine's Monrad main draw is the SAME bracket (BWF
+ *  seeding + byes), so "SE + consolation" is a real generated structure.
+ *  DE/compass already route losers by construction; rr/swiss have no losers'
+ *  side to feed. */
+export function consolationPoliciesFor(
+  format: string | undefined,
+): ConsolationPolicy[] {
+  return format === 'se' ? CONSOLATION_POLICIES : [];
+}
 
 /** Descriptor lookup by (case-insensitive) format id; undefined for
  *  unknown/absent formats so callers can fall back to the raw id. */

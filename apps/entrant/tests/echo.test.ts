@@ -69,6 +69,7 @@ describe('parseEcho', () => {
     expect(echo.players[0]).toEqual({
       name: 'Ada Lovelace',
       gender: 'F',
+      representation: '',
       club: 'Kingsway',
       birthYear: '1990',
       remarks: 'no Saturdays',

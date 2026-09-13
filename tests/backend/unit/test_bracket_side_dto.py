@@ -37,6 +37,9 @@ def client(tmp_path, monkeypatch):
     app.include_router(tournaments.router)
     app.include_router(brackets.router)
     app.add_exception_handler(ConflictError, _conflict_error_handler)
+    from competition.service import CompetitionError
+    from core.main import _competition_error_handler
+    app.add_exception_handler(CompetitionError, _competition_error_handler)
     return TestClient(app)
 
 
@@ -61,6 +64,11 @@ def test_doubles_pair_and_bye_serialize_to_the_right_side_variants(client, tid):
     """A 3-entrant SE draw round 1: two matches, one a bye. One participant
     is a doubles pair (``members``) so its resolved side carries the pair's
     composite name with a seed and a participant key — never split."""
+    _seed_roster(client, tid, [
+        {'id':'p-ana','name':'Ana Silva'}, {'id':'p-ben','name':'Ben Ito'},
+        {'id':'p-chidi','name':'Chidi Okeke'}, {'id':'p-eve','name':'Eve Lee'},
+        {'id':'p-dan','name':'Dan Reyes'}, {'id':'p-fay','name':'Fay Chen'},
+    ])
     body = {
         "courts": 2,
         "total_slots": 64,
@@ -79,8 +87,8 @@ def test_doubles_pair_and_bye_serialize_to_the_right_side_variants(client, tid):
                         "members": ["p-ana", "p-ben"],
                         "seed": 1,
                     },
-                    {"id": "P2", "name": "Chidi Okeke", "seed": None},
-                    {"id": "P3", "name": "Dan Reyes", "seed": None},
+                    {"id": "P2", "name": "Chidi Okeke / Eve Lee", "members": ["p-chidi", "p-eve"]},
+                    {"id": "P3", "name": "Dan Reyes / Fay Chen", "members": ["p-dan", "p-fay"]},
                 ],
                 "duration_slots": 1,
             }
@@ -108,14 +116,11 @@ def test_doubles_pair_and_bye_serialize_to_the_right_side_variants(client, tid):
     assert len(resolved_sides) == 3  # PAIR-1, P2, P3 each resolved once
 
     pair_side = next(s for s in resolved_sides if s["participantKey"] == "PAIR-1")
-    assert pair_side["persons"] == [{"id": "PAIR-1", "name": "Ana Silva / Ben Ito"}]
+    assert pair_side["persons"] == [{"id": "p-ana", "name": "Ana Silva"}, {"id": "p-ben", "name": "Ben Ito"}]
     assert pair_side["seed"] == 1
     assert pair_side["unresolved"] is None
 
-    # No slash-assembled label anywhere else on the wire: the singles sides
-    # carry their stored name verbatim, with no ' / ' join applied to them.
-    singles_names = {s["persons"][0]["name"] for s in resolved_sides if s["participantKey"] != "PAIR-1"}
-    assert singles_names == {"Chidi Okeke", "Dan Reyes"}
+    assert all(len(side['persons']) == 2 for side in resolved_sides)
 
 
 def test_future_winner_slot_serializes_to_winner_of(client, tid):
@@ -225,7 +230,7 @@ def _md_draw(participants: list[dict], event_id: str = "MD", discipline: str = "
     }
 
 
-def test_a_seam_built_pair_resolves_to_two_stacked_persons(client, tid):
+def test_a_canonical_pair_resolves_to_two_stacked_persons(client, tid):
     """V3-10-1. The entries seam writes the two roster seats into
     ``member_ids`` and a COMPOSITE label into ``name``. The wire now carries
     the two humans, each with their own id — the composite label is not what
@@ -234,10 +239,10 @@ def test_a_seam_built_pair_resolves_to_two_stacked_persons(client, tid):
         client,
         tid,
         [
-            {"id": "entry-ana", "name": "Ana Silva"},
-            {"id": "entry-ben", "name": "Ben Ito"},
-            {"id": "entry-cara", "name": "Cara Diaz"},
-            {"id": "entry-dev", "name": "Dev Rao"},
+            {"id": "roster-ana", "name": "Ana Silva"},
+            {"id": "roster-ben", "name": "Ben Ito"},
+            {"id": "roster-cara", "name": "Cara Diaz"},
+            {"id": "roster-dev", "name": "Dev Rao"},
         ],
     )
     r = client.post(
@@ -247,13 +252,13 @@ def test_a_seam_built_pair_resolves_to_two_stacked_persons(client, tid):
                 {
                     "id": "team-ana-ben",
                     "name": "Ana Silva / Ben Ito",
-                    "members": ["entry-ana", "entry-ben"],
+                    "members": ["roster-ana", "roster-ben"],
                     "seed": 1,
                 },
                 {
                     "id": "team-cara-dev",
                     "name": "Cara Diaz / Dev Rao",
-                    "members": ["entry-cara", "entry-dev"],
+                    "members": ["roster-cara", "roster-dev"],
                     "seed": 2,
                 },
             ]
@@ -264,8 +269,8 @@ def test_a_seam_built_pair_resolves_to_two_stacked_persons(client, tid):
 
     pair = sides["team-ana-ben"]
     assert pair["persons"] == [
-        {"id": "entry-ana", "name": "Ana Silva"},
-        {"id": "entry-ben", "name": "Ben Ito"},
+        {"id": "roster-ana", "name": "Ana Silva"},
+        {"id": "roster-ben", "name": "Ben Ito"},
     ]
     assert pair["unresolved"] is None
     assert pair["seed"] == 1
@@ -304,7 +309,7 @@ def test_a_hand_entered_pair_stacks_the_same_way(client, tid):
     assert [p["name"] for p in sides["MD-T2"]["persons"]] == ["Cara Diaz", "Dev Rao"]
 
 
-def test_an_unresolvable_member_keeps_the_composite_label_as_one_person(client, tid):
+def test_a_draw_rejects_unresolvable_members(client, tid):
     """The honest fallback. One member has no roster row, so the stored
     composite name is the only text that names everybody — it is emitted as
     ONE person rather than half a pair or an id masquerading as a name."""
@@ -322,13 +327,11 @@ def test_an_unresolvable_member_keeps_the_composite_label_as_one_person(client, 
             ]
         ),
     )
-    assert r.status_code == 200, r.text
-    sides = _sides_by_key(r.json())
-    assert sides["MD-T1"]["persons"] == [{"id": "MD-T1", "name": "Ana Silva / Ben Ito"}]
-    assert sides["MD-T1"]["unresolved"] is None
+    assert r.status_code == 409, r.text
+    assert r.json()["error"] == "INVALID_ROSTER"
 
 
-def test_a_one_member_team_is_a_pending_member(client, tid):
+def test_a_draw_rejects_incomplete_units(client, tid):
     """The other structural signal: a TEAM row with one member id is a pair
     slot with a member missing outright."""
     _seed_roster(
@@ -345,14 +348,11 @@ def test_a_one_member_team_is_a_pending_member(client, tid):
             ]
         ),
     )
-    assert r.status_code == 200, r.text
-    side = _sides_by_key(r.json())["MD-T1"]
-    assert side["persons"] == [{"id": "p-ana", "name": "Ana Silva"}]
-    assert side["unresolved"]["kind"] == "pending_member"
-    assert side["unresolved"]["missing"] == 1
+    assert r.status_code == 409, r.text
+    assert r.json()["error"] == "ROSTER_INCOMPLETE"
 
 
-def test_a_hand_added_lone_person_in_a_doubles_draw_is_left_alone(client, tid):
+def test_a_doubles_draw_requires_explicit_people(client, tid):
     """The second negative control. An imported or hand-added PLAYER row may
     legitimately hold a whole pair under one label, so "partner to be
     confirmed" over it would be a false statement about someone else's draw.
@@ -366,22 +366,8 @@ def test_a_hand_added_lone_person_in_a_doubles_draw_is_left_alone(client, tid):
             ]
         ),
     )
-    assert r.status_code == 200, r.text
-    sides = _sides_by_key(r.json())
-    assert sides["IMPORTED-1"]["unresolved"] is None
-    assert sides["IMPORTED-1"]["persons"] == [
-        {"id": "IMPORTED-1", "name": "Ana Silva / Ben Ito"}
-    ]
-
-
-# ---------------------------------------------------------------------------
-# The entry-backed lone person. Tested at the builder rather than through the
-# route: ``ParticipantIn`` carries neither ``meta`` nor a free ``entryPlayerId``
-# (the column is FK-constrained to ``entry_players``), so the ONLY way to put a
-# genuine seam-built singleton in front of the serializer without standing up
-# the whole entries seam is to call the builder with the participant the seam
-# would have written.
-# ---------------------------------------------------------------------------
+    assert r.status_code == 409, r.text
+    assert r.json()["error"] == "ROSTER_INCOMPLETE"
 
 
 def _engine_participant(**kwargs):

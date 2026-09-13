@@ -50,6 +50,7 @@ def parse_players(form: Any) -> List[dict]:
     names = form.getlist("playerName")
     genders = form.getlist("gender")
     clubs = form.getlist("club")
+    representations = form.getlist("representation")
     years = form.getlist("birthYear")
     remarks = form.getlist("remarks")
 
@@ -74,6 +75,14 @@ def parse_players(form: Any) -> List[dict]:
                 "name": str(name).strip()[:200],
                 "gender": gender[:20],
                 "club": str(clubs[index] if index < len(clubs) else "").strip()[:200]
+                or None,
+                # D4 / O4. Left as the raw string: the controlled vocabulary
+                # is enforced once, at the DTO/service edge
+                # (``core.representation``), so a bad code is a refusal the
+                # entrant sees rather than a value quietly dropped here.
+                "representation": str(
+                    representations[index] if index < len(representations) else ""
+                ).strip()[:16]
                 or None,
                 "birthYear": parse_year(years[index] if index < len(years) else ""),
                 "remarks": str(

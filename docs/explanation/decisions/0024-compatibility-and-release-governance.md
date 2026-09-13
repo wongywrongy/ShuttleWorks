@@ -2,6 +2,13 @@
 
 **Status:** Accepted — 2026-09-01
 
+**Amended 2026-09-12:** the N-2 compatibility window activates at GA,
+defined as the first external organization installing a tagged release.
+Until then, wire and tournament blob versions restart at 1 and only the
+current version is supported. The immutable-tag and CI-gate decisions remain
+in force. See the [pre-launch policy](../../reference/migration-and-versioning-policy.md).
+The compatibility and rolling-upgrade requirements below are parked until GA.
+
 ## Context
 
 Offline nodes reconnect after a delay and may not be upgraded at the same time

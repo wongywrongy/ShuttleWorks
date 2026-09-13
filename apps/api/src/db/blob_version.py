@@ -4,11 +4,9 @@ F-DM-06: 24 JSON columns, one versioned, and that one versioned three
 incompatible ways. A blob with no version is a document nobody can date -
 the reader guesses, and a reshape has no safe rollout.
 
-**The rule** (ruled 2026-08-24, ``DM1_RULINGS.md:100-111``): a version int
-lives INSIDE the blob; **absent means 1**; a write stamps the current
-version; a read of a blob NEWER than the code raises rather than
-mis-parsing. No migration and no backfill - every existing row is "absent
-=> 1" and gets stamped whenever it is next written.
+**Pre-launch rule** (2026-09-12): absent means 1; writes stamp the
+current version; reads accept exactly that version. Any other version is a
+stale development database and requires a reset. Empty documents remain empty.
 
 **Why a TypeDecorator and not a function pair.** The ruling says "one
 read/write helper per blob column at the repository boundary". A type
@@ -22,7 +20,7 @@ it needs no Alembic revision.
 
 **Empty dicts are never stamped.** A fresh workspace stores ``data={}``
 and four call sites read that emptiness as "no state yet"; a stamped
-``{"version": 2}`` is truthy and would flip all four. An empty document
+``{"version": 1}`` is truthy and would flip all four. An empty document
 has no schema to version.
 """
 from __future__ import annotations
@@ -37,20 +35,11 @@ from sqlalchemy.types import TypeDecorator
 # ``repositories`` (the persistence-direction contract) and ``models.py``
 # now needs the number to declare the column. ``local.py`` imports it and
 # so keeps the name bound - ``ops/health.py`` still reads it from there.
-CURRENT_TOURNAMENT_SCHEMA_VERSION = 2
+CURRENT_TOURNAMENT_SCHEMA_VERSION = 1
 
 
 class BlobVersionError(RuntimeError):
-    """A stored blob is newer than the code trying to read it.
-
-    Deliberately fatal. The alternative - parse it anyway - is the exact
-    silent mis-read this mechanism exists to prevent, and on a
-    single-store product an operator seeing a loud error has a real
-    remedy: run the build that wrote the blob. Note it is the ONLY
-    remedy for the offending row - the guard fires at hydration, so
-    ``delete``/``upsert``/``restore`` on that row raise too; restoring a
-    snapshot only helps OTHER workspaces.
-    """
+    """A stored blob does not match this build; reset the dev database."""
 
 
 class VersionedJSON(TypeDecorator):
@@ -84,12 +73,11 @@ class VersionedJSON(TypeDecorator):
         # lands in ``get_by_id`` - i.e. at HYDRATION, not at attribute access.
         if isinstance(value, dict) and value:
             stored = value.get(self.version_key, 1)
-            if isinstance(stored, int) and stored > self.version:
+            if type(stored) is not int or stored != self.version:
                 raise BlobVersionError(
-                    f"stored blob is version {stored}; this build reads at "
-                    f"most {self.version}. Run the build that wrote it - "
-                    f"this row cannot be read, rewritten or restored by an "
-                    f"older build."
+                    f"stored blob is version {stored!r}; this build reads only "
+                    f"version {self.version}. Reset the stale development database "
+                    f"with make fixture-up (demo: make demo-rebuild)."
                 )
         return value
 
@@ -134,6 +122,12 @@ class VersionedJSON(TypeDecorator):
 # Versioning the snapshot column closes it; nothing in P2 needs it.
 # ---------------------------------------------------------------------
 BLOB_VERSIONS: dict[str, Optional[int]] = {
+    "state_transitions.detail": None,  # Append-only evidence; machine_version and event select its interpretation.
+    "competition_audit.payload": None,  # ADR 0030 command-specific facts; action selects the shape.
+    "competition_units.attributes": None,  # Existing draw metadata projection; round-trip sensitive.
+    "draw_instances.config": None,  # Draw revision freezes the format-specific configuration.
+    "entry_players.roster_attributes": None,  # Scheduling/source fields; composition lives in rows.
+    "scoring_profile_versions.rules": None,  # Versioned by immutable catalog row (profile_key, version).
     # -- versioned ----------------------------------------------------
     "tournaments.data": CURRENT_TOURNAMENT_SCHEMA_VERSION,
     # -- list-shaped: needs a reshape, UNOWNED (see the notes above) ---

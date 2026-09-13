@@ -32,9 +32,14 @@ import {
   type BracketPairingCommand,
 } from './pairingMutation';
 import { disciplineLabel } from './bracketLabels';
-import { EYEBROW_CLASS, ACCENT_PRESS } from '../../lib/utils';
+import { EYEBROW_CLASS } from '../../lib/utils';
 import { isDoublesCode } from '../../lib/doubles';
 import { formatPersonName } from '../../platform/domain/sides';
+import { representationCodeLabel } from '../../lib/representations';
+import {
+  PartnerPickerModal,
+  type PartnerCandidate,
+} from './PartnerPickerModal';
 
 /** Writes one event's participant list (config echoed by the caller). */
 export type CommitEventFn = (
@@ -174,10 +179,18 @@ export function BracketAvailabilityEventsFields({
 /* =========================================================================
  * EventTypeEditor — the per-discipline rows inside EventsControl. One row
  * per bracket event of that discipline: entry chip for draft draws
- * (singles toggle straight through; doubles/mixed arm an inline partner
- * select), a lock hint for generated/started draws. Every write echoes
+ * (singles toggle straight through; doubles/mixed open the focused partner
+ * picker), a lock hint for generated/started draws. Every write echoes
  * the event's config via buildEventUpsertPayload — never a bare
  * participants payload.
+ *
+ * O5/D4: the partner control was a native `<select>` listing every eligible
+ * roster name — unsearchable, undisambiguated, and committing straight from
+ * the chosen option. It is now `PartnerPickerModal`: search, a stated reason
+ * for every candidate the draw cannot take, a preview of the proposed pair
+ * and of what confirming does to the current one, and ONE explicit commit
+ * through the same `commitBracketPairing` seam. The per-event draft
+ * (selection + query) lives HERE so cancelling keeps it.
  * ========================================================================= */
 function EventTypeEditor({
   typeCode,
@@ -193,8 +206,33 @@ function EventTypeEditor({
   onCommitEvent: CommitEventFn | null;
 }) {
   const [pairingFor, setPairingFor] = useState<string | null>(null);
-  const [partnerId, setPartnerId] = useState('');
+  /** Per-event pairing draft. Cancel closes the picker and keeps this, so a
+   *  dismissed dialog never costs the operator the search they just did. */
+  const [drafts, setDrafts] = useState<
+    Record<string, { partnerId: string; query: string }>
+  >({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const draftFor = (eventId: string) =>
+    drafts[eventId] ?? { partnerId: '', query: '' };
+  const patchDraft = (
+    eventId: string,
+    patch: Partial<{ partnerId: string; query: string }>,
+  ) =>
+    setDrafts((current) => ({
+      ...current,
+      [eventId]: { ...(current[eventId] ?? { partnerId: '', query: '' }), ...patch },
+    }));
+  const clearDraft = (eventId: string) =>
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[eventId];
+      return next;
+    });
+  const openPicker = (eventId: string) => {
+    setError(null);
+    setPairingFor(eventId);
+  };
 
   const matching = events.filter((e) => e.discipline === typeCode);
   if (matching.length === 0) return null;
@@ -217,7 +255,7 @@ function EventTypeEditor({
     try {
       await onCommitEvent(ev.id, buildEventUpsertPayload(ev, participants));
       setPairingFor(null);
-      setPartnerId('');
+      clearDraft(ev.id);
     } catch {
       // Interceptor surfaces a toast; the snapshot stays untouched.
     } finally {
@@ -231,12 +269,21 @@ function EventTypeEditor({
   ) => {
     if (!onCommitEvent) return;
     setBusyId(ev.id);
+    setError(null);
     try {
       await commitBracketPairing(onCommitEvent, ev, command);
       setPairingFor(null);
-      setPartnerId('');
-    } catch {
-      // Interceptor surfaces a toast; the snapshot stays untouched.
+      clearDraft(ev.id);
+    } catch (err) {
+      // The pairing seam rejects self-pairing and an occupied partner before
+      // any write; a network failure arrives here too. Either way the picker
+      // stays open with the draft intact and says what went wrong — the
+      // interceptor's toast is not the place a half-finished pair is fixed.
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'That pair could not be saved. Nothing was changed.',
+      );
     } finally {
       setBusyId(null);
     }
@@ -258,9 +305,8 @@ function EventTypeEditor({
         );
       }
     } else if (isDoublesCode(ev.discipline)) {
-      // ON (doubles) — arm the inline partner select first.
-      setPairingFor((curr) => (curr === ev.id ? null : ev.id));
-      setPartnerId('');
+      // ON (doubles) — a doubles entry IS a pair, so open the picker first.
+      openPicker(ev.id);
     } else {
       // ON (singles) — append this player.
       void commit(ev, [
@@ -271,7 +317,7 @@ function EventTypeEditor({
   };
 
   const confirmPair = (ev: BracketEventDTO) => {
-    const partner = roster.find((p) => p.id === partnerId);
+    const partner = roster.find((p) => p.id === draftFor(ev.id).partnerId);
     if (!partner) return;
     const wireParticipants = ev.participants ?? [];
     const existingTeam = wireParticipants.find(
@@ -292,11 +338,6 @@ function EventTypeEditor({
         const isDraft = (ev.status ?? 'draft') === 'draft';
         const entered = isEnteredIn(ev, player.id);
         const busy = busyId === ev.id;
-        const pairedIds = new Set(
-          (ev.participants ?? []).flatMap((participant) =>
-            (participant.members?.length ?? 0) > 0 ? participant.members ?? [] : [],
-          ),
-        );
         const currentPartnerId = isDoublesCode(ev.discipline)
           ? partnerIdForPlayer(ev, player.id)
           : null;
@@ -310,13 +351,70 @@ function EventTypeEditor({
                 (participant.members ?? []).includes(player.id),
             )
           : undefined;
-        const changing = entered && currentTeam != null && pairingFor === ev.id;
-        if (changing) {
-          for (const memberId of currentTeam.members ?? []) pairedIds.delete(memberId);
+        // Who this draw already has in a PAIR, and with whom — the reason a
+        // candidate is unavailable, stated rather than left as a missing row.
+        // The player's own team is exempt while it is the one being changed:
+        // that pair is exactly what the command replaces.
+        const partnerOf = new Map<string, string>();
+        for (const participant of ev.participants ?? []) {
+          const members = participant.members ?? [];
+          if (members.length < 2) continue;
+          if (currentTeam && participant.id === currentTeam.id) continue;
+          for (const memberId of members) {
+            const otherId = members.find((m) => m !== memberId) ?? '';
+            partnerOf.set(
+              memberId,
+              roster.find((r) => r.id === otherId)?.name ?? otherId,
+            );
+          }
         }
-        const partnerOptions = roster
-          .filter((c) => c.id !== player.id && !pairedIds.has(c.id))
-          .sort((a, b) => a.name.localeCompare(b.name));
+        // Standalone rows: legal partners (the command consumes the row), but
+        // the operator should know the entry is about to change shape.
+        const soloIds = new Set(
+          (ev.participants ?? [])
+            .filter((participant) => (participant.members?.length ?? 0) === 0)
+            .map((participant) => participant.id),
+        );
+        const draft = draftFor(ev.id);
+        const candidates: PartnerCandidate[] = roster
+          .filter((candidate) => candidate.id !== player.id)
+          .slice()
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((candidate) => {
+            const detail = [
+              representationCodeLabel(candidate.representation),
+              soloIds.has(candidate.id) ? `entered in ${ev.id} on their own` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ');
+            const blocked = partnerOf.get(candidate.id);
+            return {
+              id: candidate.id,
+              name: candidate.name,
+              detail,
+              ...(blocked != null
+                ? {
+                    blockedReason: `Already paired with ${formatPersonName(blocked)} in ${ev.id}`,
+                  }
+                : {}),
+            };
+          });
+        const proposed =
+          roster.find((candidate) => candidate.id === draft.partnerId) ?? null;
+        const effects: string[] = [];
+        if (proposed) {
+          if (currentPartner) {
+            effects.push(
+              `${formatPersonName(currentPartner.name)} is no longer entered in ${ev.id}.`,
+            );
+          }
+          if (soloIds.has(proposed.id)) {
+            effects.push(
+              `${formatPersonName(proposed.name)}'s standalone entry in ${ev.id} becomes this pair.`,
+            );
+          }
+          effects.push('Both entries are written together, in one operation.');
+        }
         return (
           <div
             key={ev.id}
@@ -378,10 +476,7 @@ function EventTypeEditor({
                   <>
                     <button
                       type="button"
-                      onClick={() => {
-                        setPairingFor((curr) => (curr === ev.id ? null : ev.id));
-                        setPartnerId('');
-                      }}
+                      onClick={() => openPicker(ev.id)}
                       disabled={busy || !onCommitEvent}
                       data-testid={`partner-change-${ev.id}`}
                       className="text-accent underline-offset-2 hover:underline disabled:opacity-50"
@@ -400,45 +495,39 @@ function EventTypeEditor({
                       Dissolve pair
                     </button>
                   </>
+                ) : isDraft ? (
+                  // Entered with no team: a legacy singleton in a doubles
+                  // draw. "Partner missing" used to be the end of it — there
+                  // was no control that could give this entry a partner.
+                  <button
+                    type="button"
+                    onClick={() => openPicker(ev.id)}
+                    disabled={busy || !onCommitEvent}
+                    data-testid={`partner-choose-${ev.id}`}
+                    className="text-accent underline-offset-2 hover:underline disabled:opacity-50"
+                  >
+                    Choose partner
+                  </button>
                 ) : null}
               </div>
             ) : null}
-            {pairingFor === ev.id && isDraft && (!entered || changing) ? (
-              <div className="flex items-center gap-1.5 pl-11">
-                <select
-                  value={partnerId}
-                  onChange={(e) => setPartnerId(e.target.value)}
-                  aria-label={`Partner for ${ev.id}`}
-                  data-testid={`partner-select-${ev.id}`}
-                  className="h-7 min-w-0 flex-1 rounded-sm border border-border bg-bg-elev px-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Choose partner…</option>
-                  {partnerOptions.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={!partnerId || busy}
-                  onClick={() => confirmPair(ev)}
-                  data-testid={`partner-confirm-${ev.id}`}
-                  className={`rounded-sm bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink ${ACCENT_PRESS} disabled:opacity-50`}
-                >
-                  Add
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPairingFor(null);
-                    setPartnerId('');
-                  }}
-                  className="rounded-sm border border-border px-2 py-0.5 text-xs hover:bg-muted/40"
-                >
-                  Cancel
-                </button>
-              </div>
+            {pairingFor === ev.id && isDraft ? (
+              <PartnerPickerModal
+                eventId={ev.id}
+                eventLabel={`${ev.id} · ${disciplineLabel(ev.discipline)}`}
+                playerName={player.name}
+                currentPartnerName={currentPartner?.name ?? null}
+                candidates={candidates}
+                query={draft.query}
+                onQueryChange={(query) => patchDraft(ev.id, { query })}
+                selectedId={draft.partnerId}
+                onSelect={(partnerId) => patchDraft(ev.id, { partnerId })}
+                effects={effects}
+                busy={busy}
+                error={error}
+                onConfirm={() => confirmPair(ev)}
+                onCancel={() => setPairingFor(null)}
+              />
             ) : null}
           </div>
         );

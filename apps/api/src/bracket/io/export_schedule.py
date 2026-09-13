@@ -57,6 +57,7 @@ def to_csv(
     writer.writerow([
         "event_id", "round", "match_id", "court", "slot",
         "start_time", "duration_minutes", "side_a", "side_b", "status",
+        "side_a_representation", "side_b_representation",
     ])
 
     for pu_id, a in _ordered_assignments(state):
@@ -81,6 +82,8 @@ def to_csv(
                 side_a,
                 side_b,
                 _bucket(pu_id, a, state),
+                "|".join(str(state.participants[pid].metadata.get("representation") or "") if pid in state.participants else "" for pid in (pu.side_a or [])),
+                "|".join(str(state.participants[pid].metadata.get("representation") or "") if pid in state.participants else "" for pid in (pu.side_b or [])),
             )
         ])
 

@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from db.models import Base, SolveJob, SolveJobStatus, Tournament
+from db.models import SolveJob, SolveJobStatus, Tournament
 from solve_rail import solve_jobs
 from solve_rail.solve_jobs import (
     ActiveSolveJobConflict,
@@ -48,14 +48,16 @@ def db(request):
     if request.param == "postgres" and not POSTGRES_URL:
         pytest.skip("TEST_POSTGRES_URL not set")
     engine = _make_engine(request.param)
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     Session = sessionmaker(
         bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
     )
     try:
         yield engine, Session
     finally:
-        Base.metadata.drop_all(engine)
+        from _helpers import drop_test_database
+        drop_test_database(engine)
         engine.dispose()
 
 
@@ -196,7 +198,7 @@ def test_new_submit_allowed_after_terminal(session, tournament_id):
 def test_partial_unique_index_enforces_active_rule_at_the_db(session, tournament_id):
     """Bypass the service pre-check: the index itself must reject a
     second active row on BOTH dialects (this is the repo's first
-    partial index — the test proves create_all/migration produced it)."""
+    partial index — the test proves the baseline produced it)."""
     _enqueue(session, tournament_id)
     session.commit()
     rogue = SolveJob(

@@ -36,30 +36,8 @@ from tests.backend._helpers import isolate_test_database
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    """A client whose database looks like production's.
-
-    ``isolate_test_database`` builds the schema with
-    ``Base.metadata.create_all``, which leaves no ``alembic_version``
-    row. Readiness deliberately treats that as **not ready** — a
-    database nobody migrated is exactly the deploy that answers simple
-    queries and then fails on the first new column — so the fixture
-    stamps the head, which is what the API's lifespan does for real.
-    """
+    """A client whose schema and Alembic marker come from real migrations."""
     isolate_test_database(tmp_path, monkeypatch)
-    from sqlalchemy import text
-    from db.session import engine
-    from ops.health import _expected_revision
-
-    head = _expected_revision()
-    with engine.begin() as conn:
-        conn.execute(
-            text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32))")
-        )
-        conn.execute(text("DELETE FROM alembic_version"))
-        conn.execute(
-            text("INSERT INTO alembic_version (version_num) VALUES (:v)"), {"v": head}
-        )
-
     from fastapi.testclient import TestClient
     from core.main import app
 
@@ -67,10 +45,11 @@ def client(tmp_path, monkeypatch):
 
 
 def test_readiness_refuses_an_unmigrated_database(tmp_path, monkeypatch):
-    """A schema built without migrations has no ``alembic_version`` and
-    must read as not-ready. This is the case the fixture above papers
-    over, so it gets its own test rather than being lost."""
+    """An absent Alembic marker makes an otherwise present schema unready."""
     isolate_test_database(tmp_path, monkeypatch)
+    from db.session import engine
+    with engine.begin() as conn:
+        conn.exec_driver_sql("DROP TABLE alembic_version")
     from fastapi.testclient import TestClient
     from core.main import app
 

@@ -18,8 +18,8 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 // single microtask) guarantees the whole `Promise.resolve().then().finally()`
 // chain drains before act resolves.
 const flushAssignSettle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
-// Recording is terminal (runMachine's `done` has no edge out, Meet has no
-// reopen), so the button arms on the first press and commits on the second.
+// Recording requires confirmation: the first press arms the button and the
+// second commits the result. Finished matches remain reopenable in the graph.
 const pressRecord = () => {
   fireEvent.click(screen.getByTestId('run-act-record'));
   fireEvent.click(screen.getByTestId('run-act-record'));

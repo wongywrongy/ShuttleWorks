@@ -2,16 +2,17 @@
  * Workspace Hub — the control-plane landing page at `/`.
  *
  * A full-width operational control plane: a top command bar (wordmark, search,
- * New workspace), a TIME view strip (Upcoming · Live · Past — see hubFacets
- * for why the Hub partitions on the event's date range rather than on
- * lifecycle/status facets), a dense workspace list (see WorkspaceRow) in one
- * fixed operational order, and a right-side inspector for the selected
- * workspace. "New workspace" routes to the dedicated `/new` create surface.
+ * New workspace), a single-select Active/Past view (see hubFacets for why the
+ * Hub partitions on the event's date range rather than on lifecycle/status
+ * facets), a dense Tournament · Dates · Status · Open · Actions table (see
+ * WorkspaceRow) in one fixed operational order, and a right-side preview panel
+ * for the selected row. "New workspace" routes to the dedicated `/new` create
+ * surface.
  *
- * The default view is Live + Upcoming, with undated workspaces kept reachable
- * in a compact "Date not set" group at its foot. Search reaches EVERY
- * workspace — past and undated included — because a director searching by
- * name is not asking a question about time.
+ * The default view is Active, with undated workspaces kept reachable in a
+ * compact "Date not set" group at its foot. Search reaches EVERY workspace —
+ * past and undated included — because a director searching by name is not
+ * asking a question about time.
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -26,7 +27,6 @@ import {
   DetailDock,
   COL_PRIORITY_CLASS,
 } from '../../components/control-plane';
-import { temporalGroupOf } from './hubGrouping';
 import {
   DEFAULT_HUB_VIEW,
   HUB_VIEWS,
@@ -38,7 +38,6 @@ import {
   type HubViewId,
 } from './hubFacets';
 import { needsAttention } from './hubSignals';
-import { lifecycleChip } from '../../platform/domain/lifecycle';
 import { WorkspaceRow } from './WorkspaceRow';
 import { WorkspaceInspector } from './WorkspaceInspector';
 import { HUB_DOCK_MIN_CONTENT_WIDTH, HUB_DOCK_WIDTH } from './hubDockGeometry';
@@ -61,29 +60,26 @@ function positivePage(value: string | null): number {
 }
 
 /** One view chip with its count. Quiet text; the SELECTED view is a raised
- *  pill (no border chrome — surface does the work). A non-zero LIVE count
- *  warms; a zero count stays quiet whatever the tone, so an empty view never
- *  shouts. */
+ *  pill (no border chrome — surface does the work). The two chips are a
+ *  single-select pair, so they carry radio semantics: exactly one is chosen,
+ *  and its count is the size of the list it produces. */
 function FilterChip({
   label,
   count,
   active,
-  emphasize,
   onClick,
 }: {
   label: string;
   count: number;
   active: boolean;
-  emphasize?: 'live';
   onClick: () => void;
 }) {
-  const countTone =
-    count > 0 && emphasize === 'live' ? 'text-status-live' : 'text-ink-faint';
+  const countTone = 'text-ink-faint';
   return (
     <ActiveChoice
       active={active}
       geometry="segment"
-      semantics="pressed"
+      semantics="radio"
       onClick={onClick}
       className="shrink-0 whitespace-nowrap px-2.5 py-1 text-xs"
     >
@@ -105,7 +101,7 @@ export function HubPage() {
 
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** Time view. `current` (the default) is Live + Upcoming together. */
+  /** Time view — Active (live + upcoming + undated) or Past. */
   const [view, setView] = useState<HubViewId>(() => {
     const candidate = searchParams.get('view');
     return candidate && HUB_VIEW_IDS.has(candidate)
@@ -180,7 +176,6 @@ export function HubPage() {
   }, [refresh]);
 
   const now = demoNow();
-  const todayKey = now.toISOString().slice(0, 10);
 
   // Search reaches EVERY workspace — past and undated included. A director
   // typing a name is not asking a question about time, and the old behaviour
@@ -226,13 +221,13 @@ export function HubPage() {
     setPage(1);
     updateListUrl({ q: value.trim(), page: 1 });
   };
-  /** Clicking the selected view returns to the combined default, so a
-   *  narrowed strip is always escapable with the control that narrowed it. */
-  const changeView = (next: Exclude<HubViewId, 'current'>) => {
-    const resolved: HubViewId = view === next ? DEFAULT_HUB_VIEW : next;
-    setView(resolved);
+  /** Single-select: a chip chooses its view. There is no combined state to
+   *  fall back to, so clicking the current chip is a no-op rather than a
+   *  hidden third mode. */
+  const changeView = (next: HubViewId) => {
+    setView(next);
     setPage(1);
-    updateListUrl({ view: resolved, page: 1 });
+    updateListUrl({ view: next, page: 1 });
   };
   const changePage = (nextPage: number) => {
     const safePage = Math.min(Math.max(nextPage, 1), pageCount);
@@ -240,23 +235,7 @@ export function HubPage() {
     updateListUrl({ page: safePage });
     requestAnimationFrame(() => focusListPage(listScrollRef.current));
   };
-  const viewLabel =
-    view === 'current'
-      ? 'Live and Upcoming'
-      : HUB_VIEWS.find((v) => v.id === view)!.label;
-
-  // Hide the date entirely when no visible row has one — a rail of muted
-  // em-dashes is noise standing in for a fact nobody asked for.
-  const showDates = useMemo(() => visible.some((t) => !!t.tournamentDate), [visible]);
-
-  // When every visible row would carry the SAME lifecycle chip, the per-row
-  // chip is suppressed (X6 never-varies). Any variation keeps it.
-  const lifecycleChipVaries = useMemo(() => {
-    const labels = new Set(
-      visible.map((t) => lifecycleChip(t.signals?.phase, t.status)?.text ?? ''),
-    );
-    return labels.size !== 1 || labels.has('');
-  }, [visible]);
+  const viewLabel = HUB_VIEWS.find((v) => v.id === view)!.label;
 
   // The undated rows sort to the foot of the default view; this is the index
   // where the compact "Date not set" group header goes.
@@ -281,11 +260,10 @@ export function HubPage() {
     [tournaments, selectedId],
   );
 
-  // Open a workspace — on the CTA's named destination when it has one
-  // ("Open live day" opens the live day, G1), else the Overview default.
+  // Open a workspace. ONE destination for every row (D2): the workspace
+  // Overview, which is the surface that then owns "what next".
   const openTournament = useCallback(
-    (id: string, segment?: string) =>
-      navigate(`/tournaments/${id}/${segment ?? 'overview'}`),
+    (id: string) => navigate(`/tournaments/${id}/overview`),
     [navigate],
   );
 
@@ -356,21 +334,20 @@ export function HubPage() {
                 viewport under an ancestor's `overflow-hidden`. */}
             <div
               data-testid="hub-facet-strip"
+              role="radiogroup"
+              aria-label="Workspace view"
               className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
             >
-              {/* Three chips, always all three: they are a partition of time,
-                  and a missing one would read as "you have no past events"
-                  rather than "this view is empty". In the combined default
-                  BOTH Upcoming and Live show as selected, because both are
-                  what the list is showing; clicking one narrows to it, and
-                  clicking it again returns to the pair. */}
+              {/* Two chips, always both: they partition the list, and a
+                  missing one would read as "you have no past events" rather
+                  than "this view is empty". Each count is the size of the set
+                  its own chip shows. */}
               {HUB_VIEWS.map((v) => (
                 <FilterChip
                   key={v.id}
                   label={v.label}
                   count={counts[v.id]}
-                  active={view === v.id || (view === 'current' && v.id !== 'past')}
-                  emphasize={v.id === 'live' ? 'live' : undefined}
+                  active={view === v.id}
                   onClick={() => changeView(v.id)}
                 />
               ))}
@@ -423,10 +400,11 @@ export function HubPage() {
                 aria-hidden
                 className={`flex items-center gap-3 border-b border-border px-4 py-2 @container/table ${EYEBROW_CLASS} text-ink-faint`}
               >
-                <span className="min-w-0 flex-1">Workspace</span>
-                <span className={['shrink-0', COL_PRIORITY_CLASS[3]].join(' ')}>Modules</span>
-                <span className="w-40 shrink-0 px-2">Next action</span>
-                <span className="w-6 shrink-0" />
+                <span className="min-w-0 flex-1">Tournament</span>
+                <span className={['w-36 shrink-0', COL_PRIORITY_CLASS[2]].join(' ')}>Dates</span>
+                <span className="w-24 shrink-0">Status</span>
+                <span className="w-[3.75rem] shrink-0">Open</span>
+                <span className="w-6 shrink-0">Actions</span>
               </div>
               <div className="divide-y divide-border">
                 {pageRows.map((t) => (
@@ -445,13 +423,10 @@ export function HubPage() {
                   <WorkspaceRow
                     key={t.id}
                     tournament={t}
-                    group={temporalGroupOf(t, todayKey)}
-                    showDate={showDates}
-                    showLifecycleBadge={lifecycleChipVaries}
+                    now={now}
                     selected={t.id === selectedId}
                     onSelect={() => setSelectedId(t.id)}
-                    onOpen={(segment) => openTournament(t.id, segment)}
-                    onSetDate={() => navigate(`/tournaments/${t.id}/setup/details`)}
+                    onOpen={() => openTournament(t.id)}
                     onSettings={() => navigate(`/tournaments/${t.id}/administration/lifecycle`)}
                     onDelete={t.role === 'owner' ? () => setDeleteTarget(t) : undefined}
                   />
@@ -562,8 +537,8 @@ export function HubPage() {
           <WorkspaceInspector
             key={selected?.id}
             tournament={selected}
+            now={now}
             onOpen={openTournament}
-            onSetDate={(id) => navigate(`/tournaments/${id}/setup/details`)}
             onSettings={(id) => navigate(`/tournaments/${id}/administration/lifecycle`)}
             onClose={() => setSelectedId(null)}
           />

@@ -1,0 +1,129 @@
+{
+  "scope": "Authorized minimal repair follow-up; isolated writes and read-only private demo verification",
+  "branch": "feat/operator-ui-refinement",
+  "commit": "720647988f15caa9eb2e59c8d07d0adcc4554b31",
+  "dirtyTree": true,
+  "deployedSourceRevision": "720647988f15caa9eb2e59c8d07d0adcc4554b31-dirty-a72bd30bb07b3d0a802bebc0f1e4bd2b39628e0b0c59c74c24bbb0032462cd79",
+  "migrationHead": "a9d3e7f1b5c8",
+  "demoUpdate": {
+    "command": "make demo-update",
+    "result": "passed; no reseed",
+    "verifiedBackup": "20260909T232553Z",
+    "allApplicationImageRevisionsAgree": true,
+    "health": "healthy"
+  },
+  "browserDraftReview": {
+    "serverQuotedReview": true,
+    "reviewFingerprintPresent": true,
+    "requiredConsentUnticked": true,
+    "backFocus": "Entry details",
+    "offlineDidNotClaimReceipt": true,
+    "reconnectedDraftRetained": true,
+    "reconnectedEventSelectionExact": true
+  },
+  "deployedBrowser": [
+    {
+      "name": "console",
+      "url": "http://100.68.168.126:8090/",
+      "status": 200,
+      "title": "ShuttleWorks",
+      "headings": [
+        "Workspaces"
+      ],
+      "errors": []
+    },
+    {
+      "name": "entrant",
+      "url": "http://100.68.168.126:8091/e/",
+      "status": 200,
+      "title": "Tournaments \u00b7 ShuttleWorks Tournaments",
+      "headings": [
+        "2026 season"
+      ],
+      "errors": []
+    }
+  ],
+  "gates": {
+    "make check PYTEST_WORKERS=8": {
+      "result": "passed",
+      "consolePassed": 2391,
+      "entrantPassed": 1214,
+      "backendPassed": 2583,
+      "backendSkipped": 74
+    },
+    "laterCompleteEntrantSuite": {
+      "passed": 1215
+    },
+    "finalDraftSuite": {
+      "passed": 6
+    },
+    "displayConcurrencyAndArchitecture": {
+      "passed": 25
+    },
+    "disposablePostgresSubset": {
+      "passed": 96
+    },
+    "surfaceCaptureToolIntegration": {
+      "passed": 11
+    },
+    "finalEntrantLintAndTypecheck": "passed"
+  },
+  "limitations": [
+    "Full checked-out node/cloud WAN reconnect and public convergence not rehearsed",
+    "No production-readiness certification; original unverified audit scenarios remain unverified"
+  ],
+  "fixture": {
+    "mode": "normal",
+    "reviewExtras": true,
+    "eventClock": "2026-07-31T05:15:00Z",
+    "tournaments": [
+      "T029 Taipei",
+      "T030 Korea"
+    ],
+    "securityAndAuditClock": "real"
+  },
+  "captureAttempts": [
+    {
+      "attempt": "detached final fixture",
+      "result": "environment interruption; entrant listener stopped; discarded and recaptured with foreground fixture"
+    }
+  ],
+  "books": [
+    {
+      "tier": "operator-console",
+      "status": "complete",
+      "surfaces": 37,
+      "pdfPages": 47,
+      "failedViewports": 0,
+      "allInteractionsSucceeded": true,
+      "bytes": 8214808,
+      "sha256": "46414e6819a5137f5a5db02ebab6c325c8e00ad9c93893c0f1d5855a1232d9e4",
+      "servedBytesMatch": true,
+      "url": "http://100.68.168.126:8093/operator-console-surface-book.pdf"
+    },
+    {
+      "tier": "public-entrant",
+      "status": "complete",
+      "surfaces": 45,
+      "pdfPages": 60,
+      "failedViewports": 0,
+      "allInteractionsSucceeded": true,
+      "bytes": 8798240,
+      "sha256": "bef3133e41ced0283dfb79a334fb796c02d5c138292fbc7e99962398926ea4bb",
+      "servedBytesMatch": true,
+      "url": "http://100.68.168.126:8093/public-entrant-surface-book.pdf"
+    }
+  ],
+  "visualReview": {
+    "operatorImages": 91,
+    "publicImages": 107,
+    "method": "All desktop/mobile and interaction frames inspected in local contact sheets; focused full-size result editor, disabled board, receipt, Review and highlighted path inspection",
+    "expectedConsoleMessages": "Public S45 desktop/mobile withheld-player 404; no unexpected captured console errors",
+    "fixtureLimit": "Discovery includes auxiliary V3-PER-18 Open from existing isolated account-journey fixture; it was not seeded into the durable demo",
+    "polishLimit": "Existing narrow mobile board-link wrapping remains visible"
+  },
+  "finalFixtureServerErrors": {
+    "api.log": 0,
+    "entrant.log": 0
+  }
+}

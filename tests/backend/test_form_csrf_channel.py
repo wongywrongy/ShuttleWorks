@@ -28,6 +28,8 @@ lands in the database.
 """
 from __future__ import annotations
 
+from _helpers import submit_reviewed
+
 import json
 import uuid
 
@@ -407,7 +409,7 @@ def test_a_large_multi_player_submission_survives_the_middleware_body_read(
         "_csrf": token,
     }
 
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}", data=data, follow_redirects=False
     )
 

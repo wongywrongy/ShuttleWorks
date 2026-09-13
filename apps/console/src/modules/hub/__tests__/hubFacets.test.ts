@@ -29,9 +29,9 @@ function ws(over: Partial<TournamentSummaryDTO>): TournamentSummaryDTO {
 const NOW = new Date('2026-07-30T10:00:00Z');
 
 describe('hub time views', () => {
-  it('offers exactly Upcoming · Live · Past', () => {
-    expect(HUB_VIEWS.map((v) => v.id)).toEqual(['upcoming', 'live', 'past']);
-    expect(HUB_VIEWS.map((v) => v.label)).toEqual(['Upcoming', 'Live', 'Past']);
+  it('offers exactly Active · Past', () => {
+    expect(HUB_VIEWS.map((v) => v.id)).toEqual(['active', 'past']);
+    expect(HUB_VIEWS.map((v) => v.label)).toEqual(['Active', 'Past']);
   });
 
   it('derives the bucket from the event date RANGE, not a single day', () => {
@@ -61,19 +61,20 @@ describe('hub time views', () => {
     expect(eventRangeOf(bad)).toEqual({ start: '2026-08-01', end: '2026-08-01' });
   });
 
-  it('shows Live + Upcoming (and the undated) by default; Past is its own view', () => {
+  it('Active holds live, upcoming and undated; Past holds the rest', () => {
     const live = ws({ id: 'l', tournamentDate: '2026-07-30' });
     const soon = ws({ id: 'u', tournamentDate: '2026-08-10' });
     const done = ws({ id: 'p', tournamentDate: '2026-07-01' });
     const none = ws({ id: 'n', tournamentDate: null });
-    for (const t of [live, soon, none]) expect(matchesView(t, 'current', NOW)).toBe(true);
-    expect(matchesView(done, 'current', NOW)).toBe(false);
+    for (const t of [live, soon, none]) expect(matchesView(t, 'active', NOW)).toBe(true);
+    expect(matchesView(done, 'active', NOW)).toBe(false);
     expect(matchesView(done, 'past', NOW)).toBe(true);
-    expect(matchesView(live, 'live', NOW)).toBe(true);
-    expect(matchesView(soon, 'upcoming', NOW)).toBe(true);
+    expect(matchesView(live, 'past', NOW)).toBe(false);
   });
 
-  it('counts each workspace once, in one bucket', () => {
+  // The counts must describe the sets the chips actually produce: an
+  // undated workspace appears in Active, so Active counts it.
+  it('counts each workspace once, in the view that shows it', () => {
     const counts = viewCounts(
       [
         ws({ id: 'a', tournamentDate: '2026-07-30' }),
@@ -84,7 +85,7 @@ describe('hub time views', () => {
       ],
       NOW,
     );
-    expect(counts).toEqual({ live: 1, upcoming: 2, past: 1, undated: 1 });
+    expect(counts).toEqual({ active: 4, past: 1 });
   });
 
   it('orders live first, upcoming ascending, undated, then past descending', () => {

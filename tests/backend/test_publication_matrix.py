@@ -25,6 +25,7 @@ not by spot-checking known-safe keys.
 
 from __future__ import annotations
 
+
 import json as _json
 import uuid
 
@@ -184,7 +185,7 @@ def _seed_person(
         submission = Submission(tournament_id=uuid.UUID(tid), account_id=account.id)
         player = EntryPlayer(
             tournament_id=uuid.UUID(tid),
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name=full_name,
             gender="X",
             club=club,

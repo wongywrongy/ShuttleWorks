@@ -1,3 +1,4 @@
+import { isRunComplete } from './runMachine';
 /**
  * runActions — Operations Run write router.
  *
@@ -95,7 +96,7 @@ export function slotForAssign(
   currentSlot: number,
 ): number {
   const courtSlots = matches
-    .filter((m) => m.court === court && m.status !== 'done')
+    .filter((m) => m.court === court && !isRunComplete(m.status))
     .map((m) => m.plannedSlot)
     .filter((s): s is number => s != null);
 

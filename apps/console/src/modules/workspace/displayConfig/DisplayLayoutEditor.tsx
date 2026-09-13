@@ -112,10 +112,16 @@ const GRID_COLUMNS_OPTIONS = [
   { value: 4, label: '4' },
 ];
 
+// D1: "a segmented control must fit all labels". Four options in the shared
+// 240px control column leave each segment ~36px of content box, so
+// "Compact"/"Comfortable" wrapped mid-word and collided with the rows above
+// and below. The STORED values are unchanged ('compact'/'comfortable'); only
+// the words shown shrink to ones that fit, which is the fix that keeps this
+// a one-glance radio group instead of a dropdown.
 const CARD_SIZE_OPTIONS = [
   { value: 'auto' as const, label: 'Auto' },
-  { value: 'compact' as const, label: 'Compact' },
-  { value: 'comfortable' as const, label: 'Comfortable' },
+  { value: 'compact' as const, label: 'Small' },
+  { value: 'comfortable' as const, label: 'Medium' },
   { value: 'large' as const, label: 'Large' },
 ];
 
@@ -305,6 +311,9 @@ export function DisplayLayoutEditor({ tid }: { tid?: string }) {
         two products to the eye — which is the whole complaint the config
         unification is answering. */}
     <Section title="Board layout">
+      {/* Mode scope, stated (D7): the tv* grid fields are read by the Meet
+          board alone, so this whole section is Meet-only. */}
+      <p className="pt-2 text-xs text-muted-foreground">Applies to the Meet board only.</p>
       <Row
         label="Display mode"
         control={

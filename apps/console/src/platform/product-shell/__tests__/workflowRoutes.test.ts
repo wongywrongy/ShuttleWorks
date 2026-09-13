@@ -86,7 +86,7 @@ describe("workflow-first workspace route registry", () => {
       "Operations",
       "Display",
     ]);
-    expect(nav.admin.label).toBe("Administration");
+    expect(nav.admin.label).toBe("Settings");
     expect(nav.sections.map((section) => section.label)).not.toContain(
       "Competition",
     );

@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from copy import deepcopy
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from bracket.application import BracketPinService
 from core.config import settings
-from db.models import Base, EventOperation, SyncOutbox, Tournament
+from db.models import EventOperation, SyncOutbox, Tournament
 from repositories import LocalRepository
 from sync.schemas import OperationEnvelope
 from sync.service import ALLOWED_COMMAND_CLASSES, apply_cloud_projection
@@ -19,10 +20,11 @@ from sync.service import ALLOWED_COMMAND_CLASSES, apply_cloud_projection
 
 def _fixture(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     db = Session(engine, expire_on_commit=False)
     tournament_id = uuid.uuid4()
-    db.add(Tournament(id=tournament_id, name="Pin proof", data={"version": 2}))
+    db.add(Tournament(id=tournament_id, name="Pin proof", data={"version": 1}))
     db.commit()
     assignment = SimpleNamespace(
         play_unit_id="m1",
@@ -40,12 +42,19 @@ def _fixture(monkeypatch):
         rest_between_rounds=1,
         player_extras={},
         applied_command_ids=set(),
+        match_versions={"m1": 1},
     )
 
     import bracket.brackets as routes
 
     monkeypatch.setattr(routes, "_ensure_tournament_exists", lambda *_args: None)
-    monkeypatch.setattr(routes, "_hydrate_session", lambda *_args: state)
+    persisted = deepcopy(state)
+    reads = 0
+    def hydrate(*_args):
+        nonlocal reads
+        reads += 1
+        return state if reads == 1 else deepcopy(persisted)
+    monkeypatch.setattr(routes, "_hydrate_session", hydrate)
     monkeypatch.setattr(
         routes,
         "_bracket_locked_play_unit_ids",
@@ -212,10 +221,11 @@ def test_pin_rollback_removes_snapshot_and_operation_when_outbox_fails(monkeypat
 
 def test_pin_is_in_signed_grant_allowlist_and_cloud_replay_projection():
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     db = Session(engine, expire_on_commit=False)
     tournament_id = uuid.uuid4()
-    db.add(Tournament(id=tournament_id, name="Projection proof", data={"version": 2}))
+    db.add(Tournament(id=tournament_id, name="Projection proof", data={"version": 1}))
     db.commit()
     assert "bracket.pin.v1" in ALLOWED_COMMAND_CLASSES
     now = datetime.now(timezone.utc)
@@ -232,7 +242,7 @@ def test_pin_is_in_signed_grant_allowlist_and_cloud_replay_projection():
         payload={"bracketSnapshot": {"assignments": []}, "playUnitId": "m1", "slotId": 9, "courtId": 2},
         occurred_at_local=now,
         accepted_at_node=now,
-        schema_version=3,
+        schema_version=1,
     )
     apply_cloud_projection(db, operation)
     from db.models import CloudEventProjection

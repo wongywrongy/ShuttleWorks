@@ -9,21 +9,22 @@ from sqlalchemy.orm import Session
 
 from bracket.application import BracketMatchActionService
 from core.config import settings
-from db.models import Base, EventOperation, SyncOutbox, Tournament
+from db.models import EventOperation, SyncOutbox, Tournament
 from repositories import LocalRepository
 
 
 def _fixture(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     session = Session(engine, expire_on_commit=False)
     tournament_id = uuid.uuid4()
     session.add(
         Tournament(
             id=tournament_id,
             name="Bracket action proof",
-            data={"version": 2},
-            schema_version=2,
+            data={"version": 1},
+            schema_version=1,
         )
     )
     session.commit()
@@ -120,7 +121,7 @@ def test_match_action_rolls_projection_back_when_operation_append_fails(
         )
 
     session.expire_all()
-    assert session.get(Tournament, tournament_id).data == {"version": 2}
+    assert session.get(Tournament, tournament_id).data == {"version": 1}
     assert session.scalar(select(EventOperation)) is None
     assert session.scalar(select(SyncOutbox)) is None
 

@@ -312,12 +312,15 @@ describe('BracketRosterTab — detail panel', () => {
     render(<BracketRosterTab />);
     const panel = openPanelFor('p-alex-tan');
     const eyebrows = within(panel).getAllByText(
-      /^(AVAILABILITY|EVENTS|NOTES)$/,
+      /^(IDENTITY|EVENT ENTRIES|AVAILABILITY|INTERNAL NOTES)$/,
     );
+    // D4/O5 order: who they are, what they are in, when they can play, and
+    // the operator's own text last.
     expect(eyebrows.map((e) => e.textContent)).toEqual([
+      'IDENTITY',
+      'EVENT ENTRIES',
       'AVAILABILITY',
-      'EVENTS',
-      'NOTES',
+      'INTERNAL NOTES',
     ]);
     expect(within(panel).queryByText('Roster ID')).not.toBeInTheDocument();
     expect(within(panel).queryByText('p-alex-tan')).not.toBeInTheDocument();
@@ -331,7 +334,7 @@ describe('BracketRosterTab — detail panel', () => {
   it('keeps a note typed and then dismissed with Escape', () => {
     render(<BracketRosterTab />);
     const panel = openPanelFor('p-alex-tan');
-    fireEvent.change(within(panel).getByLabelText('Notes'), {
+    fireEvent.change(within(panel).getByLabelText('Internal notes'), {
       target: { value: 'ankle taped' },
     });
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -341,17 +344,17 @@ describe('BracketRosterTab — detail panel', () => {
   it('keeps a min-rest edit typed and then dismissed with Escape', () => {
     render(<BracketRosterTab />);
     const panel = openPanelFor('p-alex-tan');
-    fireEvent.change(within(panel).getByLabelText('Min rest (slots)'), {
+    fireEvent.change(within(panel).getByLabelText('Minimum rest between matches'), {
       target: { value: '4' },
     });
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(playerById('p-alex-tan')?.restSlots).toBe(4);
   });
 
-  it('writes a Min rest (slots) edit to the roster record', () => {
+  it('writes a minimum-rest edit to the roster record', () => {
     render(<BracketRosterTab />);
     const panel = openPanelFor('p-alex-tan');
-    const input = within(panel).getByLabelText('Min rest (slots)') as HTMLInputElement;
+    const input = within(panel).getByLabelText('Minimum rest between matches') as HTMLInputElement;
     expect(input.placeholder).toBe('default (1)');
     fireEvent.change(input, { target: { value: '3' } });
     fireEvent.blur(input);
@@ -364,7 +367,7 @@ describe('BracketRosterTab — detail panel', () => {
     });
     render(<BracketRosterTab />);
     const panel = openPanelFor('p-alex-tan');
-    const input = within(panel).getByLabelText('Min rest (slots)');
+    const input = within(panel).getByLabelText('Minimum rest between matches');
     fireEvent.change(input, { target: { value: '' } });
     fireEvent.blur(input);
     expect(playerById('p-alex-tan')?.restSlots).toBeUndefined();
@@ -445,23 +448,27 @@ describe('BracketRosterTab — multi-event entry', () => {
     );
   });
 
-  it('doubles toggle ON pairs via the inline partner select before upserting', async () => {
+  it('doubles toggle ON pairs through the partner picker before upserting', async () => {
     render(<BracketRosterTab />);
     const panel = openPanelFor('p-cole-park');
     fireEvent.click(within(panel).getByTestId('events-category-doubles'));
     fireEvent.click(within(panel).getByTestId('event-toggle-MD'));
 
-    // Partner candidates exclude players already in the event (Alex + Ben
-    // via team members) and the player themself.
-    const select = within(panel).getByTestId('partner-select-MD') as HTMLSelectElement;
-    const optionLabels = Array.from(select.options).map((o) => o.textContent);
-    expect(optionLabels).toContain('Dana Liu');
-    expect(optionLabels).not.toContain('Alex Tan');
-    expect(optionLabels).not.toContain('Ben Carter');
-    expect(optionLabels).not.toContain('Cole Park');
+    // Self is not a candidate at all; a player the draw already has in a pair
+    // is SHOWN with the reason and cannot be picked (a missing row explains
+    // nothing), and neither state has written anything yet.
+    expect(within(panel).queryByTestId('partner-option-p-cole-park')).toBeNull();
+    const taken = within(panel).getByTestId('partner-option-p-alex-tan');
+    expect(taken).toBeDisabled();
+    expect(taken).toHaveTextContent('Already paired with Ben Carter in MD');
     expect(mockEventUpsert).not.toHaveBeenCalled();
 
-    fireEvent.change(select, { target: { value: 'p-dana-liu' } });
+    fireEvent.click(within(panel).getByTestId('partner-option-p-dana-liu'));
+    expect(within(panel).getByTestId('partner-preview-MD')).toHaveTextContent(
+      'Cole Park / Dana Liu',
+    );
+    expect(mockEventUpsert).not.toHaveBeenCalled();
+
     await act(async () => {
       fireEvent.click(within(panel).getByTestId('partner-confirm-MD'));
     });

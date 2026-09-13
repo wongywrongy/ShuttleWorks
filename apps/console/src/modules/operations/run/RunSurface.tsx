@@ -1,3 +1,4 @@
+import { isRunComplete } from '../runtime/runMachine';
 /**
  * RunSurface — the Operations Run keystone.
  *
@@ -338,6 +339,7 @@ export function RunSurface({
         const pu = bracketData?.play_units.find((u) => u.id === matchId);
         void bracketResultSubmit({
           matchId,
+          correction: bracketData?.results.some((result) => result.play_unit_id === matchId),
           winnerSide: (winnerSide ?? 'A') as 'A' | 'B',
           seenVersion: pu?.version ?? 0,
         });
@@ -492,7 +494,7 @@ export function RunSurface({
    * `start` it would only duplicate the inspector's own Start button.
    */
   const showBracketPanel =
-    selectedMatch?.source === 'bracket' && selectedMatch.status === 'playing' && bracketData != null;
+    selectedMatch?.source === 'bracket' && (selectedMatch.status === 'playing' || bracketData?.results.some((result) => result.play_unit_id === selectedMatch.id)) && bracketData != null;
 
   /**
    * The meet rail (C4): score entry, undo-start, check-in/roster edits and
@@ -502,7 +504,7 @@ export function RunSurface({
   const showMeetPanel =
     meetOps != null &&
     selectedMatch?.source === 'meet' &&
-    selectedMatch.status !== 'done' &&
+    !isRunComplete(selectedMatch.status) &&
     meetOps.matches.some((m) => m.id === selectedMatch.id);
 
   // F-UNI-14: one already-loaded model feeds the shared inspector. Selecting
@@ -869,7 +871,7 @@ export function RunSurface({
                       nowRef={nowRef}
                       freeCourt={freeCourt}
                       onAction={handleAction}
-                      suppressRecord={showMeetPanel}
+                      suppressRecord={showMeetPanel || showBracketPanel}
                     />
                     {showMeetPanel ? (
                       <MeetMatchControls

@@ -28,6 +28,8 @@ has to remember to write.
 """
 from __future__ import annotations
 
+from core.state_machine import set_transition_actor
+
 import logging
 import uuid
 from typing import Optional
@@ -287,6 +289,7 @@ def get_current_entrant(
             entrant_service.resolve_session, token
         )
         if account is not None:
+            repo.stage(set_transition_actor, "entrant", account.id)
             return AuthEntrant(
                 id=str(account.id),
                 email=account.email,
@@ -346,6 +349,7 @@ def require_tournament_access(min_role: str):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{role}' is insufficient (requires '{min_role}')",
             )
+        repo.stage(set_transition_actor, "operator", user_uuid)
         return user
 
     # Friendlier repr for FastAPI dep-graph dumps.

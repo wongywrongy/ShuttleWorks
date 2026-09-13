@@ -68,6 +68,7 @@ def _canonical_json(value: Any) -> bytes:
 
 
 ALLOWED_COMMAND_CLASSES = (
+    "competition.replace.v1",
     "match.record_result.v3",
     "bracket.pin.v1",
     "record_bracket_result",
@@ -400,7 +401,9 @@ def _normalized_bracket(session: Session, tournament_id: uuid.UUID) -> dict[str,
     def rows(model: Any) -> list[Any]:
         return list(session.scalars(select(model).where(model.tournament_id == tournament_id)))
 
+    from competition.checkpoint import export_slice
     return {
+        "competition": export_slice(session, tournament_id),
         "bracketEvents": _serialize_rows(rows(BracketEvent)),
         "bracketParticipants": _serialize_rows(rows(BracketParticipant)),
         "bracketMatches": _serialize_rows(rows(BracketMatch)),
@@ -435,6 +438,7 @@ def checkpoint_package(
         _normalized_bracket(session, tournament.id)
         if session is not None
         else {
+            "competition": {"schemaVersion": 1, "accounts": [], **{model.__tablename__: [] for model in __import__("competition.checkpoint", fromlist=["MODELS"]).MODELS}},
             "bracketEvents": [],
             "bracketParticipants": [],
             "bracketMatches": [],
@@ -645,7 +649,7 @@ def import_checkpoint(
         tournament_end_date=record.get("tournament_end_date"),
         time_zone=record.get("time_zone", "UTC"),
         data=checkpoint.get("tournamentState") or {},
-        schema_version=int(record.get("schema_version", 2)),
+        schema_version=int(record.get("schema_version", 1)),
         state_version=state_version,
     )
     session.add(tournament)
@@ -695,19 +699,22 @@ def import_checkpoint(
                     )
                 )
             session.flush()
+        from competition.checkpoint import import_slice
+        import_slice(session, tournament_id, normalized.get("competition"))
         for collection, model in _CHECKPOINT_COLLECTIONS.items():
             columns = {column.name for column in model.__table__.columns}
             for raw in normalized[collection]:
                 if not isinstance(raw, dict):
                     raise ProtocolError(409, "invalid_checkpoint", f"Row in {collection} is invalid")
                 values = {
-                    key: _import_scalar(key, value)
+                    key: (uuid.UUID(str(value)) if value is not None and isinstance(model.__table__.columns[key].type, __import__("sqlalchemy").Uuid) else _import_scalar(key, value))
                     for key, value in raw.items()
                     if key in columns
                 }
                 if values.get("tournament_id") != tournament_id:
                     raise ProtocolError(409, "invalid_checkpoint", f"Row in {collection} has the wrong tournament")
                 session.add(model(**values))
+            session.flush()
         session.commit()
     except ProtocolError:
         session.rollback()
@@ -843,6 +850,14 @@ def _active_authority(session: Session, tournament_id: uuid.UUID) -> TournamentA
         )
         .order_by(TournamentAuthority.epoch.desc())
     )
+
+
+def checked_out_tournament_ids(session: Session, tournament_ids) -> set:
+    """Batch the authority predicate for account-wide read projections."""
+    return set(session.scalars(select(TournamentAuthority.tournament_id).where(
+        TournamentAuthority.tournament_id.in_(tournament_ids),
+        TournamentAuthority.state.in_(("preparing", "active")),
+    )))
 
 
 def tournament_is_checked_out(session: Session, tournament_id: uuid.UUID) -> bool:
@@ -1460,6 +1475,10 @@ def append_local_operation(
     traceparent: str | None = None,
 ) -> EventOperation:
     from sync.operation_log import append_local_operation as implementation
+    if command_type in {"roster.replace.v1", "bracket.lifecycle.replace.v1", "bracket.lifecycle.delete.v1"}:
+        from competition.checkpoint import export_slice
+        session.flush()
+        payload = {**payload, "competition": export_slice(session, tournament_id)}
 
     return implementation(
         session,
@@ -1490,15 +1509,21 @@ def _apply_cloud_projection_data(
     data: dict[str, Any], operation: OperationEnvelope
 ) -> None:
     """Apply one already-validated operation to projection data."""
-    if operation.command_type in {"record_bracket_result", "match.record_result.v3"}:
+    if isinstance(operation.payload.get("competition"), dict):
+        data.setdefault("normalized", {})["competition"] = operation.payload["competition"]
+    if operation.command_type == "competition.replace.v1":
+        data["roster"] = {"players": operation.payload.get("players", []), "bracketPlayers": operation.payload.get("bracketPlayers", [])}
+    elif operation.command_type in {"record_bracket_result", "match.record_result.v3"}:
         results = dict(data.get("bracketResults") or {})
         results[operation.aggregate_id] = {
-            **operation.payload,
+            **{key: value for key, value in operation.payload.items() if key != "bracketSnapshot"},
             "operationId": str(operation.operation_id),
             "sequence": operation.sequence,
             "acceptedAtNode": operation.accepted_at_node.isoformat(),
         }
         data["bracketResults"] = results
+        if isinstance(operation.payload.get("bracketSnapshot"), dict):
+            data["bracket"] = operation.payload["bracketSnapshot"]
     elif operation.command_type in {
         "match_state.update.v1",
         "match_state.delete.v1",

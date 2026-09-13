@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # conftest adds backend/ + scheduler_core/ to sys.path.
-from db.models import Base, MatchStatus
+from db.models import MatchStatus
 from repositories.local import LocalRepository
 from scheduler_core.domain.models import (
     Assignment,
@@ -236,7 +236,8 @@ def session():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     s = SessionLocal()
     try:

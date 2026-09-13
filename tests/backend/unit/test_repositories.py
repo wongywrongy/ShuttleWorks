@@ -17,7 +17,6 @@ from sqlalchemy.pool import StaticPool
 
 # conftest.py adds backend/ to sys.path before this module is collected.
 from db.models import (
-    Base,
     InviteLink,
     Match,
     MatchState,
@@ -42,7 +41,8 @@ def session():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     s = SessionLocal()
     try:
@@ -102,7 +102,7 @@ def test_create_inserts_with_defaults(repo):
     assert row.owner_id is None
     assert row.status == "draft"
     assert row.data == {}
-    assert row.schema_version == 2
+    assert row.schema_version == 1
 
 
 def test_create_accepts_named_fields(repo):
@@ -209,7 +209,7 @@ def test_upsert_data_replaces_blob_and_keeps_denormalised(repo):
     assert row.tournament_date == "2026-04-02"
     # Server stamps updatedAt and version inside data.
     assert "updatedAt" in row.data
-    assert row.data["version"] == 2
+    assert row.data["version"] == 1
 
 
 def test_upsert_data_raises_keyerror_on_missing(repo):
@@ -729,8 +729,8 @@ def test_state_version_and_the_schema_version_coexist_and_move_apart(session):
     session.expire_all()
     fresh = repo.tournaments.get_by_id(row.id)
     assert fresh.state_version == 2, "the OCC token counts writes"
-    assert fresh.data["version"] == 2, "the schema version does not"
-    assert fresh.schema_version == 2, "and the mirror column tracks the schema one"
+    assert fresh.data["version"] == 1, "the schema version does not"
+    assert fresh.schema_version == 1, "and the mirror column tracks the schema one"
 
 
 def test_a_fresh_workspace_keeps_an_empty_document(session):
@@ -744,10 +744,11 @@ def test_a_fresh_workspace_keeps_an_empty_document(session):
     assert repo.tournaments.get_by_id(row.id).data == {}
 
 
-def test_a_future_version_blob_refuses_to_load(session):
-    """NC 1 end-to-end: v2 code meeting a v3 document raises instead of
+@pytest.mark.parametrize("stored", [0, 2])
+def test_a_noncurrent_version_blob_refuses_to_load(session, stored):
+    """Current-only end-to-end: an older or newer document raises instead of
     parsing it. The blob is planted with textual SQL ON PURPOSE - the bind
-    processor would re-stamp it to 2 through any typed write, so a
+    processor would re-stamp it to 1 through any typed write, so a
     ``session.execute(update(...))`` plant would test nothing."""
     import json
 
@@ -764,7 +765,7 @@ def test_a_future_version_blob_refuses_to_load(session):
         # ``.hex``, not ``str()``: SQLAlchemy's ``Uuid`` stores UNDASHED
         # 32-char hex on SQLite, so a dashed bind matches zero rows and
         # the plant silently does nothing.
-        {"d": json.dumps({"version": 3, "config": {}}), "i": row.id.hex},
+        {"d": json.dumps({"version": stored, "config": {}}), "i": row.id.hex},
     )
     session.commit()
     session.expire_all()
@@ -774,8 +775,7 @@ def test_a_future_version_blob_refuses_to_load(session):
 
 
 def test_an_unversioned_blob_reads_as_v1_and_is_rewritten_stamped(session):
-    """NC 1's other half - the compatibility promise the no-backfill
-    decision rests on. Every row in a shipped database is in this state."""
+    """Absent means the current initial version; writes stamp it explicitly."""
     import json
 
     from sqlalchemy import text
@@ -797,4 +797,4 @@ def test_an_unversioned_blob_reads_as_v1_and_is_rewritten_stamped(session):
 
     repo.tournaments.upsert_data(row.id, dict(legacy.data))
     session.expire_all()
-    assert repo.tournaments.get_by_id(row.id).data["version"] == 2
+    assert repo.tournaments.get_by_id(row.id).data["version"] == 1

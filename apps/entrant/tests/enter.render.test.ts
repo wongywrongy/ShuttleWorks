@@ -304,8 +304,8 @@ describe('the entry form, unhydrated', () => {
   it('states the bundle schedule verbatim from the projection', async () => {
     const html = await render();
 
-    expect(html).toContain('Bundle pricing');
-    expect(html).toContain('2 events');
+    expect(html).toContain('How the total is calculated');
+    expect(html.replace(/<!--.*?-->/g, '')).toContain('2 events');
     expect(html).toContain('25.00');
   });
 

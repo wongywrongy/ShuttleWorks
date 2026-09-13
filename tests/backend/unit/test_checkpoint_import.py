@@ -8,7 +8,6 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from db.models import (
-    Base,
     BracketEvent,
     BracketMatch,
     BracketParticipant,
@@ -29,7 +28,8 @@ from sync.service import (
 
 def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return Session(engine, expire_on_commit=False)
 
 
@@ -42,8 +42,8 @@ def _source() -> tuple[Session, uuid.UUID, uuid.UUID]:
             id=tournament_id,
             name="Checkpoint proof",
             kind="bracket",
-            data={"version": 2, "config": {"tournamentName": "Checkpoint proof"}},
-            schema_version=2,
+            data={"version": 1, "config": {"tournamentName": "Checkpoint proof"}},
+            schema_version=1,
             state_version=4,
             tournament_date="2026-09-10",
             tournament_end_date="2026-09-12",
@@ -109,8 +109,8 @@ def _source() -> tuple[Session, uuid.UUID, uuid.UUID]:
 
 def test_checkout_contains_deterministic_normalized_bracket_slice() -> None:
     session, tournament_id, node_id = _source()
-    first = checkpoint_package(session.get(Tournament, tournament_id), schema_version=3, session=session)
-    second = checkpoint_package(session.get(Tournament, tournament_id), schema_version=3, session=session)
+    first = checkpoint_package(session.get(Tournament, tournament_id), schema_version=1, session=session)
+    second = checkpoint_package(session.get(Tournament, tournament_id), schema_version=1, session=session)
     assert first == second
     assert [row["id"] for row in first["normalized"]["bracketEvents"]] == ["MS"]
     assert [row["id"] for row in first["normalized"]["bracketMatches"]] == ["m1"]
@@ -136,7 +136,7 @@ def test_checkout_carries_minimal_versioned_operator_policy_without_secrets() ->
     ))
     session.commit()
     checkpoint = checkpoint_package(
-        session.get(Tournament, tournament_id), schema_version=3, session=session
+        session.get(Tournament, tournament_id), schema_version=1, session=session
     )
     assert checkpoint["operatorPolicy"] == {
         "schemaVersion": 1,
@@ -152,7 +152,7 @@ def test_checkout_carries_minimal_versioned_operator_policy_without_secrets() ->
 
 def test_import_is_atomic_and_retry_is_idempotent() -> None:
     source, tournament_id, _node = _source()
-    checkpoint = checkpoint_package(source.get(Tournament, tournament_id), schema_version=3, session=source)
+    checkpoint = checkpoint_package(source.get(Tournament, tournament_id), schema_version=1, session=source)
     target = _session()
     node_id = uuid.uuid4()
     capability = "capability-" + "x" * 40
@@ -185,7 +185,7 @@ def test_import_provisions_operator_policy_identities() -> None:
     source.flush()
     source.add(TournamentMember(tournament_id=tournament_id, user_id=user_id, role="owner"))
     source.commit()
-    checkpoint = checkpoint_package(source.get(Tournament, tournament_id), schema_version=3, session=source)
+    checkpoint = checkpoint_package(source.get(Tournament, tournament_id), schema_version=1, session=source)
     target = _session()
     import_checkpoint(
         target,
@@ -204,7 +204,7 @@ def test_import_provisions_operator_policy_identities() -> None:
 
 def test_corrupt_checkpoint_rejected_before_writes_and_existing_target_is_never_overwritten() -> None:
     source, tournament_id, _node = _source()
-    checkpoint = checkpoint_package(source.get(Tournament, tournament_id), schema_version=3, session=source)
+    checkpoint = checkpoint_package(source.get(Tournament, tournament_id), schema_version=1, session=source)
     target = _session()
     corrupt = {**checkpoint, "normalized": {**checkpoint["normalized"], "bracketMatches": []}}
     with pytest.raises(ProtocolError, match="digest"):

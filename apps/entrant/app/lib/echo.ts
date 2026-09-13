@@ -41,6 +41,7 @@ export interface PlayerEcho {
   name: string;
   gender: string;
   club: string;
+  representation?: string;
   birthYear: string;
   remarks: string;
   /** Raw `"<index>:<eventId>"` values, exactly as posted. */
@@ -66,6 +67,7 @@ export interface FormEcho {
   players: PlayerEcho[];
   showAllEvents: boolean;
   totalCents: number | null;
+  reviewedQuote?: string;
   /** Fixed local copy chosen by `refusalText` — never text off the URL. */
   refusal: string | null;
 }
@@ -167,6 +169,7 @@ export function parseEcho(params: URLSearchParams): FormEcho {
       name,
       gender: genders[index] ?? '',
       club: clubs[index] ?? '',
+      representation: params.getAll('representation')[index] ?? '',
       birthYear: years[index] ?? '',
       remarks: remarks[index] ?? '',
       // Split on the first colon and compare the index EXACTLY. A
@@ -181,6 +184,7 @@ export function parseEcho(params: URLSearchParams): FormEcho {
     })),
     showAllEvents: params.get('showAllEvents') !== null,
     totalCents: readCents(params.get('totalCents')),
+    reviewedQuote: /^[a-f0-9]{64}$/.test(params.get('reviewedQuote') ?? '') ? params.get('reviewedQuote')! : '',
     refusal: refusalText(params.get('refusalCode'), params.get('refusalSubjects')),
   };
 }

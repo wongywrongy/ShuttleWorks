@@ -1,8 +1,8 @@
 /**
- * Hub navigation + the control plane. The Hub narrows workspaces by TIME
- * (Upcoming · Live · Past, derived from the event date range in the event's
- * timezone), defaults to the combined Live + Upcoming view, and shows them as
- * one flat list ordered live → upcoming → undated → past.
+ * Hub navigation + the control plane. The Hub narrows workspaces by TIME with
+ * a single-select Active/Past view (derived from the event date range in the
+ * event's timezone) and shows them as one flat Tournament · Dates · Status ·
+ * Open · Actions table ordered live → upcoming → undated → past.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -86,18 +86,31 @@ describe('HubPage navigation', () => {
     const loc = { current: '' };
     mount(loc);
     await waitFor(() => expect(screen.getByText(/Bracket A/i)).toBeInTheDocument());
-    const openButtons = screen.getAllByRole('button', { name: 'Open workspace' });
+    const openButtons = screen.getAllByTestId('row-open');
     fireEvent.click(openButtons[0]); // bracket row first (soonest upcoming)
     expect(loc.current).toBe('/tournaments/br1/overview');
   });
 
-  it('Open on a meet tournament navigates to its Overview', async () => {
+  it('Open on a meet tournament navigates to the SAME destination', async () => {
     const loc = { current: '' };
     mount(loc);
     await waitFor(() => expect(screen.getByText(/Meet A/i)).toBeInTheDocument());
-    const openButtons = screen.getAllByRole('button', { name: 'Open workspace' });
+    const openButtons = screen.getAllByTestId('row-open');
     fireEvent.click(openButtons[1]); // meet row second
     expect(loc.current).toBe('/tournaments/me1/overview');
+  });
+
+  it('a live workspace opens on the Overview too — one destination per row', async () => {
+    vi.mocked(apiClient.listTournaments).mockResolvedValue([
+      { id: 'live1', name: 'Taipei Open', kind: 'meet' as const, role: 'owner' as const,
+        tournamentDate: '2026-07-31', status: 'active' as const,
+        signals: { health: 'good', attention: [], modules: { enabled: 1, available: 0, disabled: 0, comingSoon: 0 }, setup: {}, collaboration: { memberCount: 1, activeInviteCount: 0 }, phase: 'live' as const } },
+    ] as never);
+    const loc = { current: '' };
+    mount(loc);
+    await waitFor(() => expect(screen.getByText('Taipei Open')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('row-open'));
+    expect(loc.current).toBe('/tournaments/live1/overview');
   });
 });
 
@@ -113,28 +126,29 @@ describe('HubPage time-oriented control plane', () => {
     ] as never);
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Taipei Open')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /^Live\b/ })).toHaveTextContent('1');
-    expect(screen.getByRole('button', { name: /^Upcoming\b/ })).toHaveTextContent('1');
+    // The Active count is the size of the set Active shows: live + upcoming.
+    expect(screen.getByRole('radio', { name: /^Active\b/ })).toHaveTextContent('2');
+    expect(screen.getByRole('radio', { name: /^Past\b/ })).toHaveTextContent('1');
     expect(screen.getByText('Taipei Open')).toBeInTheDocument();
     expect(screen.getByText('Korea Masters')).toBeInTheDocument();
     expect(screen.queryByText('Old Cup')).not.toBeInTheDocument();
   });
 
-  it('keeps the chosen view in the URL and returns to the default on a second click', async () => {
+  it('is a single-select view kept in the URL', async () => {
     const loc = { current: '' };
     const search = { current: '' };
     mount(loc, search);
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
-    // The default view is Live + Upcoming: both chips read as selected, and
-    // the URL carries no `view` at all.
-    expect(screen.getByRole('button', { name: /^Upcoming\b/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /^Live\b/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /^Past\b/ })).toHaveAttribute('aria-pressed', 'false');
+    // Exactly ONE view is chosen; the default carries no `view` in the URL.
+    expect(screen.getByRole('radio', { name: /^Active\b/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /^Past\b/ })).toHaveAttribute('aria-checked', 'false');
     expect(search.current).toBe('');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Past\b/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /^Past\b/ }));
     expect(search.current).toContain('view=past');
-    fireEvent.click(screen.getByRole('button', { name: /^Past\b/ }));
+    expect(screen.getByRole('radio', { name: /^Active\b/ })).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(screen.getByRole('radio', { name: /^Active\b/ }));
     expect(search.current).toBe('');
   });
 
@@ -224,15 +238,15 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.queryByRole('button', { name: /new event/i })).not.toBeInTheDocument();
   });
 
-  it('offers exactly the three time views and nothing else', async () => {
+  it('offers exactly the two time views and nothing else', async () => {
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
     const strip = screen.getByTestId('hub-facet-strip');
-    expect(within(strip).getAllByRole('button').map((b) => b.textContent?.trim().split(' ')[0]))
-      .toEqual(['Upcoming', 'Live', 'Past']);
+    expect(within(strip).getAllByRole('radio').map((b) => b.textContent?.trim().split(' ')[0]))
+      .toEqual(['Active', 'Past']);
     // The lifecycle/status facets are gone, not relabelled.
-    for (const name of [/^All\b/, /^Active\b/, /^Setup\b/, /^Ready\b/, /^Complete\b/, /Needs attention/, /^Shared\b/, /^Archived\b/]) {
-      expect(within(strip).queryByRole('button', { name })).toBeNull();
+    for (const name of [/^All\b/, /^Setup\b/, /^Ready\b/, /^Complete\b/, /Needs attention/, /^Shared\b/, /^Archived\b/]) {
+      expect(within(strip).queryByRole('radio', { name })).toBeNull();
     }
     // Sorting is not a control any more: one operational order.
     expect(screen.queryByLabelText('Sort workspaces')).toBeNull();
@@ -247,7 +261,7 @@ describe('HubPage time-oriented control plane', () => {
     ] as never);
     mount({ current: '' });
     await waitFor(() => expect(screen.getByText('Next Season')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /^Past\b/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /^Past\b/ }));
     expect(screen.getByText('Last Season')).toBeInTheDocument();
     expect(screen.queryByText('Next Season')).toBeNull();
   });
@@ -282,31 +296,20 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByText('Meet A')).toBeInTheDocument();
   });
 
-  it('selecting a row populates the inspector with its module catalog', async () => {
-    mount({ current: '' });
+  it('selecting a row opens the preview panel and does not navigate', async () => {
+    const loc = { current: '' };
+    mount(loc);
     await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Meet A'));
-    expect(screen.getByText('MODULES')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-inspector')).toBeInTheDocument();
+    expect(loc.current).toBe('/');
   });
 
-  it('rows carry module glyphs with accessible names, and no attention prose', async () => {
-    vi.mocked(apiClient.listTournaments).mockResolvedValue([
-      {
-        id: 'x1', name: 'Glyph Cup', kind: 'meet' as const, role: 'owner' as const,
-        tournamentDate: '2099-12-01', status: 'active' as const,
-        modules: [
-          { moduleId: 'meet', status: 'enabled', config: null },
-          { moduleId: 'display', status: 'enabled', config: null },
-        ],
-      },
-    ] as never);
+  it('names its columns Tournament · Dates · Status · Open · Actions', async () => {
     mount({ current: '' });
-    await waitFor(() => expect(screen.getByText(/Glyph Cup/i)).toBeInTheDocument());
-    const glyphs = screen.getByTestId('row-modules');
-    expect(within(glyphs).getByRole('img', { name: 'Meet' })).toBeInTheDocument();
-    expect(within(glyphs).getByRole('img', { name: 'Display' })).toBeInTheDocument();
-    // Nothing is wrong with this workspace, so no attention dot at all.
-    expect(screen.queryByTestId('row-attention')).toBeNull();
+    await waitFor(() => expect(screen.getByText('Bracket A')).toBeInTheDocument());
+    const header = screen.getByText('Tournament').parentElement!;
+    expect(header.textContent).toBe('TournamentDatesStatusOpenActions');
   });
 
   it('states attention as one labelled dot that opens the inspector', async () => {
@@ -339,7 +342,7 @@ describe('HubPage time-oriented control plane', () => {
     expect(screen.getByTestId('hub-footer')).toHaveTextContent('1 archived');
   });
 
-  it('suppresses a never-varying Complete chip already stated by the facet (SWP-2)', async () => {
+  it('states a status on every row, whether or not the rows agree', async () => {
     const completeSignals = {
       health: 'good' as const,
       attention: [],
@@ -355,11 +358,16 @@ describe('HubPage time-oriented control plane', () => {
         tournamentDate: '2026-07-02', status: 'active' as const, signals: completeSignals },
     ] as never);
     mount({ current: '' });
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Past\b/ })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /^Past\b/ }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: /^Past\b/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('radio', { name: /^Past\b/ }));
     expect(screen.getByText('Complete One')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Past\b/ })).toHaveTextContent('2');
-    expect(screen.queryByTestId('row-lifecycle')).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^Past\b/ })).toHaveTextContent('2');
+    // Both rows say it. A status column that hides itself when every row
+    // agrees is blank exactly when it is easiest to read.
+    expect(screen.getAllByTestId('row-status').map((n) => n.textContent)).toEqual([
+      'Completed',
+      'Completed',
+    ]);
   });
 
   it('"New workspace" navigates to the dedicated /new surface', async () => {
@@ -370,27 +378,16 @@ describe('HubPage time-oriented control plane', () => {
     expect(loc.current).toBe('/new');
   });
 
-  it('the inspector module map reads the real modules[] DTO when present (not only kind)', async () => {
-    vi.mocked(apiClient.listTournaments).mockResolvedValue([
-      {
-        id: 'x1', name: 'X Workspace', kind: 'meet' as const, role: 'owner' as const,
-        tournamentDate: '2026-12-01', status: 'draft' as const,
-        modules: [
-          { moduleId: 'meet', status: 'enabled', config: null },
-          { moduleId: 'display', status: 'enabled', config: null },
-        ],
-      },
-    ] as never);
+  it('the preview panel is a preview, not a copy of the workspace Overview', async () => {
     mount({ current: '' });
-    await waitFor(() => expect(screen.getByText('X Workspace')).toBeInTheDocument());
-    // Select the row → the inspector's module map reflects the DTO: Display
-    // enabled (a kind=meet default would NOT enable it) alongside Meet.
-    fireEvent.click(screen.getByText('X Workspace'));
-    expect(screen.getByText('MODULES')).toBeInTheDocument();
-    const displayRow = screen.getByText('Display').closest('li')!;
-    expect(displayRow.textContent).toMatch(/enabled/i);
-    const meetRow = screen.getByText('Meet').closest('li')!;
-    expect(meetRow.textContent).toMatch(/enabled/i);
+    await waitFor(() => expect(screen.getByText('Meet A')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Meet A'));
+    const panel = screen.getByTestId('workspace-inspector');
+    expect(within(panel).getByRole('button', { name: 'Open' })).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.queryByTestId('inspector-checklist')).toBeNull();
+    expect(screen.queryByTestId('inspector-next-up')).toBeNull();
+    expect(screen.queryByText('MODULES')).toBeNull();
   });
 });
 
@@ -406,12 +403,12 @@ describe('HubPage — the view strip is reachable at any width', () => {
     // Overflowing content gets a scrollbar instead of being clipped away.
     expect(strip.className).toMatch(/\boverflow-x-auto\b/);
     // Every view chip is INSIDE that strip, so scrolling reaches all of them.
-    for (const chip of within(strip).getAllByRole('button')) {
+    for (const chip of within(strip).getAllByRole('radio')) {
       expect(strip.contains(chip)).toBe(true);
     }
-    const past = within(strip).getByRole('button', { name: /^Past\b/ });
+    const past = within(strip).getByRole('radio', { name: /^Past\b/ });
     fireEvent.click(past);
-    expect(past).toHaveAttribute('aria-pressed', 'true');
+    expect(past).toHaveAttribute('aria-checked', 'true');
   });
 });
 

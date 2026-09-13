@@ -152,7 +152,7 @@ export function NewWorkspacePage() {
           />
         </Section>
 
-        <Section title="What it runs">
+        <Section title="Modules">
           {MODULE_IDS.map((id, i) => (
             <Row
               key={id}

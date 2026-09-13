@@ -78,7 +78,7 @@ know who is reading, by design.
   route when identity or spatial interaction requires the browser; inline script and framework
   hydration remain absent. Poster and discovery documents have a blocking 4 KB page-weight budget,
   the published-results documents (Players, a full draw, the schedule) a blocking 14 KB one,
-  while the persistent entry journey has an 8 KB budget including its route module. CSP remains
+  while the persistent entry journey has a 10 KB budget including its route module. CSP remains
   `script-src 'self'`.
 - **The rendering tier never relays credentials.** It cannot read a cookie or an inbound header, so
   it cannot know who is reading a page. Outcomes are carried on the URL, not derived from identity.

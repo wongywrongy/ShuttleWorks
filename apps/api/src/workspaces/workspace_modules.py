@@ -39,12 +39,12 @@ log = logging.getLogger("scheduler.workspace_modules")
 # is immutable and never appears on either side. Setting a status to
 # ``available`` is not an operator-driven transition — only the derived
 # seed produces it.
+from core.state_machine import GUARDS, TransitionError, apply
+from core.state_machines import WORKSPACE_MODULE
+
 _ALLOWED_TRANSITIONS = frozenset(
-    {
-        ("available", "enabled"),
-        ("enabled", "disabled"),
-        ("disabled", "enabled"),
-    }
+    (source, transition.to)
+    for transition in WORKSPACE_MODULE.transitions for source in transition.from_states
 )
 
 
@@ -163,36 +163,11 @@ def patch_module(
                 f"transition {target.status} → {new_status} is not allowed",
             )
 
-        if new_status == "enabled" and module_id == "display":
-            statuses = {m.module_id: m.status for m in modules}
-            statuses["display"] = "enabled"
-            if not display_dependency_satisfied(statuses):
-                raise http_error(
-                    409,
-                    ErrorCode.MODULE_DEPENDENCY_UNMET,
-                    "enabling display requires an enabled operational module",
-                )
-
-        if new_status == "disabled" and module_id in OPERATIONAL_MODULES:
-            # Destructive-disable guard FIRST so a module with data surfaces
-            # its own specific error even when it is also the last operator.
-            if _module_has_data(module_id, tournament_id, repo):
-                raise http_error(
-                    409,
-                    ErrorCode.MODULE_HAS_DATA,
-                    f"module '{module_id}' has data and cannot be disabled",
-                )
-            enabled_operators = [
-                m
-                for m in modules
-                if m.module_id in OPERATIONAL_MODULES and m.status == "enabled"
-            ]
-            if len(enabled_operators) <= 1:
-                raise http_error(
-                    409,
-                    ErrorCode.MODULE_LAST_OPERATIONAL,
-                    "cannot disable the last enabled operational module",
-                )
+        event = "enable" if new_status == "enabled" else "disable"
+        try:
+            repo.stage(_transition_module, target, event, modules=modules, repo=repo)
+        except TransitionError as exc:
+            raise http_error(409, exc.code, exc.message) from exc
 
     updated = repo.modules.update(tournament_id, module_id, provided)
     if updated is None:  # pragma: no cover — resolved above, defensive
@@ -202,6 +177,11 @@ def patch_module(
             f"module not found: {module_id}",
         )
     return WorkspaceModuleDTO.from_row(updated)
+
+
+def _transition_module(session, target, event, *, modules, repo):
+    apply(WORKSPACE_MODULE, target, event, "operator", guards=GUARDS,
+          session=session, context={"modules": modules, "repo": repo}).persist(session)
 
 
 def _module_has_data(
@@ -215,3 +195,40 @@ def _module_has_data(
     if module_id == "bracket":
         return repo.modules.count_bracket_events(tournament_id) > 0
     return False
+
+
+def display_has_operator(row, *, modules, repo, session=None):
+    module_id = row.module_id
+    if module_id == "display":
+        statuses = {m.module_id: m.status for m in modules}
+        statuses["display"] = "enabled"
+        if not display_dependency_satisfied(statuses):
+            raise TransitionError(
+                ErrorCode.MODULE_DEPENDENCY_UNMET,
+                "enabling display requires an enabled operational module",
+            )
+
+
+def keeps_one_operational(row, *, modules, repo, session=None):
+    module_id, tournament_id = row.module_id, row.tournament_id
+    if module_id in OPERATIONAL_MODULES:
+        # Destructive-disable guard FIRST so a module with data surfaces
+        # its own specific error even when it is also the last operator.
+        if _module_has_data(module_id, tournament_id, repo):
+            raise TransitionError(
+                ErrorCode.MODULE_HAS_DATA,
+                f"module '{module_id}' has data and cannot be disabled",
+            )
+        enabled_operators = [
+            m
+            for m in modules
+            if m.module_id in OPERATIONAL_MODULES and m.status == "enabled"
+        ]
+        if len(enabled_operators) <= 1:
+            raise TransitionError(
+                ErrorCode.MODULE_LAST_OPERATIONAL,
+                "cannot disable the last enabled operational module",
+            )
+
+
+GUARDS.update(display_has_operator=display_has_operator, keeps_one_operational=keeps_one_operational)

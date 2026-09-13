@@ -79,6 +79,7 @@ def world(client, turnstile, mailbox):
                 slug="money-open",
                 is_open=True,
                 fee_schedule={"1": 4000},
+                fee_currency="USD",
             )
         )
         event = EntryEvent(
@@ -202,13 +203,13 @@ def test_marking_paid_clears_the_reason(client, world):
     out = _submit(world)
     _as_operator(client)
     r = client.post(
-        f"/tournaments/{world['tid']}/submissions/{out['submission_id']}/paid",
-        json={"note": "Zelle, ref 4412"},
+        f"/tournaments/{world['tid']}/submissions/{out['submission_id']}/payments",
+        json={"note": "Zelle, ref 4412", "amountCents": 4000, "currency": "USD", "requestId": "payment-1"},
         headers=CSRF,
     )
     assert r.status_code == 200, r.text
-    assert r.json()["entriesUpdated"] == 1
-    assert r.json()["paidAt"] is not None
+    assert r.json()["paidCents"] == 4000
+    assert r.json()["outstandingCents"] == 0
     assert "awaiting_payment" not in _entry(world["tid"], out["entry_id"]).pending_reasons
 
 
@@ -223,7 +224,8 @@ def test_marking_paid_does_not_confirm_the_entry(client, world):
     out = _submit(world)
     _as_operator(client)
     client.post(
-        f"/tournaments/{world['tid']}/submissions/{out['submission_id']}/paid",
+        f"/tournaments/{world['tid']}/submissions/{out['submission_id']}/payments",
+        json={"amountCents": 4000, "currency": "USD", "requestId": "payment-1"},
         headers=CSRF,
     )
     assert _entry(world["tid"], out["entry_id"]).state == "pending"
@@ -233,20 +235,20 @@ def test_marking_paid_twice_is_not_an_error(client, world):
     """Two operators on a busy desk is a thing that happens."""
     out = _submit(world)
     _as_operator(client)
-    url = f"/tournaments/{world['tid']}/submissions/{out['submission_id']}/paid"
-    first = client.post(url, headers=CSRF)
-    second = client.post(url, headers=CSRF)
+    url = f"/tournaments/{world['tid']}/submissions/{out['submission_id']}/payments"
+    first = client.post(url, json={"amountCents": 4000, "currency": "USD", "requestId": "payment-1"}, headers=CSRF)
+    second = client.post(url, json={"amountCents": 4000, "currency": "USD", "requestId": "payment-1"}, headers=CSRF)
     assert first.status_code == second.status_code == 200
     # The second press cleared nothing, because there was nothing left.
-    assert second.json()["entriesUpdated"] == 0
+    assert second.json() == first.json()
 
 
 def test_unmarking_restores_the_reason(client, world):
     out = _submit(world)
     _as_operator(client)
     base = f"/tournaments/{world['tid']}/submissions/{out['submission_id']}"
-    client.post(f"{base}/paid", headers=CSRF)
-    r = client.post(f"{base}/unpaid", headers=CSRF)
+    client.post(f"{base}/payments", json={"amountCents": 4000, "currency": "USD", "requestId": "payment-1"}, headers=CSRF)
+    r = client.post(f"{base}/payments", json={"amountCents": -4000, "currency": "USD", "requestId": "refund-1"}, headers=CSRF)
 
     assert r.status_code == 200
     assert "awaiting_payment" in _entry(world["tid"], out["entry_id"]).pending_reasons
@@ -262,8 +264,8 @@ def test_unmarking_a_free_act_invents_no_debt(client, world):
     out = _submit(world, fee=None)
     _as_operator(client)
     base = f"/tournaments/{world['tid']}/submissions/{out['submission_id']}"
-    client.post(f"{base}/paid", headers=CSRF)
-    client.post(f"{base}/unpaid", headers=CSRF)
+    client.post(f"{base}/payments", json={"amountCents": 4000, "currency": "USD", "requestId": "payment-1"}, headers=CSRF)
+    client.post(f"{base}/payments", json={"amountCents": -4000, "currency": "USD", "requestId": "refund-1"}, headers=CSRF)
     assert "awaiting_payment" not in _entry(world["tid"], out["entry_id"]).pending_reasons
 
 
@@ -284,7 +286,8 @@ def test_a_viewer_cannot_record_a_payment(client, world):
     client.post(f"/invites/{token}/accept", headers=CSRF)
 
     r = client.post(
-        f"/tournaments/{world['tid']}/submissions/{out['submission_id']}/paid",
+        f"/tournaments/{world['tid']}/submissions/{out['submission_id']}/payments",
+        json={"amountCents": 4000, "currency": "USD", "requestId": "payment-1"},
         headers=CSRF,
     )
     assert r.status_code == 403

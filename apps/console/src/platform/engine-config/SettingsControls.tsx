@@ -292,10 +292,14 @@ export function Toggle({
   value,
   onChange,
   ariaLabel,
+  disabled = false,
 }: {
   value: boolean;
   onChange: (v: boolean) => void;
   ariaLabel?: string;
+  /** Real `disabled`, matching `Seg`: a wrapper's `pointer-events-none`
+   *  leaves the button keyboard-operable. */
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -303,6 +307,7 @@ export function Toggle({
       role="switch"
       aria-checked={value}
       aria-label={ariaLabel}
+      disabled={disabled}
       onClick={() => onChange(!value)}
       className={[
         // MOTION.md §6 Toggle: track at duration-fast, thumb at
@@ -313,6 +318,9 @@ export function Toggle({
         // AA minimum target size on its own (v3 consolidated plan §6).
         'inline-flex h-6 w-9 items-center rounded-full transition-colors duration-fast ease-brand',
         value ? 'bg-accent' : 'bg-muted',
+        // Variant, not a conditional class: the button carries a real
+        // `disabled` attribute, which the ink contract exempts by pattern.
+        'disabled:opacity-50',
       ].join(' ')}
     >
       <span
@@ -389,6 +397,7 @@ export function NumberInput({
   max,
   width = 64,
   ariaLabel,
+  disabled = false,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -396,6 +405,7 @@ export function NumberInput({
   max?: number;
   width?: number;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <span className="inline-block shrink-0" style={{ width: `${width}px` }}>
@@ -407,6 +417,7 @@ export function NumberInput({
         value={value}
         min={min}
         max={max}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label={ariaLabel}
         inputClassName="tabular-nums"
@@ -423,6 +434,7 @@ export function NumberWithSuffix({
   max,
   width = 64,
   ariaLabel,
+  disabled = false,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -431,6 +443,7 @@ export function NumberWithSuffix({
   max?: number;
   width?: number;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <span className="inline-flex items-baseline gap-2">
@@ -441,6 +454,7 @@ export function NumberWithSuffix({
         max={max}
         width={width}
         ariaLabel={ariaLabel}
+        disabled={disabled}
       />
       <UnitSlot>{suffix}</UnitSlot>
     </span>

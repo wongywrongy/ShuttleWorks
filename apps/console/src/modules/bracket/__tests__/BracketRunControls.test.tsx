@@ -120,13 +120,13 @@ describe('BracketMatchControls', () => {
     render(<BracketMatchControls matchId="pu-1" data={startedData} onChange={vi.fn()} />);
 
     // Sets-mode score entry, not the plain win buttons.
-    expect(screen.getByTestId('bracket-score-entry')).toBeInTheDocument();
+    expect(screen.getByTestId('result-entry-form')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Alice wins/i })).toBeNull();
 
-    fireEvent.change(screen.getByLabelText('Set 1 Alice score'), { target: { value: '21' } });
-    fireEvent.change(screen.getByLabelText('Set 1 Bob score'), { target: { value: '18' } });
-    fireEvent.change(screen.getByLabelText('Set 2 Alice score'), { target: { value: '21' } });
-    fireEvent.change(screen.getByLabelText('Set 2 Bob score'), { target: { value: '15' } });
+    fireEvent.change(screen.getByLabelText('Game 1 score for Alice'), { target: { value: '21' } });
+    fireEvent.change(screen.getByLabelText('Game 1 score for Bob'), { target: { value: '18' } });
+    fireEvent.change(screen.getByLabelText('Game 2 score for Alice'), { target: { value: '21' } });
+    fireEvent.change(screen.getByLabelText('Game 2 score for Bob'), { target: { value: '15' } });
     fireEvent.click(screen.getByRole('button', { name: /Record result/i }));
 
     await waitFor(() => expect(mockSubmitResult).toHaveBeenCalled());
@@ -135,6 +135,9 @@ describe('BracketMatchControls', () => {
       winnerSide: 'A',
       seenVersion: 1,
       finishedAtSlot: 6,
+      correction: false,
+      walkover: false,
+      reason: null,
       score: { sets: [{ sideA: 21, sideB: 18 }, { sideA: 21, sideB: 15 }] },
     });
   });

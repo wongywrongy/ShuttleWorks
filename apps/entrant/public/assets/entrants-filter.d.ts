@@ -15,6 +15,7 @@ export function matches(
   club: string | null | undefined,
 ): boolean;
 export function filterNoun(root: Element | null | undefined): 'player' | 'entrant';
-export function apply(scope: ParentNode, query: string): number;
+export function rowHasEvent(events: string | null | undefined, event: string | null | undefined): boolean;
+export function apply(scope: ParentNode, query: string, event?: string): number;
 export function findLabel(noun: 'player' | 'entrant'): string;
 export function boot(root: Element): void;

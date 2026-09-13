@@ -10,7 +10,7 @@ Small same-origin route modules are limited to browser-dependent enhancements: `
 `my-entries.js`, `receipt.js`, `regulations.js`, `entrants-filter.js`, and `bracket-path.js`.
 Poster/discovery pages stay within a blocking 4 KB script budget; the published-results documents
 (Players, a full draw, the schedule) have a blocking 14 KB budget; the persistent entry journey has
-an 8 KB budget. See the [entrant architecture](../../docs/explanation/architecture/entrant-tier.md)
+a 10 KB budget. See the [entrant architecture](../../docs/explanation/architecture/entrant-tier.md)
 for the public data contract and publication gates.
 
 The public tournament navigation is intent-led: Overview, Schedule / Live, Events, Players, Draws,

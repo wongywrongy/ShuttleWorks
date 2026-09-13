@@ -112,6 +112,7 @@ export function MatchesSpreadsheet({
   // beats a second mechanism.
   const [statusParam, setStatusParam] = useSearchParamState('status', '');
   const [sortParam, setSortParam] = useSearchParamState('sort', 'asc');
+  const [showFilters, setShowFilters] = useState(false);
   const statusFilter = parseMatchStatusFilter(statusParam);
   // Legacy filter params kept for URL backward compatibility — not
   // currently surfaced in any UI; if the user lands with these set, the
@@ -381,9 +382,48 @@ export function MatchesSpreadsheet({
           onChange={(v) => setStatusParam(v === 'all' ? '' : v)}
           testIdPrefix="matches"
         />
-        <label className="flex flex-wrap items-center gap-2 px-5 py-2 text-xs text-muted-foreground">Match number within event
-          <select aria-label="Sort matches" className="min-h-9 rounded-md border border-border bg-card px-2 text-foreground" value={sortParam === 'desc' ? 'desc' : 'asc'} onChange={(event) => setSortParam(event.target.value)}><option value="asc">Ascending</option><option value="desc">Descending</option></select>
-        </label>
+        {/* Sort is not a frequent task, so it does not get a permanent row of
+            its own (plan D5). It lives behind the same Filters disclosure the
+            occasional controls use; the applied state and Clear show only
+            when the order is not the default. */}
+        <div className="flex flex-wrap items-center gap-2 px-5 py-2 text-xs text-muted-foreground">
+          <button
+            type="button"
+            aria-expanded={showFilters}
+            data-testid="matches-filters-toggle"
+            onClick={() => setShowFilters((open) => !open)}
+            className="inline-flex min-h-7 items-center gap-1 rounded-sm border border-border bg-card px-2 text-xs text-foreground hover:bg-muted/40"
+          >
+            Filters
+          </button>
+          {showFilters ? (
+            <label className="flex items-center gap-2">
+              Match number within event
+              <select
+                aria-label="Sort matches"
+                className="min-h-9 rounded-md border border-border bg-card px-2 text-foreground"
+                value={sortParam === 'desc' ? 'desc' : 'asc'}
+                onChange={(event) => setSortParam(event.target.value)}
+              >
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </label>
+          ) : null}
+          {sortParam === 'desc' ? (
+            <>
+              {!showFilters ? <span>Match number descending</span> : null}
+              <button
+                type="button"
+                data-testid="matches-clear-filters"
+                onClick={() => setSortParam('asc')}
+                className="inline-flex min-h-7 items-center rounded-sm px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear filters
+              </button>
+            </>
+          ) : null}
+        </div>
         <div ref={listScrollRef} data-list-scroll="meet-matches" className="min-h-0 flex-1 overflow-auto">
         {inventory.page.total === 0 ? (
           <>

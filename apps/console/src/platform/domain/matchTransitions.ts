@@ -16,20 +16,18 @@
  * route short-circuits a re-assert of the current status *before* the transition
  * guard, which is what lets an operator edit the score of a finished match.
  */
+import stateMachines from '@scheduler/shared-contract/state-machines.json';
 import type { MatchStateDTO } from '../../api/dto';
 
 export type MatchStatus = MatchStateDTO['status'];
 
-export const VALID_TRANSITIONS: Record<MatchStatus, MatchStatus[]> = {
-  scheduled: ['called', 'scheduled'],
-  called: ['started', 'scheduled', 'called'],
-  // Undo of a start returns to `scheduled` (the backend has no playing→called
-  // edge); the queue re-offers the match for calling.
-  started: ['finished', 'scheduled', 'started'],
-  // `finished → started` is the operator's undo of a mis-tapped Finish;
-  // `finished → finished` is a score edit. Nothing else re-opens a result.
-  finished: ['started', 'finished'],
-};
+const toWire = (state: string): MatchStatus => (state === 'playing' ? 'started' : state) as MatchStatus;
+export const VALID_TRANSITIONS = Object.fromEntries(
+  stateMachines.machines.match.states.map((state) => [toWire(state), [
+    ...stateMachines.machines.match.transitions.filter((t) => t.from_states.includes(state)).map((t) => toWire(t.to)),
+    toWire(state), // Reasserting status edits score without a lifecycle transition.
+  ]]),
+) as Record<MatchStatus, MatchStatus[]>;
 
 export function isValidTransition(from: MatchStatus, to: MatchStatus): boolean {
   return VALID_TRANSITIONS[from].includes(to);

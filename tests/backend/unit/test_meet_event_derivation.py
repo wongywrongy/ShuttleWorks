@@ -19,9 +19,7 @@ sentinel written into ``label``, which only a recreate could erase.
 **P7b-NC4** (derivation half): absent ``rankCounts`` and ``{}`` both mean zero
 divisions.
 
-Schema here is ``Base.metadata.create_all`` on purpose — F-DM-11 binds the
-*migration* control to a migration-built schema, and that control lives in
-``test_meet_events_migration.py``. This module is about the runtime sync.
+Schema is built through Alembic; test_baseline_schema checks fresh-install parity.
 """
 from __future__ import annotations
 
@@ -30,7 +28,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from db.models import Base, MeetEvent
+from db.models import MeetEvent
 from repositories.local import LocalRepository
 
 
@@ -42,7 +40,8 @@ def engine():
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(eng)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(eng)
     try:
         yield eng
     finally:

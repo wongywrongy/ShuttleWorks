@@ -293,6 +293,8 @@ def _build_draw_from_import(ev, *, roster_ids: Optional[set[str]] = None) -> Dra
         # participant row's free-form ``meta`` (``_participant_persist_fields``
         # lifts only ``seed``/``entryPlayerId`` into columns) and hydrates
         # back onto the participant, so the read model can echo it.
+        if p.representation is not None:
+            metadata["representation"] = p.representation
         if p.personId:
             metadata["personId"] = p.personId
         if p.personSource:
@@ -301,7 +303,7 @@ def _build_draw_from_import(ev, *, roster_ids: Optional[set[str]] = None) -> Dra
             participants[p.id] = Participant(
                 id=p.id,
                 name=p.name,
-                type=ParticipantType.TEAM,
+                type=ParticipantType.TEAM if len(p.members) > 1 else ParticipantType.PLAYER,
                 member_ids=list(p.members),
                 metadata=metadata,
             )
@@ -565,6 +567,25 @@ def _build_draw_from_csv_rows(event_id: str, fmt: str, rows: List[dict]) -> Draw
     participants: Dict[str, Participant] = {
         pid: Participant(id=pid, name=pid) for pid in sorted(participant_ids)
     }
+
+    from core.representation import normalize_representation
+
+    for row in rows:
+        for side in ("a", "b"):
+            ids = _split_side(row.get(f"side_{side}", ""))
+            raw = row.get(f"side_{side}_representation", "")
+            if not raw:
+                continue
+            codes = raw.split("|")
+            if len(codes) != len(ids):
+                raise ValueError("Representation columns must align with the people on each side")
+            for pid, code in zip(ids, codes):
+                value = normalize_representation(code)
+                existing = participants[pid].metadata.get("representation")
+                if existing is not None and value is not None and existing != value:
+                    raise ValueError("Conflicting representation values for one imported player")
+                if value is not None:
+                    participants[pid].metadata["representation"] = value
 
     play_units: Dict[str, PlayUnit] = {}
     slots: Dict[str, Tuple[BracketSlot, BracketSlot]] = {}

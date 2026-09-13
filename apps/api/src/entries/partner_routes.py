@@ -43,7 +43,7 @@ from core.error_codes import ErrorCode, http_error
 from core.limits import Name, StrictModel
 from db.models import EntryEvent, EntryPage, Tournament
 from entries import partners as partner_service
-from entries.entries_json import require_form_csrf
+from entries.entries_json import require_form_csrf, _reviewed_quote
 from entries.entries_public import _event_is_open, _is_age_bracketed, _utcnow
 from entries.entry_fees import PlayerSelection, compute_fee_total
 from entries.entry_form import parse_year
@@ -66,6 +66,11 @@ class PartnerInviteDTO(BaseModel):
     # recipient was mailed by this person and already has it.
     invitedBy: str
     askBirthYear: bool = False
+    totalCents: Optional[int] = None
+    feeCurrency: Optional[str] = None
+    reviewedQuote: Optional[str] = None
+    regulationsText: Optional[str] = None
+    regulationsVersion: Optional[int] = None
 
 
 class PartnerAcceptRequest(StrictModel):
@@ -77,6 +82,8 @@ class PartnerAcceptRequest(StrictModel):
     """
 
     fullName: Name
+    acknowledged: bool = False
+    reviewedQuote: Optional[str] = None
     gender: Name
     club: Optional[Name] = None
     remarks: Optional[Name] = None
@@ -237,6 +244,7 @@ def preview_partner_invite(
     ask_birth_year = any(
         _is_age_bracketed(ev) for ev in events if _event_is_open(ev, now)
     )
+    total, basis = compute_fee_total(page, [PlayerSelection("partner", [event])])
     return PartnerInviteDTO(
         tournamentName=tournament.name if tournament is not None else None,
         slug=page.slug if page is not None else None,
@@ -246,6 +254,11 @@ def preview_partner_invite(
         # set no display name — the honest answer is what we actually know.
         invitedBy=entry.contact_name or "Someone",
         askBirthYear=ask_birth_year,
+        totalCents=total,
+        feeCurrency=page.fee_currency,
+        reviewedQuote=_reviewed_quote(page, [str(event.id)], total, basis),
+        regulationsText=page.regulations_text,
+        regulationsVersion=page.regulations_version,
     )
 
 
@@ -338,18 +351,25 @@ def accept_partner_invite(
         page, [PlayerSelection(key="partner", events=[event])]
     )
 
-    partner_entry = repo.execute_transaction(
-        partner_service.accept,
-        entry,
-        account_id=uuid.UUID(entrant.id),
-        full_name=body.fullName,
-        gender=body.gender,
-        club=body.club,
-        remarks=body.remarks,
-        birth_year=parse_year(body.birthYear or ""),
-        fee_total_cents=total,
-        fee_basis=basis,
-    )
+    try:
+        partner_entry = repo.execute_transaction(
+            partner_service.accept,
+            entry,
+            account_id=uuid.UUID(entrant.id),
+            full_name=body.fullName,
+            gender=body.gender,
+            club=body.club,
+            remarks=body.remarks,
+            birth_year=parse_year(body.birthYear or ""),
+            fee_total_cents=total,
+            fee_basis=basis,
+            acknowledged=body.acknowledged,
+            reviewed_quote=body.reviewedQuote,
+        )
+    except partner_service.InvitationUnavailable:
+        if is_form_post(request):
+            return RedirectResponse(url=_failed_url("unusable"), status_code=303)
+        raise _dead() from None
     if is_form_post(request):
         return RedirectResponse(
             # The accepted outcome is account-scoped: the dedicated outcome

@@ -124,7 +124,7 @@ def test_event_node_roster_edits_commit_replayable_operation_with_state(
                 node_id=node_id,
                 state="active",
                 checkpoint_hash="a" * 64,
-                checkpoint_schema_version=3,
+                checkpoint_schema_version=1,
                 capability_digest="b" * 64,
                 allowed_command_classes=["roster.replace.v1"],
             )

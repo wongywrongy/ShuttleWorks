@@ -190,3 +190,10 @@ def _discipline_breach(
                 subjects=(str(key),),
             )
     return None
+
+
+def assert_representative(session, tournament_id, player_id, account_id):
+    """A submission may only name a player this principal represents."""
+    from db.models import PlayerRepresentative
+    if session.get(PlayerRepresentative, (tournament_id, player_id, account_id)) is None:
+        raise PermissionError("This account does not represent the selected player")

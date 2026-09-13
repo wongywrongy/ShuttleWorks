@@ -26,7 +26,15 @@
  *
  * The selection is written back to the URL (`?view=path&player={id}`) with
  * `replaceState`, so the state a reader can see is the state they can share —
- * and that same URL is the no-JavaScript fallback it was built from.
+ * and that same URL is the no-JavaScript fallback it was built from. Clearing
+ * writes the URL back too (public-ui-refinement P4), so "Clear path" survives
+ * a reload rather than lasting until the next refresh.
+ *
+ * **public-ui-refinement P4 (A05/D4)** adds two things: the selected SIDE ROW
+ * of each match on the path is marked (`data-selected-side`, recomputed from
+ * the same two id lists the server rendered it from), and a round jump lands
+ * on a meaningful node — the selected player's match in that round, else the
+ * round's first match — instead of on empty canvas beside a late round.
  */
 
 export function includesPerson(node, personId) {
@@ -38,6 +46,33 @@ export function applyPersonPath(root, personId) {
   root.classList.toggle('has-person-path', active);
   for (const node of root.querySelectorAll('[data-person-ids]')) {
     node.classList.toggle('is-person-path', active && includesPerson(node, personId));
+  }
+  applySideRows(root, personId);
+}
+
+/**
+ * public-ui-refinement P4 (D4): WHICH side row of a match the selection is
+ * standing on. The server writes the same `data-selected-side` from the same
+ * two id lists, so the enhanced rendering and the no-JavaScript rendering are
+ * the same document; this recomputes it in place when the selection changes.
+ * The named anchor itself also gets a weight/underline cue, so selection is
+ * never carried by colour alone.
+ */
+export function applySideRows(root, personId) {
+  const active = Boolean(personId);
+  for (const slot of root.querySelectorAll('[data-side-a-ids]')) {
+    const side = !active
+      ? ''
+      : (slot.dataset.sideAIds ?? '').split(/\s+/).includes(personId)
+        ? 'a'
+        : (slot.dataset.sideBIds ?? '').split(/\s+/).includes(personId)
+          ? 'b'
+          : '';
+    if (side) slot.dataset.selectedSide = side;
+    else delete slot.dataset.selectedSide;
+  }
+  for (const ref of root.querySelectorAll('[data-person-id]')) {
+    ref.classList.toggle('is-person-selected', active && ref.dataset.personId === personId);
   }
 }
 
@@ -70,6 +105,14 @@ export function scrollPinnedPersonIntoView(root, personId) {
  */
 export function personPathHref(href, personId) {
   const url = new URL(href, 'http://bracket.invalid');
+  if (!personId) {
+    // P4: "Clear path" restores the normal tree, and a reload has to restore
+    // it too — leaving `?player=` behind meant the cleared state lasted only
+    // until the reader refreshed or shared the link.
+    url.searchParams.delete('player');
+    if (url.searchParams.get('view') === 'path') url.searchParams.delete('view');
+    return `${url.pathname}${url.search}`;
+  }
   url.searchParams.set('view', 'path');
   url.searchParams.set('player', personId);
   return `${url.pathname}${url.search}`;
@@ -79,10 +122,33 @@ export function personPathHref(href, personId) {
  *  region. Rect maths rather than `offsetLeft`, because the region is not
  *  necessarily the column's offset parent; a no-op in jsdom, where every
  *  rect is zero and `scrollBy` is absent. */
-export function scrollRoundIntoView(scroller, column, behavior = 'smooth') {
+export function scrollRoundIntoView(scroller, column, behavior = 'smooth', focus = null) {
   if (!scroller || !column || typeof scroller.scrollBy !== 'function') return;
-  const left = column.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
-  scroller.scrollBy({ left, behavior });
+  const region = scroller.getBoundingClientRect();
+  const left = column.getBoundingClientRect().left - region.left;
+  // A05: a late round is one node in a very tall column, so scrolling only
+  // sideways landed the reader on empty canvas. `focus` is the meaningful
+  // target in that column — the selected player's match when there is one,
+  // the first match otherwise — and it is centred vertically at the same time.
+  let top = 0;
+  if (focus && typeof focus.getBoundingClientRect === 'function') {
+    const rect = focus.getBoundingClientRect();
+    if (rect.height || rect.top) {
+      top = rect.top + rect.height / 2 - (region.top + region.height / 2);
+    }
+  }
+  scroller.scrollBy({ left, top, behavior });
+}
+
+/** The node a round jump should land on: the selected player's match in that
+ *  column when they have one, otherwise the column's first match. */
+export function roundFocusNode(column, personId) {
+  const nodes = [...(column?.querySelectorAll?.('[data-node-key][data-person-ids]') ?? [])];
+  if (personId) {
+    const own = nodes.find((node) => includesPerson(node, personId));
+    if (own) return own;
+  }
+  return nodes[0] ?? null;
 }
 
 /** A plain activation: the one click a script may take over. Every modified
@@ -101,18 +167,96 @@ function plainActivation(event) {
 
 const BUTTON_CLASS =
   'h-8 rounded-sm border border-rule-control bg-surface-raised px-2 text-sm font-semibold text-foreground hover:bg-surface-sunken';
-const LINK_CLASS = 'text-sm text-accent underline-offset-4 hover:underline';
+const LINK_CLASS = 'text-sm font-semibold text-accent underline-offset-4 hover:underline';
+const MUTED_LINK_CLASS = 'text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline';
+const SUMMARY_CLASS =
+  'flex flex-wrap items-baseline gap-x-3 gap-y-1 border-s-2 border-action-primary bg-surface-sunken px-3 py-2 text-sm';
+
+/** How many MATCH nodes (not braces) carry the selected person. */
+function pathMatchCount(root, personId) {
+  let count = 0;
+  for (const node of root.querySelectorAll('[data-node-key][data-person-ids]')) {
+    if (includesPerson(node, personId)) count += 1;
+  }
+  return count;
+}
+
+/**
+ * The ONE path summary (refinement 2026-09-12, the S44 duplicate-clear
+ * defect): `Path: name · N matches · View profile · Clear path`. The server
+ * renders it for `?player={id}`; this keeps that same element in step with
+ * an in-place selection — filling it, creating it in `[data-path-slot]`
+ * when the page arrived with no selection, and removing it on clear. The
+ * script never builds a second clear or a second profile link beside it.
+ */
+function renderSummary(doc, section, root, personId, name, href) {
+  const slot = section.querySelector?.('[data-path-slot]') ?? null;
+  let summary = section.querySelector?.('[data-path-summary]') ?? null;
+  if (!personId) {
+    if (summary) summary.remove();
+    return;
+  }
+  if (!summary) {
+    if (!slot) return;
+    summary = doc.createElement('p');
+    summary.setAttribute('data-path-summary', '');
+    summary.setAttribute('role', 'status');
+    summary.className = SUMMARY_CLASS;
+    const lead = doc.createElement('span');
+    lead.className = 'text-muted-foreground';
+    lead.textContent = 'Path: ';
+    const strong = doc.createElement('strong');
+    strong.setAttribute('data-path-name', '');
+    strong.className = 'font-semibold text-foreground';
+    lead.appendChild(strong);
+    const count = doc.createElement('span');
+    count.setAttribute('data-path-count', '');
+    count.className = 'tabular-nums text-muted-foreground';
+    const profile = doc.createElement('a');
+    profile.setAttribute('data-path-profile', '');
+    profile.className = LINK_CLASS;
+    profile.textContent = 'View profile';
+    const clear = doc.createElement('a');
+    clear.setAttribute('data-path-clear', '');
+    clear.className = MUTED_LINK_CLASS;
+    clear.textContent = 'Clear path';
+    summary.append(lead, count, profile, clear);
+    slot.appendChild(summary);
+  }
+  const nameEl = summary.querySelector('[data-path-name]');
+  if (nameEl && name) nameEl.textContent = name;
+  const countEl = summary.querySelector('[data-path-count]');
+  if (countEl) {
+    const n = pathMatchCount(root, personId);
+    countEl.textContent = `${n} ${n === 1 ? 'match' : 'matches'}`;
+  }
+  const profile = summary.querySelector('[data-path-profile]');
+  if (profile) {
+    if (href) {
+      profile.href = href;
+      profile.hidden = false;
+    } else if (!profile.getAttribute('href')) {
+      profile.hidden = true;
+    }
+  }
+  const clear = summary.querySelector('[data-path-clear]');
+  if (clear && doc.defaultView?.location) {
+    clear.href = personPathHref(doc.defaultView.location.href, '');
+  }
+}
 
 export function mountBracketPath(root) {
   const doc = root.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
   if (!doc) return;
-  const section = root.closest?.('[data-testid="public-bracket-canvas"]') ?? doc;
+  // The toolbar, the round controls and the path summary live in the page's
+  // one toolbar ABOVE the canvas (refinement 2026-09-12), so the scope is
+  // the document's main landmark rather than the canvas section.
+  const section = root.closest?.('main') ?? doc;
   const scroller = root.closest?.('[data-bracket-scroll]') ?? null;
   const toolbar = section.querySelector?.('[data-bracket-toolbar]') ?? null;
 
   /** The persistent selection — SSR's `?player={id}` to begin with. */
   let pinned = root.dataset.pinnedPerson ?? '';
-  let pinnedHref = '';
   let highlight = false;
 
   applyPersonPath(root, pinned);
@@ -120,31 +264,43 @@ export function mountBracketPath(root) {
 
   // ---- the toolbar (built here, so no-JS readers see no dead control) ----
   let toggle = null;
-  let profileLink = null;
-  let clearButton = null;
 
   function syncToolbar() {
     if (toggle) toggle.setAttribute('aria-pressed', highlight ? 'true' : 'false');
-    if (clearButton) clearButton.hidden = pinned === '';
-    if (profileLink) {
-      profileLink.hidden = pinned === '' || pinnedHref === '';
-      if (pinnedHref) profileLink.href = pinnedHref;
-    }
+  }
+
+  /** The selected person's name and profile href, read off their own
+   *  anchor in the tree — the identity seam wrote both. */
+  function personFacts(personId) {
+    const anchor = personId ? root.querySelector(`[data-person-id="${personId}"]`) : null;
+    return {
+      name: anchor?.textContent?.trim() ?? '',
+      href: anchor?.getAttribute('href') ?? '',
+    };
   }
 
   function select(personId, href) {
     pinned = personId ?? '';
-    pinnedHref = href ?? '';
     applyPersonPath(root, pinned);
     root.dataset.pinnedPerson = pinned;
+    const facts = personFacts(pinned);
+    renderSummary(doc, section, root, pinned, facts.name, href || facts.href);
     syncToolbar();
-    if (pinned && typeof doc.defaultView?.history?.replaceState === 'function') {
+    if (typeof doc.defaultView?.history?.replaceState === 'function') {
       doc.defaultView.history.replaceState(
         null,
         '',
         personPathHref(doc.defaultView.location.href, pinned),
       );
     }
+  }
+
+  // Arriving pinned (`?player={id}`), the server has already rendered the
+  // summary; this fills any field it could not (the live match count) and
+  // creates the line only where a document arrived without one.
+  if (pinned) {
+    const facts = personFacts(pinned);
+    renderSummary(doc, section, root, pinned, facts.name, facts.href);
   }
 
   if (toolbar) {
@@ -157,22 +313,20 @@ export function mountBracketPath(root) {
       highlight = !highlight;
       syncToolbar();
     });
-
-    profileLink = doc.createElement('a');
-    profileLink.className = LINK_CLASS;
-    profileLink.textContent = 'View profile';
-    profileLink.hidden = true;
-
-    clearButton = doc.createElement('button');
-    clearButton.type = 'button';
-    clearButton.className = LINK_CLASS;
-    clearButton.textContent = 'Clear path';
-    clearButton.hidden = true;
-    clearButton.addEventListener('click', () => select('', ''));
-
-    toolbar.append(toggle, profileLink, clearButton);
+    toolbar.append(toggle);
     syncToolbar();
   }
+
+  // The SSR summary's clear is a real link (the no-JS reset); with the
+  // script it clears in place instead of reloading the document. Listened
+  // on the summary's own slot, so nothing outside it is ever intercepted.
+  const pathSlot = section.querySelector?.('[data-path-slot]') ?? null;
+  pathSlot?.addEventListener('click', (event) => {
+    const clear = event.target?.closest?.('[data-path-clear]');
+    if (!clear || !plainActivation(event)) return;
+    event.preventDefault();
+    select('', '');
+  });
 
   // ---- selection: click, touch and keyboard (Enter fires a click) --------
   const personFrom = (target) => target?.closest?.('[data-person-id]') ?? null;
@@ -221,13 +375,18 @@ export function mountBracketPath(root) {
       const column = doc.getElementById(jump.dataset.roundJump);
       if (!column) return;
       event.preventDefault();
-      scrollRoundIntoView(scroller, column);
+      // The selection is NOT cleared by moving round: the reader keeps the
+      // player and lands on that player's match in the round they asked for.
+      scrollRoundIntoView(scroller, column, 'smooth', roundFocusNode(column, pinned));
       for (const other of jumps) other.removeAttribute('aria-current');
       jump.setAttribute('aria-current', 'true');
     });
   }
   const initial = root.dataset.initialRound;
-  if (initial) scrollRoundIntoView(scroller, doc.getElementById(initial), 'auto');
+  if (initial) {
+    const column = doc.getElementById(initial);
+    scrollRoundIntoView(scroller, column, 'auto', roundFocusNode(column, pinned));
+  }
 }
 
 if (typeof document !== 'undefined') {

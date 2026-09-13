@@ -50,7 +50,7 @@ function entry(partial: Partial<EntryDTO> & { id: string }): EntryDTO {
     partnerEntryId: null,
     remarks: null,
     listOptOut: false,
-    committedPlayerId: null,
+    membershipId: null,
     submittedAt: '2026-08-06T10:00:00Z',
     withdrawnAt: null,
     ...partial,
@@ -420,8 +420,8 @@ describe('EntriesDesk — the commit summary', () => {
     vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
       entry({ id: 'e-1', state: 'confirmed' }),
     ]);
-    const commit = vi.spyOn(apiClient, 'commitEntries').mockResolvedValue({
-      committed: [{ id: 'e-1', playerId: 'p-1' }],
+    const commit = vi.spyOn(apiClient, 'bindEntries').mockResolvedValue({
+      bindings: [{ entryId: 'e-1', unitId: 'u-1', membershipId: 'm-1', competitionEventId: 'ce-1', status: 'active', outcome: 'bound' }],
       skipped: [],
     });
 
@@ -429,12 +429,12 @@ describe('EntriesDesk — the commit summary', () => {
     await screen.findByTestId('entry-row-e-1');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /commit to roster/i }),
+      screen.getByRole('button', { name: /bind to competition/i }),
     );
 
     await waitFor(() => expect(commit).toHaveBeenCalledWith('t-1'));
     const summary = await screen.findByTestId('entries-commit-summary');
-    expect(within(summary).getByText(/1 committed/i)).toBeInTheDocument();
+    expect(within(summary).getByText(/1 bound/i)).toBeInTheDocument();
     expect(within(summary).queryByText(/skipped/i)).toBeNull();
   });
 
@@ -448,20 +448,20 @@ describe('EntriesDesk — the commit summary', () => {
         eventCode: 'XD9',
       }),
     ]);
-    vi.spyOn(apiClient, 'commitEntries').mockResolvedValue({
-      committed: [{ id: 'e-1', playerId: 'p-1' }],
-      skipped: [{ id: 'e-2', reason: 'UNMAPPABLE_EVENT' }],
+    vi.spyOn(apiClient, 'bindEntries').mockResolvedValue({
+      bindings: [{ entryId: 'e-1', unitId: 'u-1', membershipId: 'm-1', competitionEventId: 'ce-1', status: 'active', outcome: 'bound' }],
+      skipped: [{ entryId: 'e-2', reason: 'UNMAPPABLE_EVENT', message: 'Choose an event' }],
     });
 
     render(<EntriesDesk tid="t-1" />);
     await screen.findByTestId('entry-row-e-1');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /commit to roster/i }),
+      screen.getByRole('button', { name: /bind to competition/i }),
     );
 
     const summary = await screen.findByTestId('entries-commit-summary');
-    expect(within(summary).getByText(/1 committed/i)).toBeInTheDocument();
+    expect(within(summary).getByText(/1 bound/i)).toBeInTheDocument();
     // The skip must name the ENTRANT, not just an opaque uuid — the operator
     // has to go find that person's event code and fix it.
     expect(within(summary).getByText(/Bo Lin/)).toBeInTheDocument();
@@ -472,10 +472,10 @@ describe('EntriesDesk — the commit summary', () => {
 
   it('says so plainly when a re-run commits nothing (the seam is idempotent)', async () => {
     vi.spyOn(apiClient, 'listEntries').mockResolvedValue([
-      entry({ id: 'e-1', state: 'confirmed', committedPlayerId: 'p-1' }),
+      entry({ id: 'e-1', state: 'confirmed', membershipId: 'p-1' }),
     ]);
-    vi.spyOn(apiClient, 'commitEntries').mockResolvedValue({
-      committed: [],
+    vi.spyOn(apiClient, 'bindEntries').mockResolvedValue({
+      bindings: [],
       skipped: [],
     });
 
@@ -483,7 +483,7 @@ describe('EntriesDesk — the commit summary', () => {
     await screen.findByTestId('entry-row-e-1');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /commit to roster/i }),
+      screen.getByRole('button', { name: /bind to competition/i }),
     );
 
     const summary = await screen.findByTestId('entries-commit-summary');
@@ -505,17 +505,17 @@ describe('EntriesDesk — the write gate', () => {
     await screen.findByTestId('entry-row-e-1');
 
     expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /commit to roster/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /bind to competition/i })).toBeNull();
   });
 });
 
 describe('EntriesDesk — the payment record (E5)', () => {
-  const paid = { submissionId: 'sub-1', paidAt: '2026-08-22T09:00:00Z', entriesUpdated: 1 };
+  const paid = { submissionId: 'sub-1', paidCents: 1000, outstandingCents: 3000, currency: 'USD' };
 
   function pricedAct(over: Partial<EntryDTO> = {}) {
     return entry({
       id: 'e-1',
-      submission: submission({ feeTotalCents: 4000 }),
+      submission: submission({ feeTotalCents: 4000, feeCurrency: 'USD', paidCents: 0, outstandingCents: 4000 }),
       pendingReasons: ['awaiting_payment'],
       ...over,
     });
@@ -533,7 +533,7 @@ describe('EntriesDesk — the payment record (E5)', () => {
     expect(
       within(row('e-1')).queryByRole('button', { name: /paid/i }),
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Mark paid' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record' })).toBeInTheDocument();
   });
 
   it('records a payment against the act and re-reads', async () => {
@@ -541,15 +541,16 @@ describe('EntriesDesk — the payment record (E5)', () => {
       .spyOn(apiClient, 'listEntries')
       .mockResolvedValueOnce([pricedAct()])
       .mockResolvedValueOnce([pricedAct({ pendingReasons: [] })]);
-    const mark = vi.spyOn(apiClient, 'markSubmissionPaid').mockResolvedValue(paid);
+    const mark = vi.spyOn(apiClient, 'recordSubmissionPayment').mockResolvedValue(paid);
 
     render(<EntriesDesk tid="t-1" />);
     await screen.findByTestId('entry-row-e-1');
-    await userEvent.click(screen.getByRole('button', { name: 'Mark paid' }));
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'Payment amount' }), '10');
+    await userEvent.click(screen.getByRole('button', { name: 'Record' }));
 
-    await waitFor(() => expect(mark).toHaveBeenCalledWith('t-1', 'sub-1'));
+    await waitFor(() => expect(mark).toHaveBeenCalledWith('t-1', 'sub-1', { amountCents: 1000, currency: 'USD', requestId: expect.any(String) }));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('Paid')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record' })).toBeInTheDocument();
   });
 
   it('offers nothing where the act owes nothing', async () => {
@@ -563,7 +564,7 @@ describe('EntriesDesk — the payment record (E5)', () => {
     render(<EntriesDesk tid="t-1" />);
     await screen.findByTestId('entry-row-e-1');
 
-    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Record' })).toBeNull();
     expect(screen.queryByText('Paid')).toBeNull();
   });
 
@@ -574,6 +575,6 @@ describe('EntriesDesk — the payment record (E5)', () => {
     render(<EntriesDesk tid="t-1" />);
     await screen.findByTestId('entry-row-e-1');
 
-    expect(screen.queryByRole('button', { name: 'Mark paid' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Record' })).toBeNull();
   });
 });

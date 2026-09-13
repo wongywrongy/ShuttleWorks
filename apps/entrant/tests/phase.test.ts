@@ -308,9 +308,9 @@ describe('activeTab', () => {
 
 // ---- the season list: filters, the season model, the action cell -----------
 
-describe('parseFilters (P5: the calendar carries two things, and only two)', () => {
+describe('parseFilters (P5 + refinement: season, search, slice and page — and nothing else)', () => {
   it('is unspecified when the URL names nothing', () => {
-    expect(parseFilters(new URLSearchParams())).toEqual({ year: null, q: '' });
+    expect(parseFilters(new URLSearchParams())).toEqual({ year: null, q: '', show: 'all', page: 1 });
   });
   it('reads a four-digit season and the deliberate all-seasons scope', () => {
     expect(parseFilters(new URLSearchParams('year=2026')).year).toBe(2026);
@@ -327,8 +327,8 @@ describe('parseFilters (P5: the calendar carries two things, and only two)', () 
       // A public-tier URL is attacker-typeable and the toolbar echoes state
       // back into a hidden form input, so nothing here may reach a prototype
       // member.
-      expect(parseFilters(new URLSearchParams(`year=${key}&status=${key}`))).toEqual({
-        year: null, q: '',
+      expect(parseFilters(new URLSearchParams(`year=${key}&status=${key}&show=${key}&page=${key}`))).toEqual({
+        year: null, q: '', show: 'all', page: 1,
       });
     },
   );
@@ -337,8 +337,13 @@ describe('parseFilters (P5: the calendar carries two things, and only two)', () 
   });
   it('ignores the retired lifecycle and date vocabulary', () => {
     expect(
-      parseFilters(new URLSearchParams('view=completed&preset=30d&from=2026-09-01&to=&page=2')),
-    ).toEqual({ year: null, q: '' });
+      parseFilters(new URLSearchParams('view=completed&preset=30d&from=2026-09-01&to=')),
+    ).toEqual({ year: null, q: '', show: 'all', page: 1 });
+  });
+  it('reads the lifecycle slice and the page, and drops anything it cannot read', () => {
+    expect(parseFilters(new URLSearchParams('show=past&page=3'))).toEqual({ year: null, q: '', show: 'past', page: 3 });
+    expect(parseFilters(new URLSearchParams('show=soon&page=0'))).toEqual({ year: null, q: '', show: 'all', page: 1 });
+    expect(parseFilters(new URLSearchParams('page=1.5'))).toEqual({ year: null, q: '', show: 'all', page: 1 });
   });
 });
 
@@ -449,7 +454,10 @@ describe('seasonModel (P5: one season, upcoming ascending then past descending)'
       new Date(Date.UTC(2026, 7, 11, 12, 0)),
     );
     expect(model.past).toEqual([]);
-    expect(model.upcoming.flatMap((month) => month.rows).map((item) => item.slug)).toEqual(['live-multi']);
+    // Refinement 2026-09-12: a tournament being played sits in the LIVE
+    // group at the top, once — not under its month.
+    expect(model.upcoming).toEqual([]);
+    expect(model.live.map((item) => item.slug)).toEqual(['live-multi']);
   });
 
   it('moves a multi-day tournament to past only after its end date', () => {
@@ -547,9 +555,9 @@ describe('actionCell — one action slot, one arm per enum case', () => {
     const cell = actionCell(row({ status: 'entries_open', closesInDays: 5 }), false);
     expect(JSON.stringify(cell)).not.toContain('5');
   });
-  it('in_progress_live deep-links to draws', () => {
+  it('in_progress_live deep-links to the live schedule', () => {
     expect(actionCell(row({ slug: 'x', status: 'in_progress_live' }), false)).toEqual({
-      kind: 'live', label: 'Follow live', href: '/e/x?tab=draws',
+      kind: 'live', label: 'Follow live', href: '/e/x/schedule',
     });
   });
   it('in_progress without published draws is plain text — no link', () => {

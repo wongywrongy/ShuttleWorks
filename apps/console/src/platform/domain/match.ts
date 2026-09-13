@@ -14,7 +14,7 @@
  *
  * Status vocabulary: `Match.status` uses the ENGINE vocab (`started`/`finished`)
  * because that is what both engines persist. View-models that need the operator
- * vocab (`playing`/`done`) — e.g. `RunMatch` / the Run state machine — map at
+ * vocab (`playing`/`finished`) — e.g. `RunMatch` / the Run state machine — map at
  * their own seam; that split is intentional, not an omission.
  */
 
@@ -25,7 +25,7 @@ export type MatchSource = 'meet' | 'bracket';
 
 /** Unified lifecycle status (engine vocab). Bracket has no distinct `called`;
  *  meet emits all four. View-models remap to operator vocab as needed. */
-export type MatchStatus = 'scheduled' | 'called' | 'started' | 'finished';
+export type MatchStatus = 'scheduled' | 'called' | 'started' | 'finished' | 'retired';
 
 export interface Match {
   /** Engine of origin — decides chip tint and which API an action routes to. */

@@ -15,7 +15,8 @@ export interface MyEntryLine {
    *  state through a 6-entry dict with an `awaiting` fail-calm default, so an
    *  unknown future state arrives AS `awaiting` and never as itself. The old
    *  `| string` tail described a case the emitter cannot produce. */
-  state: 'awaiting' | 'entered' | 'withdrawn' | 'rejected';
+  state: 'awaiting' | 'entered' | 'withdrawn' | 'rejected' | 'waitlisted';
+  pendingReasons?: string[];
   /** E2: the id `POST /e/api/me/entries/{id}/withdraw` takes. */
   entryId: string;
   /** E2: the server's own `assert_withdrawable`, precomputed. */
@@ -40,11 +41,17 @@ export interface MyTournamentCard {
   resultsPublished: boolean;
   date: string | null;
   venueName: string | null;
-  /** Closed on purpose (F-DM-60): `entries_me.py::_card_status` has four
-   *  `return` statements and every one is a member below. The old `| string`
-   *  tail described a case the emitter cannot produce. */
-  status: 'awaiting' | 'entered' | 'played' | 'withdrawn';
+  /** Closed on purpose (F-DM-60): `entries_me.py::_card_status` returns one
+   *  of these and nothing else. `past` and `rejected` joined the set with the
+   *  P9 status derivation — `played` is now claimed only where a published
+   *  result names the player, and a rejected card no longer reads as
+   *  withdrawn. */
+  status: 'awaiting' | 'entered' | 'played' | 'past' | 'rejected' | 'withdrawn';
+  /** Grouping only: the workspace's date is behind the effective event
+   *  clock. Never a claim about participation. */
+  isPast?: boolean;
   feeTotalCents: number | null;
+  feeCurrency?: string | null;
   submittedAt: string;
   events: MyEntryLine[];
   /** The submission this card represents (the newest, when a card folds
@@ -70,6 +77,13 @@ export type WithdrawAffordance =
   | { kind: 'actions'; entryId: string };
 
 export function formatCents(cents: number | null | undefined): string;
+export function formatMoney(cents: number | null | undefined, currency?: string | null): string;
+export const PENDING_REASON_TEXT: Readonly<Record<string, string>>;
+export function pendingReasonText(reason: string): string | null;
+export function nextStep(
+  card: MyTournamentCard,
+  emailVerified: boolean,
+): { text: string; action: { label: string; href: string } | null } | null;
 export function formatDate(iso: string | null | undefined): string;
 export function formatWithdrawDeadline(iso: string | null | undefined): string;
 export function receiptHref(card: MyTournamentCard): string | null;
@@ -78,6 +92,11 @@ export function yearGroups(
 ): { year: string; cards: MyTournamentCard[] }[];
 export function cardChip(status: string): { label: string; tone: 'live' | 'done' | 'plain' };
 export function priceLine(card: MyTournamentCard): string | null;
+export function withdrawLine(card: MyTournamentCard): string | null;
+export function isPastCard(card: MyTournamentCard): boolean;
+export function activeAndPast(
+  cards: readonly MyTournamentCard[],
+): { key: 'active' | 'past'; label: string; cards: MyTournamentCard[] }[];
 export function lineChip(cardStatus: string, state: string): string | null;
 export function resultsHref(card: MyTournamentCard, line: MyEntryLine): string | null;
 export function withdrawAffordance(
@@ -88,4 +107,4 @@ export function accountPanel(
   doc: Document,
   handlers: { onExport: () => unknown; onErase: () => unknown },
 ): HTMLElement;
-export function render(root: HTMLElement, data: MyEntries): void;
+export function render(root: HTMLElement | null, data: MyEntries): void;

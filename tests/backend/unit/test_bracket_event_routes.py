@@ -13,6 +13,7 @@ deps + repository layer end-to-end.
 """
 from __future__ import annotations
 
+
 import uuid
 
 import pytest
@@ -157,16 +158,16 @@ def test_upsert_event_serializes_per_event_participants(client, tid):
         json=_upsert_body(
             [
                 {"id": "p-alex", "name": "Alex"},
-                {"id": "MS-T1", "name": "Ben / Cam", "members": ["p-ben", "p-cam"]},
+                {"id": "p-ben", "name": "Ben"},
             ]
         ),
     )
     assert r.status_code == 200, r.text
     ms_event = next(e for e in r.json()["events"] if e["id"] == "MS")
     by_id = {p["id"]: p for p in ms_event["participants"]}
-    assert set(by_id) == {"p-alex", "MS-T1"}
-    assert by_id["p-alex"]["members"] is None
-    assert by_id["MS-T1"]["members"] == ["p-ben", "p-cam"]
+    assert set(by_id) == {"p-alex", "p-ben"}
+    assert by_id["p-alex"]["members"] == ["p-alex"]
+    assert by_id["p-ben"]["members"] == ["p-ben"]
 
 
 def test_upsert_event_preserves_seeds_through_echo(client, tid):
@@ -298,7 +299,7 @@ def _mint_person(tid: str, email: str = "stamp@example.com") -> uuid.UUID:
         session.flush()
         player = EntryPlayer(
             tournament_id=uuid.UUID(tid),
-            account_id=account.id,
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
             full_name="Player 1",
             gender="F",
         )
@@ -310,26 +311,18 @@ def _mint_person(tid: str, email: str = "stamp@example.com") -> uuid.UUID:
 
 
 def _stamp_person(tid: str, event_id: str, pid: str, meta: dict) -> uuid.UUID:
-    """Write ``meta`` **and** a real ``entry_player_id`` onto a participant row.
-
-    Done in SQL because the upsert route writes neither from its own
-    payload before an operator has echoed one back — the entries commit
-    seam is what puts ``sourceEntryId`` and the key there in production
-    (see
-    ``test_entries_commit_seam.test_a_committed_entry_puts_the_person_key_on_its_participant``).
-    """
+    """Update canonical metadata; participants are a disposable projection."""
     from db.session import SessionLocal
-    from db.models import BracketParticipant
-    player_id = _mint_person(tid)
-    session = SessionLocal()
-    try:
+    from db.models import BracketParticipant, CompetitionUnit
+    from competition.projection import project
+    with SessionLocal() as session:
         row = session.get(BracketParticipant, (uuid.UUID(tid), event_id, pid))
-        row.meta = meta
-        row.entry_player_id = player_id
+        player_id = row.entry_player_id
+        unit = session.get(CompetitionUnit, (uuid.UUID(tid), row.unit_id))
+        unit.attributes = meta
+        project(session, uuid.UUID(tid))
         session.commit()
         return player_id
-    finally:
-        session.close()
 
 
 def test_regenerating_a_draw_preserves_the_person_key_and_meta(client, tid):
@@ -402,10 +395,9 @@ def test_get_bracket_exposes_the_person_key_and_source_entry(client, tid):
     assert top["entryPlayerId"] == str(player_id)
     assert top["sourceEntryId"] == "entry-abc"
 
-    # A hand-added participant is nobody in ``entry_players`` — hence
-    # Optional, not required.
+    # Manual roster entrants now have a canonical tournament-player row.
     p2 = next(p for p in ms["participants"] if p["id"] == "P2")
-    assert p2["entryPlayerId"] is None
+    assert p2["entryPlayerId"] is not None
     assert p2["sourceEntryId"] is None
 
 

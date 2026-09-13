@@ -22,7 +22,13 @@
  */
 import type { TournamentConfig, MatchDTO, MatchStateDTO } from '../../../api/dto';
 import { SideScores, type SetPair } from '../../../components/control-plane/MatchCard';
-import { formatPlayers, sideLines, isCourtClosedNow, hasResolvedSides } from './helpers';
+import {
+  formatPlayers,
+  sideLines,
+  isCourtClosedNow,
+  hasResolvedSides,
+  matchEventLabel,
+} from './helpers';
 import {
   resolveSignageCourtSize,
   resolveSignageNameSize,
@@ -145,7 +151,16 @@ function CourtsListMode({
                  row per SIDE, both doubles partners inside their own row,
                  and that side's score in the column beside it. The old
                  single "A vs B" line put one score block at the far right
-                 belonging visibly to neither side. */
+                 belonging visibly to neither side.
+                 D7: the event line rides ABOVE the sides — plain muted text,
+                 never a pill — so the row says which event it is without
+                 competing with the names or the court number. */
+              <div className="min-w-0">
+              <EventLine
+                courtId={courtId}
+                label={matchEventLabel(match)}
+                className="text-sm"
+              />
               <div
                 data-testid={`court-match-${courtId}`}
                 // The score column EXISTS only when there is a score:
@@ -180,9 +195,12 @@ function CourtsListMode({
                   data-testid={`court-score-${courtId}-b`}
                 />
               </div>
+              </div>
             ) : preview ? (
               <span className="min-w-0 text-muted-foreground" style={SIGNAGE_NAME_WRAP}>
-                <span className="font-semibold uppercase tracking-wide text-foreground">Next</span>{' '}
+                <span className="font-semibold uppercase tracking-wide text-foreground">
+                  Next{matchEventLabel(preview) ? ` · ${matchEventLabel(preview)}` : ''}
+                </span>{' '}
                 {formatPlayers(preview.sideA, playerNames)} vs{' '}
                 {formatPlayers(preview.sideB, playerNames)}
               </span>
@@ -193,6 +211,34 @@ function CourtsListMode({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The event identity of a shown match — "Men's Doubles 2" (D7).
+ *
+ * Muted secondary ink, no border, no background: it is context for the names
+ * beside it, not a decorative badge, and it must never take size from the
+ * court number or the players. Renders nothing when the match carries no
+ * event, rather than a placeholder.
+ */
+function EventLine({
+  courtId,
+  label,
+  className = '',
+}: {
+  courtId: number;
+  label: string | null;
+  className?: string;
+}) {
+  if (!label) return null;
+  return (
+    <span
+      data-testid={`court-event-${courtId}`}
+      className={`block break-words font-semibold uppercase tracking-[0.08em] text-muted-foreground ${className}`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -321,6 +367,14 @@ function CourtCard({
         {courtId}
       </span>
 
+      {/* D7: which event this court is playing, directly under its number and
+          above the names — always present for a shown match. */}
+      <EventLine
+        courtId={courtId}
+        label={current ? matchEventLabel(current) : null}
+        className="max-w-full text-center text-sm"
+      />
+
       {current ? (
         /* P1 (contract rules 2-3): a court card is a STACKED layout, so each
            side owns its own aligned score column and the centred lane
@@ -368,7 +422,7 @@ function CourtCard({
           className="flex flex-col items-center gap-0.5 text-center"
         >
           <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Next
+            Next{matchEventLabel(preview) ? ` · ${matchEventLabel(preview)}` : ''}
           </span>
           <span
             className={`${current ? 'text-base' : nameSize} font-semibold leading-tight text-muted-foreground`}

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, event, pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
@@ -42,9 +42,10 @@ if config.config_file_name is not None:
     # ``tests/unit/test_logging_survives_migrations.py``.
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
-# Override sqlalchemy.url from settings — keeps the canonical source of
-# truth in one place. The ini file's placeholder is left blank.
-config.set_main_option("sqlalchemy.url", normalize_database_url(settings.database_url))
+# Explicit programmatic URLs take precedence; CLI defaults come from settings.
+# The ini URL is blank so DATABASE_URL remains the normal entry point.
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", normalize_database_url(settings.database_url).replace("%", "%%"))
 
 target_metadata = Base.metadata
 
@@ -64,44 +65,57 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def render_item(kind, obj, autogen_context):
+    # Freeze the SQL type in revisions, never import a mutable application type.
+    from db.blob_version import VersionedJSON
+    if kind == "type" and isinstance(obj, VersionedJSON):
+        return "sa.JSON()"
+    return False
+
+
+def migrate_connection(connection) -> None:
+    sqlite = connection.dialect.name == "sqlite"
+    raw = connection.connection.driver_connection if sqlite else None
+    foreign_keys = raw.execute("PRAGMA foreign_keys").fetchone()[0] if sqlite else None
+    if sqlite:
+        if raw.in_transaction:
+            raise RuntimeError("SQLite migrations require a connection outside a transaction")
+        # Batch rebuilds must not fire child cascades when dropping originals.
+        raw.execute("PRAGMA foreign_keys=OFF")
+    try:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=sqlite,
+            compare_type=True,
+            render_item=render_item,
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+    finally:
+        if sqlite:
+            # Alembic commits its own transaction. On failure, roll it back
+            # before returning a pooled connection with enforcement restored.
+            if connection.in_transaction():
+                connection.rollback()
+            raw.execute(f"PRAGMA foreign_keys={foreign_keys}")
+
+
 def run_migrations_online() -> None:
+    connection = config.attributes.get("connection")
+    if connection is not None:
+        migrate_connection(connection)
+        return
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-
-    if connectable.dialect.name == "sqlite":
-        # ``db.session`` turns ``PRAGMA foreign_keys`` ON for every
-        # SQLite connection so the models' ON DELETE CASCADE actually fires.
-        # Migrations must opt back OUT: batch mode rebuilds a table by
-        # DROPping the original, and with enforcement on SQLite runs an
-        # implicit DELETE FROM before that DROP, firing every child CASCADE.
-        # MEASURED: upgrading a populated pre-orgs database through
-        # n7e1f5a9b3c4 (which batch-alters ``tournaments``) deleted every
-        # matches / match_states / tournament_backups / tournament_members
-        # row. Enforcement is connection-scoped, so this affects migrations
-        # only — the application's own connections keep it on.
-        #
-        # It must go through the ``connect`` event, not
-        # ``connection.exec_driver_sql``: SQLAlchemy 2.0 autobegins on the
-        # first execute, the pragma is silently ignored inside a transaction,
-        # and the leftover outer transaction rolls the entire migration back
-        # when the connection closes. That failure is invisible — Alembic
-        # still logs every "Running upgrade" line.
-        @event.listens_for(connectable, "connect")
-        def _fk_off_for_migrations(dbapi_connection, _connection_record):  # noqa: ANN001
-            dbapi_connection.execute("PRAGMA foreign_keys=OFF")
-
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            render_as_batch=settings.database_url.startswith("sqlite"),
-        )
-
-        with context.begin_transaction():
-            context.run_migrations()
+    try:
+        with connectable.connect() as connection:
+            migrate_connection(connection)
+    finally:
+        connectable.dispose()
 
 
 if context.is_offline_mode():

@@ -219,7 +219,7 @@ describe('receipt loader', () => {
     }
   });
 
-  it('404s an unknown slug, uniformly, carrying no upstream detail', async () => {
+  it('keeps an owned receipt reachable when public page branding is unavailable', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
@@ -230,10 +230,8 @@ describe('receipt loader', () => {
       }),
     );
 
-    const thrown = (await get('nope', SUBMISSION).catch((e: unknown) => e)) as Response;
-
-    expect(thrown.status).toBe(404);
-    expect(await thrown.text()).not.toContain('TOURNAMENT_NOT_FOUND');
+    const receipt = await get('nope', SUBMISSION);
+    expect(receipt).toEqual({ page: { tournamentName: null }, slug: 'nope', reference: SUBMISSION });
   });
 });
 
@@ -370,7 +368,7 @@ describe('GET /e/{slug}/receipt/{reference}', () => {
     expect(sent.map((r) => r.method)).toEqual(['GET', 'GET']);
   });
 
-  it('renders a not-found page for an unknown slug, leaking neither cause nor topology', async () => {
+  it('renders the neutral private receipt loader without public branding', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
@@ -384,7 +382,8 @@ describe('GET /e/{slug}/receipt/{reference}', () => {
     const res = await fetchEntrant(`/e/does-not-exist/receipt/${SUBMISSION}`);
     const body = await res.text();
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(body).toContain('/assets/receipt.js');
     expect(body).not.toContain('TOURNAMENT_NOT_FOUND');
   });
 

@@ -44,9 +44,11 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Optional, Sequence
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from db.models import Entry, EntryEvent, EntryPlayer, Submission
+from core.state_machines import ENTRY
+from core.state_machine import GUARDS, TransitionError, apply, check
 
 # ---- the vocabulary ---------------------------------------------------
 
@@ -82,7 +84,7 @@ AWAITING_PARTNER = "awaiting_partner"
 ERASED_NAME = "(erased)"
 
 
-class LifecycleError(Exception):
+class LifecycleError(TransitionError):
     """A refused transition, with the reason a human needs.
 
     ``code`` is stable wire vocabulary; ``message`` is the sentence. Both,
@@ -90,7 +92,7 @@ class LifecycleError(Exception):
     """
 
     def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
+        super().__init__(code, message)
         self.code = code
         self.message = message
 
@@ -137,7 +139,8 @@ def promote_verified_entries(session: Session, account_id: uuid.UUID) -> int:
     """
     promoted = 0
     for entry in _entries_of(session, account_id, states=(UNVERIFIED,)):
-        entry.state = PENDING
+        transition_entry(entry, "verify", "system", session=session)
+        recompute_reasons(session, entry)
         promoted += 1
     return promoted
 
@@ -248,13 +251,9 @@ def withdraw(
     invariant I4 asks for: the software prevents the entrant's accident, the
     operator decides the exception.
 
-    **A committed entry is NOT un-committed here** (ruling R3). If the seam
-    has already written this entry onto the roster, ``committed_player_id``
-    stays set and the roster is left exactly as it is. The withdrawal
-    becomes a *signal* — an operator has a scheduled player who is no longer
-    entered, and a machine silently pulling them out of a built draw is the
-    kind of automatic consequence I4 forbids. ``committed_and_withdrawn``
-    below is what the attention code reads.
+    A bound entry keeps its membership row. Withdrawal marks that membership
+    withdrawn and returns its unit to pending; a published draw keeps its unit
+    reference for the director to reconcile explicitly.
     """
     if by_operator:
         if entry.state not in LIVE_STATES:
@@ -265,10 +264,28 @@ def withdraw(
     else:
         assert_withdrawable(entry, event)
 
-    entry.state = WITHDRAWN
+    from competition.service import lock_workspace, withdraw_membership
+    lock_workspace(session, entry.tournament_id)
+    transition_entry(entry, "operator_withdraw" if by_operator else "withdraw",
+                     "operator" if by_operator else "entrant", session=session, context={"event": event})
+    withdraw_membership(session, entry.tournament_id, entry.id)
     entry.withdrawn_at = _utcnow()
+    if entry.paired_entry_id is not None:
+        partner = session.get(Entry, (entry.tournament_id, entry.paired_entry_id))
+        if (
+            partner is not None
+            and partner.tournament_id == entry.tournament_id
+            and partner.paired_entry_id == entry.id
+            and partner.state in LIVE_STATES
+        ):
+            partner.pending_reasons = list(dict.fromkeys([
+                *(partner.pending_reasons or []), AWAITING_PARTNER,
+            ]))
     if erase:
         erase_player(session, entry)
+    recompute_reasons(session, entry)
+    session.flush()
+    session.expire(entry, ["membership"])
     return entry
 
 
@@ -295,25 +312,31 @@ def erase_player(session: Session, entry: Entry) -> Optional[EntryPlayer]:
     if player is None or player.erased_at is not None:
         return player
     player.full_name = ERASED_NAME
+    player.gender = "unknown"
+    player.roster_attributes = {}
     player.club = None
+    # D4 / O4: the representation describes the human, so it is scrubbed
+    # with the rest of them rather than surviving as a lone attribute.
+    player.representation = None
+    player.representation_public = False
     player.remarks = None
     player.birth_year = None
     player.erased_at = _utcnow()
+    from competition.projection import project
+    project(session, player.tournament_id)
     return player
 
 
 def committed_and_withdrawn(entries: Iterable[Entry]) -> list[Entry]:
     """The entries a director has to reconcile by hand (E4's attention code).
 
-    Derived, not stored: an entry is in this set when the commit seam wrote
-    it onto the roster (``committed_player_id``) and it was withdrawn
-    afterwards. A stored flag would be a third place the same fact lives and
+    Derived from membership existence and the withdrawn entry state. A stored flag would be a third place the same fact lives and
     the first one to go stale.
     """
     return [
         entry
         for entry in entries
-        if entry.committed_player_id and entry.state == WITHDRAWN
+        if entry.membership is not None and entry.state == WITHDRAWN
     ]
 
 
@@ -334,7 +357,10 @@ def reject(entry: Entry, *, note: Optional[str] = None) -> Entry:
             "Only an entry still awaiting a decision can be rejected. "
             "Withdraw a confirmed entry instead.",
         )
-    entry.state = REJECTED
+    transition_entry(entry, "reject", "operator", reason=note)
+    session = object_session(entry)
+    if session is not None:
+        recompute_reasons(session, entry)
     return entry
 
 
@@ -359,14 +385,14 @@ def promote(entry: Entry) -> Entry:
             "ENTRY_NOT_WAITLISTED",
             "Only a waitlisted entry can be promoted.",
         )
-    entry.state = PENDING
-    entry.pending_reasons = [
-        reason for reason in (entry.pending_reasons or []) if reason != OVER_CAP
-    ]
+    transition_entry(entry, "promote", "operator")
+    session = object_session(entry)
+    if session is not None:
+        recompute_reasons(session, entry)
     return entry
 
 
-def assert_confirmable(entry: Entry) -> None:
+def _is_pending_exactly(entry: Entry, **_context) -> None:
     """Raise unless ``pending → confirmed`` is legal for this entry.
 
     Ruling D1's guard, lifted out of the desk route so the machine states
@@ -412,3 +438,76 @@ def live_entries_for(session: Session, account_id: uuid.UUID) -> Sequence[Entry]
     to decide which lines can offer a withdraw action at all.
     """
     return _entries_of(session, account_id, states=sorted(LIVE_STATES))
+
+
+def recompute_reasons(session: Session, entry: Entry) -> list[str]:
+    """Rebuild desk reasons from source records; the cache is never policy."""
+    from entries.entry_policy import gender_flags
+    from entries import partners
+    event = session.get(EntryEvent, (entry.tournament_id, entry.entry_event_id))
+    reasons = []
+    if entry.submission is not None and (entry.submission.outstanding_cents or 0) > 0:
+        reasons.append(AWAITING_PAYMENT)
+    if entry.state == WAITLISTED:
+        reasons.append(OVER_CAP)
+    if entry.player is not None and event is not None:
+        reasons.extend(gender_flags(entry.player.gender, event))
+        if entry.submission:
+            from entries.submissions import has_unresolvable_namesake
+            from types import SimpleNamespace
+            if has_unresolvable_namesake(session, entry.tournament_id, entry.submission.account_id,
+                    SimpleNamespace(full_name=entry.player.full_name, birth_year=entry.player.birth_year), entry.player.id):
+                reasons.append('needs_review_person')
+        duplicate = session.scalar(select(Entry.id).join(EntryPlayer,
+            (Entry.tournament_id == EntryPlayer.tournament_id) & (Entry.entry_player_id == EntryPlayer.id)).where(
+                Entry.tournament_id == entry.tournament_id, Entry.entry_event_id == entry.entry_event_id,
+                Entry.id != entry.id, Entry.state.in_(LIVE_STATES),
+                func.lower(EntryPlayer.full_name) == entry.player.full_name.lower()).limit(1))
+        if duplicate:
+            reasons.append('needs_review')
+    if event is not None and partners.is_doubles(event):
+        partner = session.get(Entry, (entry.tournament_id, entry.paired_entry_id)) if entry.paired_entry_id else None
+        if partner is None or partner.state not in LIVE_STATES:
+            reasons.append(AWAITING_PARTNER)
+        if entry.invitation_email and partners.conflicting(session, entry, entry.invitation_email):
+            reasons.append(partners.PAIR_CONFLICT)
+    entry.pending_reasons = list(dict.fromkeys(reasons))
+    return entry.pending_reasons
+
+
+def _before_withdrawal_deadline(entry, *, event=None, **_context):
+    assert_withdrawable(entry, event)
+
+
+def _at_capacity(entry, *, session, event, **_context):
+    if not at_cap(session, entry.tournament_id, event):
+        raise LifecycleError("ENTRY_NOT_AT_CAP", "This event still has places available.")
+
+
+GUARDS.update(before_withdrawal_deadline=_before_withdrawal_deadline,
+              is_pending_exactly=_is_pending_exactly, at_capacity=_at_capacity)
+
+
+def assert_confirmable(entry: Entry) -> None:
+    # Preserve the specific messages even when no graph edge exists.
+    _is_pending_exactly(entry)
+    check(ENTRY, entry, "confirm", "operator", guards=GUARDS)
+
+
+def transition_entry(entry, event, actor, *, session=None, reason=None, context=None, actor_id=None):
+    session = session if session is not None else object_session(entry)
+    try:
+        record = apply(ENTRY, entry, event, actor, guards=GUARDS, session=session,
+                       reason=reason, context=context, actor_id=actor_id)
+    except TransitionError as exc:
+        raise LifecycleError(exc.code, exc.message) from exc
+    if session is not None:
+        record.persist(session)
+    return record
+
+
+def confirm(session, entry, *, actor_id=None):
+    assert_confirmable(entry)
+    transition_entry(entry, "confirm", "operator", session=session, actor_id=actor_id)
+    recompute_reasons(session, entry)
+    return entry

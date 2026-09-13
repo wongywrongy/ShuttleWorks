@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 
 from bracket.application import BracketResultService
 from db.models import (
-    Base,
     CloudEventProjection,
     EventOperation,
     SyncCheckpoint,
@@ -41,7 +40,8 @@ from sync.service import (
 
 def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return Session(engine, expire_on_commit=False)
 
 
@@ -51,7 +51,7 @@ def _tournament(session: Session, tournament_id: uuid.UUID) -> None:
             id=tournament_id,
             name="Protocol proof",
             data={"version": 2, "config": {"tournamentName": "Protocol proof"}},
-            schema_version=2,
+            schema_version=1,
         )
     )
     session.commit()
@@ -250,7 +250,7 @@ def test_gap_rejects_whole_batch_without_partial_application() -> None:
         payload={},
         occurred_at_local=now,
         accepted_at_node=now,
-        schema_version=3,
+        schema_version=1,
     )
 
     with pytest.raises(ProtocolError) as raised:
@@ -329,7 +329,7 @@ def test_command_outside_signed_grant_is_quarantined() -> None:
         payload={},
         occurred_at_local=now,
         accepted_at_node=now,
-        schema_version=3,
+        schema_version=1,
     )
 
     with pytest.raises(ProtocolError) as raised:
@@ -376,7 +376,7 @@ def test_schedule_commit_rebuilds_cloud_read_projection() -> None:
         payload=payload,
         occurred_at_local=now,
         accepted_at_node=now,
-        schema_version=3,
+        schema_version=1,
     )
 
     assert ingest_batch(
@@ -606,7 +606,7 @@ def test_bulk_match_state_operation_rebuilds_cloud_projection() -> None:
     )
     cloud.delete(cloud.get(CloudEventProjection, tournament_id))
     cloud.commit()
-    checkpoint = checkpoint_package(cloud.get(Tournament, tournament_id), schema_version=3, session=cloud)
+    checkpoint = checkpoint_package(cloud.get(Tournament, tournament_id), schema_version=1, session=cloud)
     rebuilt = rebuild_cloud_projection(cloud, checkpoint=checkpoint,
                                        checkpoint_hash=authority.checkpoint_hash,
                                        authority_epoch=authority.epoch)

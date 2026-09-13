@@ -107,6 +107,7 @@ export interface NodeResultDTO {
   winnerSide: string | null;
   score: number[][] | null;
   walkover: boolean;
+  reason?: 'walkover' | 'retired' | 'forfeit' | null;
 }
 
 export interface MatchNodeDTO {

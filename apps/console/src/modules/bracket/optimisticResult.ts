@@ -22,6 +22,7 @@ export function applyOptimisticResult(
     play_unit_id: input.matchId,
     winner_side: input.winnerSide,
     walkover: input.walkover ?? false,
+    reason: input.reason ?? null,
     finished_at_slot: input.finishedAtSlot ?? null,
     score: input.score ?? null,
   };

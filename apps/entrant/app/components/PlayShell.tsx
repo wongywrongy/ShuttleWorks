@@ -46,6 +46,11 @@ import { EntrantSessionContext } from '../lib/sessionContext';
 
 const DISCOVERY_HREF = '/e/';
 
+/** One skin for every header link, so the personal area's two entries and the
+ * signed-out sign-in link stay the same control. */
+const PERSONAL_LINK =
+  'inline-flex min-h-8 items-center rounded px-2 text-sm font-semibold text-foreground underline-offset-4 hover:bg-surface-sunken hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+
 export function PlayShell({
   signInLabel = 'Sign in',
   children,
@@ -75,17 +80,41 @@ export function PlayShell({
               Tournaments
             </span>
           </a>
-          {/* Exactly one of these renders (§3.8). `ml-auto` sits on whichever
-              one it is, so the single link right-aligns in both states the way
-              the pair used to. `min-h-6` (24px) is the tap-target floor
-              (WCAG 2.5.8) — text-sm's own line-height is 20px, under it with
-              no padding of its own. */}
-          <a
-            href={signedIn ? '/e/me/entries' : '/e/login'}
-            className="ml-auto inline-flex min-h-8 items-center rounded px-2 text-sm font-semibold text-foreground underline-offset-4 hover:bg-surface-sunken hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            {signedIn ? 'My entries' : signInLabel}
-          </a>
+          {/* Exactly one of these SHAPES renders (§3.8): signed out, a way in;
+              signed in, the personal area. `ml-auto` sits on whichever one it
+              is, so it right-aligns in both states. `min-h-8` clears the
+              tap-target floor (WCAG 2.5.8) — text-sm's own line-height is
+              20px, under it with no padding of its own.
+
+              P9/D9: signed in, the two personal destinations are grouped in
+              one labelled nav rather than a single orphan link. "My entries"
+              keeps its exact href — every existing deep link and the sign-in
+              `next` allowlist point at it — and Settings is its own page
+              since 2026-09-12 (`/e/me/settings`), where the export and erase
+              controls live. */}
+          {signedIn ? (
+            <nav
+              aria-label="Your account"
+              className="ml-auto flex items-center gap-1"
+            >
+              <a
+                href="/e/me/entries"
+                className={PERSONAL_LINK}
+              >
+                My entries
+              </a>
+              <a
+                href="/e/me/settings"
+                className={PERSONAL_LINK}
+              >
+                Settings
+              </a>
+            </nav>
+          ) : (
+            <a href="/e/login" className={`ml-auto ${PERSONAL_LINK}`}>
+              {signInLabel}
+            </a>
+          )}
         </div>
       </header>
       {/* `tabIndex={-1}`: WCAG 2.4.1 "Bypass Blocks" needs the skip link's

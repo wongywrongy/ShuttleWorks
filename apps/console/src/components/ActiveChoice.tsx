@@ -3,11 +3,23 @@ import { Link, type To } from 'react-router-dom';
 
 export type ActiveChoiceGeometry = 'row' | 'segment';
 export type ActiveChoiceSemantics = 'page' | 'tab' | 'radio' | 'pressed';
+/**
+ * How loudly the selected state paints.
+ *
+ * `accent` (the default) is the product's selection fill. `quiet` is for a
+ * control that is CHROME rather than content — the shell header's Workspace
+ * action, which sits beside the page's own primary button: on its own pages it
+ * still has to read as current, but painting it accent made the loudest
+ * control in the header the one that goes where you already are (D2). Both
+ * states are owned here, so "selected" keeps one spelling.
+ */
+export type ActiveChoiceEmphasis = 'accent' | 'quiet';
 
 export interface ActiveChoiceProps {
   active: boolean;
   geometry: ActiveChoiceGeometry;
   semantics: ActiveChoiceSemantics;
+  emphasis?: ActiveChoiceEmphasis;
   children: ReactNode;
   className?: string;
   to?: To;
@@ -48,6 +60,7 @@ export function ActiveChoice({
   active,
   geometry,
   semantics,
+  emphasis = 'accent',
   children,
   className = '',
   to,
@@ -65,7 +78,9 @@ export function ActiveChoice({
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset',
     GEOMETRY_CLASS[geometry],
     active
-      ? 'bg-action-primary text-text-on-accent focus-visible:ring-text-on-accent'
+      ? emphasis === 'quiet'
+        ? 'bg-surface-chip text-foreground focus-visible:ring-ring'
+        : 'bg-action-primary text-text-on-accent focus-visible:ring-text-on-accent'
       : 'text-foreground hover:bg-surface-hover focus-visible:ring-ring',
     // Token-based disabled treatment (not opacity — a11y-inspection sweep,
     // WP-06/X1): a disabled ActiveChoice still renders through the same

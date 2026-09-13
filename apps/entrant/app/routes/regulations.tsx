@@ -259,10 +259,10 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
   const title = tournamentName ? `${tournamentName} regulations` : 'Tournament regulations';
   // The identity a PRINTED page needs and the screen already has from the
   // hero: who is playing what, and when. On screen it is duplicate furniture,
-  // so it renders only on paper.
-  const printIdentity = [tournamentName, formatDateLong(page.tournament.date), page.venue?.name]
-    .filter((part): part is string => Boolean(part))
-    .join(' · ');
+  // so it renders only on paper. Separate fields without middle-dot separators (D1).
+  const printTournamentName = tournamentName;
+  const printDate = formatDateLong(page.tournament.date);
+  const printVenue = page.venue?.name;
   return (
     <PlayShell>
       {/* Contract §11 (public P1): the reader used to carry a floating
@@ -276,27 +276,24 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
           other public page prints. `media="print"` keeps them out of the
           screen cascade entirely. */}
       <link rel="stylesheet" media="print" href="/e/assets/regulations-print.css" />
-      <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
-        {/* public-visual-fixes P6: the document's own title band is ONE line.
-            It used to be a section title repeating the word already in the
-            breadcrumb, the tab and the browser tab, over a version/updated
-            line, over an sr-only "Regulations document" heading — three
-            names for one thing before a reader reached a single rule. What
-            is left is the heading the page hierarchy needs (the frame owns
-            the `h1`) and the provenance a rules document must carry. */}
-        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-          <h2 className={SECTION_TITLE}>Regulations</h2>
-          <p className="text-sm text-muted-foreground">
-            {`Version ${version}`}
-            {updatedDate ? ` · updated ${formatDateLong(updatedDate)}` : ''}
-          </p>
-          {/* Document actions stay with the document, inside the shared page
-              hierarchy — they are not a second navigation. `Download` says
-              what the button does and no more: it saves the text of this
-              document, and calling that "Save as PDF" would be a lie about
-              the file the reader gets. */}
-          <div id="regulations-actions" hidden className="flex flex-wrap gap-2" data-document-title={title}>
-            {/* P7: both wear the tier's ONE secondary register
+      <main className="mx-auto w-full max-w-3xl px-4 py-5 md:py-6">
+        {/* P5, tightened 2026-09-12: ONE title row. The document heading
+            (the frame owns the `h1`), its provenance right beside it in the
+            helper register, and the two document actions on the same line,
+            so the text itself starts within a few lines of the tabs. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <h2 className={SECTION_TITLE}>Regulations</h2>
+            {/* Version and updated date as separate fields, no middle-dot separator. */}
+            <p className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
+              <span>{`Version ${version}`}</span>
+              {updatedDate ? <span>{`Updated ${formatDateLong(updatedDate)}`}</span> : null}
+            </p>
+          </div>
+          {/* Document actions grouped together, visible without JavaScript to meet
+              keyboard access and narrow-screen usability requirements. */}
+          <div id="regulations-actions" className="flex flex-wrap gap-2" data-document-title={title}>
+            {/* P5: both wear the tier's ONE secondary register
                 (`ACTION_SECONDARY`) rather than a bespoke copy of it, so a
                 document action looks like every other non-committing control
                 on the public site. */}
@@ -313,7 +310,7 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
             not a page navigation: it names only sections of the text below
             it, and sits above the document rather than beside it. */}
         {sections.length > 1 ? (
-          <nav aria-label="Document sections" className="mt-6 max-w-3xl rounded-lg border border-rule-soft bg-surface-raised p-4">
+          <nav aria-label="Document sections" className="mt-4 max-w-3xl rounded-lg border border-rule-soft bg-surface-raised p-4">
             <h3 className="font-display text-sm font-bold tracking-tight text-foreground">On this page</h3>
             <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
               {sections.map((section) => (
@@ -327,14 +324,29 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
           </nav>
         ) : null}
 
-        <article id="regulations-document" className="mt-8 min-w-0 max-w-3xl">
-          {printIdentity ? (
-            <p className="hidden text-sm text-muted-foreground print:block">{printIdentity}</p>
+        <article id="regulations-document" className="mt-4 min-w-0 max-w-3xl">
+          {/* Print identity: tournament name, date, venue on first line(s) of document,
+              using separate fields without middle-dot separators (D1). */}
+          {(printTournamentName || printDate || printVenue) ? (
+            <div className="hidden text-sm text-muted-foreground print:block space-y-1 pb-4 border-b border-rule-soft">
+              {printTournamentName && <p>{printTournamentName}</p>}
+              <div className="flex flex-wrap gap-4">
+                {printDate && <p>{printDate}</p>}
+                {printVenue && <p>{printVenue}</p>}
+              </div>
+            </div>
           ) : null}
           <div className="grid gap-8">
             {sections.map((section) => (
               <section key={section.id} id={section.id} className="scroll-mt-6">
-                <h3 className="font-display text-xl font-bold tracking-tight text-foreground">{section.title}</h3>
+                {/* The parser's synthetic "Full regulations" title is
+                    omitted when it would be the ONLY heading: "Regulations"
+                    is already the title row above, and the same word twice
+                    in a row said nothing the second time (S10/S42). An
+                    organizer's own headings always render. */}
+                {sections.length === 1 && section.title === 'Full regulations' ? null : (
+                  <h3 className="font-display text-xl font-bold tracking-tight text-foreground">{section.title}</h3>
+                )}
                 {section.blocks.map((block, index) =>
                   block.kind === 'list' ? (
                     <ul

@@ -81,9 +81,22 @@ describe('roster detail pane — grammar and order', () => {
   it('groups the form into the canonical four sections, in order', () => {
     renderPosition(['p1']);
     const eyebrows = screen
-      .getAllByText(/^(IDENTITY|AVAILABILITY|EVENTS|NOTES)$/)
+      .getAllByText(/^(IDENTITY|EVENT ENTRIES|AVAILABILITY|INTERNAL NOTES)$/)
       .map((el) => el.textContent);
-    expect(eyebrows).toEqual(['IDENTITY', 'AVAILABILITY', 'EVENTS', 'NOTES']);
+    // D4/O5 order — the current entries (and partner) sit above availability.
+    expect(eyebrows).toEqual([
+      'IDENTITY',
+      'EVENT ENTRIES',
+      'AVAILABILITY',
+      'INTERNAL NOTES',
+    ]);
+  });
+
+  it('names the current position and partner without expanding anything', () => {
+    renderPosition();
+    const summary = screen.getByTestId('entry-summary-MD1');
+    expect(summary).toHaveTextContent('MD1');
+    expect(summary).toHaveTextContent('with Ben');
   });
 
   it('shows one occupant at a time behind a seat switcher on a doubles position', () => {
@@ -92,7 +105,7 @@ describe('roster detail pane — grammar and order', () => {
     expect(within(switcher).getByTestId('seat-tab-0')).toHaveTextContent('Aiko');
     expect(within(switcher).getByTestId('seat-tab-1')).toHaveTextContent('Ben');
     // Exactly ONE form is mounted, not both stacked.
-    expect(screen.getAllByLabelText('Notes')).toHaveLength(1);
+    expect(screen.getAllByLabelText('Internal notes')).toHaveLength(1);
     expect(screen.getByLabelText(/Unassign Aiko/)).toBeInTheDocument();
 
     fireEvent.click(within(switcher).getByTestId('seat-tab-1'));
@@ -167,7 +180,7 @@ describe('roster detail pane — events (defect D8)', () => {
 describe('roster detail pane — staleness (defect D16)', () => {
   it('does not invalidate the schedule when a note is typed', () => {
     renderPosition(['p1']);
-    fireEvent.change(screen.getByLabelText('Notes'), {
+    fireEvent.change(screen.getByLabelText('Internal notes'), {
       target: { value: 'taped ankle' },
     });
     expect(player('p1')?.notes).toBe('taped ankle');
@@ -176,7 +189,7 @@ describe('roster detail pane — staleness (defect D16)', () => {
 
   it('DOES invalidate it when a field the solver reads changes', () => {
     renderPosition(['p1']);
-    fireEvent.change(screen.getByLabelText('Min rest'), {
+    fireEvent.change(screen.getByLabelText('Minimum rest between matches'), {
       target: { value: '45' },
     });
     expect(useTournamentStore.getState().scheduleIsStale).toBe(true);

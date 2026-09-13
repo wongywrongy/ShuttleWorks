@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
@@ -548,8 +549,17 @@ class SimClient:
     def withdraw_entry(self, tid: str, entry_id: str) -> dict:
         return self._json("POST", f"/tournaments/{tid}/entries/{entry_id}/withdraw")
 
-    def commit_entries(self, tid: str) -> dict:
-        return self._json("POST", f"/tournaments/{tid}/entries/commit")
+    def bind_entries(self, tid: str) -> dict:
+        return self._json("POST", f"/tournaments/{tid}/competition/bind", json={"requestId": str(uuid.uuid4())})
+
+    def competition_event(self, tid: str, code: str, bracket_event_id: str, *, doubles=False) -> dict:
+        existing = self._json("GET", f"/tournaments/{tid}/competition/events")
+        for event in existing:
+            if event.get("bracketEventId") == bracket_event_id:
+                return event
+        return self._json("POST", f"/tournaments/{tid}/competition/events", json={
+            "categoryCode": code, "formatKey": "doubles" if doubles else "singles", "bracketEventId": bracket_event_id,
+        })
 
     def import_entries(self, tid: str, body: dict) -> dict:
         """``POST /tournaments/{tid}/entries/import`` — the operator import seam.
@@ -629,6 +639,10 @@ class SimClient:
         body: dict[str, list[str]] = {}
         for name, value in [*fields, ("_csrf", self.form_csrf())]:
             body.setdefault(name, []).append(value)
+        quote = self.request("POST", f"/e/api/quote/{slug}", data=body,
+                             headers={"Accept": "application/json"}, expect=(200, 400, 404, 409))
+        if quote.status_code == 200 and quote.json().get("reviewedQuote"):
+            body["reviewedQuote"] = [quote.json()["reviewedQuote"]]
         return self.request("POST", f"/e/api/submit/{slug}", data=body, expect=expect)
 
     def entry_page_projection(self, slug: str, *, expect: Iterable[int] = OK) -> httpx.Response:

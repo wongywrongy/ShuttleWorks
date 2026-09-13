@@ -137,7 +137,10 @@ describe('SP-P9 bracket invariants', () => {
     // Still no SVG, no ResizeObserver, no measured connector layout: the
     // braces are pseudo-elements on equal flex slots, which is why varied
     // node heights need no recalculation in JavaScript at all.
-    expect(`${draw}\n${stripComments(css)}`).not.toMatch(/<svg|ResizeObserver|getBoundingClientRect|position:\s*absolute|bracket-connectors/);
+    expect(`${draw}\n${stripComments(css)}`).not.toMatch(/<svg|ResizeObserver|getBoundingClientRect|bracket-connectors/);
+    // Static path edges are an intentional overlay; no measured layout is allowed.
+    const layoutCss = stripComments(css).replace(/\.bracket-link-edge\s*\{[^}]*\}/g, '');
+    expect(`${draw}\n${layoutCss}`).not.toMatch(/position:\s*absolute/);
   });
 });
 
@@ -149,7 +152,6 @@ describe('SP-P9 reduction guard', () => {
       'components/EventRow.tsx',
       'components/SeasonStatusCell.tsx',
       'components/SeasonControls.tsx',
-      'components/NowStrip.tsx',
       'routes/schedule.tsx',
       'routes/draw.tsx',
       'routes/player.tsx',

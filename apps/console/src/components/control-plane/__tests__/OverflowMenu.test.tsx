@@ -56,12 +56,12 @@ describe('OverflowMenu', () => {
     render(
       <MemoryRouter>
         <OverflowMenu
-          items={[{ key: 'admin', label: 'Open administration', to: '/tournaments/t1/administration/lifecycle' }]}
+          items={[{ key: 'admin', label: 'Open settings', to: '/tournaments/t1/administration/lifecycle' }]}
         />
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
-    expect(screen.getByRole('menuitem', { name: 'Open administration' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: 'Open settings' })).toHaveAttribute(
       'href',
       '/tournaments/t1/administration/lifecycle',
     );

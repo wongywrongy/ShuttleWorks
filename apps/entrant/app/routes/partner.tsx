@@ -1,10 +1,10 @@
 /**
- * `GET /e/partner/:token` — the doubles invitation, and its two outcomes (E3).
+ * `GET /e/partner/:token`, the doubles invitation, and its two outcomes (E3).
  *
  * **This page is the argument for invites over capability links, rendered.**
  * A stranger arrives holding a URL somebody mailed them. What the URL buys
  * them is this page: who invited them, to what tournament, in what event.
- * What it does not buy them is the ability to act — the form below posts to
+ * What it does not buy them is the ability to act, the form below posts to
  * a route that requires a signed-in, verified entrant account, so the link
  * carries an invitation and never an authority.
  *
@@ -14,8 +14,8 @@
  * design, and it is public because a person who has just been mailed a link
  * has no account yet.
  *
- * A dead invite — unknown, expired, already accepted, or attached to an
- * entry the nominator withdrew — is one uniform 404 from the API and one
+ * A dead invite, unknown, expired, already accepted, or attached to an
+ * entry the nominator withdrew, is one uniform 404 from the API and one
  * message here. The page does not distinguish them because the API cannot:
  * a reader who could tell "expired" from "never existed" could confirm that
  * a forwarded link had once been real.
@@ -27,16 +27,19 @@ import { data } from 'react-router';
 import { MessagePage } from '../components/MessagePage';
 import { PersonRef } from '../components/PersonRef';
 import { PlayShell } from '../components/PlayShell';
+import { formatCents } from '../lib/money';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
 import { CARD, PAGE_TITLE } from '../lib/ui';
+import { hasEntrantSession } from '../lib/session.server';
+import { safeNext } from '../lib/nextTarget';
 import type { Route } from './+types/partner';
 
 const ACCEPTED_SUFFIX = '/accepted';
 const FAILED_SUFFIX = '/failed';
 
-/** See `verify.tsx` — same clamp, same reason. */
+/** See `verify.tsx`, same clamp, same reason. */
 const MAX_TOKEN = 200;
 
 interface PartnerInvite {
@@ -46,6 +49,11 @@ interface PartnerInvite {
   discipline: string;
   invitedBy: string;
   askBirthYear: boolean;
+  totalCents?: number | null;
+  feeCurrency?: string | null;
+  reviewedQuote?: string | null;
+  regulationsText?: string | null;
+  regulationsVersion?: number | null;
 }
 
 export interface PartnerLoaderData {
@@ -56,6 +64,7 @@ export interface PartnerLoaderData {
   failed: boolean;
   failureReason?: 'unverified' | 'unusable' | 'retry' | null;
   entryId?: string;
+  signedIn: boolean;
 }
 
 export async function loader({
@@ -75,6 +84,7 @@ export async function loader({
   const failureReason = rawReason === 'unverified' || rawReason === 'unusable' || rawReason === 'retry'
     ? rawReason
     : null;
+  const signedIn = hasEntrantSession(request);
 
   let invite: PartnerInvite | null = null;
   if (token && !accepted && !failed) {
@@ -83,8 +93,8 @@ export async function loader({
         `/e/api/partner-invites/${encodeURIComponent(token)}`,
       );
     } catch (error) {
-      // A 404 is the EXPECTED shape for every dead invite — unknown,
-      // expired, already accepted, attached to a withdrawn entry — so it is
+      // A 404 is the EXPECTED shape for every dead invite, unknown,
+      // expired, already accepted, attached to a withdrawn entry, so it is
       // the answer rather than a failure, and the component renders it as
       // one message. A non-ApiError is rethrown: an unreachable backend is a
       // real fault and must not be dressed up as "your invitation expired".
@@ -101,6 +111,7 @@ export async function loader({
     failed,
     failureReason,
     entryId: accepted ? url.searchParams.get('entryId') ?? '' : '',
+    signedIn,
   };
   return data(payload, csrf.responseInit);
 }
@@ -116,7 +127,7 @@ export const meta: Route.MetaFunction = () => [
 const FORM_CARD = `grid gap-4 ${CARD}`;
 
 export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) {
-  const { formCsrf, token, invite, accepted, failed, failureReason } = loaderData;
+  const { formCsrf, token, invite, accepted, failed, failureReason, signedIn } = loaderData;
 
   if (accepted) {
     return (
@@ -142,8 +153,8 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
     // `unverified` case is actually resolved by an account step; `verify.tsx`
     // (package 23's file, out of this package's scope) does not accept a
     // `next=` destination, so the link honestly says only what it does —
-    // confirming the address — rather than promising a return this route
-    // cannot keep. `retry` names a real thing to retry — the invitation
+    // confirming the address, rather than promising a return this route
+    // cannot keep. `retry` names a real thing to retry, the invitation
     // itself. The default (`unusable`) case tells the reader to ask for a
     // new link; "Sign in" answered a different question, so it is replaced
     // by the same honest return action the dead-invite state above offers.
@@ -185,9 +196,9 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
   }
 
   if (!invite) {
-    // One message for every dead invite — see the module note. V3-PE35.1:
+    // One message for every dead invite, see the module note. V3-PE35.1:
     // the API cannot distinguish "never existed" from "already accepted"
-    // (deliberately — see the module docstring), so the copy claims neither
+    // (deliberately, see the module docstring), so the copy claims neither
     // expiry nor acceptance; it states what IS true (this link answers
     // nothing) and offers both the honest next step and a safe way to check
     // an already-accepted invitation without claiming that is what happened.
@@ -201,35 +212,78 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
   }
 
   const invitationPath = `/e/partner/${encodeURIComponent(token)}`;
+  const nextUrl = safeNext(invitationPath, invitationPath);
 
   return (
     <PlayShell>
       <main className="mx-auto grid w-full max-w-md gap-6 px-4 py-10 md:py-14">
-        <header className="grid gap-1">
-          <h1 className={PAGE_TITLE}>
+        <div className={FORM_CARD}>
+          <h1 className={PAGE_TITLE}>Doubles invitation</h1>
+
+          {/* ---- P7 partner: labeled fields ---- */}
+          <div className="grid gap-2 bg-bg-elev rounded px-3 py-3">
+            <div className="grid gap-0.5">
+              <p className="text-xs font-medium text-muted-foreground">Tournament</p>
+              <p className="text-sm text-foreground">{invite.tournamentName ?? 'Not specified'}</p>
+            </div>
+            <div className="grid gap-0.5">
+              <p className="text-xs font-medium text-muted-foreground">Event</p>
+              <p className="text-sm text-foreground">{invite.discipline || 'Doubles'} – {invite.eventCode}</p>
+            </div>
+            <div className="grid gap-0.5">
+              <p className="text-xs font-medium text-muted-foreground">Invited by</p>
+              <p className="text-sm text-foreground">
+                <PersonRef
+                  slug={invite.slug ?? ''}
+                  identity={{ id: null, name: invite.invitedBy }}
+                  state="dead"
+                />
+              </p>
+            </div>
+          </div>
+
+          {/* ---- P7 partner: entry explanation ---- */}
+          <p className="text-sm text-muted-foreground">
+            When you accept, a new entry will be created in your name for this event. You will be paired with{' '}
             <PersonRef
               slug={invite.slug ?? ''}
               identity={{ id: null, name: invite.invitedBy }}
               state="dead"
-            />{' '}
-            invited you to play
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {invite.discipline} at {invite.tournamentName ?? 'a tournament'}.
-            Nothing is entered in your name until you accept.
+            />
+            . Your fee: {invite.totalCents == null ? 'Not configured, ask the organizer' : `${formatCents(invite.totalCents)} ${invite.feeCurrency ?? '(currency not configured)'}`}. Payment and organizer approval are separate from accepting this invitation.
           </p>
-        </header>
 
-        <div className={FORM_CARD}>
-          {/* Posts across the tier boundary to FastAPI (R8-A), as a native
-              form that does not depend on client JS. The route requires a
-              signed-in verified account and answers 303 to an outcome page,
-              which is what makes the invitation an invitation rather than a
-              capability. */}
+          {/* ---- P7 partner: sign-in-first action hierarchy ---- */}
+          {!signedIn && (
+            <>
+              <div className="grid gap-2">
+                <Button asChild size="lg">
+                  <a href={`/e/login?next=${encodeURIComponent(nextUrl)}`}>
+                    Sign in to continue
+                  </a>
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  or{' '}
+                  <a
+                    className="text-accent underline underline-offset-4"
+                    href={`/e/signup?next=${encodeURIComponent(nextUrl)}`}
+                  >
+                    create an account
+                  </a>
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground border-t border-rule-soft pt-3">
+                You'll need a verified email address to accept this invitation. After signing in, you'll return to this page to complete your entry.
+              </p>
+            </>
+          )}
+
+          {/* ---- P7 partner: acceptance form ---- */}
           <form
             method="post"
             action={`/e/api/partner-invites/${encodeURIComponent(token)}/accept`}
             className="grid gap-4"
+            hidden={!signedIn}
           >
             <input type="hidden" name={FORM_FIELD} value={formCsrf} />
 
@@ -291,28 +345,16 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
               />
             ) : null}
 
+            <input type="hidden" name="reviewedQuote" value={invite.reviewedQuote ?? ''} />
+            <p className="whitespace-pre-wrap text-sm">{invite.regulationsText}</p>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="acknowledged" value="true" required />
+              <span>I accept the regulations (version {invite.regulationsVersion}) and the fee shown above. My name and club may appear in published draws and results.</span>
+            </label>
             <Button type="submit" size="lg" className="justify-self-start">
               Accept and enter
             </Button>
           </form>
-
-          <p className="border-t border-rule-soft pt-4 text-sm text-muted-foreground">
-            You need a confirmed entrant account to accept.{' '}
-            <a
-              className="text-accent underline underline-offset-4"
-              href={`/e/login?next=${encodeURIComponent(invitationPath)}`}
-            >
-              Sign in
-            </a>{' '}
-            or{' '}
-            <a
-              className="text-accent underline underline-offset-4"
-              href={`/e/signup?next=${encodeURIComponent(`/e/partner/${token}`)}`}
-            >
-              create one
-            </a>{' '}
-            first. You will return to this invitation.
-          </p>
         </div>
       </main>
     </PlayShell>

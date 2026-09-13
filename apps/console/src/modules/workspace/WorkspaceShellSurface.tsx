@@ -179,7 +179,7 @@ export function WorkspaceAdminPage({
           single visual owner, so the administration tabs carried a lighter
           "selected" weight than the identical act of selection anywhere
           else — the rail, the segmented controls, the filter chips. */}
-      <nav aria-label="Workspace administration" className="flex gap-1">
+      <nav aria-label="Workspace settings" className="flex gap-1">
         {WORKSPACE_ADMIN_TABS.map((tab) => (
           <ActiveChoice
             key={tab.path}

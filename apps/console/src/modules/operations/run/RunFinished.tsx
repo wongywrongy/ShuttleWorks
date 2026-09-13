@@ -1,3 +1,4 @@
+import { can, isRunComplete } from '../runtime/runMachine';
 /**
  * RunFinished — the Finished section below the Run queue (SP-CONSOLE-4 C4).
  *
@@ -21,7 +22,7 @@ import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
 import { formatGamePairs } from '../../../components/control-plane';
 
 export interface RunFinishedProps {
-  /** The full Run match list — this component filters to `done` itself. */
+  /** The full Run match list — this component filters to finished and retired matches. */
   matches: RunMatch[];
   /** Meet write seams; absent = every row read-only (no Undo). */
   meetOps?: MeetRunOps;
@@ -29,7 +30,7 @@ export interface RunFinishedProps {
 
 export function RunFinished({ matches, meetOps }: RunFinishedProps) {
   const done = matches
-    .filter((m) => m.status === 'done')
+    .filter((m) => isRunComplete(m.status))
     .sort((a, b) => (b.plannedSlot ?? -1) - (a.plannedSlot ?? -1));
   if (done.length === 0) return null;
 
@@ -60,7 +61,7 @@ function FinishedRow({ match, meetOps }: { match: RunMatch; meetOps?: MeetRunOps
   const canEdit = useCanEdit();
   const [updating, setUpdating] = useState(false);
 
-  const undoable = match.source === 'meet' && !!meetOps;
+  const undoable = match.source === 'meet' && !!meetOps && can(match.status, 'undo_finish');
   // SWP-1: the score rides the match itself (both engines fill `Match.score`
   // in their adapters), so bracket rows show their recorded sets here — the
   // old read went through `meetOps.matchStates`, a store bracket play-unit
@@ -107,6 +108,7 @@ function FinishedRow({ match, meetOps }: { match: RunMatch; meetOps?: MeetRunOps
       <span className="min-w-0 flex-1 break-words text-muted-foreground">
         {match.sideA} <span className="text-muted-foreground">vs</span> {match.sideB}
       </span>
+      {match.status === 'retired' && <span className="shrink-0 text-muted-foreground">Retired</span>}
       {scoreLine ? (
         <span className="sw-num shrink-0 text-xs font-semibold tabular-nums text-status-started">
           {scoreLine}

@@ -67,7 +67,14 @@ the application images with `--pull --no-cache` before recreating the complete
 four-container demo. Application images receive an OCI revision label. Backup
 metadata and `demo-status` retain/report the source revision, worktree state,
 and image IDs/digests, so an operator can verify that the running containers
-come from the intended commit without disturbing the Postgres bind mount.
+come from the intended commit.
+
+**Amended 2026-09-12:** under the
+[pre-launch policy](../../reference/migration-and-versioning-policy.md),
+`make demo-rebuild` now quarantines the old Postgres/data directories after
+backup and successful image build, creates a fresh schema, and reseeds it.
+The immutable provenance requirements remain. `demo-update` retains data for
+schema-compatible code updates; it cannot upgrade the retired revision tree.
 
 `infra/compose/docker-compose.selfhost.yml` remains the canonical production
 deployment definition. The demo override is not a second production stack.

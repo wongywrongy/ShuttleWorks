@@ -45,7 +45,7 @@ function entry(id: string, submissionId: string | null, email = 'a@b.c'): EntryD
     partnerEntryId: null,
     remarks: null,
     listOptOut: false,
-    committedPlayerId: null,
+    membershipId: null,
     submittedAt: null,
     withdrawnAt: null,
   };

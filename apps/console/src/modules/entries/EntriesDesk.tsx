@@ -44,12 +44,14 @@ import {
   type BandedTableColumn,
 } from '../../components/control-plane';
 import { apiClient } from '../../api/client';
-import type { EntryCommitResultDTO, EntryDTO } from '../../api/dto';
+import type { EntryBindResultDTO, EntryDTO } from '../../api/dto';
 import { useAction } from '../../hooks/useAction';
 import { useCanEdit } from '../../hooks/useCanEdit';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { MODULE_LABELS } from '../../platform/product-shell/types';
 import type { EntryGroup } from './entryDisplay';
+import { CompetitionMove } from './CompetitionMove';
+import { CompetitionBind } from './CompetitionBind';
 import {
   ENTRY_STATE_LABEL,
   ENTRY_STATE_TONE,
@@ -101,7 +103,7 @@ export function EntriesDesk({ tid }: { tid: string }) {
   // real submissions (2026-08-10 full-scale browser pass). How many entries
   // exist is UNKNOWN when the read fails; it is never zero.
   const [loadFailed, setLoadFailed] = useState(false);
-  const [result, setResult] = useState<EntryCommitResultDTO | null>(null);
+  const [result, setResult] = useState<EntryBindResultDTO | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -172,26 +174,13 @@ export function EntriesDesk({ tid }: { tid: string }) {
   // Putting it on a row would offer to mark one entry of a three-event act
   // paid, which is not a thing that can happen: one form act is one
   // transfer.
-  const setPaid = useAction(
-    useCallback(
-      async (id: string) => {
-        await apiClient.markSubmissionPaid(tid, id);
-        await load();
-      },
-      [tid, load],
-    ),
+  const recordPayment = useAction(
+    useCallback(async (id: string, amountCents: number, currency: string, requestId: string, onRecorded: () => void) => {
+      await apiClient.recordSubmissionPayment(tid, id, { amountCents, currency, requestId });
+      onRecorded();
+      await load();
+    }, [tid, load]),
     { errorMessage: 'Could not record that payment' },
-  );
-
-  const setUnpaid = useAction(
-    useCallback(
-      async (id: string) => {
-        await apiClient.markSubmissionUnpaid(tid, id);
-        await load();
-      },
-      [tid, load],
-    ),
-    { errorMessage: 'Could not undo that payment' },
   );
 
   const withdraw = useAction(
@@ -209,11 +198,11 @@ export function EntriesDesk({ tid }: { tid: string }) {
   // why this is a plain button and not a confirm-first destructive action.
   const commit = useAction(
     useCallback(async () => {
-      const r = await apiClient.commitEntries(tid);
+      const r = await apiClient.bindEntries(tid);
       setResult(r);
       await load();
     }, [tid, load]),
-    { errorMessage: 'Could not commit entries to the roster' },
+    { errorMessage: 'Could not bind entries to competition' },
   );
 
   const nameById = new Map((entries ?? []).map((e) => [e.id, e.playerName]));
@@ -232,9 +221,10 @@ export function EntriesDesk({ tid }: { tid: string }) {
           ) : null
         }
       >
+        {canEdit ? <CompetitionBind tid={tid} onBound={async (result) => { setResult(result); await load(); }} /> : null}
         {canEdit ? (
           <Button size="xs" onClick={() => void commit.run()} disabled={commit.pending}>
-            {commit.pending ? 'Committing…' : 'Commit to roster'}
+            {commit.pending ? 'Binding…' : 'Bind to competition'}
           </Button>
         ) : null}
       </ActionsBar>
@@ -292,12 +282,9 @@ export function EntriesDesk({ tid }: { tid: string }) {
               // been declared free, so offering to mark it paid would be
               // offering to record a transfer of an unknown amount.
               action:
-                canEdit && owesMoney(g)
-                  ? paymentControl(g, {
-                      pending: setPaid.pending || setUnpaid.pending,
-                      onPaid: () => void setPaid.run(g.key),
-                      onUnpaid: () => void setUnpaid.run(g.key),
-                    })
+                canEdit && g.feeCurrency
+                  ? <PaymentControl group={g} pending={recordPayment.pending}
+                      onRecord={(amount, requestId, done) => recordPayment.run(g.key, amount, g.feeCurrency!, requestId, done)} />
                   : null,
             }))}
             rowId={(e) => e.id}
@@ -319,6 +306,8 @@ export function EntriesDesk({ tid }: { tid: string }) {
                   <StatusPill tone={ENTRY_STATE_TONE[e.state]}>
                     {ENTRY_STATE_LABEL[e.state]}
                   </StatusPill>
+                  {e.unitStatus === 'withdrawn' ? <span className="block text-xs text-muted-foreground">Withdrawn from competition</span> : null}
+                  {e.unitStatus === 'pending' && e.membershipStatus === 'active' ? <span className="block text-xs text-muted-foreground">Seeking partner</span> : null}
                 </span>
                 <span role="cell" className={`${colClass(COLUMNS[3])} flex flex-wrap gap-1`}>
                   {e.pendingReasons.map((code) => (
@@ -351,6 +340,7 @@ export function EntriesDesk({ tid }: { tid: string }) {
                   role="cell"
                   className={`${colClass(COLUMNS[5])} flex items-center justify-end gap-1`}
                 >
+                  {canEdit && e.membershipId && e.membershipStatus === 'active' ? <CompetitionMove tid={tid} entry={e} onMoved={load} /> : null}
                   {canEdit && e.state === CONFIRMABLE_FROM ? (
                     <Button
                       size="xs"
@@ -411,49 +401,30 @@ export function EntriesDesk({ tid }: { tid: string }) {
  *  nothing has not declared its entries free, and offering to mark such an
  *  act paid would be offering to record a transfer of an unknown amount.
  *  Mirrors `entries/money.owes_payment`. */
-function owesMoney(group: EntryGroup): boolean {
-  return !!group.feeTotalCents;
-}
-
-/** Has this act been paid? Derived from the entries' reasons rather than
- *  from a `paidAt` the desk row does not carry — `awaiting_payment` is set
- *  and cleared by the same service call, so the two cannot disagree, and
- *  reading the reason is what the operator is looking at anyway. */
-function isPaid(group: EntryGroup): boolean {
-  return !group.entries.some((e) => e.pendingReasons.includes('awaiting_payment'));
-}
-
-/** The band's payment affordance: a state and its inverse action.
- *
- *  "Paid" is a STATEMENT with a quiet undo beside it, not a toggle: the
- *  common case is recording a payment once, and a control that reads as a
- *  switch invites a press to see what happens. Marking paid is not armed —
- *  it destroys nothing and its own undo sits next to it. */
-function paymentControl(
-  group: EntryGroup,
-  {
-    pending,
-    onPaid,
-    onUnpaid,
-  }: { pending: boolean; onPaid: () => void; onUnpaid: () => void },
-) {
-  if (isPaid(group)) {
-    return (
-      <span className="flex items-center gap-2">
-        <StatusPill tone="green">
-          Paid
-        </StatusPill>
-        <Button size="xs" variant="ghost" disabled={pending} onClick={onUnpaid}>
-          Undo
-        </Button>
-      </span>
-    );
-  }
-  return (
-    <Button size="xs" variant="outline" disabled={pending} onClick={onPaid}>
-      Mark paid
-    </Button>
-  );
+function PaymentControl({ group, pending, onRecord }: {
+  group: EntryGroup; pending: boolean; onRecord: (amount: number, requestId: string, done: () => void) => Promise<unknown>;
+}) {
+  const [amount, setAmount] = useState('');
+  const [kind, setKind] = useState<'payment' | 'refund'>('payment');
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const cents = Math.round(Number(amount) * 100);
+  return <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => {
+    event.preventDefault();
+    if (!Number.isSafeInteger(cents) || cents <= 0) return;
+    void onRecord(kind === 'refund' ? -cents : cents, requestId, () => {
+      setAmount(''); setRequestId(crypto.randomUUID());
+    });
+  }}>
+    <span className="text-xs text-muted-foreground">Recorded {formatCents(group.paidCents)} · Due {formatCents(group.outstandingCents)} {group.feeCurrency}</span>
+    <select aria-label="Transaction type" value={kind} onChange={(e) => { setKind(e.target.value as 'payment' | 'refund'); setRequestId(crypto.randomUUID()); }}
+      className="rounded border border-border bg-background px-2 py-1 text-xs">
+      <option value="payment">Payment</option><option value="refund">Refund / correction</option>
+    </select>
+    <input aria-label="Payment amount" type="number" min="0.01" step="0.01" required value={amount}
+      onChange={(e) => { setAmount(e.target.value); setRequestId(crypto.randomUUID()); }}
+      className="w-24 rounded border border-border bg-background px-2 py-1 text-xs" />
+    <Button size="xs" type="submit" variant="outline" disabled={pending || !Number.isSafeInteger(cents) || cents <= 0}>Record</Button>
+  </form>;
 }
 
 /**
@@ -495,26 +466,27 @@ function CommitSummary({
   result,
   nameById,
 }: {
-  result: EntryCommitResultDTO;
+  result: EntryBindResultDTO;
   nameById: Map<string, string>;
 }) {
-  const { committed, skipped } = result;
+  const { bindings, skipped } = result;
+  const bound = bindings.filter((b) => b.outcome === 'bound');
   return (
     <div
       data-testid="entries-commit-summary"
       className="border-b border-border bg-muted/20 px-5 py-3"
     >
       <p className="text-xs font-medium text-foreground">
-        {committed.length === 0 && skipped.length === 0
-          ? 'Nothing new to commit: every confirmed entry is already on the roster.'
-          : `${committed.length} committed to the roster.`}
+        {bound.length === 0 && skipped.length === 0
+          ? 'Nothing new to bind: every confirmed entry is already on the roster.'
+          : `${bound.length} bound to competition.`}
       </p>
       {skipped.length > 0 ? (
         <ul className="mt-1.5 space-y-0.5">
           {skipped.map((s) => (
-            <li key={s.id} className={TEXT_MUTED_XS}>
+            <li key={s.entryId} className={TEXT_MUTED_XS}>
               <span className={TEXT_EMPHASIS}>
-                {nameById.get(s.id) ?? s.id}
+                {nameById.get(s.entryId) ?? s.entryId}
               </span>{' '}
               skipped: {skipReasonLabel(s.reason)}
             </li>

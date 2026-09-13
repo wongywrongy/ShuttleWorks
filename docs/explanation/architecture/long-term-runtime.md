@@ -64,9 +64,10 @@ transition so existing deployments do not change startup targets accidentally.
 
 Release images are built only after successful CI for the exact source commit.
 They carry a long commit-SHA tag and OCI revision metadata. Release Compose
-requires an explicit `TAG`; it has no mutable `latest` fallback. The current
-release plus the previous two compatible operation/checkpoint schema releases
-are supported and covered by compatibility and restore checks.
+requires an explicit `TAG`; it has no mutable `latest` fallback. Pre-launch,
+only operation/checkpoint schema 1 is supported. The current-plus-two window
+activates at the first external installation of a tagged release, under the
+[migration policy](/reference/migration-and-versioning-policy).
 
 Automated tests exercise these protocol and restore contracts. Physical
 reference-hardware validation, abrupt-power testing, and the 24-hour and

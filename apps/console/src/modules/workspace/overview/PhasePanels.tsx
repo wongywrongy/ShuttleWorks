@@ -59,8 +59,13 @@ function Figures({ items }: { items: { value: number | string; label: string }[]
   );
 }
 
-/** One-line "setup is done" summary — the checklist collapses once every step
- *  is behind the operator; restating four ✓ rows is noise. */
+/** One-line "the setup steps are done" summary — the checklist collapses once
+ *  every step is behind the operator; restating four ✓ rows is noise.
+ *
+ *  The claim is SCOPED to the checklist (D2). It used to read "Setup
+ *  complete", which a workspace could show while the same page displayed an
+ *  unresolved warning the checklist has no step for — a broad readiness claim
+ *  covering checks it does not make. It now names exactly what it counted. */
 function ReadySummary({ steps }: { steps: ChecklistStep[] }) {
   const progress = checklistProgress(steps);
   if (!progress) return null;
@@ -69,7 +74,7 @@ function ReadySummary({ steps }: { steps: ChecklistStep[] }) {
       <span aria-hidden className="mr-1.5 text-status-live">
         ✓
       </span>
-      Setup complete · {progress.ready} of {progress.total} steps
+      Setup steps done · {progress.ready} of {progress.total}
     </p>
   );
 }
@@ -83,9 +88,16 @@ function SetupPanel({ summary, steps, onNavigate }: PanelProps) {
     <section>
       <div className="mb-1 flex items-baseline justify-between">
         <SectionLabel>Set up this event</SectionLabel>
+        {/* Named, not a bare "3 / 3": the fraction counts the steps in THIS
+            checklist and nothing else, and an unscoped ratio on a page that
+            can also be showing a warning reads as a verdict on the whole
+            workspace (D2). */}
         {progress ? (
-          <span className="text-2xs sw-num text-text-muted">
-            {progress.ready} / {progress.total}
+          <span data-testid="overview-setup-progress" className="text-2xs text-text-muted">
+            <span className="sw-num">
+              {progress.ready} of {progress.total}
+            </span>{' '}
+            setup steps done
           </span>
         ) : null}
       </div>
@@ -273,14 +285,18 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
               : null
             }
           />
-          <button
-            type="button"
-            onClick={() => onNavigate(seg.matches)}
-            className={`mt-2 text-sm text-accent underline underline-offset-2 hover:no-underline ${NAV_LINK_ROW}`}
-          >
-            <span>View all matches</span>
-            <NavCaret />
-          </button>
+          {/* A neutral outline button, not an underlined link (D1): this is
+              a navigation shortcut sitting beside the panel's other actions,
+              and three different visual grammars for "go somewhere" on one
+              page is what made none of them read as a hierarchy. */}
+          <div className="mt-2">
+            <Button variant="outline" size="sm" onClick={() => onNavigate(seg.matches)}>
+              <span className={NAV_LINK_ROW}>
+                <span>View all matches</span>
+                <NavCaret />
+              </span>
+            </Button>
+          </div>
         </div>
       ) : null}
     </section>
@@ -300,13 +316,9 @@ function CompletePanel({ summary, onNavigate }: PanelProps) {
           job, not the phase's next step — a quiet link, not a button
           (SP-OPCON-1 SWP-3). */}
       <div>
-        <button
-          type="button"
-          onClick={() => onNavigate('ws-sync')}
-          className="text-sm text-accent underline underline-offset-2 hover:no-underline"
-        >
+        <Button variant="outline" size="sm" onClick={() => onNavigate('ws-sync')}>
           Back up this event
-        </button>
+        </Button>
       </div>
     </section>
   );

@@ -270,13 +270,23 @@ describe.each(CASES)('the tournament frame on $name', ({ path, routes, activeTab
     stubApi(routes);
     const html = await render(path);
 
-    expect(html).toMatch(/<h1[^>]*id="tournament-title"[^>]*>Spring Open<\/h1>/);
+    if (path.includes('/players/')) expect(html).toMatch(/<h1[^>]*>[\s\S]*Ada Lovelace[\s\S]*?<\/h1>/);
+    else expect(html).toMatch(/<h1[^>]*id="tournament-title"[^>]*>Spring Open<\/h1>/);
     expect((html.match(/<h1[\s>]/g) ?? []).length).toBe(1);
-    // §11.1: the hero carries the tournament's identity at every depth.
-    expect(html).toContain('Kingsway BC');
-    expect(html).toContain('Saturday 12 September 2026 · Kingsway Centre');
+    // §11.1: the hero carries the tournament's identity at every depth —
+    // in FULL on the Overview (organizer, long date), and in the COMPACT
+    // band everywhere else (concise date, same venue), since the 2026-09-12
+    // public refinement.
+    if (activeTab === 'Overview') {
+      expect(html).toContain('Kingsway BC');
+      expect(html).toContain('Saturday 12 September 2026');
+      expect(html).toContain('Kingsway Centre');
+    } else if (!path.includes('/players/')) {
+      expect(html).toContain('12 Sep 2026');
+      expect(html).toContain('Kingsway Centre');
+    }
     // §7.1: the venue-time rule is stated once per frame, never per card.
-    expect((html.match(/All times local to the venue/g) ?? []).length).toBe(1);
+    if (!path.includes('/players/')) expect((html.match(/All times local to the venue/g) ?? []).length).toBe(1);
   });
 
   it('renders the same tab bar with the right parent tab current', async () => {

@@ -146,6 +146,25 @@ describe('SetupProduct — four consolidated pages', () => {
     expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
   });
 
+  it('names "No limit" instead of a zero sentinel and states the effective rules', async () => {
+    const user = userEvent.setup();
+    renderSetup('/tournaments/t1/setup/scoring');
+    // The stored rules section is empty: 21 / best of 3 / deuce, no cap.
+    expect(await screen.findByText(/Best of 3 games to 21, win by 2, no maximum\./)).toBeInTheDocument();
+    expect(screen.queryByText('(0 = no cap)')).toBeNull();
+    // Standard is the ONE preset the product may name: it writes 21 / best of
+    // 3 / win by 2 / cap 30, and the sentence follows the values.
+    await user.click(screen.getByRole('radio', { name: 'Standard 21-point' }));
+    expect(await screen.findByText(/Best of 3 games to 21, win by 2, capped at 30\./)).toBeInTheDocument();
+    expect(screen.getByLabelText('Point cap')).toHaveValue(30);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(patchTournamentSetup).toHaveBeenCalledWith(
+      't1',
+      'rules',
+      expect.objectContaining({ pointsPerSet: 21, setsToWin: 2, deuceEnabled: true, pointCap: 30 }),
+    ));
+  });
+
   it('V3-OC10.1: exposes the configured point cap only when deuce is enabled', async () => {
     const fixture = setupFixture();
     fixture.sections = fixture.sections.map((section) => section.key === 'rules'
@@ -178,7 +197,19 @@ describe('SetupProduct — four consolidated pages', () => {
     renderSetup('/tournaments/t1/setup/public-site');
     const image = await screen.findByAltText('Selected tournament logo');
     fireEvent.error(image);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry preview' }));
+    const retried = await screen.findByAltText('Selected tournament logo');
+    expect(retried).not.toBe(image);
+    expect(retried).toHaveAttribute('src', 'https://example.test/logo.png');
+    fireEvent.error(retried);
     expect(await screen.findByRole('button', { name: 'Retry preview' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Logo image link'), {
+      target: { value: 'https://example.test/replacement.png' },
+    });
+    expect(await screen.findByAltText('Selected tournament logo')).toHaveAttribute(
+      'src', 'https://example.test/replacement.png',
+    );
+    expect(screen.queryByRole('button', { name: 'Retry preview' })).toBeNull();
   });
 
   it('V3-OC07.2: only existing named courts can be selected, as a checkbox list', async () => {

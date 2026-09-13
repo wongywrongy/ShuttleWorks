@@ -110,19 +110,22 @@ describe('the Hub command bar fits a narrow viewport', () => {
 
 /**
  * A Hub row is NAME (`min-w-0 flex-1`) beside four `shrink-0` siblings —
- * Modules, Date, Next action, the overflow menu. At 390px measured
- * `scrollWidth` 424 vs `clientWidth` 334: the siblings alone exceed the row,
- * so `flex-1`'s hypothetical size (basis 0, min-width 0) stayed 0 and the
- * row's only identifying text disappeared. The column header above it,
- * sharing the same widths, collapsed the same way — 0px with `overflow:
- * visible`, so its text spilled instead of clipping.
+ * Dates, Status, Open, the actions menu. At 390px measured `scrollWidth` 424
+ * vs `clientWidth` 334: the siblings alone exceed the row, so `flex-1`'s
+ * hypothetical size (basis 0, min-width 0) stayed 0 and the row's only
+ * identifying text disappeared. The column header above it, sharing the same
+ * widths, collapsed the same way — 0px with `overflow: visible`, so its text
+ * spilled instead of clipping.
  *
  * The fix reuses BandedTable's own mechanism (`@container/table` sizing +
  * `hidden …:block|flex` priority classes, `components/control-plane/
  * BandedList.tsx`) rather than inventing a new one, applied directly to the
  * row (and mirrored on the header) since neither is `columns`-config-driven.
- * Modules yields first (priority 3), Date next (priority 2) — both are
- * metadata the inspector panel already repeats; the name never yields.
+ *
+ * Since the D2 table (Tournament · Dates · Status · Open · Actions) exactly
+ * ONE column yields: **Dates**, at priority 2. Status, Open and the actions
+ * menu are what the row is FOR — a list you cannot read the state of, or act
+ * on, is not narrower, it is useless — and the name never yields.
  */
 describe('the Hub row keeps its name at a narrow container width', () => {
   it('the row is its own `@container/table` sizing context', () => {
@@ -137,23 +140,21 @@ describe('the Hub row keeps its name at a narrow container width', () => {
     expect(workspaceRow).toMatch(/className="flex min-w-\[12rem\] flex-1 items-center gap-2\.5"/);
   });
 
-  it('the module glyphs yield first — priority 3, hides soonest', () => {
-    expect(workspaceRow).toMatch(/COL_PRIORITY_CLASS\[3\]/);
-  });
-
-  it('the date rides the name cell rather than reserving its own column', () => {
-    // The date moved to the LEFT, beside the name it belongs to, so there is
-    // no fixed-width date column to yield: it is inside the one flexible cell
-    // and wraps with it. Nothing else may claim priority 2 either — a second
-    // yielding column would take width from the name at the same breakpoint.
+  it('the dates column is the one that yields — priority 2, and nothing yields sooner', () => {
     expect(workspaceRow).toMatch(/data-testid="row-date"/);
-    expect(workspaceRow).not.toMatch(/COL_PRIORITY_CLASS\[2\]/);
+    expect(workspaceRow).toMatch(/COL_PRIORITY_CLASS\[2\]/);
+    expect(workspaceRow).not.toMatch(/COL_PRIORITY_CLASS\[3\]/);
   });
 
-  it('the Hub column header shares the row\'s container and its one priority', () => {
+  it('status survives every width — a blank state column is the defect D2 fixed', () => {
+    expect(workspaceRow).toMatch(/data-testid="row-status"/);
+    expect(/data-testid="row-status"[^>]*COL_PRIORITY_CLASS/.test(workspaceRow)).toBe(false);
+  });
+
+  it("the Hub column header shares the row's container and its one priority", () => {
     expect(hubPage).toMatch(/@container\/table/);
-    expect(hubPage).toMatch(/COL_PRIORITY_CLASS\[3\]/);
-    expect(hubPage).not.toMatch(/COL_PRIORITY_CLASS\[2\]/);
+    expect(hubPage).toMatch(/COL_PRIORITY_CLASS\[2\]/);
+    expect(hubPage).not.toMatch(/COL_PRIORITY_CLASS\[3\]/);
   });
 });
 

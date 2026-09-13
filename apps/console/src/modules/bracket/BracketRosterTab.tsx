@@ -456,14 +456,18 @@ function BracketRosterTabCore({
                   record: their matches in this workspace, named by them.
                   Omitted provider-less, where there is no workspace to
                   address. */}
-              <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1">
+              {/* D1: a navigation shortcut asked for as an action reads as a
+                  button and stays a link — the panel holds the editing task,
+                  and these two are the way OUT of it to the fuller record. */}
+              <div className="mb-3 flex flex-wrap items-center gap-2">
                 {tid ? (
                   <Link
                     to={`/tournaments/${tid}/bracket/matches?q=${encodeURIComponent(selected.name || '')}`}
-                    className="inline-flex text-xs text-accent underline-offset-4 hover:underline"
+                    className={UTILITY_BUTTON}
+                    title="Every match this player is in, in this workspace"
                     data-testid="bracket-player-matches-link"
                   >
-                    View this player&rsquo;s matches
+                    View profile
                   </Link>
                 ) : null}
                 {/* OPR-0908-6: the other half of the same person — what the
@@ -478,10 +482,10 @@ function BracketRosterTabCore({
                     href={publicSitePlayerHref}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex text-xs text-accent underline-offset-4 hover:underline"
+                    className={UTILITY_BUTTON}
                     data-testid="bracket-player-public-profile-link"
                   >
-                    View public profile
+                    Public profile
                   </a>
                 ) : null}
               </div>

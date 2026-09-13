@@ -25,6 +25,8 @@ import {
   resultsHref,
   withdrawAffordance,
   yearGroups,
+  nextStep,
+  pendingReasonText,
 } from '../public/assets/my-entries.js';
 
 function line(over: Partial<MyEntryLine> = {}): MyEntryLine {
@@ -93,10 +95,10 @@ describe('the pure decisions', () => {
 
   it('quotes while awaiting, totals after, and prices no withdrawn card', () => {
     expect(priceLine(card({ status: 'awaiting' }))).toBe(
-      'Quoted 55.00 · pay at the desk',
+      'Quoted 55.00 (currency not stated), payable to the organizer',
     );
-    expect(priceLine(card({ status: 'entered' }))).toBe('Total 55.00');
-    expect(priceLine(card({ status: 'played' }))).toBe('Total 55.00');
+    expect(priceLine(card({ status: 'entered' }))).toBe('Total 55.00 (currency not stated)');
+    expect(priceLine(card({ status: 'played' }))).toBe('Total 55.00 (currency not stated)');
     expect(priceLine(card({ status: 'withdrawn' }))).toBeNull();
     expect(priceLine(card({ feeTotalCents: null }))).toBeNull();
     expect(formatCents(null)).toBe('');
@@ -132,12 +134,12 @@ describe('the pure decisions', () => {
 
   it('appends the withdrawal deadline to the price line only when one exists (E2)', () => {
     expect(priceLine(card({ withdrawsUntil: '2026-09-05T18:00:00Z' }))).toContain(
-      'Total 55.00 · withdrawal open until',
+      'Total 55.00 (currency not stated)',
     );
-    expect(priceLine(card({ withdrawsUntil: null }))).toBe('Total 55.00');
+    expect(priceLine(card({ withdrawsUntil: null }))).toBe('Total 55.00 (currency not stated)');
     expect(
       priceLine(card({ status: 'awaiting', withdrawsUntil: null })),
-    ).toBe('Quoted 55.00 · pay at the desk');
+    ).toBe('Quoted 55.00 (currency not stated), payable to the organizer');
   });
 
   it('links to the receipt whenever the card names a slug and a reference', () => {
@@ -148,6 +150,41 @@ describe('the pure decisions', () => {
     expect(receiptHref(card())).toBe('/e/spring-open/receipt/H4KJ29QW');
     expect(receiptHref(card({ slug: null }))).toBeNull();
     expect(receiptHref(card({ shortReference: '' }))).toBeNull();
+  });
+});
+
+describe('nextStep (refinement 2026-09-12: status is not the next action)', () => {
+  it('leads with what the entrant can do now: an outstanding payment points at the receipt', () => {
+    const step = nextStep(card({ events: [line({ pendingReasons: ['awaiting_payment', 'awaiting_partner'] })] }), true);
+    expect(step?.text).toContain('Payment outstanding');
+    expect(step?.action).toEqual({ label: 'View receipt', href: '/e/spring-open/receipt/H4KJ29QW' });
+  });
+
+  it('speaks the process in the entrant\'s words, never the desk\'s queue vocabulary', () => {
+    expect(nextStep(card({ events: [line({ pendingReasons: ['needs_review_person'] })] }), true)?.text).toBe(
+      "The organizer is checking this player's details.",
+    );
+    expect(nextStep(card({ events: [line({ pendingReasons: ['pair_conflict'] })] }), true)?.text).toBe(
+      'The organizer is checking this pairing.',
+    );
+    expect(nextStep(card({ events: [line({ pendingReasons: ['awaiting_partner'] })] }), true)?.text).toBe(
+      'Waiting for your partner to accept the invitation.',
+    );
+    expect(pendingReasonText('needs_review_person')).not.toMatch(/identity review/i);
+  });
+
+  it('offers the email confirmation only while it blocks a change the entrant could make', () => {
+    const step = nextStep(card({ events: [line({ canWithdraw: true, pendingReasons: [] })] }), false);
+    expect(step?.action).toEqual({ label: 'Confirm your email', href: '/e/verify' });
+    expect(nextStep(card({ status: 'awaiting', events: [line({ canWithdraw: false, pendingReasons: [] })] }), false)?.text).toBe(
+      'Waiting for the organizer to confirm.',
+    );
+  });
+
+  it('is null for a settled or past card', () => {
+    expect(nextStep(card({ status: 'entered', events: [line({ state: 'entered', canWithdraw: true, pendingReasons: [] })] }), true)).toBeNull();
+    expect(nextStep(card({ status: 'played', events: [line({ pendingReasons: ['awaiting_payment'] })] }), true)).toBeNull();
+    expect(nextStep(card({ events: [line({ state: 'withdrawn', pendingReasons: ['awaiting_payment'] })] }), true)).toBeNull();
   });
 });
 
@@ -169,15 +206,15 @@ describe('the DOM render', () => {
       ],
     });
 
-    expect(root.querySelector('h2')?.textContent).toBe('2026');
+    expect(root.querySelector('h2')?.textContent).toBe('Past');
     const link = root.querySelector('article a') as HTMLAnchorElement;
     expect(link.textContent).toBe('Spring Open');
     expect(link.getAttribute('href')).toBe('/e/spring-open');
-    expect(root.textContent).toContain('Kingsway BC · Kingsway Centre · 12 September 2026');
+    for (const text of ['Kingsway BC', 'Kingsway Centre', '12 September 2026']) expect(root.textContent).toContain(text);
     expect(root.textContent).toContain('Played');
-    expect(root.textContent).toContain("MS · Men's Singles · Ada Chen");
+    for (const text of ["MS", "Men's Singles", "Ada Chen"]) expect(root.textContent).toContain(text);
     expect(root.textContent).toContain('Winner');
-    expect(root.textContent).toContain('Total 55.00');
+    expect(root.textContent).toContain('Total 55.00 (currency not stated)');
     const view = [...root.querySelectorAll('a')].find(
       (a) => a.textContent === 'View results',
     );
@@ -203,8 +240,8 @@ describe('the DOM render', () => {
         }),
       ],
     });
-    expect(root.textContent).toContain("XD · Men's Singles · Ada Chen with Sam Ali");
-    expect(root.textContent).toContain("MS · Men's Singles · Ada Chen");
+    for (const text of ["XD", "Men's Singles", "Ada Chen", "Sam Ali"]) expect(root.textContent).toContain(text);
+    for (const text of ["MS", "Men's Singles", "Ada Chen"]) expect(root.textContent).toContain(text);
     // The un-partnered line carries no stray "with".
     expect(root.textContent).not.toContain('Ada Chen with Sam Ali with');
   });
@@ -242,10 +279,10 @@ describe('the DOM render', () => {
       (a) => a.textContent === 'View receipt',
     );
     expect(receipt?.getAttribute('href')).toBe('/e/spring-open/receipt/H4KJ29QW');
-    expect(root.textContent).toContain('withdrawal open until');
+    expect(root.textContent).toContain('You can withdraw yourself until');
     // V3-24-1: the entrant's handle on this entry, on the surface they reach
     // for before the receipt — the same string the receipt page prints.
-    expect(root.textContent).toContain('Reference H4KJ29QW');
+    expect(root.textContent).toContain('H4KJ29QW');
   });
 
   it('names a line\'s own act only when it is not the card\'s (V3-24-1)', () => {
@@ -260,14 +297,15 @@ describe('the DOM render', () => {
     });
     // The older act's line says which reference answers for it; the line
     // that belongs to the card's own act does not repeat the footer.
-    expect(root.textContent).toContain('Reference PQRS2345');
-    expect(root.textContent?.match(/Reference H4KJ29QW/g)).toHaveLength(1);
+    expect(root.textContent).toContain('Earlier entries');
+    expect(root.textContent).toContain('PQRS2345');
+    expect(root.textContent?.match(/H4KJ29QW/g)).toHaveLength(1);
   });
 
   it('omits the withdrawal deadline text when there is no open deadline', () => {
     const root = mount();
     render(root, { tournaments: [card({ withdrawsUntil: null })] });
-    expect(root.textContent).not.toContain('withdrawal open until');
+    expect(root.textContent).not.toContain('You can withdraw yourself until');
   });
 
   it('renders the calm empty state', () => {
@@ -340,8 +378,8 @@ describe('withdrawAffordance (E2)', () => {
     const withControls = mount();
     render(withControls, { tournaments: [card()], emailVerified: true });
     const labels = [...withControls.querySelectorAll('button')].map((b) => b.textContent);
-    expect(labels).toContain('Withdraw');
-    expect(labels).toContain('Withdraw and erase');
+    expect(labels).toContain('Withdraw entry');
+    expect(labels).not.toContain('Withdraw and erase');
 
     const withReason = mount();
     render(withReason, { tournaments: [card()], emailVerified: false });
@@ -357,23 +395,28 @@ describe('withdrawAffordance (E2)', () => {
     const root = mount();
     render(root, { tournaments: [card()], emailVerified: true });
     const first = [...root.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Withdraw',
+      (b) => b.textContent === 'Withdraw entry',
     );
     first?.click();
 
-    expect(root.textContent).toContain('Withdraw this entry?');
+    expect(root.textContent).toContain('Withdraw Ada Chen from');
     const keep = [...root.querySelectorAll('button')].find(
       (b) => b.textContent === 'Keep it',
     );
     expect(keep).toBeTruthy();
     keep?.click();
-    expect(root.textContent).not.toContain('Withdraw this entry?');
+    expect(root.textContent).not.toContain('Withdraw Ada Chen from');
   });
 });
 
 describe('the account panel (E5)', () => {
+  /** The settings page's mount (`routes/mySettings.tsx`): since 2026-09-12
+   *  the panel renders THERE and nowhere else, so each case builds the slot
+   *  the page ships and renders with no entries list at all. */
   function mount() {
+    document.body.innerHTML = '';
     const root = document.createElement('div');
+    root.id = 'my-account-root';
     document.body.appendChild(root);
     return root;
   }
@@ -383,12 +426,25 @@ describe('the account panel (E5)', () => {
     // applies: an unverified account has not shown it controls the address
     // it claims, and the routes 403 it anyway.
     const verified = mount();
-    render(verified, { tournaments: [card()], emailVerified: true });
+    render(null, { tournaments: [card()], emailVerified: true });
     expect(verified.textContent).toContain('Your account');
 
     const unverified = mount();
-    render(unverified, { tournaments: [card()], emailVerified: false });
+    render(null, { tournaments: [card()], emailVerified: false });
     expect(unverified.textContent).not.toContain('Your account');
+    // The unverified reader is told what unlocks the controls, with a way to do it.
+    expect(unverified.textContent).toContain('Confirm your email');
+    expect(unverified.querySelector('a')?.getAttribute('href')).toBe('/e/verify');
+  });
+
+  it('never renders on the entries list itself (the list is a different task)', () => {
+    document.body.innerHTML = '';
+    const list = document.createElement('div');
+    list.id = 'my-entries-root';
+    document.body.appendChild(list);
+    render(list, { tournaments: [card()], emailVerified: true });
+    expect(list.textContent).not.toContain('Your account');
+    expect(list.textContent).not.toContain('Download my data');
   });
 
   it('arms erasure and says what actually happens', () => {
@@ -396,7 +452,7 @@ describe('the account panel (E5)', () => {
     // details go, the entries stay as the organizers' records. Copy that
     // said "your data will be deleted" would describe a different product.
     const root = mount();
-    render(root, { tournaments: [card()], emailVerified: true });
+    render(null, { tournaments: [card()], emailVerified: true });
 
     const start = [...root.querySelectorAll('button')].find(
       (b) => b.textContent === 'Erase my details',
@@ -411,7 +467,7 @@ describe('the account panel (E5)', () => {
 
   it('offers the export as a plain read', () => {
     const root = mount();
-    render(root, { tournaments: [card()], emailVerified: true });
+    render(null, { tournaments: [card()], emailVerified: true });
     expect(
       [...root.querySelectorAll('button')].some(
         (b) => b.textContent === 'Download my data',

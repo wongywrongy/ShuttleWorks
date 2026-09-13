@@ -1,7 +1,7 @@
 /**
  * The workspace left-sidebar navigation model — the single source of truth for
  * the workflow-first IA: Setup, Participants, Meet, Bracket, Operations,
- * Display, and Administration, with Overview as the workspace landing.
+ * Display, and Settings, with Overview as the workspace landing.
  * Enabled modules adapt the tools within those stable categories.
  *
  * Competition and Publish are gone as visible categories: a match belongs to
@@ -32,7 +32,7 @@ export interface WsNavItem {
    * model; required by the workflow navigation model. */
   path?: string;
   /** Extra paths this item OWNS in the rail. A destination that carries its
-   * own internal tabs (Administration · Workspace: settings, backups, the
+   * own internal tabs (Settings · Workspace: settings, backups, the
    * activity log) is one rail item over several URLs; without this the rail
    * would show no active item on two of its own tabs. */
   matchPaths?: readonly string[];
@@ -283,10 +283,12 @@ export function buildWorkflowNavigation(
     sections.push({
       id: "meet",
       label: MODULE_LABELS.meet,
-      items: [
-        item("meet/matches", "matches", "Matches"),
-        item("meet/team-structure", "roster", "Team structure"),
-      ],
+      // D4/O5: "Team structure" rendered the SAME component as Participants ·
+      // Roster — identity, positions and lineup are one screen — which is the
+      // false destination this file's own rule above forbids. The rail lists
+      // it once; `meet/team-structure` stays a valid route, so bookmarks and
+      // the surface book's alias still land on it.
+      items: [item("meet/matches", "matches", "Matches")],
     });
   }
   if (enabled.has("bracket")) {
@@ -325,7 +327,11 @@ export function buildWorkflowNavigation(
     overview: item("overview", "overview", "Overview"),
     sections,
     admin: {
-      label: "Administration",
+      // "Settings" (D2): the section was called Administration while every
+      // other surface, the header action and the Hub's row menu called the
+      // same destination settings. Routes are unchanged — the /administration
+      // prefix stays, so old bookmarks still land.
+      label: "Settings",
       // Three destinations: Team · Modules · Workspace. Backups and the
       // activity log are not separate administrations — they are things you
       // look at ABOUT this workspace, so they are tabs inside Workspace
@@ -375,9 +381,9 @@ const ADMIN_SEGMENTS: ReadonlySet<AppTab> = new Set<AppTab>([
 
 /** The page title for a shell-rendered segment.
  *
- *  Administration and Overview used to render with NO page-title bar at all
+ *  Settings and Overview used to render with NO page-title bar at all
  *  while every module surface carried an `ActionsBar` — so the title baseline
- *  moved as soon as the director crossed into Administration. Titles here are
+ *  moved as soon as the director crossed into Settings. Titles here are
  *  the SAME words the rail uses; a destination that renames itself on arrival
  *  reads as a different place. */
 export const SHELL_SEGMENT_TITLE: Partial<Record<AppTab, string>> = {

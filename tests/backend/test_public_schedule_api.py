@@ -50,6 +50,10 @@ ITEM_KEYS = {
     # same string the operator's match list shows. No person data.
     "reference",
     "shortReference",
+    # Public refinement 2026-09-12: the running points of a live match's game
+    # in play, off the Operations match state; ``None`` unless live with
+    # results published and a recorded running score.
+    "liveScore",
 }
 # v3 pkg 29: ``unresolved`` is the discriminated reason a side is not a
 # resolved name (match-card contract §2.1). It carries no person data of its

@@ -75,6 +75,11 @@ npm run docs:build
 
 ## Demo and review
 
+PDF surface books (requires Tailscale access):
+
+- [Operator console PDF](http://100.68.168.126:8093/operator-console-surface-book.pdf)
+- [Public entrant PDF](http://100.68.168.126:8093/public-entrant-surface-book.pdf)
+
 The repeatable Tailscale demo uses the production application path with a
 dedicated Postgres data directory and private `100.64.0.0/10` bindings:
 

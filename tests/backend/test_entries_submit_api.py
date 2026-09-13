@@ -66,6 +66,8 @@ surfaces drift and call it a passing suite.
 """
 from __future__ import annotations
 
+from _helpers import submit_reviewed
+
 import json
 import uuid
 from urllib.parse import urlsplit
@@ -266,7 +268,7 @@ def _submit(client, page, **overrides):
         },
         overrides,
     )
-    return client.post(
+    return submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data=data,
         headers=headers,
@@ -1164,7 +1166,7 @@ def test_an_event_that_has_not_opened_yet_is_refused(client, page, entrant):
 
 
 def test_a_submission_to_an_unknown_slug_is_the_uniform_404(client, page, entrant):
-    r = client.post(
+    r = submit_reviewed(client,
         "/e/api/submit/no-such-page",
         data={
             "playerName": "Alice",
@@ -1193,7 +1195,7 @@ def test_a_player_without_a_gender_is_refused(client, page, entrant):
 
 
 def test_the_global_body_cap_applies_to_this_route_too(client, page, entrant):
-    r = client.post(
+    r = submit_reviewed(client,
         f"/e/api/submit/{page['slug']}",
         data={"playerName": "A", "gender": "F", "remarks": "x" * (5 * 1024 * 1024)},
         follow_redirects=False,

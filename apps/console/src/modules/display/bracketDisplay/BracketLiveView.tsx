@@ -1,7 +1,9 @@
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import { liveMatches, type LiveRow } from './bracketDisplayData';
 import { SideScores } from '../../../components/control-plane/MatchCard';
-import { SIGNAGE_NAME_WRAP, stepDownSignageNameSize } from '../publicDisplay/tvSizing';
+import { SIGNAGE_NAME_WRAP, stepDownSignageNameSize, resolveGridColsClass } from '../publicDisplay/tvSizing';
+import { autoLayout } from '../publicDisplay/courtLayout';
+import { resolveBoardAccent } from '../publicDisplay/boardChrome';
 
 /**
  * Read-only "what's playing now" view for the bracket TV — the bracket analog
@@ -25,13 +27,18 @@ export function BracketLiveView({
   isFullscreen = false,
   showNext = false,
   showScores = true,
+  accent = null,
 }: {
   data: BracketTournamentDTO;
   isFullscreen?: boolean;
   showNext?: boolean;
   showScores?: boolean;
+  /** The board's operator-set accent. Restrained chrome only — a hairline on
+   *  the top of each court tile (D7). Status hues are never derived from it. */
+  accent?: string | null;
 }) {
   const rows = liveMatches(data);
+  const boardAccent = resolveBoardAccent(accent);
   const courtSize = isFullscreen ? 'text-8xl' : 'text-7xl';
   const nameSize = isFullscreen ? 'text-4xl' : 'text-3xl';
   const scoreSize = isFullscreen ? 'text-3xl' : 'text-2xl';
@@ -47,9 +54,25 @@ export function BracketLiveView({
     );
   }
 
+  // D7: every configured court fits the board. The old fixed
+  // `sm:2 / xl:3` grid with `auto-rows-min` overflowed the viewport past six
+  // courts and left the rest behind a scrollbar nobody at a TV can reach.
+  // Columns come from the same `autoLayout` the meet board uses, and the rows
+  // divide the height (`1fr`) instead of stacking off the bottom.
+  const courts = Array.from(new Set(rows.map((row) => row.court)));
+  const boardAspect =
+    typeof window === 'undefined' || window.innerHeight === 0
+      ? 16 / 9
+      : window.innerWidth / window.innerHeight;
+  const gridColsClass = resolveGridColsClass(autoLayout(courts.length, boardAspect).columns);
+
   return (
-    <div className="grid auto-rows-min grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
-      {Array.from(new Set(rows.map((row) => row.court))).map((court) => {
+    <div
+      className={`grid h-full min-h-0 gap-4 p-4 ${gridColsClass}`}
+      style={{ gridAutoRows: 'minmax(0, 1fr)' }}
+      data-testid="bracket-live-grid"
+    >
+      {courts.map((court) => {
         const courtRows = rows.filter((row) => row.court === court);
         const current = courtRows.find((row) => row.status === 'on-court');
         const disputed = courtRows.filter((row) => row.status === 'conflict').length > 1;
@@ -60,7 +83,12 @@ export function BracketLiveView({
           <div
             key={court}
             data-testid={`bracket-court-card-${court}`}
-            className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-5 text-center"
+            className="flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-border border-t-4 bg-card p-5 text-center"
+            /* The one place the operator's accent touches this board: the
+               tile's top rule. Branding, not status — the live/called hues
+               below stay on their own tokens (D7). */
+            style={{ borderTopColor: boardAccent }}
+            data-board-accent={boardAccent}
           >
             <span
               data-testid={`bracket-court-number-${court}`}
@@ -68,12 +96,22 @@ export function BracketLiveView({
             >
               {court}
             </span>
+            {/* Which event and round is on this court — always present for a
+                shown match, muted and never a pill (D7). */}
+            {shown?.eventLabel ? (
+              <span
+                data-testid={`bracket-court-event-${court}`}
+                className="block max-w-full break-words text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+              >
+                {shown.eventLabel}
+              </span>
+            ) : null}
             {shown ? (
               <MatchNames row={shown} nameSize={nameSize} scoreSize={scoreSize} showScores={showScores} />
             ) : !disputed && showNext && next ? (
               <div className="flex flex-col items-center gap-0.5">
                 <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Next
+                  Next{next.eventLabel ? ` · ${next.eventLabel}` : ''}
                 </span>
                 <MatchNames row={next} nameSize={nameSize} scoreSize={scoreSize} showScores={false} muted />
               </div>

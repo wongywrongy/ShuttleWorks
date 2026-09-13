@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyPersonPath,
+  applySideRows,
   includesPerson,
   mountBracketPath,
   personPathHref,
@@ -20,6 +21,24 @@ describe('public bracket path emphasis', () => {
     const node = document.createElement('div');
     node.dataset.personIds = 'person-10 person-2';
     expect(includesPerson(node, 'person-1')).toBe(false);
+  });
+
+  it('marks the side row the person stands on, for either partner of a pair', () => {
+    const root = document.createElement('div');
+    root.innerHTML =
+      '<div data-node-key="qf3" data-person-ids="d1 d2 p6" data-side-a-ids="d1 d2" data-side-b-ids="p6">' +
+      '<a data-person-id="d1"></a><a data-person-id="d2"></a><a data-person-id="p6"></a></div>' +
+      '<div data-node-key="qf4" data-person-ids="p7 p8" data-side-a-ids="p7" data-side-b-ids="p8"></div>';
+    for (const partner of ['d1', 'd2']) {
+      applySideRows(root, partner);
+      expect(root.querySelector('[data-node-key="qf3"]')?.getAttribute('data-selected-side')).toBe('a');
+      expect(root.querySelector('[data-node-key="qf4"]')?.hasAttribute('data-selected-side')).toBe(false);
+      expect(root.querySelector(`[data-person-id="${partner}"]`)?.classList.contains('is-person-selected')).toBe(true);
+    }
+    applySideRows(root, 'p6');
+    expect(root.querySelector('[data-node-key="qf3"]')?.getAttribute('data-selected-side')).toBe('b');
+    applySideRows(root, '');
+    expect(root.querySelector('[data-selected-side]')).toBeNull();
   });
 
   it('clears the route when no person is active', () => {
@@ -46,6 +65,7 @@ function bracket({ pinned = '' } = {}) {
         <a href="#draw-round-final" data-round-jump="draw-round-final">F</a>
       </nav>
       <div data-bracket-toolbar></div>
+      <div data-path-slot></div>
       <div data-bracket-scroll>
         <div data-bracket-grid${pinned ? ` data-pinned-person="${pinned}"` : ''}>
           <section id="draw-round-final" data-bracket-round="Final">
@@ -99,11 +119,18 @@ describe('the Highlight path mode (§4.3, P4)', () => {
     expect(root.classList.contains('has-person-path')).toBe(true);
     expect([...root.querySelectorAll('.is-person-path')]).toHaveLength(2);
 
-    const profile = document.querySelector(
-      '[data-bracket-toolbar] a',
-    ) as HTMLAnchorElement;
+    // Refinement 2026-09-12: the selection is stated ONCE, in the path
+    // summary — name, match count, profile link and the one clear — never
+    // as a second set of controls in the toolbar (the S44 duplicate).
+    const summary = document.querySelector('[data-path-summary]') as HTMLElement;
+    expect(summary).toBeTruthy();
+    expect(summary.querySelector('[data-path-name]')?.textContent).toBe('Ada Lovelace');
+    expect(summary.querySelector('[data-path-count]')?.textContent).toBe('1 match');
+    const profile = summary.querySelector('[data-path-profile]') as HTMLAnchorElement;
     expect(profile.hidden).toBe(false);
     expect(profile.getAttribute('href')).toBe('/e/spring-open/players/p1');
+    expect(document.querySelectorAll('[data-path-clear]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-bracket-toolbar] a')).toHaveLength(0);
   });
 
   it('never takes a modified click — new tab still opens the profile', () => {
@@ -138,13 +165,19 @@ describe('the Highlight path mode (§4.3, P4)', () => {
     ).toBe(true);
   });
 
-  it('offers a clear reset, by button and by Escape', () => {
+  it('offers a clear reset, by the summary\'s one clear and by Escape', () => {
     const root = bracket({ pinned: 'p1' });
     expect(root.classList.contains('has-person-path')).toBe(true);
-    const clear = toolbarButton('Clear path');
-    expect(clear.hidden).toBe(false);
-    clear.click();
+    // Arriving pinned, the script fills the summary in place — it does not
+    // add a second one beside the server's.
+    expect(document.querySelectorAll('[data-path-summary]')).toHaveLength(1);
+    const clear = document.querySelector('[data-path-clear]') as HTMLAnchorElement;
+    expect(clear).toBeTruthy();
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    clear.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
     expect(root.classList.contains('has-person-path')).toBe(false);
+    expect(document.querySelector('[data-path-summary]')).toBeNull();
 
     const again = bracket({ pinned: 'p1' });
     again.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

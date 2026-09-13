@@ -14,10 +14,16 @@
  *    availability is module state, so this page drives the ONE existing
  *    module command (`useWorkspaceModules`) for the Display module itself
  *    and shows nothing else about the other modules.
- *  - **No embedded preview frame.** A useful preview is full board size,
- *    which this settings column cannot offer; "Preview fullscreen" opens the
- *    same published capability URL in its own window, and the configuration
- *    page underneath is never unmounted.
+ *  - **No second renderer for the preview.** The embedded frame loads the
+ *    same published capability URL the wall does, so preview and fullscreen
+ *    are the same saved config in the same renderer — only the box around
+ *    it differs. "Preview fullscreen" stays for the full-size look, and the
+ *    configuration page underneath is never unmounted.
+ *
+ * Settings are grouped by purpose (D7): the IMMEDIATE commands (board
+ * on/off, link replacement) are fenced into their own labelled block;
+ * Layout, Content and Appearance follow, with content/appearance edits held
+ * as a draft until "Apply to board".
  *
  * Built from the shared settings grammar (`Section` + `Row`), the same as
  * Meet and Bracket Configuration.
@@ -51,9 +57,18 @@ export function DisplayConfig({
   linkSlot?: ReactNode;
 }) {
   const meetEnabled = modules.some((m) => m.id === 'meet' && m.status === 'enabled');
-  const engineOn = modules.some(
-    (m) => (m.id === 'meet' || m.id === 'bracket') && m.status === 'enabled',
-  );
+  const bracketEnabled = modules.some((m) => m.id === 'bracket' && m.status === 'enabled');
+  const engineOn = meetEnabled || bracketEnabled;
+  // Mode scope, in words (D7): only applicable settings are offered, and the
+  // ones that are say which board they reach. A hybrid workspace runs two
+  // boards; the content/appearance settings are one owner for both, the
+  // layout controls below are the Meet board's alone.
+  const scopeLabel =
+    meetEnabled && bracketEnabled
+      ? 'Applies to both the Meet and Bracket boards.'
+      : bracketEnabled
+        ? 'Applies to the Bracket board.'
+        : 'Applies to the Meet board.';
   const displayModule = modules.find((m) => m.id === 'display');
   const boardOn = displayModule?.status === 'enabled';
 
@@ -108,6 +123,17 @@ export function DisplayConfig({
           the column, and a narrower inner cap left the controls' right edge
           10rem short of the heading and the save row they belong to. */}
       <div className="space-y-2">
+        {/* IMMEDIATE COMMANDS, fenced off from the drafted settings below
+            (D7). Turning the board off and replacing its link both change
+            the venue the instant they are clicked; they must never look
+            like fields inside a form that has its own Apply button. */}
+        <div
+          data-testid="display-immediate-commands"
+          className="rounded-sm border border-border bg-muted/20 px-3 pb-3"
+        >
+          <p className="pt-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Immediate: takes effect at the venue right away
+          </p>
         <Section title="Board">
           <Row
             label="Show this board"
@@ -131,36 +157,53 @@ export function DisplayConfig({
         </Section>
 
         {linkSlot}
+        </div>
 
         {/* Court order and visibility + the meet grid layout. These read the
             meet config, which the bracket board does not consume — the
             controls that DO apply to every board (Show next, Show scores,
-            branding) live in `BoardAppearance` below and are always shown. */}
+            branding) live in `BoardAppearance` below and are always shown.
+            Offered only where a Meet board exists (D7: no setting is shown
+            for a mode it cannot reach). */}
         {meetEnabled ? <DisplayLayoutEditor tid={tid} /> : null}
 
-        <BoardAppearance tid={tid} />
+        <BoardAppearance tid={tid} scopeLabel={scopeLabel} />
 
         {/* One explicit action, not an embedded frame: opens the real
             published board (the same minted token every other surface
             reads) in its own window. */}
         <Section title="Preview">
           {publicUrl ? (
-            <Row
-              readOnly
-              last
-              label="See the board as the venue will"
-              control={
-                <a
-                  href={publicUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-3 text-sm text-foreground"
-                >
-                  <ArrowSquareOut aria-hidden className="h-4 w-4" />
-                  Preview fullscreen
-                </a>
-              }
-            />
+            <>
+              <Row
+                readOnly
+                label="See the board as the venue will"
+                control={
+                  <a
+                    href={publicUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-7 items-center gap-1.5 rounded border border-border-control bg-card px-3 text-sm text-foreground"
+                  >
+                    <ArrowSquareOut aria-hidden className="h-4 w-4" />
+                    Preview fullscreen
+                  </a>
+                }
+              />
+              {/* The SAME published board, in the SAME renderer, sized to
+                  this container rather than to the operator's window (D7).
+                  It shows the SAVED configuration — the unapplied draft is
+                  previewed in Appearance above — so the two previews answer
+                  two different questions and neither guesses. */}
+              <div className="pb-3">
+                <iframe
+                  title="Venue board preview"
+                  data-testid="display-config-preview"
+                  src={publicUrl}
+                  className="aspect-video w-full rounded-sm border border-border bg-card"
+                />
+              </div>
+            </>
           ) : mintDenied ? (
             <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
               No venue board link yet. Only a workspace owner can create one.

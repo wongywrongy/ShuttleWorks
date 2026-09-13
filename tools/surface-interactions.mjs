@@ -3,11 +3,16 @@ import { join } from 'node:path';
 import { expandedRecipes, inventoryControls } from './surface-interaction-recipes.mjs';
 
 // The lineup endpoint is a pure projection of its posted state; it does not
-// persist a generation. Its confirmation still uses the blocked state write.
+// persist a generation. Quote and its native form echo are also read-only.
+// Actual entry submission, acceptance and confirmation remain blocked.
 export function isReadOnlyCaptureRequest(method, url, origin) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return true;
   const target = new URL(url);
-  return method === 'POST' && target.origin === origin && /^\/api\/tournaments\/[0-9a-f-]+\/meet\/lineup$/.test(target.pathname);
+  return method === 'POST' && target.origin === origin && (
+    /^\/api\/tournaments\/[0-9a-f-]+\/meet\/lineup$/.test(target.pathname) ||
+    /^\/e\/api\/quote\/[a-z0-9-]+$/.test(target.pathname) ||
+    (/^\/e\/[a-z0-9-]+\/enter(?:\/signed-in)?$/.test(target.pathname) && /^[a-f0-9]{64}$/.test(target.searchParams.get('reviewedQuote') ?? ''))
+  );
 }
 
 // Explicit, reversible recipes: never infer clicks from arbitrary action text.
@@ -22,11 +27,17 @@ export function interactionRecipes(tier, surfaces) {
     ] },
   ].filter(recipe => recipe.path);
   return [
+    { name: 'Entry form · Signed-in outcome · Review entry', path: find('Entry form · Signed-in outcome'), steps: [
+      ['Enter the participant name', 'input[name="playerName"]', 'body', undefined, { fill: 'Review Entrant' }],
+      ['Select the participant gender', 'select[name="gender"]', 'body', undefined, { select: 'M' }],
+      ['Choose an event', 'input[name="events"]:not(:disabled)', 'body'],
+      ['Review the server quote and current regulations', 'button:text-is("Review entry")', '[data-entry-stage="review"]'],
+    ] },
     { name: 'Player path and round selection', path: find('Results draw · Singles full bracket') ?? find('Draw · Singles full bracket'), steps: [
       ['Enable path selection', 'button:text-is("Highlight path")', 'button[aria-pressed="true"]'],
       ['Select a player and highlight their path', '[data-bracket-grid] [data-person-id]', '[data-bracket-grid][data-pinned-person]:not([data-pinned-person=""])'],
       ['Select the final round', '[data-round-jump]', '[data-round-jump][aria-current="true"]', 'last'],
-      ['Clear the selected path', 'button:text-is("Clear path")', '[data-bracket-grid][data-pinned-person=""]'],
+      ['Clear the selected path', '[data-path-clear]', '[data-bracket-grid][data-pinned-person=""]'],
     ] },
   ].filter(recipe => recipe.path);
 }

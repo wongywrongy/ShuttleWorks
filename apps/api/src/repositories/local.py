@@ -52,7 +52,7 @@ def _conflict_error_class():
     return mod.ConflictError
 
 from fastapi import Request
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from core.config import cloud_modules_enabled
@@ -397,6 +397,8 @@ class _LocalTournamentRepo:
                 ),
             )
         stamped = _stamp_payload(payload)
+        from competition.roster import ingest_document
+        ingest_document(self.session, row, stamped)
         row.data = stamped
         # Keep the denormalised columns in sync when the payload's config
         # carries them. The DELETE side is gated by Step 6's status pill.
@@ -434,6 +436,8 @@ class _LocalTournamentRepo:
         # the client, or the client's next save spuriously conflicts.
         row.state_version = (row.state_version or 0) + 1
         self._sync_meet_events(tournament_id, stamped)
+        from competition.projection import project
+        project(self.session, tournament_id, advance_version=False)
         self.session.flush()
         if commit:
             self.session.commit()
@@ -713,6 +717,19 @@ class _LocalBracketRepo:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    def lock_tournament(self, tournament_id: uuid.UUID) -> None:
+        """Serialize bracket commands before hydrating their write snapshot."""
+        self.session.execute(update(Tournament).where(Tournament.id == tournament_id)
+                             .values(name=Tournament.name))
+        self.session.expire_all()
+
+    def increment_match_version(self, tournament_id: uuid.UUID, event_id: str, match_id: str) -> None:
+        self.session.execute(update(BracketMatch).where(
+            BracketMatch.tournament_id == tournament_id,
+            BracketMatch.bracket_event_id == event_id,
+            BracketMatch.id == match_id,
+        ).values(version=BracketMatch.version + 1))
+
     # ---- Events --------------------------------------------------------
 
     def get_event(
@@ -824,6 +841,8 @@ class _LocalBracketRepo:
             return None
         row.status = status
         row.version = row.version + 1
+        from competition.draws import record_status
+        record_status(self.session, tournament_id, event_id, status, config=row.config)
         if commit:
             self.session.commit()
             self.session.refresh(row)
@@ -839,6 +858,8 @@ class _LocalBracketRepo:
         row = self.get_event(tournament_id, event_id)
         if row is None:
             return False
+        from competition.draws import record_status
+        record_status(self.session, tournament_id, event_id, "superseded")
         # CASCADE wipes participants + matches + results via FK.
         self.session.delete(row)
         if commit:
@@ -895,7 +916,7 @@ class _LocalBracketRepo:
         Returns the number of rows inserted.
         """
         return self._insert_participants(
-            tournament_id, event_id, participants, commit=commit
+            tournament_id, event_id, participants, commit=commit, replace=True
         )
 
     def add_participants(
@@ -927,41 +948,12 @@ class _LocalBracketRepo:
         """
         return self._insert_participants(tournament_id, event_id, participants)
 
-    def _insert_participants(
-        self,
-        tournament_id: uuid.UUID,
-        event_id: str,
-        participants: list[dict],
-        *,
-        commit: bool = True,
-    ) -> int:
-        """Shared row construction for both participant writers.
-
-        The two public methods differ only in their calling contract (own
-        the list vs. add to it), so the dict → row mapping lives once. A
-        second copy would drift the moment either grows a field.
-        """
-        if not participants:
-            return 0
-        rows = [
-            BracketParticipant(
-                tournament_id=tournament_id,
-                bracket_event_id=event_id,
-                id=p["id"],
-                name=p["name"],
-                type=p["type"],
-                member_ids=p.get("member_ids") or [],
-                seed=p.get("seed"),
-                meta=p.get("meta") or {},
-                entry_player_id=p.get("entry_player_id"),
-            )
-            for p in participants
-        ]
-        self.session.add_all(rows)
-        self.session.flush()
+    def _insert_participants(self, tournament_id, event_id, participants, *, commit=True, replace=False):
+        from competition.roster import ingest_bracket_participants
+        count = ingest_bracket_participants(self.session, tournament_id, event_id, participants, replace=replace)
         if commit:
             self.session.commit()
-        return len(rows)
+        return count
 
     # ---- Matches -------------------------------------------------------
 
@@ -2243,10 +2235,15 @@ class LocalRepository:
     ) -> str:
         """Return the display capability, creating it atomically if absent."""
         row = self.session.get(DisplayToken, tournament_id)
+        if row is not None:
+            return row.token
+        self.session.execute(update(Tournament).where(Tournament.id == tournament_id)
+                             .values(name=Tournament.name))
+        row = self.session.get(DisplayToken, tournament_id, populate_existing=True)
         if row is None:
             row = DisplayToken(tournament_id=tournament_id, token=token)
             self.session.add(row)
-            _commit_transaction(self.session)
+        _commit_transaction(self.session)
         return row.token
 
     def rotate_display_token(
@@ -2254,8 +2251,10 @@ class LocalRepository:
         tournament_id: uuid.UUID,
         token: str,
     ) -> str:
-        """Replace a display capability, creating its row when necessary."""
-        row = self.session.get(DisplayToken, tournament_id)
+        """Replace a display capability, serializing with first creation."""
+        self.session.execute(update(Tournament).where(Tournament.id == tournament_id)
+                             .values(name=Tournament.name))
+        row = self.session.get(DisplayToken, tournament_id, populate_existing=True)
         if row is None:
             row = DisplayToken(tournament_id=tournament_id, token=token)
             self.session.add(row)
@@ -2563,7 +2562,7 @@ class LocalRepository:
             self.commit_pending()
             raise error
 
-        self._apply_command_mutation(match, action, payload, target_status)
+        self._apply_command_mutation(match, action, payload, target_status, actor_id=submitted_by)
         self._mirror_command_state(tournament_id, match_id, target_status)
         command_row = self._finalize_applied_command(
             command_row,
@@ -3016,15 +3015,18 @@ class LocalRepository:
             return exc
         return None
 
-    @staticmethod
     def _apply_command_mutation(
+        self,
         match: Match,
         action: str,
         payload: Optional[dict],
         target_status: MatchStatus,
+        *,
+        actor_id=None,
     ) -> None:
         """Apply canonical match status and command side effects."""
-        match.status = target_status.value
+        from operations.match_state import transition_match
+        transition_match(match, target_status, session=self.session, actor_id=actor_id)
         if action == "assign_court":
             command_payload = payload or {}
             match.court_id = command_payload["court_id"]
@@ -3040,30 +3042,8 @@ class LocalRepository:
         match_id: str,
         target_status: MatchStatus,
     ) -> None:
-        """Mirror an applied command into the legacy match-state row."""
-        canonical_to_legacy = {
-            MatchStatus.SCHEDULED: "scheduled",
-            MatchStatus.CALLED: "called",
-            MatchStatus.PLAYING: "started",
-            MatchStatus.FINISHED: "finished",
-            MatchStatus.RETIRED: "finished",
-        }
-        state_row = self.session.get(MatchState, (tournament_id, match_id))
-        if state_row is None:
-            state_row = MatchState(tournament_id=tournament_id, match_id=match_id)
-            self.session.add(state_row)
-        state_row.status = canonical_to_legacy[target_status]
-        stamp = now_iso()
-        if target_status == MatchStatus.CALLED:
-            state_row.called_at = stamp
-        elif target_status == MatchStatus.PLAYING:
-            state_row.actual_start_time = state_row.actual_start_time or stamp
-        elif target_status in (MatchStatus.FINISHED, MatchStatus.RETIRED):
-            state_row.actual_end_time = state_row.actual_end_time or stamp
-        else:
-            state_row.called_at = None
-            state_row.actual_start_time = None
-            state_row.actual_end_time = None
+        from operations.match_state import mirror_command_state
+        mirror_command_state(self.session, tournament_id, match_id, target_status)
 
     def _finalize_applied_command(
         self,

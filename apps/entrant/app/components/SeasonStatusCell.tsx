@@ -33,19 +33,23 @@ import { ACTION_LINK_BASE } from '../lib/ui';
  * it read as a difference between them that does not exist. */
 const LINK = `relative z-10 ${ACTION_LINK_BASE}`;
 
-/** `Enter · closes 15 Aug`, or the bare invitation when the organizer set no
- * deadline (rule 4: degrade to what is known, never to a placeholder). */
-function enterLabel(cell: Extract<ActionCell, { kind: 'enter' }>): string {
-  const day = cell.closesAt === null ? null : formatDayMonthInZone(cell.closesAt, cell.timeZone);
-  return day === null ? 'Enter' : `Enter · closes ${day}`;
+/** Deadline text rendered below the Enter button. Null means no deadline. */
+function deadlineText(cell: Extract<ActionCell, { kind: 'enter' }>): string | null {
+  return cell.closesAt === null ? null : `closes ${formatDayMonthInZone(cell.closesAt, cell.timeZone)}`;
 }
 
 export function SeasonStatusCell({ cell }: { cell: ActionCell }) {
   if (cell.kind === 'enter') {
+    const deadline = deadlineText(cell);
     return (
-      <a href={cell.href} className={`${LINK} text-accent`}>
-        {enterLabel(cell)}
-      </a>
+      <div className="grid gap-0.5 text-right">
+        <a href={cell.href} className={`${LINK} text-accent`}>
+          Enter
+        </a>
+        {deadline ? (
+          <span className="text-xs text-muted-foreground">{deadline}</span>
+        ) : null}
+      </div>
     );
   }
 

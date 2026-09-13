@@ -97,6 +97,18 @@ export {
   type MatchLayout,
 } from './MatchCard';
 export {
+  ResultEntryForm,
+  effectiveScoringRules,
+  scoringRulesSentence,
+  gameWinner,
+  type EffectiveScoringRules,
+  type ResultEntryFormProps,
+  type ResultEntryValue,
+  type ResultOutcome,
+  type ResultSaveState,
+} from './ResultEntryForm';
+export { RecordResultModal, type RecordResultModalProps } from './RecordResultModal';
+export {
   MatchStatusFilter,
   parseMatchStatusFilter,
   type MatchStatusFilterValue,

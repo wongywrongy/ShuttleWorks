@@ -20,11 +20,11 @@ describe('ModuleUnavailablePanel', () => {
     expect(onGo).toHaveBeenCalled();
   });
 
-  it('shows Open Administration · Modules only when onOpenSettings is provided', () => {
+  it('shows Open Settings · Modules only when onOpenSettings is provided', () => {
     const { rerender } = render(
       <ModuleUnavailablePanel label="Display" primaryLabel="Meet" onGoToPrimary={() => {}} />,
     );
-    expect(screen.queryByRole('button', { name: /Open Administration · Modules/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Open Settings · Modules/ })).toBeNull();
     const onSettings = vi.fn();
     rerender(
       <ModuleUnavailablePanel
@@ -34,7 +34,7 @@ describe('ModuleUnavailablePanel', () => {
         onOpenSettings={onSettings}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Open Administration · Modules/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Open Settings · Modules/ }));
     expect(onSettings).toHaveBeenCalled();
   });
 
@@ -75,13 +75,13 @@ describe('ModuleUnavailablePanel', () => {
     );
     // The button must not promise "Setup · General" — that is not where
     // onGoToPrimary sends the operator in this state (AppShell routes it to
-    // Administration · Modules instead).
+    // Settings · Modules instead).
     expect(screen.queryByRole('button', { name: /Setup · General/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'View available tools' }));
     expect(onGo).toHaveBeenCalledOnce();
   });
 
-  it('makes Administration · Modules the enablement owner', () => {
+  it('makes Settings · Modules the enablement owner', () => {
     const onSettings = vi.fn();
     render(
       <ModuleUnavailablePanel
@@ -95,7 +95,7 @@ describe('ModuleUnavailablePanel', () => {
     expect(screen.getByTestId('module-unavailable-reason')).toHaveTextContent(
       'Enable this module to add it to the tournament workflow.',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Enable in Administration · Modules' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable in Settings · Modules' }));
     expect(onSettings).toHaveBeenCalledOnce();
   });
 });

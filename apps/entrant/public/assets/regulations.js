@@ -29,7 +29,6 @@ export function downloadText(root) {
 export function boot(root) {
   const view = root?.ownerDocument?.defaultView;
   if (!root || !view) return;
-  root.hidden = false;
   root.querySelector('[data-regulations-print]')?.addEventListener('click', () => view.print());
   root.querySelector('[data-regulations-download]')?.addEventListener('click', () => downloadText(root));
 }

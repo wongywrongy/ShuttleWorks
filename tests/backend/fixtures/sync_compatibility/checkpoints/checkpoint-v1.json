@@ -2,22 +2,45 @@
   "checkpointSchemaVersion": 1,
   "tournamentId": "00000000-0000-4000-8000-000000000001",
   "stateVersion": 0,
-  "tournamentState": {"version": 2},
+  "tournamentState": {
+    "version": 1
+  },
   "tournamentRecord": {
-    "name": "Archived checkpoint v1",
+    "name": "Current registration competition checkpoint",
     "status": "draft",
     "kind": "bracket",
     "tournament_date": null,
     "tournament_end_date": null,
     "time_zone": "UTC",
-    "schema_version": 2,
+    "schema_version": 1,
     "state_version": 0
   },
   "normalized": {
     "bracketEvents": [],
     "bracketParticipants": [],
     "bracketMatches": [],
-    "bracketResults": []
+    "bracketResults": [],
+    "competition": {
+      "schemaVersion": 1,
+      "accounts": [],
+      "scoring_profile_versions": [],
+      "event_format_versions": [],
+      "competition_events": [],
+      "entry_players": [],
+      "entry_events": [],
+      "submissions": [],
+      "entries": [],
+      "player_representatives": [],
+      "partner_invitations": [],
+      "payments": [],
+      "competition_units": [],
+      "unit_memberships": [],
+      "draw_instances": [],
+      "competition_audit": []
+    }
   },
-  "operatorPolicy": {"schemaVersion": 1, "members": []}
+  "operatorPolicy": {
+    "schemaVersion": 1,
+    "members": []
+  }
 }

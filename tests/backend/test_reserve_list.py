@@ -16,6 +16,7 @@ worth publishing at all:
 """
 from __future__ import annotations
 
+
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -97,7 +98,7 @@ def _seed(world, name, *, state, minutes_ago, opt_out=False):
         )
         player = EntryPlayer(
             tournament_id=uuid.UUID(world["tid"]),
-            account_id=world["account_id"],
+            representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=world["account_id"])],
             full_name=name,
             gender="M",
             club="Riverside",

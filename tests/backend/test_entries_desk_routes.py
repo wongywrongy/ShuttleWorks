@@ -7,7 +7,7 @@ Three routes, all workspace-scoped and all behind the tenancy seam:
   D1's one lifecycle action. E1 has no email verification and no confirm UI
   beyond this, so without it nothing ever reaches ``confirmed`` and Seam A
   has nothing to commit. Reject / promote stay E2.
-- ``POST /tournaments/{tournament_id}/entries/commit`` — runs Seam A and
+- ``POST /tournaments/{tournament_id}/competition/bind`` — runs Seam A and
   returns the per-entry summary.
 
 The cross-tenant 404 is not asserted here: ``test_tenant_isolation.py``
@@ -17,6 +17,7 @@ is the point of that suite. What this file pins is the role matrix, the
 error codes, and the list projection.
 """
 from __future__ import annotations
+
 
 import uuid
 
@@ -102,6 +103,9 @@ def _seed_entries(tid, specs):
             discipline="Men's Singles",
             entry_type="singles",
         )
+        from competition.roster import ensure_event
+        target = ensure_event(session, _uuid.UUID(tid), "MS")
+        event.competition_event_id = target.id
         session.add(event)
         session.flush()
         ids = []
@@ -129,7 +133,7 @@ def _seed_entries(tid, specs):
                     acts[act] = submission
             player = EntryPlayer(
                 tournament_id=_uuid.UUID(tid),
-                account_id=account.id,
+                representatives=[EntryPlayer.__mapper__.relationships["representatives"].mapper.class_(account_id=account.id)],
                 full_name=spec["player_name"],
                 # New fixture data, not a backfill: R12 makes the field
                 # required and no old column could have supplied it.
@@ -193,7 +197,7 @@ def test_the_desk_list_carries_state_flags_and_remarks(client, workspace):
     assert row["pendingReasons"] == ["needs_review"]
     assert row["remarks"] == "can't play before 6pm Saturday"
     assert row["eventCode"] == "MS"
-    assert row["committedPlayerId"] is None
+    assert row["membershipId"] is None
 
 
 def test_the_desk_list_never_leaks_entrant_credential_material(client, workspace):
@@ -216,8 +220,8 @@ def test_the_desk_list_never_leaks_entrant_credential_material(client, workspace
     for leak in ("password", "token", "hash", "secret"):
         assert leak not in serialized, f"the desk row mentions {leak!r}"
     # And the retired column is gone rather than merely hidden.
-    from db.models import Entry
 
+    from db.models import Entry
     assert not hasattr(Entry, "manage_token_hash")
 
 
@@ -381,7 +385,6 @@ def test_a_desk_row_carries_its_partner_link(client, workspace):
     """
     import uuid as _uuid
     from datetime import datetime, timezone
-    from db.models import Entry
     from db.session import SessionLocal
 
     tid = workspace
@@ -401,10 +404,9 @@ def test_a_desk_row_carries_its_partner_link(client, workspace):
     accepted_at = datetime.now(timezone.utc)
     session = SessionLocal()
     try:
-        for mine, theirs in ((left, right), (right, left)):
-            row = session.get(Entry, (_uuid.UUID(tid), _uuid.UUID(mine)))
-            row.partner_entry_id = _uuid.UUID(theirs)
-            row.partner_accepted_at = accepted_at
+        from db.models import PartnerInvitation
+        session.add(PartnerInvitation(tournament_id=_uuid.UUID(tid), inviting_entry_id=_uuid.UUID(left),
+            accepted_entry_id=_uuid.UUID(right), recipient_email="partner@example.test", status="accepted", accepted_at=accepted_at))
         session.commit()
     finally:
         session.close()
@@ -525,10 +527,10 @@ def test_commit_returns_the_per_entry_summary(client, workspace):
     _login(client, "op@example.com")
     client.post(f"/tournaments/{tid}/entries/{entry_id}/confirm", headers=CSRF)
 
-    r = client.post(f"/tournaments/{tid}/entries/commit", headers=CSRF)
+    r = client.post(f"/tournaments/{tid}/competition/bind", json={"requestId": "bind-test"}, headers=CSRF)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert [c["id"] for c in body["committed"]] == [entry_id]
+    assert [c["entryId"] for c in body["bindings"]] == [entry_id]
     assert body["skipped"] == []
 
     # The roster carries the entrant, the remark and the provenance.
@@ -546,14 +548,15 @@ def test_commit_is_idempotent_over_http(client, workspace):
 
     assert (
         len(
-            client.post(f"/tournaments/{tid}/entries/commit", headers=CSRF).json()[
-                "committed"
+            client.post(f"/tournaments/{tid}/competition/bind", json={"requestId": "bind-test"}, headers=CSRF).json()[
+                "bindings"
             ]
         )
         == 1
     )
-    second = client.post(f"/tournaments/{tid}/entries/commit", headers=CSRF).json()
-    assert second == {"committed": [], "skipped": []}
+    second = client.post(f"/tournaments/{tid}/competition/bind", json={"requestId": "bind-test"}, headers=CSRF).json()
+    assert second["skipped"] == []
+    assert second["bindings"][0]["outcome"] == "already_bound"
     assert len(client.get(f"/tournaments/{tid}/state").json()["players"]) == 1
 
 
@@ -568,8 +571,8 @@ def test_commit_leaves_unconfirmed_entries_alone(client, workspace):
     )
     _login(client, "op@example.com")
 
-    body = client.post(f"/tournaments/{tid}/entries/commit", headers=CSRF).json()
-    assert body == {"committed": [], "skipped": []}
+    body = client.post(f"/tournaments/{tid}/competition/bind", json={"requestId": "bind-test"}, headers=CSRF).json()
+    assert body == {"bindings": [], "skipped": []}
     assert _roster(client, tid) == []
 
 
@@ -580,14 +583,14 @@ def test_commit_is_operator_only(client, workspace):
     client.post(f"/tournaments/{tid}/entries/{entry_id}/confirm", headers=CSRF)
 
     _login(client, "viewer@example.com")
-    r = client.post(f"/tournaments/{tid}/entries/commit", headers=CSRF)
+    r = client.post(f"/tournaments/{tid}/competition/bind", json={"requestId": "bind-test"}, headers=CSRF)
     assert r.status_code == 403, r.text
     assert _roster(client, tid) == []
 
     # Negative control — the operator's identical request goes through.
     _login(client, "op@example.com")
     assert (
-        client.post(f"/tournaments/{tid}/entries/commit", headers=CSRF).status_code
+        client.post(f"/tournaments/{tid}/competition/bind", json={"requestId": "bind-test"}, headers=CSRF).status_code
         == 200
     )
 
@@ -602,4 +605,4 @@ def test_the_routes_are_registered_on_the_app(client):
     paths = app.openapi()["paths"]
     assert "/tournaments/{tournament_id}/entries" in paths
     assert "/tournaments/{tournament_id}/entries/{entry_id}/confirm" in paths
-    assert "/tournaments/{tournament_id}/entries/commit" in paths
+    assert "/tournaments/{tournament_id}/competition/bind" in paths

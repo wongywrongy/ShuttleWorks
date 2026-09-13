@@ -9,7 +9,7 @@ import {
 } from '../../../platform/domain/courtOccupancy';
 import type { OpsBlock } from '../opsBlock';
 import type { BoardChip } from './boardPlacements';
-import { fromEngineStatus, deriveTimeliness, can, type RunStatus, type Timeliness } from './runMachine';
+import { isRunComplete, fromEngineStatus, deriveTimeliness, can, type RunStatus, type Timeliness } from './runMachine';
 
 export interface RunMatch {
   key: string; id: string; source: 'meet' | 'bracket';
@@ -91,7 +91,7 @@ export interface CourtLane {
  * ranked into a silently selected current match. A single live match still
  * outranks scheduled work; the earlier planned slot breaks remaining ties.
  */
-const LANE_RANK: Record<RunStatus, number> = { playing: 0, called: 1, scheduled: 2, done: 3 };
+const LANE_RANK: Record<RunStatus, number> = { playing: 0, called: 1, scheduled: 2, finished: 3, retired: 3 };
 
 /**
  * Build per-court Now/Next/Later lanes.
@@ -114,7 +114,7 @@ export function deriveCourtLanes(
   const n = Math.max(1, courtCount);
   return Array.from({ length: n }, (_, i) => i + 1).map((court) => {
     const lane = matches
-      .filter((m) => m.court === court && m.status !== 'done')
+      .filter((m) => m.court === court && !isRunComplete(m.status))
       .sort((a, b) => LANE_RANK[a.status] - LANE_RANK[b.status]
         || (a.plannedSlot ?? Infinity) - (b.plannedSlot ?? Infinity)
         || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
@@ -168,7 +168,7 @@ export function deriveCourtLanes(
  */
 export function deriveQueue(matches: RunMatch[]): RunMatch[] {
   return matches
-    .filter((m) => m.court == null && m.status !== 'done')
+    .filter((m) => m.court == null && !isRunComplete(m.status))
     .sort((a, b) => (a.plannedSlot ?? Infinity) - (b.plannedSlot ?? Infinity)
       || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
@@ -185,7 +185,7 @@ export function deriveQueue(matches: RunMatch[]): RunMatch[] {
 export function busyPlayers(matches: RunMatch[]): ReadonlySet<string> {
   const busy = new Set<string>();
   for (const m of matches) {
-    if (m.court != null && m.status !== 'done') {
+    if (m.court != null && !isRunComplete(m.status)) {
       for (const p of m.playerIds) busy.add(p);
     }
   }
@@ -259,7 +259,7 @@ export function restShortKeys(
 
   const freeAt = new Map<string, number>();      // player -> earliest rested slot
   for (const m of matches) {
-    if (m.status !== 'done' || m.actualEndSlot == null) continue;
+    if (!isRunComplete(m.status) || m.actualEndSlot == null) continue;
     for (const p of m.playerIds) {
       freeAt.set(p, Math.max(freeAt.get(p) ?? 0, m.actualEndSlot + restSlots));
     }
@@ -267,7 +267,7 @@ export function restShortKeys(
 
   const flagged = new Set<string>();
   for (const m of matches) {
-    if (m.court != null || m.status === 'done') continue;   // queue rows only
+    if (m.court != null || isRunComplete(m.status)) continue;   // queue rows only
     if (m.playerIds.some((p) => (freeAt.get(p) ?? 0) > currentSlot)) flagged.add(m.key);
   }
   return flagged;
@@ -302,7 +302,7 @@ export function deriveSummary(
       .map((m) => ({ id: m.id, status: m.status, court: m.court })),
   );
   return {
-    done: matches.filter((m) => m.status === 'done').length,
+    done: matches.filter((m) => isRunComplete(m.status)).length,
     total: matches.length,
     playing: occupiedCourtCount(states),
     disputedCourts: disputedCourtCount(states),

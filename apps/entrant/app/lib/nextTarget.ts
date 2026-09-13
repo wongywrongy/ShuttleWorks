@@ -32,6 +32,14 @@ const SAFE_NEXT = /^\/e\/[A-Za-z0-9/_.~-]*$/;
  */
 export function safeNext(raw: string | null, fallback: string): string {
   const value = raw ?? '';
+  if (value.startsWith('/e/verify?') || value.startsWith('/e/verify/failed?')) {
+    const url = new URL(value, 'https://local.invalid');
+    const targets = url.searchParams.getAll('next');
+    if (!url.hash && [...url.searchParams.keys()].length === 1 && targets.length === 1 && SAFE_NEXT.test(targets[0]) && !targets[0].includes('..')) {
+      return `${url.pathname}?${new URLSearchParams({ next: targets[0] })}`;
+    }
+    return fallback;
+  }
   if (value.includes('..') || !SAFE_NEXT.test(value)) return fallback;
   return value;
 }

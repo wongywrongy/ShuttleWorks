@@ -19,7 +19,7 @@ describe('email confirmation recovery', () => {
   it('asks a signed-out visitor to sign in and return before resending', async () => {
     const { html } = await render('/e/verify/failed');
     expect(html).toContain('Your saved entries are unchanged');
-    expect(html).toContain('href="/e/login?next=/e/verify/failed"');
+    expect(decodeURIComponent(html)).toContain('/e/login?next=/e/verify/failed?next=%2Fe%2Fme%2Fentries');
     expect(html).not.toContain('action="/e/account/resend-verification"');
   });
 
@@ -36,7 +36,7 @@ describe('email confirmation recovery', () => {
     const { html } = await render('/e/verify/sent');
     expect(html).toContain('Confirmation email sent');
     expect(html).toContain('Open the latest email');
-    expect(html).toContain('href="/e/me/entries"');
+    expect(decodeURIComponent(html)).toContain('href="/e/login?next=/e/me/entries"');
   });
 
   it('tells a signed-in visitor the resend actually failed, with a retry action', async () => {

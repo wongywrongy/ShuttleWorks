@@ -17,7 +17,7 @@
  * (§6.1: the known names, THEN the phrase — never an invented second
  * person, never rendered as if the side were singles). A side with no
  * resolved persons renders its unresolved label, or "To be decided" when
- * even that is absent (§6.2 — never "TBD", "–", "No players" or "").
+ * even that is absent (§6.2 — never "–", "No players" or "").
  * `sideSummaryPhrase` joins the two sides with "versus" — the one inline
  * accessible phrase every renderer must share, kept even where the visual
  * card omits the word because stacked sides already make opposition
@@ -42,24 +42,25 @@ export interface UnresolvedSideDTO {
 export const PENDING_MEMBER_LABEL = 'partner to be confirmed';
 
 /**
- * The muted feeder line for a side whose predecessor has not been played
- * (state-and-formatting §6.2, match-card §4.3 — public-visual-fixes P3).
+ * The muted line for a side whose predecessor has not been played
+ * (state-and-formatting §6.2, match-card §4.3).
  *
- * The public tier does NOT say "Winner of {reference}". That phrasing
- * dressed a structural placeholder as a participant, so a draw's unplayed
- * half read as generated player content; the operator tier keeps it, the
- * public tier renders an empty participant slot carrying one muted line
- * instead. The relationship itself travels in the connector geometry and in
- * `feederNodeKey`, never in visible prose, and the reference is the SHARED
- * one (§6.1) — the same string the node it points at is labelled with, so
- * "from QF2" resolves by reading, not by counting rows.
+ * The public tier does NOT say "Winner of {reference}": that phrasing dressed
+ * a structural placeholder as a participant. **public-ui-refinement P4 (A06,
+ * D4) drops the "from R32" spelling too.** Repeating the feeder reference in
+ * every unresolved side exposed progression mechanics to a reader who only
+ * wanted to know who is in the slot, and the honest public answer to that is
+ * one word. The relationship is NOT lost: it still travels in the connector
+ * geometry, in `feederNodeKey`, and in the `data-feeder-node` /
+ * `data-feeder-ref` attributes the draw route writes onto each node slot —
+ * data, not prose.
  *
- * `loser_of` reads the same way on purpose: the public tier states where the
- * side comes FROM, and the draw structure says which half of that match it
- * is. One spelling, both takes.
+ * `loser_of` reads the same way on purpose: the draw structure says where the
+ * side comes from. One spelling, both takes.
  */
-export function feederLabel(reference: string | null | undefined): string {
-  return reference ? `from ${reference}` : 'from an earlier match';
+export function feederLabel(_reference?: string | null | undefined): string {
+  void _reference;
+  return 'TBD';
 }
 
 export interface SideLike {

@@ -45,6 +45,8 @@ jobs:
         run: npm run test:docs
       - name: Generated brand contract
         run: npm run brand:check
+      - name: Generated state-machine contract
+        run: npm run state-machines:check
       - name: Documentation paths
         run: npm run docs:paths
       - name: Documentation build
@@ -204,6 +206,13 @@ jobs:
         # config file stays beside the app one level up.
         working-directory: apps/api/src
         run: lint-imports --config ../.importlinter
+      - name: Schema drift (fresh SQLite)
+        working-directory: apps/api
+        env:
+          DATABASE_URL: sqlite:///${{ runner.temp }}/schema-drift.db
+        run: |
+          alembic upgrade head
+          alembic check
       - name: Unit tests (pytest)
         env:
           TEST_POSTGRES_URL: postgresql://scheduler:scheduler@localhost:5433/scheduler

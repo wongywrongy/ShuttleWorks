@@ -31,6 +31,24 @@ describe('BracketLiveView', () => {
     expect(on.container.textContent).not.toMatch(/To be decided|Winner of/);
   });
 
+  it('names the event and round of a shown match, and wires the accent to tile chrome', () => {
+    // D7: a shown match always states WHICH event it is, and the bracket
+    // board — which used to ignore the accent entirely — carries it as
+    // restrained chrome.
+    const withEvent = {
+      ...data,
+      events: [{ id: 'e1', discipline: 'MD', format: 'se', rounds: [['u1']] }],
+    } as unknown as BracketTournamentDTO;
+    render(<BracketLiveView data={withEvent} accent="#ff0000" />);
+    expect(screen.getByTestId('bracket-court-event-2').textContent).toBe(
+      "Men's Doubles · Final",
+    );
+    expect(screen.getByTestId('bracket-court-card-2')).toHaveAttribute(
+      'data-board-accent',
+      '#ff0000',
+    );
+  });
+
   it('shows an empty state when nothing is on court', () => {
     const empty = { ...data, assignments: [] } as unknown as BracketTournamentDTO;
     render(<BracketLiveView data={empty} />);

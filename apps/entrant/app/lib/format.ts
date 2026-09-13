@@ -24,6 +24,7 @@ const MONTHS = Object.freeze([
 const WEEKDAYS = Object.freeze([
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
 ]);
+const WEEKDAYS_SHORT = Object.freeze(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
 
 /** `Jan`-style month for a zero-based index — the `DateBadge`'s vocabulary. */
 export function monthShort(index: number): string {
@@ -59,6 +60,38 @@ export function formatCalendarDay(day: string): string {
   const date = parseIsoDate(day);
   if (date === null) return day;
   return `${WEEKDAYS[date.getUTCDay()]}, ${monthLong(date.getUTCMonth())} ${date.getUTCDate()}`;
+}
+
+/**
+ * The concise date form for a compact header: `12 Sep 2026`; a range whose
+ * two ends share a year is `31 Jul – 5 Aug 2026`, and one that crosses a
+ * year keeps both years. Same day-first vocabulary as every other date on
+ * this tier; unparseable → `''` so a caller omits the fact rather than
+ * printing raw ISO.
+ */
+export function formatDateRangeShort(start: string | null, end: string | null): string {
+  const first = parseIsoDate(start);
+  if (first === null) return '';
+  const last = parseIsoDate(end);
+  const short = (d: Date) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  if (last === null || last.getTime() === first.getTime()) {
+    return `${short(first)} ${first.getUTCFullYear()}`;
+  }
+  if (last.getUTCFullYear() === first.getUTCFullYear()) {
+    return `${short(first)} – ${short(last)} ${first.getUTCFullYear()}`;
+  }
+  return `${short(first)} ${first.getUTCFullYear()} – ${short(last)} ${last.getUTCFullYear()}`;
+}
+
+/**
+ * The SHORT calendar day for a control label (schedule day strip, public
+ * refinement 2026-09-12): `Wed 5 Aug`. Same fixed tables as its long
+ * sibling; unparseable → the input verbatim.
+ */
+export function formatCalendarDayShort(day: string): string {
+  const date = parseIsoDate(day);
+  if (date === null) return day;
+  return `${WEEKDAYS_SHORT[date.getUTCDay()]} ${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`;
 }
 
 /** `2026-08` → `August 2026`; unparseable → the input verbatim. */

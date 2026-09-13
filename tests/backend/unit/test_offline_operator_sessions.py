@@ -28,7 +28,7 @@ from sync.schemas import OfflineSessionBootstrapRequest, OfflineSessionRequest
 def _scope(session):
     user_id, tournament_id, node_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     session.add(User(id=user_id, email=f"{user_id.hex}@example.test"))
-    session.add(Tournament(id=tournament_id, name="Offline event", data={}, schema_version=2))
+    session.add(Tournament(id=tournament_id, name="Offline event", data={}, schema_version=1))
     session.add(
         TournamentMember(
             tournament_id=tournament_id,
@@ -38,7 +38,7 @@ def _scope(session):
     )
     session.add(TournamentAuthority(
         tournament_id=tournament_id, epoch=2, node_id=node_id, state="active",
-        checkpoint_hash="a" * 64, checkpoint_schema_version=3,
+        checkpoint_hash="a" * 64, checkpoint_schema_version=1,
         capability_digest="b" * 64,
     ))
     session.flush()
@@ -49,9 +49,9 @@ def _scope(session):
 def session():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
-    from db.models import Base
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     with Session(engine) as value:
         yield value
 

@@ -18,8 +18,10 @@ uncommitted source changes and labels the images with their source identity.
 It preserves Postgres, accounts, invitations, and existing workspace data.
 A source update does **not** reapply seed changes to existing records.
 
-For a clean, committed release rebuild with fresh base images, use
-`make demo-rebuild`. That command deliberately rejects a dirty checkout.
+For the pre-launch reset/reseed from a clean committed revision, use
+`make demo-rebuild`. It quarantines the previous state and rejects a dirty
+checkout. See the [reset guide](reset-prelaunch-database.md) before resuming
+the deferred demo cutover.
 Use `make demo-up` for initial startup. See [running locally](running-locally.md)
 for state directories, database recovery, and the production-parity contract.
 

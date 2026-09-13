@@ -1,11 +1,16 @@
 /**
  * PlanCourtQueues — the DEFAULT Plan view (P2, `operator-visual-fixes.md`).
  *
- * One lane per court, each an ORDERED list of uniform match cells with the
- * estimated start time beneath each cell in muted text. Duration is not
- * encoded as height any more than it was encoded as width on the timeline:
- * every cell is the same size, because what the operator reads off this
- * surface is ORDER, and the time is an estimate printed underneath.
+ * One full-width lane per court, each an ORDERED list of COMPACT ROWS: one
+ * row is one match — time, position in the lane, match reference, the two
+ * participant groups and the state. Duration is not encoded as height any
+ * more than it was encoded as width on the timeline: what the operator reads
+ * off this surface is ORDER, and the clock time is stated with the clock it
+ * came from (`labelledClock`: Scheduled / Started), never a bare `~`.
+ *
+ * The lanes stack down the page rather than tiling into a grid of six inner
+ * scroll panes: one page scroll reaches every court, which is what "all
+ * courts easy to reach" means when the venue has eight of them.
  *
  * The time-scaled court x time board is still available behind the
  * **Timeline** toggle (`UnifiedOpsBoard`), which is where the zoom controls
@@ -44,6 +49,7 @@ import { formatMatchIdentity } from '../../../platform/domain/matchIdentity';
 import { SELECTABLE_ROW_FOCUS } from '../../../lib/selectableRow';
 import { NavCaret, NAV_LINK_ROW } from '../../../components/NavCaret';
 import { TEXT_HELPER, TEXT_SECONDARY } from '../../../lib/textRoles';
+import { labelledClock } from '../../../lib/formatDateTime';
 import { EYEBROW_CLASS } from '../../../lib/utils';
 import { STATE_WORD } from '../../../lib/stateWords';
 import type { MatchDTO, ScheduleDTO, TournamentConfig } from '../../../api/dto';
@@ -251,7 +257,11 @@ export function PlanCourtQueues({
   return (
     <div data-testid="plan-court-queues" className="shrink-0">
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        {/* Lanes stack full width and the PAGE scrolls. Six or eight courts
+            tiled into a grid each got their own cramped scroll pane, so
+            reaching court 7's next match meant finding and scrolling a
+            different little window. */}
+        <div className="flex flex-col gap-2 p-3">
           {lanes.map((lane) => {
             // Position in the lane is the move coordinate, so it is read off
             // the FULL lane once and carried through the split below: what a
@@ -275,7 +285,7 @@ export function PlanCourtQueues({
                 key={lane.court}
                 data-testid={`plan-queue-lane-${lane.court}`}
                 aria-label={`Court ${lane.court} queue`}
-                className="flex flex-col overflow-hidden rounded border border-border bg-card"
+                className="overflow-hidden rounded border border-border bg-card"
               >
                 <div className="flex items-baseline justify-between gap-2 border-b border-rule-soft bg-surface-band px-2.5 py-1.5">
                   <span className={`${EYEBROW_CLASS} text-foreground`}>Court {lane.court}</span>
@@ -285,7 +295,7 @@ export function PlanCourtQueues({
                   </span>
                 </div>
                 {/* Completed work is history: it keeps its lane order and its
-                    cells, but it is collapsed so court 6's first match is not
+                    rows, but it is collapsed so court 6's first match is not
                     behind court 1's whole afternoon. */}
                 {completed.length > 0 ? (
                   <details
@@ -301,9 +311,9 @@ export function PlanCourtQueues({
                       </span>
                       {completed.length} completed on Court {lane.court}
                     </summary>
-                    <ol className="flex flex-col gap-1.5 p-2 pt-0">
+                    <ol className="flex flex-col divide-y divide-rule-soft px-2 pb-1">
                       {completed.map(({ cell, index }) => (
-                        <QueueCell
+                        <QueueRow
                           key={cell.key}
                           block={cell}
                           selected={selectedKey === cell.key}
@@ -314,28 +324,42 @@ export function PlanCourtQueues({
                     </ol>
                   </details>
                 ) : null}
-                {/* Bounded, focusable scroll region (WCAG 2.1.1 + 2.4.3): a
-                    long court reaches its own cap instead of pushing every
-                    later court off the page, and the region takes keyboard
-                    focus so arrow keys can scroll it. */}
                 <ol
                   data-testid={`plan-queue-list-${lane.court}`}
-                  tabIndex={0}
                   aria-label={`Court ${lane.court} upcoming matches`}
-                  className={`flex max-h-[26rem] flex-col gap-1.5 overflow-y-auto p-2 ${SELECTABLE_ROW_FOCUS}`}
+                  className="flex flex-col px-2 py-1"
                 >
-                  {upcoming.map(({ cell, index }) => (
-                    <Fragment key={cell.key}>
-                      {/* The gap ABOVE the cell is the drop target for its position. */}
-                      <DropSlot court={lane.court} index={index} />
-                      <QueueCell
-                        block={cell}
-                        selected={selectedKey === cell.key}
-                        pending={pendingKey === cell.key}
-                        {...cellProps(index)}
-                      />
-                    </Fragment>
-                  ))}
+                  {upcoming.map(({ cell, index }, i) => {
+                    // A lane is sorted by slot, so a printed time that goes
+                    // BACKWARDS is never a re-ordering — it is the clock
+                    // wrapping past midnight with nothing said about it.
+                    const prev = upcoming[i - 1]?.cell;
+                    const dayBreak =
+                      prev != null &&
+                      crossesDayBoundary(slotClock(prev, formatSlot), slotClock(cell, formatSlot));
+                    return (
+                      <Fragment key={cell.key}>
+                        {dayBreak ? (
+                          <li
+                            data-testid={`plan-queue-day-break-${lane.court}`}
+                            className={`flex items-center gap-2 py-1 text-2xs uppercase tracking-[0.08em] ${TEXT_SECONDARY}`}
+                          >
+                            <span className="h-px flex-1 bg-border" />
+                            Next day
+                            <span className="h-px flex-1 bg-border" />
+                          </li>
+                        ) : null}
+                        {/* The gap ABOVE the row is the drop target for its position. */}
+                        <DropSlot court={lane.court} index={index} />
+                        <QueueRow
+                          block={cell}
+                          selected={selectedKey === cell.key}
+                          pending={pendingKey === cell.key}
+                          {...cellProps(index)}
+                        />
+                      </Fragment>
+                    );
+                  })}
                   {/* The tail target: dropping here appends to the lane. Also
                       the ONLY drop target an empty lane has. */}
                   <DropSlot court={lane.court} index={lane.cells.length} empty={lane.cells.length === 0} />
@@ -346,7 +370,7 @@ export function PlanCourtQueues({
         </div>
       </DndContext>
       {/* Outcome only. The idle state carries NO standing drag instruction
-          (P2): the move controls are on the cells, where the action is. */}
+          (P2): the move controls are on the rows, where the action is. */}
       <div
         data-testid="plan-queue-status"
         role="status"
@@ -365,7 +389,32 @@ export function PlanCourtQueues({
   );
 }
 
-/** A drop target between/after cells. `index` is the position the dragged
+/** The wall-clock a row PRINTS for its position in the lane (the planned
+ *  slot). '' when the workspace has no configured clock. */
+function slotClock(block: OpsBlock, formatSlot?: (slotId: number) => string): string {
+  return block.slot != null ? formatSlot?.(block.slot) ?? '' : '';
+}
+
+/**
+ * Do two consecutive lane times cross a calendar day?
+ *
+ * A lane is sorted by slot, so its printed times can only DECREASE when the
+ * slot→clock mapping wraps: `slotToTime` prints time-of-day and wraps at
+ * 24:00, so an overnight day window — or a plan pushed past the configured
+ * day end — prints `23:45` then `00:15` with nothing to say a day passed.
+ * Pure and string-only: it reads the two labels and never invents a date.
+ */
+export function crossesDayBoundary(prev: string, next: string): boolean {
+  const minutes = (s: string): number | null => {
+    const m = /^(\d{1,2}):(\d{2})/.exec(s.trim());
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  };
+  const a = minutes(prev);
+  const b = minutes(next);
+  return a != null && b != null && b < a;
+}
+
+/** A drop target between/after rows. `index` is the position the dragged
  *  match takes in the lane. */
 function DropSlot({ court, index, empty }: { court: number; index: number; empty?: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `slot:${court}:${index}` });
@@ -376,7 +425,7 @@ function DropSlot({ court, index, empty }: { court: number; index: number; empty
       aria-hidden
       className={[
         'rounded border border-dashed transition-colors duration-fast',
-        empty ? 'h-12' : 'h-3',
+        empty ? 'h-12' : 'h-1.5',
         isOver ? 'border-accent bg-accent-bg' : 'border-transparent',
       ].join(' ')}
     >
@@ -389,7 +438,7 @@ function DropSlot({ court, index, empty }: { court: number; index: number; empty
   );
 }
 
-function QueueCell({
+function QueueRow({
   block,
   court,
   index,
@@ -419,7 +468,16 @@ function QueueCell({
     id: `cell:${block.key}`,
     disabled: block.done || !canEdit,
   });
-  const when = block.slot != null ? formatSlot?.(block.slot) ?? '' : '';
+  // Three clocks, three labels (`labelledClock`): the slot the plan holds,
+  // and — once the desk has actually run the match — when it really started
+  // and ended. A bare `~9:00` could not tell an operator which of those it
+  // was. Nothing here estimates: the Plan surface is given planned slots and
+  // recorded actuals, so it prints those two and invents no third.
+  const planned = labelledClock('scheduled', slotClock(block, formatSlot));
+  const startedAt =
+    block.actualStartSlot != null
+      ? labelledClock('actual', formatSlot?.(block.actualStartSlot) ?? '')
+      : null;
   const stateWord = laneStateWord(block);
   const moveTitle = canEdit ? undefined : READ_ONLY_MESSAGE;
   // 24x24 minimum target (WCAG 2.2 AA 2.5.8) — a 12px caret needs a real box
@@ -427,7 +485,11 @@ function QueueCell({
   const btn =
     'grid h-6 w-6 place-items-center rounded border border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40';
   return (
-    <li data-testid={`plan-queue-cell-${block.key}`} data-source={block.source}>
+    <li
+      data-testid={`plan-queue-cell-${block.key}`}
+      data-source={block.source}
+      className="group flex items-center gap-1"
+    >
       <div
         ref={setNodeRef}
         {...listeners}
@@ -446,43 +508,59 @@ function QueueCell({
         title={`${identity}: ${block.sideA} versus ${block.sideB}`}
         aria-label={`${identity}: ${block.sideA} versus ${block.sideB}`}
         className={[
-          // P4: `min-h-12`, not `h-12`, and no `overflow-hidden`. The old
-          // fixed cell clipped the second half of a doubles pairing with no
-          // marker at all — silent clipping, which the truncation contract
-          // forbids as squarely as it forbids an inaccessible ellipsis. The
-          // cell now grows to fit the names it was given. Duration is still
-          // not encoded as height: what varies is CONTENT, not span.
-          'flex min-h-12 w-full items-start gap-2 rounded border px-2 py-1.5 text-left',
+          // One ROW, not a card: fixed columns for the facts that compare
+          // down the lane, and the names take the rest. It WRAPS rather than
+          // clips (the truncation contract forbids silent clipping as
+          // squarely as an inaccessible ellipsis), so a long doubles pairing
+          // at a narrow width pushes the row taller and stays readable.
+          'flex min-h-8 w-full flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded border px-2 py-1 text-left',
           SELECTABLE_ROW_FOCUS,
-          selected ? 'border-accent ring-1 ring-accent' : 'border-border',
-          block.done ? 'bg-muted/30' : canEdit ? 'cursor-grab active:cursor-grabbing' : '',
+          selected ? 'border-accent ring-1 ring-accent' : 'border-transparent',
+          block.done ? 'bg-muted/40' : canEdit ? 'cursor-grab active:cursor-grabbing' : '',
           isDragging ? 'border-dashed bg-muted/40' : '',
           pending ? 'animate-pulse' : '',
         ].join(' ')}
       >
-        {/* Fixed positions, one per fact: position, then the reference above
-            the two participant groups, then the state. Comparable rows in a
-            lane therefore line up whatever length the names are. */}
-        <span className="w-5 shrink-0 text-right text-2xs sw-num text-ink-faint">{index + 1}</span>
-        <span className="min-w-0 flex-1">
-          <span className={`block break-words text-xs font-semibold sw-num ${TEXT_SECONDARY}`}>
-            {identity}
+        {/* Time first: it is what an operator scans a lane for. */}
+        <span className="flex w-32 shrink-0 flex-col leading-tight">
+          <span
+            data-testid={`plan-queue-planned-${block.key}`}
+            className={`text-xs sw-num ${TEXT_SECONDARY}`}
+          >
+            {planned ?? ''}
           </span>
-          {/* One participant GROUP per line. Inline "A v B" wrapped through
-              the middle of a doubles pairing, so the reader had to work out
-              where one side ended — exactly the thing the queue exists to
-              make obvious. */}
+          {startedAt ? (
+            <span
+              data-testid={`plan-queue-actual-${block.key}`}
+              className={`text-2xs sw-num ${TEXT_HELPER}`}
+            >
+              {startedAt}
+            </span>
+          ) : null}
+        </span>
+        {/* Order in the lane, then the reference — event and round ride in
+            the reference itself (`formatMatchIdentity`), as secondary ink. */}
+        <span className="w-5 shrink-0 text-right text-2xs sw-num text-ink-faint">{index + 1}</span>
+        <span
+          className={`w-20 shrink-0 whitespace-nowrap text-xs font-semibold sw-num ${TEXT_SECONDARY}`}
+        >
+          {identity}
+        </span>
+        {/* One participant GROUP per element, so a doubles pairing never
+            wraps through its own middle and the reader never has to work out
+            where one side ends. */}
+        <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
           <span
             data-testid={`plan-queue-side-a-${block.key}`}
-            className="mt-0.5 block break-words text-[13px] font-medium leading-tight text-foreground"
+            className="break-words text-[13px] font-medium leading-tight text-foreground"
           >
             {block.sideA}
           </span>
+          <span className="text-2xs uppercase tracking-[0.06em] text-muted-foreground">v</span>
           <span
             data-testid={`plan-queue-side-b-${block.key}`}
-            className="block break-words text-[13px] font-medium leading-tight text-foreground"
+            className="break-words text-[13px] font-medium leading-tight text-foreground"
           >
-            <span className="pr-1 text-2xs uppercase tracking-[0.06em] text-muted-foreground">v</span>
             {block.sideB}
           </span>
         </span>
@@ -490,59 +568,65 @@ function QueueCell({
           <span className={`shrink-0 text-xs ${TEXT_SECONDARY}`}>{stateWord}</span>
         ) : null}
       </div>
-      <div className="mt-0.5 flex items-center justify-between gap-2 px-2">
-        {/* The estimate, beneath the cell, muted — the lane carries the
-            order, the clock time is the solve's estimate of when. */}
-        <span className={`text-2xs sw-num ${TEXT_SECONDARY}`}>{when ? `~${when}` : ''}</span>
-        {block.done ? null : (
-          <span className="flex items-center gap-0.5">
-            <button
-              type="button"
-              className={btn}
-              data-testid={`plan-queue-earlier-${block.key}`}
-              aria-label={`Move ${identity} earlier on Court ${court}`}
-              title={moveTitle}
-              disabled={!canEdit || index === 0}
-              onClick={() => onMove(block.key, court, index - 1)}
-            >
-              <CaretUp aria-hidden className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              className={btn}
-              data-testid={`plan-queue-later-${block.key}`}
-              aria-label={`Move ${identity} later on Court ${court}`}
-              title={moveTitle}
-              disabled={!canEdit || index >= laneCount - 1}
-              onClick={() => onMove(block.key, court, index + 1)}
-            >
-              <CaretDown aria-hidden className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              className={btn}
-              data-testid={`plan-queue-prev-court-${block.key}`}
-              aria-label={`Move ${identity} to Court ${court - 1}`}
-              title={moveTitle}
-              disabled={!canEdit || court <= 1}
-              onClick={() => onMove(block.key, court - 1, index)}
-            >
-              <CaretLeft aria-hidden className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              className={btn}
-              data-testid={`plan-queue-next-court-${block.key}`}
-              aria-label={`Move ${identity} to Court ${court + 1}`}
-              title={moveTitle}
-              disabled={!canEdit || court >= courtCount}
-              onClick={() => onMove(block.key, court + 1, index)}
-            >
-              <CaretRight aria-hidden className="h-3 w-3" />
-            </button>
-          </span>
-        )}
-      </div>
+      {/* Movement controls reveal on SELECTION or keyboard focus (and, as a
+          convenience, hover) — never hover alone, which no keyboard or touch
+          user can produce. They stay in the tab order at all times: opacity,
+          not `hidden`, is what changes. */}
+      {block.done ? null : (
+        <span
+          data-testid={`plan-queue-controls-${block.key}`}
+          className={[
+            'flex shrink-0 items-center gap-0.5 transition-opacity duration-fast',
+            'group-hover:opacity-100 group-focus-within:opacity-100',
+            selected ? 'opacity-100' : 'opacity-0',
+          ].join(' ')}
+        >
+          <button
+            type="button"
+            className={btn}
+            data-testid={`plan-queue-earlier-${block.key}`}
+            aria-label={`Move ${identity} earlier on Court ${court}`}
+            title={moveTitle}
+            disabled={!canEdit || index === 0}
+            onClick={() => onMove(block.key, court, index - 1)}
+          >
+            <CaretUp aria-hidden className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            className={btn}
+            data-testid={`plan-queue-later-${block.key}`}
+            aria-label={`Move ${identity} later on Court ${court}`}
+            title={moveTitle}
+            disabled={!canEdit || index >= laneCount - 1}
+            onClick={() => onMove(block.key, court, index + 1)}
+          >
+            <CaretDown aria-hidden className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            className={btn}
+            data-testid={`plan-queue-prev-court-${block.key}`}
+            aria-label={`Move ${identity} to Court ${court - 1}`}
+            title={moveTitle}
+            disabled={!canEdit || court <= 1}
+            onClick={() => onMove(block.key, court - 1, index)}
+          >
+            <CaretLeft aria-hidden className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            className={btn}
+            data-testid={`plan-queue-next-court-${block.key}`}
+            aria-label={`Move ${identity} to Court ${court + 1}`}
+            title={moveTitle}
+            disabled={!canEdit || court >= courtCount}
+            onClick={() => onMove(block.key, court + 1, index)}
+          >
+            <CaretRight aria-hidden className="h-3 w-3" />
+          </button>
+        </span>
+      )}
     </li>
   );
 }

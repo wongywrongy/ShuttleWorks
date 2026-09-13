@@ -19,7 +19,6 @@ import { EntrantsList } from '../app/components/EntrantsList';
 import { EventRow } from '../app/components/EventRow';
 import { HeroHeader } from '../app/components/HeroHeader';
 import { MatchCard } from '../app/components/MatchCard';
-import { NowStrip } from '../app/components/NowStrip';
 import { PlayShell } from '../app/components/PlayShell';
 import { SeasonCalendar } from '../app/components/SeasonCalendar';
 import { SeasonControls } from '../app/components/SeasonControls';
@@ -287,6 +286,8 @@ describe('SeasonStatusCell', () => {
     // only two of the four arms.
     expect(live).toContain('Follow live');
     expect(live).not.toContain('→');
+    // Refinement 2026-09-12: "follow" leads to the live schedule.
+    expect(live).toContain('href="/e/x/schedule"');
   });
 
   it('lifts every real link above the row-wide stretched link', () => {
@@ -314,7 +315,8 @@ describe('SeasonStatusCell', () => {
       }),
     );
     expect(html).toContain('href="/e/korea/enter"');
-    expect(html).toContain('Enter · closes 1 Aug');
+    expect(html).toContain('Enter');
+    expect(html).toContain('closes 1 Aug');
     // No countdown, no offset, no zone spelling.
     expect(html).not.toMatch(/\bd\b|GMT|KST|UTC/);
   });
@@ -335,54 +337,6 @@ describe('SeasonStatusCell', () => {
     expect(html).not.toContain('<a');
   });
 });
-
-// ---- NowStrip (SP-P8 §2.1) -------------------------------------------------
-
-describe('NowStrip', () => {
-  const live = row({
-    slug: 'x', name: 'Fall Open', venueName: 'Hall', date: '2026-09-12',
-    eventCount: 9, status: 'in_progress_live', drawsPublished: true,
-  });
-
-  it('carries the follow-live deep link and NO player count (degraded field)', () => {
-    const html = renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }));
-    expect(html).toContain('Live today');
-    expect(html).toContain('Fall Open');
-    expect(html).toContain('href="/e/x?tab=draws"');
-    expect(html).not.toMatch(/player/i);
-  });
-
-  it('states venue · date · events, and nothing it was not given', () => {
-    const html = renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }));
-    expect(html).toContain(`Hall · ${formatDateLong('2026-09-12')} · 9 events`);
-
-    const bare = renderToStaticMarkup(
-      h(NowStrip, { row: row({ slug: 'x', name: 'Bare', eventCount: 1 }), moreCount: 0 }),
-    );
-    // Exactly the one part it has — an absent venue leaves no dangling middot.
-    expect(bare).toContain('>1 event<');
-    expect(bare).not.toContain('null');
-  });
-
-  it('appends +N more only when there is more', () => {
-    expect(renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 1 }))).toContain('+1 more');
-    expect(renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }))).not.toContain('more');
-  });
-
-  it('carries live-ness in text and a sweep on the rule, with no tinted band or dot (ADR 0028)', () => {
-    const html = renderToStaticMarkup(h(NowStrip, { row: live, moreCount: 0 }));
-    expect(html).toContain('text-status-live');
-    expect(html).toContain('sw-sweep');
-    expect(html).toContain('bg-surface-raised');
-    expect(html).not.toContain('bg-surface-inverse');
-    expect(html).not.toContain('bg-status-live-bg');
-    expect(html).not.toContain('rounded-full');
-    expect(html).not.toContain('animate-pulse');
-    expect(html).not.toMatch(/#[0-9a-f]{3,8}\b/i);
-  });
-});
-
-// ---- SeasonCalendar: one continuous season (P5) -----------------------------
 
 /** The model the page hands the calendar, built the same way the loader does. */
 const model = (rows: SeasonRow[], filters: Filters = NO_FILTERS, now = new Date(Date.UTC(2026, 7, 11))) =>
@@ -449,7 +403,8 @@ describe('SeasonCalendar', () => {
         ]),
       }),
     );
-    expect(html).toContain('Riverside Hall · Wessex BC');
+    expect(html).toContain('Riverside Hall');
+    expect(html).toContain('Wessex BC');
   });
 
   it('strips a duplicated year stamp from the title the month header already carries', () => {
@@ -507,7 +462,8 @@ describe('SeasonCalendar', () => {
     expect(html).toContain('href="/e/a%20b"');
     expect(html).toContain('after:absolute after:inset-0');
     expect(html).toContain(formatDateLong('2026-09-11'));
-    expect(html).toContain('Hall · Wessex CBA');
+    expect(html).toContain('Hall');
+    expect(html).toContain('Wessex CBA');
     expect(html).not.toContain('events</span>');
   });
 
@@ -1135,6 +1091,39 @@ describe('EntrantsList (SP-P7 §3.2 — alphabetical, letter-grouped)', () => {
     expect(html).toContain('data-club="norrebro bk"');
   });
 
+  it('lays every person out as one aligned row under a Player · Club · Events header (refinement 2026-09-12)', () => {
+    const html = renderToStaticMarkup(h(EntrantsList, { slug: 'spring-open', entrants }));
+    // ONE list card, not three CSS columns of letter groups.
+    expect(html).not.toContain('lg:grid-cols-3');
+    expect(html).toMatch(/aria-hidden="true"[^>]*class="hidden[^"]*sm:grid[^"]*"[^>]*><span>Player<\/span><span>Club<\/span><span>Events<\/span>/);
+    // Each row carries the same grid, so the columns line up down the page.
+    expect((html.match(/data-entrant/g) ?? []).length).toBe(3);
+    expect(html).toMatch(/data-entrant[^>]*class="grid[^"]*sm:grid-cols-\[minmax\(0,1fr\)_minmax\(0,14rem\)_minmax\(0,10rem\)\]/);
+    expect(html).not.toContain('truncate');
+  });
+
+  it('offers a native event filter in the same form, applied on the SERVER and enhanced by the script', () => {
+    const html = renderToStaticMarkup(
+      h(EntrantsList, { slug: 'spring-open', entrants, noun: 'player' as const, action: '/e/spring-open' }),
+    );
+    const form = html.match(/<form[^>]*id="entrants-filter-root"[\s\S]*?<\/form>/)?.[0] ?? '';
+    expect(form).toMatch(/<label for="entrants-event" class="sr-only">Event<\/label>/);
+    expect(form).toMatch(/<select id="entrants-event" name="event"/);
+    expect(form).toMatch(/<option value=""[^>]*>All events<\/option>/);
+    expect(form).toContain('<option value="MS">Men&#x27;s singles</option>');
+    expect(form).toContain('<option value="XD">Mixed doubles</option>');
+    // The rows carry their codes for the script's in-place filter.
+    expect(html).toContain('data-events="MS XD"');
+
+    const filtered = renderToStaticMarkup(
+      h(EntrantsList, { slug: 'spring-open', entrants, noun: 'player' as const, event: 'MS' }),
+    );
+    expect(filtered).toContain('Tom Barker');
+    expect(filtered).not.toContain('Priya');
+    expect(filtered).toContain('1 result');
+    expect(filtered).toMatch(/<option value="MS" selected=""/);
+  });
+
   it('renders no A-Z index for a single-letter roster (nothing useful to jump between)', () => {
     const html = renderToStaticMarkup(
       h(EntrantsList, { slug: 'spring-open', entrants: [entrants[0]] }),
@@ -1169,7 +1158,28 @@ describe('StickyTotalBar', () => {
     );
     expect(html).toContain('38.00');
     expect(html).toContain('3 events');
+    // Refinement 2026-09-12: with no stated currency the figure is a quoted
+    // AMOUNT, said so once, and never dressed as a payable total.
+    expect(html).toContain('Quoted amount');
+    expect(html).toContain('The organizer has not stated a currency');
+    expect(html).not.toContain('Not configured');
+  });
+
+  it('quoted: prints the organizer\'s currency with the figure when they stated one', () => {
+    const html = renderToStaticMarkup(
+      h(StickyTotalBar, {
+        ...base,
+        feeCurrency: 'GBP',
+        feeTiers: [['1', 1500], ['2', 2500]],
+        state: { kind: 'quoted', totalCents: 3800, eventCount: 3 },
+      }),
+    );
+    expect(html).toContain('GBP 38.00');
     expect(html).toContain('Quoted total');
+    expect(html).not.toContain('has not stated a currency');
+    // The bundle schedule now lives beside the number, with the currency.
+    expect(html).toContain('How the total is calculated');
+    expect(html).toContain('GBP 25.00');
   });
 
   it('refused: renders the fixed local copy as a warning', () => {

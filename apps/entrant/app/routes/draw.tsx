@@ -197,6 +197,7 @@ function nodeToMatch(
       };
     }),
     score: node.result?.score ?? null,
+    outcomeReason: node.result?.reason ?? null,
     decided,
     scheduledTime: node.scheduledTime,
     court: node.court,
@@ -494,6 +495,40 @@ function nodePersonIds(node: MatchNodeDTO, teams: Map<string, TeamDTO>): string[
  *  nodes. */
 const ROUND_HEADER_HEIGHT = 'h-6';
 
+/** The person ids actually standing on one side of a match — the arrival, not
+ *  the candidates. A doubles side contributes BOTH partners, so either one
+ *  resolves to the pair's path (D4). */
+function sidePersonIds(
+  side: MatchNodeDTO['sides'][number] | undefined,
+  teams: Map<string, TeamDTO>,
+): string[] {
+  const team = side?.participantKey ? teams.get(side.participantKey) : undefined;
+  const ids = new Set<string>();
+  for (const person of team?.persons ?? []) {
+    if (person.identity?.id) ids.add(person.identity.id);
+  }
+  return [...ids];
+}
+
+/**
+ * The braces between two rounds (public-ui-refinement P4, A05/D4).
+ *
+ * The geometry is unchanged — one equal flex slot per destination node,
+ * drawing the same three-sided brace and stub as before. What changed is that
+ * the brace is no longer ONE highlightable thing. It used to carry the union
+ * of the destination's and BOTH feeders' person ids, so selecting a player lit
+ * the whole tall slot and the sibling branch they never came from.
+ *
+ * Each destination SIDE now owns its own overlay edge — side A the upper
+ * feeder edge, side B the lower — and an edge lights only when the selected
+ * person is standing on that side of the destination match. A player who lost
+ * their feeder is not on the destination side, so their path simply stops
+ * there: elimination needs no special case, and an unplayed round lights
+ * nothing at all because neither side has resolved yet.
+ *
+ * The progression data the prose no longer states (`feederLabel` now reads
+ * "TBD") stays on the edge as `data-feeder-node` / `data-feeder-ref`.
+ */
 function ConnectorColumn({
   destination,
   nodeIndex,
@@ -511,18 +546,37 @@ function ConnectorColumn({
       <span className={ROUND_HEADER_HEIGHT} />
       <div className="mt-3 flex flex-1 flex-col">
         {destination.matches.map((node) => {
-          const ids = new Set(nodePersonIds(node, teams));
-          for (const side of node.sides) {
+          const edges = node.sides.map((side, index) => {
             const feeder = side.feederNodeKey ? nodeIndex.get(side.feederNodeKey) : undefined;
-            for (const id of feeder ? nodePersonIds(feeder, teams) : []) ids.add(id);
-          }
-          const onPath = Boolean(selectedPersonId && ids.has(selectedPersonId));
+            return {
+              edge: index === 0 ? 'top' : 'bottom',
+              ids: sidePersonIds(side, teams),
+              feederNodeKey: side.feederNodeKey,
+              feederRef: feeder?.shortReference ?? feeder?.reference ?? null,
+            };
+          });
+          const arrived = edges.flatMap((edge) => edge.ids);
+          const lit = (ids: string[]) => Boolean(selectedPersonId && ids.includes(selectedPersonId));
           return (
-            <span
-              key={node.nodeKey}
-              className={`bracket-link-slot flex-1${onPath ? ' is-person-path' : ''}`}
-              data-person-ids={[...ids].join(' ')}
-            />
+            <span key={node.nodeKey} className="bracket-link-slot flex-1" data-destination-node={node.nodeKey}>
+              {edges.map((edge) => (
+                <span
+                  key={edge.edge}
+                  className={`bracket-link-edge${lit(edge.ids) ? ' is-person-path' : ''}`}
+                  data-edge={edge.edge}
+                  data-person-ids={edge.ids.join(' ')}
+                  data-feeder-node={edge.feederNodeKey ?? undefined}
+                  data-feeder-ref={edge.feederRef ?? undefined}
+                />
+              ))}
+              {/* The stub into the destination node: lit when the selected
+                  person is standing in that match at all. */}
+              <span
+                className={`bracket-link-edge${lit(arrived) ? ' is-person-path' : ''}`}
+                data-edge="stub"
+                data-person-ids={arrived.join(' ')}
+              />
+            </span>
           );
         })}
       </div>
@@ -640,44 +694,32 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
       ? roundAnchorId(segment.rounds[clampedRoundIndex].label)
       : undefined;
 
+  /** The selected person's own page, through the identity seam — the one
+   *  place a profile href may come from (publicUniversality). */
+  const selectedPersonHref = selectedPerson
+    ? personRefModel({
+        slug,
+        identity: selectedPerson.identity,
+        state: selectedPerson.resolution,
+      }).href
+    : null;
+
   /**
    * The bracket (contract §4.3, P4). ONE tree at every width, inside one
    * `overflow: auto` region that is bounded to the viewport, carries an
    * accessible name, is reachable by keyboard (`tabIndex`) and snaps by
    * round below `md` — the narrow-screen answer that does not shrink a name
    * to fit another column on screen. Round headers stick to the top of that
-   * region; the round controls above it are native anchors into the columns.
+   * region; the round controls live in the page's one toolbar above it
+   * (refinement 2026-09-12) as native anchors into the columns.
    */
   const bracketBlock = segment ? (
     <section
       data-testid="public-bracket-canvas"
       className="min-w-0 border-y border-rule-soft bg-surface-raised"
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pb-2 pt-3 md:px-6">
-        <RoundControls
-          rounds={segment.rounds}
-          activeIndex={roundRequested ? clampedRoundIndex : null}
-        />
-        {/* The script's mount point (the `entrants-filter.js` idiom): the
-            "Highlight path" toggle, its reset and the selected player's
-            "View profile" link exist only where JavaScript runs, so a
-            no-JS reader is never shown a dead control. The server-rendered
-            half below is the no-JS path state itself — `?player={id}`,
-            which the Find form and `?view=path` links both produce. */}
-        <div data-bracket-toolbar className="flex flex-wrap items-center gap-2 text-sm" />
-        {selectedPersonId ? (
-          <p className="flex flex-wrap items-center gap-2 text-sm" data-path-summary>
-            <span className="text-muted-foreground">
-              Path: <strong className="font-semibold text-foreground">{selectedPersonLabel}</strong>
-            </span>
-            <a href={clearPlayerHref} className={ACTION_LINK}>
-              Clear path
-            </a>
-          </p>
-        ) : null}
-      </div>
       {/* `relative` is load-bearing, not decoration: the sr-only spans inside
-          the tree ("Winner: ") are `position: absolute`, and with no
+          the tree ("Winner: ") are `absolute positioning`, and with no
           positioned ancestor here their containing block is the document — so
           they escape this container's clip at the scrolled-out right edge and
           give the PAGE 33px of horizontal scroll (§4.3's "the page never
@@ -687,7 +729,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
         tabIndex={0}
         aria-label={`${eventDisciplineLabel(draw.discipline)} bracket`}
         data-bracket-scroll
-        className="bracket-scroll relative snap-x snap-mandatory overflow-auto px-4 pb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:snap-none md:px-6"
+        className="bracket-scroll relative snap-x snap-mandatory overflow-auto px-4 pb-4 pt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:snap-none md:px-6"
       >
         <div
           className={`flex w-max min-w-full items-stretch${selectedPersonId ? ' has-person-path' : ''}`}
@@ -719,11 +761,27 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                   {round.matches.map((node) => {
                     const ids = nodePersonIds(node, teams);
                     const onPath = Boolean(selectedPersonId && ids.includes(selectedPersonId));
+                    // P4/D4: WHICH side row the selection is standing on, so
+                    // the emphasis lands on that row rather than on the whole
+                    // tall layout slot. The script recomputes the same
+                    // attribute from the same two id lists, so the enhanced
+                    // rendering and this server rendering agree exactly.
+                    const sideAIds = sidePersonIds(node.sides[0], teams);
+                    const sideBIds = sidePersonIds(node.sides[1], teams);
+                    const selectedSide =
+                      selectedPersonId && sideAIds.includes(selectedPersonId)
+                        ? 'a'
+                        : selectedPersonId && sideBIds.includes(selectedPersonId)
+                          ? 'b'
+                          : undefined;
                     return (
                       <div
                         key={node.nodeKey}
                         data-node-key={node.nodeKey}
                         data-person-ids={ids.join(' ')}
+                        data-side-a-ids={sideAIds.join(' ')}
+                        data-side-b-ids={sideBIds.join(' ')}
+                        data-selected-side={selectedSide}
                         className={`bracket-slot flex flex-1 items-center${onPath ? ' is-person-path' : ''}`}
                       >
                         <MatchCard
@@ -752,6 +810,8 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
     </section>
   ) : null;
 
+  const showBracket = !roundRobin && view !== "list";
+
   return (
     <PlayShell>
       {/* Contract §11: a draw detail keeps the tournament's identity, its
@@ -767,20 +827,29 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
           { label: eventDisciplineLabel(draw.discipline), href: null },
         ]}
       />
-      <main className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
-        <h2 className={SECTION_TITLE}>
-          {eventDisciplineLabel(draw.discipline)}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {[
-            eventCodeLabel(draw.eventCode),
-            kindLabel(draw.kind),
-            entryCountLabel(draw.eventCode, draw.size),
-          ].join(" · ")}
-        </p>
+      <main className="mx-auto w-full max-w-6xl px-4 py-4 md:py-5">
+        {/* ONE title line: the discipline, with its shape beside it. */}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h2 className={SECTION_TITLE}>
+            {eventDisciplineLabel(draw.discipline)}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {[
+              eventCodeLabel(draw.eventCode),
+              kindLabel(draw.kind),
+              entryCountLabel(draw.eventCode, draw.size),
+            ].join(" · ")}
+          </p>
+        </div>
 
-        <div className="mt-5 grid gap-3">
-          {!roundRobin ? (
+        {/* ONE toolbar (refinement 2026-09-12): the view, the search, the
+            round controls and the script's highlight toggle on one wrapping
+            row, so the tree starts one row under the title instead of four
+            stacked blocks down. Everything here is native: links, a GET
+            form, anchors; the toggle is built by the script and is absent
+            where it does not run. */}
+        {!roundRobin ? (
+          <div data-draw-toolbar className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
             <DrawViewLinks
               slug={slug}
               drawKey={draw.drawKey}
@@ -788,13 +857,11 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
               active={view}
               playerQuery={playerQuery}
             />
-          ) : null}
-          {/* P7: the visible "Find" button is gone. The field is the tier's
-              one search treatment — icon, real (`sr-only`) label, invisible
-              submit — and the form is still a native GET that keeps the view
-              and the segment in the URL. */}
-          {!roundRobin ? (
-            <form method="get" role="search" className="flex max-w-xl flex-wrap items-center gap-3">
+            {/* P7: the visible "Find" button is gone. The field is the tier's
+                one search treatment — icon, real (`sr-only`) label, invisible
+                submit — and the form is still a native GET that keeps the view
+                and the segment in the URL. */}
+            <form method="get" role="search" className="flex min-w-0 flex-1 basis-64 flex-wrap items-center gap-3">
               {view ? <input type="hidden" name="view" value={view} /> : null}
               <input type="hidden" name="segment" value={activeSegment} />
               <SearchField
@@ -809,62 +876,105 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                 // a search box is the raw-identifier leak the plan forbids.
                 defaultValue={selectedPersonLabel ?? (identityNotInThisDraw ? '' : playerQuery)}
                 submitLabel="Find in this draw"
-                className="min-w-0 flex-1 basis-56"
+                className="min-w-0 flex-1 basis-48 sm:max-w-xs"
               />
-              {playerQuery ? (
+              {/* A NAME search clears here; a resolved person clears from
+                  the path summary below, so there is one clear per state. */}
+              {playerQuery && !selectedPersonId ? (
                 <a href={clearPlayerHref} className={ACTION_LINK_MUTED}>
                   Clear search
                 </a>
               ) : null}
             </form>
-          ) : null}
-          {playerQuery ? (
-            // V3-PE12.1: name the actual behaviour exactly — a plural-aware
-            // count of what was found, not "Showing matches for X" (which
-            // does not say whether that is filtering, highlighting, or the
-            // whole draw). The bracket is never filtered — it lights the
-            // path and dims the rest of the tree instead — so "found"
-            // covers both the filtered List view and the highlighted
-            // bracket honestly. P4: the quoted term is what the reader
-            // actually asked for — a resolved person's name when the query
-            // was an identity, the typed text otherwise. A name search
-            // names nobody: it never re-prints someone else's full name as
-            // though the reader had picked them.
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-s-2 border-action-primary bg-surface-sunken px-3 py-2 text-sm" role="status">
-              <span>
-                {identityNotInThisDraw ? (
-                  'That player is not in this draw.'
-                ) : (
-                  <>
-                    {matchCount} {matchCount === 1 ? 'match' : 'matches'} found for &lsquo;<strong>{queryLabel}</strong>&rsquo;
-                  </>
-                )}
-              </span>
-              {soleNameMatch?.identity ? (
-                <a
-                  href={`${base}?${new URLSearchParams({
-                    segment: activeSegment,
-                    view: 'path',
-                    player: soleNameMatch.identity.id!,
-                  })}`}
-                  className={ACTION_LINK}
-                >
-                  Show{' '}
-                  {
-                    personRefModel({
-                      slug,
-                      identity: soleNameMatch.identity,
-                      state: soleNameMatch.resolution,
-                    }).text
-                  }
-                  &rsquo;s path
-                </a>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+            {showBracket && segment ? (
+              <RoundControls
+                rounds={segment.rounds}
+                activeIndex={roundRequested ? clampedRoundIndex : null}
+              />
+            ) : null}
+            {/* The script's mount point (the `entrants-filter.js` idiom): the
+                "Highlight path" toggle exists only where JavaScript runs, so
+                a no-JS reader is never shown a dead control. */}
+            {showBracket ? (
+              <div data-bracket-toolbar className="flex flex-wrap items-center gap-2 text-sm" />
+            ) : null}
+          </div>
+        ) : null}
 
-        <div className="mt-6 grid gap-6">
+        {/* The selected person, stated ONCE (the S44 duplicate-clear defect):
+            name, how much of the draw is theirs, the way to their profile
+            and the one clear. Server-rendered from `?player={id}`, which is
+            also the no-JS path state; `bracket-path.js` keeps this same line
+            in step with in-place selection instead of building a second one.
+            A typed NAME gets the search status instead — a count, and the
+            offer that is the only way a name becomes an identity. */}
+        {!roundRobin ? (
+          <div data-path-slot className="mt-3 empty:hidden">
+            {selectedPersonId ? (
+              <p
+                data-path-summary
+                role="status"
+                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-s-2 border-action-primary bg-surface-sunken px-3 py-2 text-sm"
+              >
+                <span className="text-muted-foreground">
+                  Path: <strong data-path-name className="font-semibold text-foreground">{selectedPersonLabel}</strong>
+                </span>
+                <span data-path-count className="tabular-nums text-muted-foreground">
+                  {`${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}
+                </span>
+                {selectedPersonHref ? (
+                  <a data-path-profile href={selectedPersonHref} className={ACTION_LINK}>
+                    View profile
+                  </a>
+                ) : null}
+                <a data-path-clear href={clearPlayerHref} className={ACTION_LINK_MUTED}>
+                  Clear path
+                </a>
+              </p>
+            ) : playerQuery ? (
+              // V3-PE12.1: name the actual behaviour exactly — a plural-aware
+              // count of what was found. The bracket is never filtered — it
+              // lights the matches and dims the rest of the tree — so "found"
+              // covers both the filtered List view and the highlighted
+              // bracket honestly. A name search names nobody: it never
+              // re-prints someone else's full name as though the reader had
+              // picked them.
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-s-2 border-action-primary bg-surface-sunken px-3 py-2 text-sm" role="status">
+                <span>
+                  {identityNotInThisDraw ? (
+                    'That player is not in this draw.'
+                  ) : (
+                    <>
+                      {matchCount} {matchCount === 1 ? 'match' : 'matches'} found for &lsquo;<strong>{queryLabel}</strong>&rsquo;
+                    </>
+                  )}
+                </span>
+                {soleNameMatch?.identity ? (
+                  <a
+                    href={`${base}?${new URLSearchParams({
+                      segment: activeSegment,
+                      view: 'path',
+                      player: soleNameMatch.identity.id!,
+                    })}`}
+                    className={ACTION_LINK}
+                  >
+                    Show{' '}
+                    {
+                      personRefModel({
+                        slug,
+                        identity: soleNameMatch.identity,
+                        state: soleNameMatch.resolution,
+                      }).text
+                    }
+                    &rsquo;s path
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="mt-3 grid gap-4">
           {roundRobin ? (
             <>
               <StandingsTable draw={draw} slug={slug} />

@@ -60,18 +60,17 @@ describe('apiClient.confirmEntry', () => {
   });
 });
 
-describe('apiClient.commitEntries', () => {
+describe('apiClient.bindEntries', () => {
   it('POSTs the commit with no event filter by default', async () => {
     const post = vi
       .spyOn(axiosOf(), 'post')
-      .mockResolvedValue({ data: { committed: [], skipped: [] } } as never);
+      .mockResolvedValue({ data: { bindings: [], skipped: [] } } as never);
 
-    await apiClient.commitEntries('t-1');
+    await apiClient.bindEntries('t-1');
 
     expect(post).toHaveBeenCalledWith(
-      '/tournaments/t-1/entries/commit',
-      undefined,
-      { params: undefined },
+      '/tournaments/t-1/competition/bind',
+      { entryEventId: undefined, competitionEventId: undefined, requestId: expect.any(String) },
     );
   });
 
@@ -80,14 +79,13 @@ describe('apiClient.commitEntries', () => {
     // silently ignored and commit the WHOLE workspace instead of one event.
     const post = vi
       .spyOn(axiosOf(), 'post')
-      .mockResolvedValue({ data: { committed: [], skipped: [] } } as never);
+      .mockResolvedValue({ data: { bindings: [], skipped: [] } } as never);
 
-    await apiClient.commitEntries('t-1', 'ev-9');
+    await apiClient.bindEntries('t-1', 'ev-9');
 
     expect(post).toHaveBeenCalledWith(
-      '/tournaments/t-1/entries/commit',
-      undefined,
-      { params: { entry_event_id: 'ev-9' } },
+      '/tournaments/t-1/competition/bind',
+      { entryEventId: 'ev-9', competitionEventId: undefined, requestId: expect.any(String) },
     );
   });
 });

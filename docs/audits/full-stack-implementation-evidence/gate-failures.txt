@@ -1,0 +1,59 @@
+backend-host
+FAILED tests/backend/unit/test_public_person_contract.py::test_every_sp_p9_serializer_has_its_exact_allow_list
+FAILED tests/backend/unit/test_public_person_contract.py::test_public_my_entries_keyset_rejects_extra_field
+FAILED tests/backend/test_dto_generated_freshness.py::test_generated_schema_keys_match_the_live_schema_keys
+FAILED tests/backend/test_entries_me_api.py::test_card_and_line_key_sets_are_exact
+FAILED tests/backend/test_entries_me_api.py::test_played_once_the_date_has_passed
+===== 5 failed, 2554 passed, 74 skipped, 73 warnings in 676.96s (0:11:16) ======
+entrant-host
+ FAIL  tests/a11yContracts.test.ts > a11y contract: 'entry wizard' > has exactly one h1 and no skipped heading level
+ FAIL  tests/components.test.ts > SeasonStatusCell > links Enter to the real entry flow and names the closing day in the event zone
+ FAIL  tests/components.test.ts > NowStrip > states venue · date · events, and nothing it was not given
+ FAIL  tests/components.test.ts > SeasonCalendar > keeps the venue block on an upcoming row
+ FAIL  tests/components.test.ts > SeasonCalendar > makes the row one stretched link and carries the date for AT
+ FAIL  tests/discovery.render.test.ts > the entry action (P5) > links Enter to the real entry flow and names the closing day
+ FAIL  tests/draw.render.test.ts > the elimination draw page > renders one bracket, in its own named scroll region, at every width
+ FAIL  tests/draw.render.test.ts > the elimination draw page > leaves an unreached slot empty with a muted feeder line
+ FAIL  tests/dtoParity.test.ts > entrant DTO parity: 'apps/entrant/public/assets/my-entries…' > keys match, except the allow-listed divergences
+ FAIL  tests/enter.render.test.ts > the entry form, unhydrated > states the bundle schedule verbatim from the projection
+ FAIL  tests/entry-wizard.script.test.ts > entry wizard enhancement > starts with context and reveals a chapter at a time
+ FAIL  tests/entry-wizard.script.test.ts > entry wizard enhancement > skips partner when the selected event set has no partner fields
+ FAIL  tests/entry-wizard.script.test.ts > entry wizard enhancement > persists entered fields and builds a text-only review summary
+ FAIL  tests/matchCard.contract.render.test.ts > match-card contract — bracket node (§4.3) > an unresolved predecessor is an EMPTY slot with a muted feeder line
+ FAIL  tests/matchCard.contract.render.test.ts > match-card contract — accessible summary (§6.1 "versus"/"and") > an unresolved side folds into the phrase by its label, not a slash join
+ FAIL  tests/matchCard.contract.render.test.ts > match-card contract — labels come from the discriminant (§2.1/§6.1) > a winner_of side is spelled from `unresolved.reference`, not the placeholder prose
+ FAIL  tests/myEntries.render.test.ts > /e/me/entries — the session-aware shell > loads the private browser module only when a session is present
+ FAIL  tests/myEntries.script.test.ts > the pure decisions > quotes while awaiting, totals after, and prices no withdrawn card
+ FAIL  tests/myEntries.script.test.ts > the pure decisions > appends the withdrawal deadline to the price line only when one exists (E2)
+ FAIL  tests/myEntries.script.test.ts > the DOM render > renders year heading, card anatomy, line, badge and results link
+ FAIL  tests/myEntries.script.test.ts > the DOM render > names an accepted doubles partner on the line, and only then (§3.1)
+ FAIL  tests/myEntries.script.test.ts > the DOM render > footer carries a receipt link and the withdrawal deadline when present (E2)
+ FAIL  tests/myEntries.script.test.ts > the DOM render > names a line's own act only when it is not the card's (V3-24-1)
+ FAIL  tests/myEntries.script.test.ts > withdrawAffordance (E2) > renders the controls only for a verified account
+ FAIL  tests/myEntries.script.test.ts > withdrawAffordance (E2) > arms before it acts, and Keep it backs out
+ FAIL  tests/noEmDash.test.ts > no em dash reaches the entrant tier > finds no banned dash pattern outside the allowlist
+ FAIL  tests/noTruncation.test.ts > no truncation reaches the entrant tier > finds no banned truncation pattern outside the allowlist
+ FAIL  tests/partner.render.test.ts > partner invitation context > shows inviter, event, and tournament before acceptance
+ FAIL  tests/partner.render.test.ts > partner invitation context > preserves the invitation through sign-in and account creation
+ FAIL  tests/player.render.test.ts > the header card > renders the linked name, club and events
+ FAIL  tests/player.render.test.ts > the match groups > renders Coming up ABOVE Played — the binding §3.3 order
+ FAIL  tests/player.render.test.ts > the draw path (P6 structured round steps) > renders each round as its own step, never an arrow-joined sentence
+ FAIL  tests/player.render.test.ts > the draw path (P6 structured round steps) > names the partner and links the event draw pinned on this person
+ FAIL  tests/player.render.test.ts > tournament history (profile v1) > links each past tournament to THAT tournament page for the same person
+ FAIL  tests/player.render.test.ts > tournament history (profile v1) > names the current tournament without linking back to itself
+ FAIL  tests/publicUniversality.test.ts > SP-P9 public person universality > recursively covers every public source and keeps identity decisions in the seam
+ FAIL  tests/publicUniversality.test.ts > SP-P9 bracket invariants > pins three-row nodes, CSS-grid braces, and the absence of measured connectors
+ FAIL  tests/receipt.script.test.ts > receipt decisions > reports transaction and external payment states without inventing a currency
+ FAIL  tests/receipt.script.test.ts > receipt decisions > builds a complete downloadable text receipt
+ FAIL  tests/receipt.script.test.ts > receipt DOM > renders the complete account-scoped summary and never interprets authored markup
+ FAIL  tests/tournament.render.test.ts > the panels > Overview: About card, currently-relevant key dates, fees pointer, documents, venue (P6)
+ FAIL  tests/tournamentFrame.render.test.ts > the tournament frame on 'Overview' > renders the one hero: the tournament is the document heading, stated once
+ FAIL  tests/tournamentFrame.render.test.ts > the tournament frame on 'Schedule' > renders the one hero: the tournament is the document heading, stated once
+ FAIL  tests/tournamentFrame.render.test.ts > the tournament frame on 'Draws index' > renders the one hero: the tournament is the document heading, stated once
+ FAIL  tests/tournamentFrame.render.test.ts > the tournament frame on 'draw detail' > renders the one hero: the tournament is the document heading, stated once
+ FAIL  tests/tournamentFrame.render.test.ts > the tournament frame on 'Players' > renders the one hero: the tournament is the document heading, stated once
+ FAIL  tests/tournamentFrame.render.test.ts > the tournament frame on 'Regulations' > renders the one hero: the tournament is the document heading, stated once
+ FAIL  tests/tournamentFrame.render.test.ts > the tournament frame on 'player detail' > renders the one hero: the tournament is the document heading, stated once
+ FAIL  tests/uiTwins.test.ts > public/assets twins of the ui.ts vocabulary > public/assets/receipt.js carries CHIP byte-identically
+ FAIL  tests/uiTwins.test.ts > public/assets twins of the ui.ts vocabulary > public/assets/entry-wizard.js carries PRIMARY_BUTTON byte-identically
+ Test Files  19 failed | 39 passed (58)

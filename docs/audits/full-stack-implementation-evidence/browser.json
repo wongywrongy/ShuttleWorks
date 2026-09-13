@@ -1,0 +1,439 @@
+{
+  "hub-1440": {
+    "title": "ShuttleWorks",
+    "h1": [],
+    "overflow": false,
+    "buttons": [],
+    "path": [],
+    "selected": [],
+    "stages": [],
+    "fields": [],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "discovery-1440": {
+    "title": "Tournaments · ShuttleWorks Tournaments",
+    "h1": [
+      "2026 season"
+    ],
+    "overflow": false,
+    "buttons": [
+      "Search"
+    ],
+    "path": [],
+    "selected": [],
+    "stages": [],
+    "fields": [
+      {
+        "name": "q",
+        "type": "search",
+        "visible": true
+      }
+    ],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "overview-1440": {
+    "title": "Korea Masters · Enter now",
+    "h1": [
+      "Korea Masters"
+    ],
+    "overflow": false,
+    "buttons": [],
+    "path": [],
+    "selected": [],
+    "stages": [],
+    "fields": [],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "entry-1440": {
+    "title": "Enter · Korea Masters",
+    "h1": [
+      "Enter this tournament"
+    ],
+    "overflow": false,
+    "buttons": [
+      "Add another player",
+      "Review entry",
+      "Update total"
+    ],
+    "path": [],
+    "selected": [],
+    "stages": [
+      {
+        "stage": "details",
+        "visible": true
+      },
+      {
+        "stage": "details",
+        "visible": true
+      },
+      {
+        "stage": "review",
+        "visible": false
+      }
+    ],
+    "fields": [
+      {
+        "name": "playerName",
+        "type": "text",
+        "visible": true
+      },
+      {
+        "name": "gender",
+        "type": "select-one",
+        "visible": true
+      },
+      {
+        "name": "club",
+        "type": "text",
+        "visible": true
+      },
+      {
+        "name": "events",
+        "type": "checkbox",
+        "visible": true
+      },
+      {
+        "name": "partner:0:43bd58c1-f18e-4086-875b-a3316c4e984e",
+        "type": "email",
+        "visible": false
+      },
+      {
+        "name": "showAllEvents",
+        "type": "checkbox",
+        "visible": true
+      },
+      {
+        "name": "acknowledged",
+        "type": "checkbox",
+        "visible": false
+      }
+    ],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "path-1440": {
+    "title": "WS · Taipei Open",
+    "h1": [
+      "Taipei Open"
+    ],
+    "overflow": false,
+    "buttons": [
+      "Find in this draw",
+      "Highlight path",
+      "Clear path"
+    ],
+    "path": [
+      [
+        "T029-WS-R32-89110a38ca7895ae99d167264d8eb4ed9bad006542b96281c51423ad10f1eff7",
+        "bottom"
+      ],
+      [
+        null,
+        "stub"
+      ]
+    ],
+    "selected": [
+      [
+        "T029-WS-R32-89110a38ca7895ae99d167264d8eb4ed9bad006542b96281c51423ad10f1eff7",
+        "a"
+      ],
+      [
+        "T029-WS-R16-135b079538fb079ba4a078d6bcca4720c7053be7a9e8a28844f39e96dd716709",
+        "b"
+      ]
+    ],
+    "stages": [],
+    "fields": [
+      {
+        "name": "player",
+        "type": "search",
+        "visible": true
+      }
+    ],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "cleared": {
+    "title": "WS · Taipei Open",
+    "h1": [
+      "Taipei Open"
+    ],
+    "overflow": false,
+    "buttons": [
+      "Find in this draw",
+      "Highlight path"
+    ],
+    "path": [],
+    "selected": [],
+    "stages": [],
+    "fields": [
+      {
+        "name": "player",
+        "type": "search",
+        "visible": true
+      }
+    ],
+    "errors": []
+  },
+  "hub-390": {
+    "title": "ShuttleWorks",
+    "h1": [],
+    "overflow": false,
+    "buttons": [],
+    "path": [],
+    "selected": [],
+    "stages": [],
+    "fields": [],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "discovery-390": {
+    "title": "Tournaments · ShuttleWorks Tournaments",
+    "h1": [
+      "2026 season"
+    ],
+    "overflow": false,
+    "buttons": [
+      "Search"
+    ],
+    "path": [],
+    "selected": [],
+    "stages": [],
+    "fields": [
+      {
+        "name": "q",
+        "type": "search",
+        "visible": true
+      }
+    ],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "overview-390": {
+    "title": "Korea Masters · Enter now",
+    "h1": [
+      "Korea Masters"
+    ],
+    "overflow": false,
+    "buttons": [],
+    "path": [],
+    "selected": [],
+    "stages": [],
+    "fields": [],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "entry-390": {
+    "title": "Enter · Korea Masters",
+    "h1": [
+      "Enter this tournament"
+    ],
+    "overflow": false,
+    "buttons": [
+      "Add another player",
+      "Review entry",
+      "Update total"
+    ],
+    "path": [],
+    "selected": [],
+    "stages": [
+      {
+        "stage": "details",
+        "visible": true
+      },
+      {
+        "stage": "details",
+        "visible": true
+      },
+      {
+        "stage": "review",
+        "visible": false
+      }
+    ],
+    "fields": [
+      {
+        "name": "playerName",
+        "type": "text",
+        "visible": true
+      },
+      {
+        "name": "gender",
+        "type": "select-one",
+        "visible": true
+      },
+      {
+        "name": "club",
+        "type": "text",
+        "visible": true
+      },
+      {
+        "name": "events",
+        "type": "checkbox",
+        "visible": true
+      },
+      {
+        "name": "partner:0:43bd58c1-f18e-4086-875b-a3316c4e984e",
+        "type": "email",
+        "visible": false
+      },
+      {
+        "name": "showAllEvents",
+        "type": "checkbox",
+        "visible": true
+      },
+      {
+        "name": "acknowledged",
+        "type": "checkbox",
+        "visible": false
+      }
+    ],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "path-390": {
+    "title": "WS · Taipei Open",
+    "h1": [
+      "Taipei Open"
+    ],
+    "overflow": false,
+    "buttons": [
+      "Find in this draw",
+      "Highlight path",
+      "Clear path"
+    ],
+    "path": [
+      [
+        "T029-WS-R32-89110a38ca7895ae99d167264d8eb4ed9bad006542b96281c51423ad10f1eff7",
+        "bottom"
+      ],
+      [
+        null,
+        "stub"
+      ]
+    ],
+    "selected": [
+      [
+        "T029-WS-R32-89110a38ca7895ae99d167264d8eb4ed9bad006542b96281c51423ad10f1eff7",
+        "a"
+      ],
+      [
+        "T029-WS-R16-135b079538fb079ba4a078d6bcca4720c7053be7a9e8a28844f39e96dd716709",
+        "b"
+      ]
+    ],
+    "stages": [],
+    "fields": [
+      {
+        "name": "player",
+        "type": "search",
+        "visible": true
+      }
+    ],
+    "errors": [],
+    "runtimeErrors": []
+  },
+  "entry-nojs": {
+    "title": "Enter · Korea Masters",
+    "h1": [
+      "Enter this tournament"
+    ],
+    "overflow": false,
+    "buttons": [
+      "Add another player",
+      "Update total",
+      "Submit entry"
+    ],
+    "path": [],
+    "selected": [],
+    "stages": [
+      {
+        "stage": "details",
+        "visible": true
+      },
+      {
+        "stage": "review",
+        "visible": true
+      }
+    ],
+    "fields": [
+      {
+        "name": "playerName",
+        "type": "text",
+        "visible": true
+      },
+      {
+        "name": "gender",
+        "type": "select-one",
+        "visible": true
+      },
+      {
+        "name": "club",
+        "type": "text",
+        "visible": true
+      },
+      {
+        "name": "events",
+        "type": "checkbox",
+        "visible": true
+      },
+      {
+        "name": "partner:0:43bd58c1-f18e-4086-875b-a3316c4e984e",
+        "type": "email",
+        "visible": true
+      },
+      {
+        "name": "showAllEvents",
+        "type": "checkbox",
+        "visible": true
+      },
+      {
+        "name": "acknowledged",
+        "type": "checkbox",
+        "visible": true
+      }
+    ],
+    "errors": []
+  },
+  "path-nojs": {
+    "title": "WS · Taipei Open",
+    "h1": [
+      "Taipei Open"
+    ],
+    "overflow": false,
+    "buttons": [
+      "Find in this draw"
+    ],
+    "path": [
+      [
+        "T029-WS-R32-89110a38ca7895ae99d167264d8eb4ed9bad006542b96281c51423ad10f1eff7",
+        "bottom"
+      ],
+      [
+        null,
+        "stub"
+      ]
+    ],
+    "selected": [
+      [
+        "T029-WS-R32-89110a38ca7895ae99d167264d8eb4ed9bad006542b96281c51423ad10f1eff7",
+        "a"
+      ],
+      [
+        "T029-WS-R16-135b079538fb079ba4a078d6bcca4720c7053be7a9e8a28844f39e96dd716709",
+        "b"
+      ]
+    ],
+    "stages": [],
+    "fields": [
+      {
+        "name": "player",
+        "type": "search",
+        "visible": true
+      }
+    ],
+    "errors": []
+  }
+}

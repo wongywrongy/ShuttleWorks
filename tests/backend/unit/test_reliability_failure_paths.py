@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from core.telemetry import bootstrap
 from core.telemetry.instruments import record_sync_upload
 from core.telemetry.state import set_runtime
-from db.models import Base, EventOperation, SyncCheckpoint, SyncInbox, SyncOutbox, Tournament
+from db.models import EventOperation, SyncCheckpoint, SyncInbox, SyncOutbox, Tournament
 from recovery.bundles import RecoveryBundleError, create_bundle, inspect_bundle
 from sync import agent
 from sync.schemas import SyncBatchResponse
@@ -23,13 +23,14 @@ from sync.service import append_local_operation, begin_checkout, ingest_batch, m
 
 def _factory():
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return engine, sessionmaker(engine, expire_on_commit=False)
 
 
 def _seed(session: Session) -> tuple[uuid.UUID, uuid.UUID, EventOperation]:
     tournament_id, node_id = uuid.uuid4(), uuid.uuid4()
-    session.add(Tournament(id=tournament_id, data={"version": 2}, schema_version=2))
+    session.add(Tournament(id=tournament_id, data={"version": 1}, schema_version=1))
     session.commit()
     operation = append_local_operation(
         session,
@@ -87,7 +88,7 @@ def test_reordered_batch_is_rejected_without_partial_application():
     _engine, factory = _factory()
     with factory() as session:
         tournament_id, node_id = uuid.uuid4(), uuid.uuid4()
-        session.add(Tournament(id=tournament_id, data={"version": 2}, schema_version=2))
+        session.add(Tournament(id=tournament_id, data={"version": 1}, schema_version=1))
         session.commit()
         authority, capability, _ = begin_checkout(
             session, tournament_id=tournament_id, node_id=node_id
@@ -114,14 +115,14 @@ def test_reordered_batch_is_rejected_without_partial_application():
                 authority_epoch=authority.epoch, sequence=2, actor_id=uuid.uuid4(),
                 command_type="match.record_result.v3", aggregate_type="bracket_match",
                 aggregate_id="m2", payload={}, expected_version=1,
-                occurred_at_local=now, accepted_at_node=now, schema_version=3,
+                occurred_at_local=now, accepted_at_node=now, schema_version=1,
             ),
             OperationEnvelope(
                 operation_id=uuid.uuid4(), event_id=tournament_id, node_id=node_id,
                 authority_epoch=authority.epoch, sequence=1, actor_id=uuid.uuid4(),
                 command_type="match.record_result.v3", aggregate_type="bracket_match",
                 aggregate_id="m1", payload={}, expected_version=1,
-                occurred_at_local=now, accepted_at_node=now, schema_version=3,
+                occurred_at_local=now, accepted_at_node=now, schema_version=1,
             ),
         ]
         with pytest.raises(Exception, match="contiguous|gap"):

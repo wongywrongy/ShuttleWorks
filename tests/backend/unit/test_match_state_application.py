@@ -23,7 +23,6 @@ class _SettingsProxy:
 
 settings = _SettingsProxy()
 from db.models import (
-    Base,
     EventOperation,
     Match,
     MatchState,
@@ -39,7 +38,8 @@ from core.exceptions import ConflictError
 
 def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     return Session(engine, expire_on_commit=False)
 
 
@@ -49,8 +49,8 @@ def _tournament(session: Session) -> uuid.UUID:
         Tournament(
             id=tournament_id,
             name="Match state proof",
-            data={"version": 2},
-            schema_version=2,
+            data={"version": 1},
+            schema_version=1,
         )
     )
     session.commit()

@@ -28,16 +28,18 @@ tournament pages (SP-P7 §3.1, Kyle's mockup-review ruling).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select, tuple_
 
 from entries.entries import roster_id
 from entries.entries_public import _get_record, _moment_iso, _scalar_rows
 from entries.entries_site import PublicPersonIdentityDTO, PersonReferenceDTO
+from core.demo_clock import utcnow as _event_utcnow
+from entries.entries_json import _public_org_name
 from core.dependencies import AuthEntrant, get_current_entrant
 from core.error_codes import ErrorCode, http_error
 from db import short_reference
@@ -81,6 +83,7 @@ class MyEntryLineDTO(BaseModel):
     # disagreeing about whether entries are still open.
     entryId: str
     canWithdraw: bool = False
+    pendingReasons: List[str] = Field(default_factory=list)
     # V3-24-1: the reference of the ACT this line came from. A card folds
     # every submission this account made against one tournament, so the
     # card's own reference names only the newest — an entrant asking the
@@ -97,7 +100,7 @@ class MyEntryLineDTO(BaseModel):
     # together is mutual visibility); the name, never the nominated email.
     partner: Optional[PersonReferenceDTO] = None
     # V3-PE37.1: true only when THIS entry nominated a partner and the mail
-    # attempt is durably known to have failed (`Entry.partner_invite_mail_sent
+    # attempt is durably known to have failed (`Entry.invitation_mail_sent
     # is False`). `None`/unattempted and "sent fine" both read `False` here —
     # there is nothing recoverable to say about either, and the entrant
     # never sees a claim this account cannot back with a real outcome.
@@ -119,9 +122,14 @@ class MyTournamentCardDTO(BaseModel):
     date: Optional[str] = None
     venueName: Optional[str] = None
     status: str
+    # Grouping only (plan D9): the workspace's own date is behind the
+    # effective event clock. Never a claim about participation — that is
+    # ``status``'s job, and it asks the entry states first.
+    isPast: bool = False
     # The summed submission snapshots, in cents. None when no submission
     # carried a quote (a page with no pricing configured).
     feeTotalCents: Optional[int] = None
+    feeCurrency: Optional[str] = None
     # ISO instant of the most recent submission — the card's recency.
     submittedAt: str
     events: List[MyEntryLineDTO]
@@ -184,8 +192,10 @@ class SubmissionReceiptDTO(BaseModel):
     submittedAt: str
     status: str
     feeTotalCents: Optional[int] = None
+    feeCurrency: Optional[str] = None
     paymentState: str
-    paymentNote: Optional[str] = None
+    paidCents: int = 0
+    outstandingCents: Optional[int] = None
     paymentInstructions: Optional[str] = None
     regulationsVersionAccepted: Optional[int] = None
     events: List[ReceiptEntryLineDTO]
@@ -225,7 +235,7 @@ def _ref_name(ref: PersonReferenceDTO) -> str:
 # parked on their own verification.
 _ENTRY_STATE = {
     "pending": "awaiting",
-    "waitlisted": "awaiting",
+    "waitlisted": "waitlisted",
     "unverified": "awaiting",
     "confirmed": "entered",
     "withdrawn": "withdrawn",
@@ -276,7 +286,7 @@ def _badges_for(repo: LocalRepository, tournament_id) -> Dict[str, Dict[str, str
     return out
 
 
-def _can_withdraw(entry, event) -> bool:
+def _can_withdraw(entry, event, *, checked_out: bool = False) -> bool:
     """Would the withdraw route accept this entry right now?
 
     Asks the state machine instead of restating its two rules. The value is
@@ -284,6 +294,8 @@ def _can_withdraw(entry, event) -> bool:
     minute ago is not authorization — but it has to agree, or the page grows
     buttons that always fail and an entrant learns to distrust them.
     """
+    if checked_out:
+        return False
     try:
         lifecycle.assert_withdrawable(entry, event)
     except lifecycle.LifecycleError:
@@ -291,26 +303,49 @@ def _can_withdraw(entry, event) -> bool:
     return True
 
 
-def _card_status(entry_states: List[str], date_iso: Optional[str], today_iso: str) -> str:
-    """The §3.1 lifecycle: Played beats Entered beats Awaiting.
+def _is_past(date_iso: Optional[str], today_iso: str) -> bool:
+    """Has the workspace's own date passed?
 
-    ``played`` is keyed on the tournament date having passed — the spec's
-    literal rule. Date comparison is ISO-string comparison in UTC; a date
-    has no zone, so "passed" flips within hours of the venue's own
-    midnight, which is the precision the spec asks for.
-
-    A card whose live entries are all gone (withdrawn/rejected) is
-    ``withdrawn`` — "awaiting confirmation" would name a decision nobody
-    is waiting on.
+    Date comparison is ISO-string comparison against the effective event
+    clock (``core.demo_clock``); a date carries no zone, so "passed" flips
+    within hours of the venue's own midnight. This answers a GROUPING
+    question only — active vs past — and never, on its own, a question
+    about what the entrant did.
     """
-    if date_iso and date_iso < today_iso:
-        return "played"
-    live = [s for s in entry_states if s in ("awaiting", "entered")]
+    return bool(date_iso) and date_iso < today_iso
+
+
+def _card_status(
+    entry_states: List[str],
+    date_iso: Optional[str],
+    today_iso: str,
+    has_result: bool = False,
+) -> str:
+    """What actually happened to this account's entries for one workspace.
+
+    The live entry states decide, and the tournament date decides nothing
+    on its own (plan D9). A withdrawn or rejected card stays withdrawn or
+    rejected after the date passes, and an entry the organizer never
+    confirmed still reads ``awaiting`` rather than being relabelled by the
+    calendar.
+
+    ``played`` is claimed only where there is participation evidence — a
+    result badge derived from the published draw. Otherwise a confirmed
+    entry on a past workspace is ``past``: true, past tense, and not a
+    claim that anybody turned up.
+    """
+    live = [s for s in entry_states if s in ("awaiting", "entered", "waitlisted")]
     if not live:
+        if entry_states and all(s == "rejected" for s in entry_states):
+            return "rejected"
         return "withdrawn"
-    if all(s == "entered" for s in live):
-        return "entered"
-    return "awaiting"
+    if all(s == "waitlisted" for s in live):
+        return "waitlisted"
+    if any(s in ("awaiting", "waitlisted") for s in live):
+        return "awaiting"
+    if _is_past(date_iso, today_iso):
+        return "played" if has_result else "past"
+    return "entered"
 
 
 # ---- the route ------------------------------------------------------------
@@ -372,9 +407,9 @@ def my_entries(
     # belongs to a DIFFERENT account, so it is not in ``entries`` above —
     # two SELECTs total, never per-line. Erased partners drop out (D7).
     partner_pairs = [
-        (e.tournament_id, e.partner_entry_id)
+        (e.tournament_id, e.paired_entry_id)
         for e in entries
-        if e.partner_entry_id is not None and e.partner_accepted_at is not None
+        if e.paired_entry_id is not None and e.invitation_accepted_at is not None
     ]
     partner_ref_by_entry: Dict[uuid.UUID, PersonReferenceDTO] = {}
     if partner_pairs:
@@ -409,10 +444,10 @@ def my_entries(
             else {}
         )
         for e in entries:
-            if e.partner_entry_id is None or e.partner_accepted_at is None:
+            if e.paired_entry_id is None or e.invitation_accepted_at is None:
                 continue
-            pe = partner_entries.get((e.tournament_id, e.partner_entry_id))
-            if pe is None:
+            pe = partner_entries.get((e.tournament_id, e.paired_entry_id))
+            if pe is None or pe.state not in lifecycle.LIVE_STATES:
                 continue
             partner = partner_players.get((pe.tournament_id, pe.entry_player_id))
             if partner is not None:
@@ -450,7 +485,13 @@ def my_entries(
         else {}
     )
 
-    today_iso = datetime.now(timezone.utc).date().isoformat()
+    # The effective event clock, not the process wall clock: the demo profile
+    # pins one, and a card that grouped itself by a different "today" than the
+    # rest of the product would contradict the tournament pages beside it.
+    today_iso = _event_utcnow().date().isoformat()
+    from sync.authority import checked_out_tournament_ids
+
+    checked_out_ids = repo.execute_query(checked_out_tournament_ids, tids)
     cards: List[MyTournamentCardDTO] = []
     for tid in tids:
         tournament = tournaments.get(tid)
@@ -471,15 +512,16 @@ def my_entries(
         # here rather than re-derived, because ``_can_withdraw`` is the only
         # place that knows the answer and asking twice is how the card and
         # the button disagree.
+        checked_out = tid in checked_out_ids
         withdraw_deadlines: List[datetime] = []
         for entry in own_entries:
             event = events.get((tid, entry.entry_event_id))
             event_badges = (
-                badges.get(event.bracket_event_id or event.code, {})
+                badges.get((event.competition_event.bracket_event_id if event.competition_event else None) or event.code, {})
                 if event is not None
                 else {}
             )
-            can_withdraw = _can_withdraw(entry, event)
+            can_withdraw = _can_withdraw(entry, event, checked_out=checked_out)
             if can_withdraw and event is not None and event.withdraws_until is not None:
                 withdraw_deadlines.append(event.withdraws_until)
             lines.append(
@@ -494,14 +536,16 @@ def my_entries(
                     # state rule AND the ``withdraws_until`` deadline, so a
                     # button that renders here is one the route will accept.
                     canWithdraw=can_withdraw,
+                    pendingReasons=list(entry.pending_reasons or []),
                     resultBadge=event_badges.get(roster_id(entry.entry_player_id)),
                     partner=partner_ref_by_entry.get(entry.id),
-                    partnerInviteMailFailed=entry.partner_invite_mail_sent is False,
+                    partnerInviteMailFailed=entry.invitation_mail_sent is False,
                     shortReference=reference_by_submission[entry.submission_id],
                 )
             )
         lines.sort(key=lambda line: (_ref_name(line.player), line.eventCode))
 
+        currencies = {(s.fee_basis or {}).get("currency") for s in own_subs if s.fee_total_cents is not None}
         quotes = [
             s.fee_total_cents for s in own_subs if s.fee_total_cents is not None
         ]
@@ -524,7 +568,7 @@ def my_entries(
             MyTournamentCardDTO(
                 slug=page.slug if page is not None else None,
                 tournamentName=tournament.name if tournament is not None else None,
-                orgName=org.name if org is not None else None,
+                orgName=_public_org_name(org),
                 entrantsPublished=bool(page.entrants_published)
                 if page is not None
                 else False,
@@ -533,8 +577,15 @@ def my_entries(
                 else False,
                 date=date_iso,
                 venueName=page.venue_name if page is not None else None,
-                status=_card_status([line.state for line in lines], date_iso, today_iso),
-                feeTotalCents=sum(quotes) if quotes else None,
+                status=_card_status(
+                    [line.state for line in lines],
+                    date_iso,
+                    today_iso,
+                    has_result=any(line.resultBadge for line in lines),
+                ),
+                isPast=_is_past(date_iso, today_iso),
+                feeTotalCents=sum(quotes) if quotes and len(currencies) <= 1 else None,
+                feeCurrency=next(iter(currencies)) if len(currencies) == 1 else None,
                 submittedAt=_moment_iso(max(s.submitted_at for s in own_subs)),
                 events=lines,
                 submissionId=str(newest.id),
@@ -642,9 +693,9 @@ def submission_receipt(
     } if event_ids else {}
 
     partner_ids = {
-        entry.partner_entry_id
+        entry.paired_entry_id
         for entry in entries
-        if entry.partner_entry_id is not None and entry.partner_accepted_at is not None
+        if entry.paired_entry_id is not None and entry.invitation_accepted_at is not None
     }
     partner_entries = {
         entry.id: entry
@@ -676,7 +727,7 @@ def submission_receipt(
     lines: List[ReceiptEntryLineDTO] = []
     for entry in entries:
         event = events.get(entry.entry_event_id)
-        partner_entry = partner_entries.get(entry.partner_entry_id)
+        partner_entry = partner_entries.get(entry.paired_entry_id)
         partner = (
             partner_players.get(partner_entry.entry_player_id)
             if partner_entry is not None
@@ -711,7 +762,7 @@ def submission_receipt(
 
     if submission.fee_total_cents in (None, 0):
         payment_state = "not_required"
-    elif submission.paid_at is not None:
+    elif submission.outstanding_cents is not None and submission.outstanding_cents <= 0:
         payment_state = "recorded"
     else:
         payment_state = "required"
@@ -721,13 +772,15 @@ def submission_receipt(
         shortReference=submission.short_reference,
         slug=page.slug if page is not None else None,
         tournamentName=tournament.name if tournament is not None else None,
-        orgName=org.name if org is not None else None,
+        orgName=_public_org_name(org),
         venueName=page.venue_name if page is not None else None,
         submittedAt=_moment_iso(submission.submitted_at),
         status=status,
         feeTotalCents=submission.fee_total_cents,
+        feeCurrency=(submission.fee_basis or {}).get("currency"),
         paymentState=payment_state,
-        paymentNote=submission.payment_note,
+        paidCents=submission.paid_cents,
+        outstandingCents=submission.outstanding_cents,
         paymentInstructions=page.payment_instructions if page is not None else None,
         regulationsVersionAccepted=submission.regulations_version_accepted,
         events=lines,
@@ -877,6 +930,8 @@ class ExportedPlayerDTO(BaseModel):
     fullName: str
     gender: str
     club: Optional[str] = None
+    #: D4 / O4 — the controlled "Representing" code; ``None`` is Unknown.
+    representation: Optional[str] = None
     birthYear: Optional[int] = None
     remarks: Optional[str] = None
     erasedAt: Optional[str] = None
@@ -900,7 +955,9 @@ class ExportedSubmissionDTO(BaseModel):
     shortReference: str
     submittedAt: str
     feeTotalCents: Optional[int] = None
-    paidAt: Optional[str] = None
+    feeCurrency: Optional[str] = None
+    paidCents: int = 0
+    outstandingCents: Optional[int] = None
     regulationsAcceptedAt: Optional[str] = None
     regulationsVersionAccepted: Optional[int] = None
 
@@ -963,7 +1020,7 @@ def export_my_account(
 
     players = repo.execute_query(
         _scalar_rows,
-        select(EntryPlayer).where(EntryPlayer.account_id == account_id),
+        select(EntryPlayer).where(EntryPlayer.representatives.any(account_id=account_id)),
     )
     submissions = repo.execute_query(
         _scalar_rows,
@@ -1014,6 +1071,7 @@ def export_my_account(
                 fullName=p.full_name,
                 gender=p.gender,
                 club=p.club,
+                representation=p.representation,
                 birthYear=p.birth_year,
                 remarks=p.remarks,
                 erasedAt=_moment_iso(p.erased_at) if p.erased_at else None,
@@ -1026,7 +1084,8 @@ def export_my_account(
                 shortReference=s.short_reference,
                 submittedAt=_moment_iso(s.submitted_at),
                 feeTotalCents=s.fee_total_cents,
-                paidAt=_moment_iso(s.paid_at) if s.paid_at else None,
+                paidCents=s.paid_cents,
+                outstandingCents=s.outstanding_cents,
                 regulationsAcceptedAt=(
                     _moment_iso(s.regulations_accepted_at)
                     if s.regulations_accepted_at

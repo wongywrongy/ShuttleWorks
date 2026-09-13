@@ -29,7 +29,7 @@ import pytest
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
-from db.models import Base, Org, Tournament, TournamentMember, User
+from db.models import Org, Tournament, TournamentMember, User
 from identity import members as members_service
 from identity.members import LastOwnerError, MemberNotFoundError
 
@@ -52,14 +52,16 @@ def db(request, tmp_path):
     if request.param == "postgres" and not POSTGRES_URL:
         pytest.skip("TEST_POSTGRES_URL not set")
     engine = _make_engine(request.param, tmp_path)
-    Base.metadata.create_all(engine)
+    from _helpers import upgrade_test_database
+    upgrade_test_database(engine)
     Session = sessionmaker(
         bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
     )
     try:
         yield engine, Session, request.param
     finally:
-        Base.metadata.drop_all(engine)
+        from _helpers import drop_test_database
+        drop_test_database(engine)
         engine.dispose()
 
 

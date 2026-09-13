@@ -1,0 +1,68 @@
+{
+  "check": {
+    "command": "make check PYTEST_WORKERS=4",
+    "exit": 2,
+    "seconds": 58.42
+  },
+  "builds": {
+    "command": "npm run build:all",
+    "exit": 0,
+    "seconds": 23.3
+  },
+  "console_tests": {
+    "command": "npm run test:scheduler",
+    "exit": 0,
+    "seconds": 34.49
+  },
+  "entrant_lint": {
+    "command": "npm run lint:entrant",
+    "exit": 1,
+    "seconds": 8.11
+  },
+  "boundaries": {
+    "command": "npm run depcruise && npm run depcruise:entrant && cd apps/api/src && lint-imports --config ../.importlinter",
+    "exit": 0,
+    "seconds": 6.98
+  },
+  "python_lint": {
+    "command": "ruff check apps/api tests/backend tests/e2e simulator tools packages/scheduler-core",
+    "exit": 0,
+    "seconds": 0.08
+  },
+  "backend-host": {
+    "exit": 2,
+    "summary": "2554 passed, 5 failed, 74 skipped; 676.96 s",
+    "command": "PATH=\"$PWD/.venv/bin:$PATH\" DATABASE_URL=sqlite:////tmp/sw-final-audit/host-gate.db BACKEND_DATA_DIR=/tmp/sw-final-audit/host-data timeout 900 make test PYTEST_WORKERS=4"
+  },
+  "entrant-host": {
+    "exit": 1,
+    "summary": "1166 passed, 50 failed; 39 files passed, 19 failed; 89.57 s",
+    "command": "npm run test:entrant"
+  },
+  "invariants": {
+    "exit": 0,
+    "summary": "59 passed, 5 PostgreSQL skips; 66.43 s",
+    "command": "PATH=\"$PWD/.venv/bin:$PATH\" timeout 180 pytest -q tests/backend/unit/test_sync_agent.py tests/backend/unit/test_sync_concurrency.py tests/backend/unit/test_offline_operator_sessions.py tests/backend/unit/test_sync_quarantine.py tests/backend/test_tenant_isolation.py tests/backend/test_auth_surface.py tests/backend/test_concurrent_state_writes.py"
+  },
+  "migration": {
+    "exit": 0,
+    "command": "cd apps/api && alembic upgrade head && alembic check && alembic heads (DATABASE_URL=sqlite:////tmp/sw-final-audit/migration.db)"
+  },
+  "docs-paths": {
+    "exit": 0,
+    "command": "npm run docs:paths"
+  },
+  "docs-build": {
+    "exit": 0,
+    "command": "npm run docs:build"
+  },
+  "string-ledger-host": {
+    "exit": 0
+  },
+  "sandbox_limitations": "Initial backend/SSR tests stalled; host reruns authoritative. docs scanner rerun host passed; generated scan restored.",
+  "docs-host": {
+    "command": "npm run test:docs",
+    "exit": 0,
+    "summary": "57 passed, 6 skipped, 0 failed"
+  }
+}
