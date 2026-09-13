@@ -101,7 +101,10 @@
         "apps/api/src/identity/offline_sessions.py",
         "apps/api/src/entries/partners.py",
         "apps/api/src/sync/service.py",
-        "infra/nginx/log-redaction.conf"
+        "infra/nginx/log-redaction.conf",
+        "apps/api/src/core/capability_policy.py",
+        "apps/api/src/repositories/local.py",
+        "apps/api/src/alembic/versions/0003_finite_staff_invites.py"
       ],
       "evidence": [
         "tests/backend/unit/test_auth_service.py",
@@ -110,7 +113,10 @@
         "tests/backend/unit/test_offline_operator_sessions.py",
         "tests/backend/test_display_public.py",
         "tools/check-nginx.sh",
-        "tools/check-nginx-runtime.py"
+        "tools/check-nginx-runtime.py",
+        "tests/backend/unit/test_invite_expiry.py",
+        "tests/backend/unit/test_repositories.py",
+        "tests/backend/unit/test_baseline_schema.py"
       ],
       "gaps": [
         "SGR-20260913-04: nginx capability/query/referer leakage is covered; raw display/staff invitation storage, repeated disclosure and console email logging remain open."
@@ -236,12 +242,14 @@
         ".github/workflows/phase4-observability-rehearsal.yml",
         "infra/compose/docker-compose.release.yml",
         "tools/verify-release.py",
+        "tools/check-source-secrets.py",
         ".github/dependabot.yml"
       ],
       "evidence": [
         "tools/tests/release-workflow.test.mjs",
         "tests/backend/unit/test_event_node_update.py",
-        "tests/backend/unit/test_release_admission.py"
+        "tests/backend/unit/test_release_admission.py",
+        "tests/backend/unit/test_source_secret_scan.py"
       ],
       "gaps": [
         "SGR-20260913-09: Compose digest pins and exact-source admission are implemented; real signed-release admission and complete release/scan rehearsals remain unexecuted."

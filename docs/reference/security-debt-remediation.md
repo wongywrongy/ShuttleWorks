@@ -6,7 +6,7 @@ Approved 2026-09-13. Implementation is in progress. The [dated review](../review
 
 - Latest-version-only before launch; coordinated prototype resets are permitted. No reset or deployment of the shared demo is part of a source-code change.
 - Meet and Bracket retain separate engines and write paths. Operations owns the common desk; convergence follows the existing module contracts.
-- Staff invites last seven days. Display links end seven days after the event; undated events require an explicit expiry. Tokens are issued once, hashed at rest, renewable and revocable.
+- Staff invites last seven days. Display links end seven days after the event; undated events require an explicit expiry. Tokens are issued once, hashed at rest, renewable and revocable. Staff expiry is implemented with migration 0003 and both-dialect evidence; display expiry and hashed one-time issuance remain in P05.
 - App-owned MFA for owner/operator privileges, including individually enrolled offline operators. Session absolute lifetime: 12 hours; idle lifetime: one hour; sensitive-action authentication age: five minutes. Polling is not human activity.
 - Retention is finite and purpose-based: organizer selection before entry collection, automatic audited sweeps, manual early erasure, and overdue alerts. Account, event, log and backup lifetimes remain separate.
 - CI uses focused blocking contracts; expensive browser, DAST and operational rehearsals run on schedule and before release. Release evidence must match the source revision.
@@ -169,7 +169,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-119 | Open — needs an owner decision / D21 | knip's 18 unused exported DTO types in the entrant tier want a policy call, not per-type deletion. | P20 | Unreconciled |
 | DL-120 | Open — needs an owner decision / D22 | adopt_or_mint never updates gender on adoption. | P11 | Unreconciled |
 | DL-121 | Open — needs an owner decision / D23 | The entrant tier's standings row is hand-written by necessity, and closing that needs a home for generated types. | P18 | Unreconciled |
-| DL-122 | Open — needs an owner decision / D17 | An irreversible, backup-less delete of user data runs unattended at startup. | P14 | Unreconciled |
+| DL-122 | Open — needs an owner decision / D17 | An irreversible, backup-less delete of user data runs unattended at startup. | P14 | Implementation verified; see reconciled source entry; review pending |
 | DL-123 | Open — needs an owner decision / D24 | A published draw's public URL can be silently re-keyed. | P18 | Unreconciled |
 | DL-124 | Open — needs an owner decision / D25 | Bracket creation and cold hydration serialize two fields differently. | P23 | Unreconciled |
 | DL-125 | Open — needs an owner decision / D26 | Global PlayerProfile v1 is blocked on an owner decision. | P19 | Unreconciled |
@@ -178,10 +178,10 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-128 | Open — needs an owner decision / D29 | Entrant identity polish remains deferred. | P23 | Unreconciled |
 | DL-129 | Open — needs an owner decision / D30 | Compass/Monrad plate winners are not projected publicly. | P18 | Unreconciled |
 | DL-130 | Open — needs an owner decision / D31 | docker-compose.release.yml is not the canonical production shape. | P13 | Unreconciled |
-| DL-131 | Open — needs an owner decision / D32 | docker-compose.release.yml still references mutable image tags (default latest) rather than immutable digests. | P13 | Unreconciled |
+| DL-131 | Open — needs an owner decision / D32 | docker-compose.release.yml still references mutable image tags (default latest) rather than immutable digests. | P13 | Implementation verified; see reconciled source entry; review pending |
 | DL-132 | Open — needs an owner decision / D33 | CI parses the demo configuration but does not run its backup/restore lifecycle. | P14 | Unreconciled |
 | DL-133 | Open — genuinely large / L1 | GDPR tooling — the ENTRANT half is done (E5, 2026-08-22); the OPERATOR half is not. | P12 | Unreconciled |
-| DL-134 | Open — genuinely large / L2 | upsert_data's compare-and-swap is identity-map-scoped, so it does not detect a cross-session concurrent write. | P09 | Unreconciled |
+| DL-134 | Open — genuinely large / L2 | upsert_data's compare-and-swap is identity-map-scoped, so it does not detect a cross-session concurrent write. | P09 | Implementation verified; see reconciled source entry; review pending |
 | DL-135 | Open — genuinely large / L3 | DESIGN.md still enforces the retired brutalist direction. | P23 | Unreconciled |
 | DL-136 | Open — genuinely large / L4 | 50 raw <input> elements remain outside TextField | P22 | Unreconciled |
 | DL-137 | Open — genuinely large / L5 | Viewer read-only vocabulary — the surfaces that still render enabled and then no-op. | P22 | Unreconciled |
@@ -206,7 +206,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-156 | Open — small and unscheduled / unnumbered | Nothing enforces "a streaming generator must not touch the repository". | P21 | Unreconciled |
 | DL-157 | Open — small and unscheduled / unnumbered | A tournament has no end date, so the public calendar's "window" is one day. | P15 | Unreconciled |
 | DL-158 | Open — small and unscheduled / unnumbered | SeasonRowDTO.status is a plain str. | P20 | Unreconciled |
-| DL-159 | Open — small and unscheduled / unnumbered | DisplayStateDTO declares its key set but not its member types. | P18 | Unreconciled |
+| DL-159 | Open — small and unscheduled / unnumbered | DisplayStateDTO declares its key set but not its member types. | P06 | Implementation verified; see reconciled source entry; review pending |
 | DL-160 | Open — small and unscheduled / unnumbered | ParticipantIn has no meta, so POST /bracket cannot carry sourceEntryId. | P23 | Unreconciled |
 | DL-161 | Open — small and unscheduled / unnumbered | The FK drift test cannot compare ondelete, and covers ENTRIES_TABLES only. | P11 | Unreconciled |
 | DL-162 | Open — small and unscheduled / unnumbered | The commit seam recognises "this human is already in the draw" by participant id only. | P23 | Unreconciled |
@@ -272,7 +272,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-222 | Open — small and unscheduled / unnumbered | Rows are never deleted. | P12 | Unreconciled |
 | DL-223 | Open — small and unscheduled / unnumbered | The key is the primary key and it is plaintext. | P12 | Unreconciled |
 | DL-224 | Open — small and unscheduled / unnumbered | A dev database can be stamped PAST a migration it never ran, and nothing notices. | P23 | Unreconciled |
-| DL-225 | Open — small and unscheduled / unnumbered | uv.lock has no consumer anywhere in the tree. | P06 | Unreconciled |
+| DL-225 | Open — small and unscheduled / unnumbered | uv.lock has no consumer anywhere in the tree. | P23 | Unreconciled |
 | DL-226 | Open — small and unscheduled / unnumbered | The backend suite's sys.path insert can be demoted to config, and was not. | P23 | Unreconciled |
 | DL-227 | Open — small and unscheduled / unnumbered | L1 — apps/api/src/core/form_csrf.py:161 imports identity.auth from inside a function. | P23 | Unreconciled |
 | DL-228 | Open — small and unscheduled / unnumbered | L2 — apps/api/src/repositories/local.py:2350 imports operations.match_state from inside a method. | P23 | Unreconciled |

@@ -4,7 +4,9 @@ This is the first implementation delivery from the [23-package program](../refer
 It does **not** close that program or reconcile all 268 historical debt entries.
 The [original golden-rule review](security-golden-rules-2026-09-13.md) remains the
 immutable baseline. Verdicts below describe residual rule compliance, not whether
-the new code compiles. Independent review and hosted CI are still pending.
+the new code compiles. Independent review is pending. Hosted CI passed on the
+first implementation commit; the later invitation/scanner additions need their
+own hosted run (see R9 for the exact recorded revision).
 
 ## Findings table
 
@@ -13,12 +15,12 @@ the new code compiles. Independent review and hosted CI are still pending.
 | R1 | PASS | `core/dependencies.py`, `core/main.py` | `tests/backend/test_auth_surface.py`, `test_cross_principal_sessions.py` | Existing session authority retained; MFA/session-strength debt is tracked separately. |
 | R2 | FAIL | `core/error_codes.py`, `core/dependencies.py`, `core/main.py`, `sync/routes.py` | `tests/backend/test_tenant_isolation.py`, `test_invite_oracle.py` | Role and HTTP/protocol 404 envelopes converge; unpublished collections still have 200/`published=false` contracts. |
 | R3 | FAIL | `core/roles.py`, `db/models.py`, `identity/invites.py` | `tests/backend/test_host_split.py`, `unit/test_baseline_schema.py` | One shared role ladder; sole-parent outbox FK exception still needs its dedicated invariant check. |
-| R4 | FAIL | `infra/nginx/log-redaction.conf` | `tools/check-nginx.sh`, `tools/check-nginx-runtime.py` | Edge URL leakage addressed; raw display/invite storage and console email bodies remain. |
+| R4 | FAIL | `infra/nginx/log-redaction.conf`, `core/capability_policy.py`, `repositories/local.py` | `tools/check-nginx.sh`, `tools/check-nginx-runtime.py`, `tests/backend/unit/test_invite_expiry.py` | Edge URL leakage and finite staff expiry addressed; raw display/invite storage, display expiry and console email bodies remain. |
 | R5 | FAIL | `sync/service.py`, `alembic/versions/0002_authority_creation_audit.py` | `tests/backend/unit/test_sync_protocol.py`, `test_authority_lifecycle.py`, `test_checkpoint_import.py` | Epoch creation is audited; complete actor/lifecycle coverage and key rotation remain. |
 | R6 | PASS | `core/config.py`, `core/main.py`, `sync/compatibility.py` | Existing startup, migration and compatibility suites | Existing fail-closed controls retained. |
 | R7 | FAIL | `competition/routes.py`, `meet/schedule_director.py`, `meet/schedule_repair.py`, `bracket/brackets.py`, `entries/entries_routes.py` | `tests/backend/unit/test_golden_rule_input_bounds.py`, derived-output tests | Nested scalar/list/map references bounded; operator Turnstile and remaining input inventory still open. |
 | R8 | PASS | All `infra/nginx/*.conf`, `docs/.vitepress/externalize-scripts.mjs` | Native syntax/runtime checks; `apps/entrant/tests/ingress.test.ts`; `tools/tests/docs-csp.test.mjs` | Operator/public/LAN/docs policies cover upstream and edge-generated failures. |
-| R9 | FAIL | `.github/workflows/{ci,security,publish-release}.yml`, `infra/compose`, `tools/verify-release.py` | `tools/tests/release-workflow.test.mjs`, `tests/backend/unit/test_release_admission.py` | Digest pins and admission implemented; real signed-release installation and remaining scanning controls unverified. |
+| R9 | FAIL | `.github/workflows/{ci,security,publish-release}.yml`, `infra/compose`, `tools/verify-release.py`, `tools/check-source-secrets.py` | `tools/tests/release-workflow.test.mjs`, `tests/backend/unit/test_release_admission.py`, `test_source_secret_scan.py` | Digest pins, source scanning and admission implemented; real signed-release installation and DAST unverified. |
 | R10 | FAIL | `display/projection.py`, `display/display.py`, `identity/responses.py`, `ops/health.py` | `tests/backend/test_display_public.py`, `test_auth_surface.py`, `test_health_surface.py`, existing erasure tests | Recursive public schemas and status-only liveness implemented; purpose-based scheduled retention still missing. |
 | R11 | NO-TEST | `recovery/bundles.py`, `tools/recovery-drill.py`, Prometheus rules | Recovery tests; [synthetic drill record](recovery-drill-2026-09-13.json); native `promtool` | Synthetic restore passes; deployed event-node/PITR recovery and alert delivery remain unrecorded. |
 | R12 | PASS | `tests/backend/unit/test_security_threat_model.py`, `.github/workflows/ci.yml` | 18 register tests, including 15 malformed-register controls | Every rule has traceable executable evidence and an owner; incomplete operational checks remain linked debt. |
@@ -55,7 +57,7 @@ consumers is required for literal R2 compliance (SGR-20260913-02).
 
 `core/roles.py` is the shared viewer/operator/owner ladder used by dependencies
 and invite acceptance. The database role CHECK and distinct principal/origin
-tests remain in place. The PostgreSQL partition passed 197 tests with one skip.
+tests remain in place. The PostgreSQL partition passed 199 tests with one skip.
 
 `SyncOutbox.operation_id` remains the sole single-column reference to a
 tournament-owned child without an independent tenant column on the outbox.
@@ -77,6 +79,19 @@ safe upstream status/timing fields remain available, and startup syntax failures
 remain visible. Removing redaction in a temporary source copy caused the native
 runtime test to fail. This controls nginx only. Raw display/staff invite bearer
 storage, repeated token disclosure and `core/email.py` console bodies remain open.
+
+Staff invitations now expire seven days after creation regardless of delivery
+mode. The repository caps supplied deadlines and the acceptance guard rejects
+null expiry and the exact deadline. Migration 0003 caps existing links at their
+original creation plus seven days, preserving shorter deadlines and all rows;
+the database refuses null expiry. Four new safety cases failed before the change.
+The migration suite passed 24 tests across SQLite and PostgreSQL, including a
+previous-schema negative control that accepts null expiry before upgrade and
+rejects it afterwards. Evidence under `tests/backend/`:
+`unit/test_invite_expiry.py`,
+`test_display_public.py::test_link_invite_expires_after_seven_days`,
+`unit/test_repositories.py` and `unit/test_baseline_schema.py`. Display capability
+expiry, hashed invitation/display storage and one-time issuance remain open.
 
 ## R5
 
@@ -146,10 +161,23 @@ Security write permissions are limited to SARIF-producing jobs. Dependabot is
 configured for Actions, npm and Python. CI no longer duplicates feature-branch
 push and PR runs and cancels obsolete PR work. SQLite tests run with four workers;
 the shared Postgres partition remains serial. The measured prior CI bottleneck
-was backend tests (about 42 minutes); hosted timing after this change is pending.
+was backend tests (about 42 minutes). The first implementation commit
+`8c8493756ed80fe3141cf21f2f023c56aa419d92` passed every hosted check; its
+[backend job](https://github.com/wongywrongy/ShuttleWorks/actions/runs/34744047786/job/103688533790)
+took 16m58s. This is one observed run, with later invitation/scanner additions
+requiring their own hosted validation.
 
-Explicit source secret scanning, DAST, disposition of Semgrep, and live release
-installation/refusal evidence remain open. No release was published or deployed.
+`tools/check-source-secrets.py` scans the checked-out commit with a digest-pinned
+Trivy image, without container network access. Its live synthetic-token and empty
+controls pass, and the source scan reports zero findings. Only file/line/rule
+metadata is printed; raw reports are temporary and never uploaded. Four focused
+tests cover report projection, scanner failure, unknown schema and disabled
+detection. The source scan is included in the required security aggregate. This
+covers the committed tree with Trivy's built-in rules and exclusions, not Git
+history or every possible credential format.
+
+DAST, disposition of Semgrep, and live release installation/refusal evidence
+remain open. No release was published or deployed.
 
 ## R10
 
@@ -204,7 +232,14 @@ validation remains in the same suite. All 18 register checks pass.
 - Complete backend rerun: 2,590 passed, 84 skipped in 13m01s. The separate
   PostgreSQL gate supplies the skipped dialect evidence; the additional CI partition
   invariant passed in its focused run.
-- PostgreSQL partition: 197 passed, one skipped, using an isolated disposable DB.
+- Follow-up parallel partition after finite staff expiry: 2,483 passed in 12m41s.
+  Five later tests (four source-scanner guards and a creation-time default) passed
+  separately; the latest repository/expiry/scanner set passed 69 tests. Both staff
+  delivery modes also passed exact seven-day HTTP assertions. The intermediate
+  removal of the partner TTL setting caused five failures; restoring its partner-
+  only use resolved them before this passing run.
+- Latest PostgreSQL partition: 199 passed, one expected SQLite-leg skip in
+  3m28s, using an isolated disposable DB; all 2,488 non-shared cases were deselected.
 - Console: 2,395 tests passed; production build passed; lint and dependency checks
   have zero errors (154 existing lint warnings and 13 dependency warnings).
 - Entrant: final complete rerun passed all 1,249 tests, including ingress and
@@ -219,6 +254,8 @@ validation remains in the same suite. All 18 register checks pass.
 - Recovery: synthetic drill and existing encryption/restore/scheduler tests pass.
 - Backend image: built successfully and imported `core.main` in an isolated
   network-disabled container, including the user-provided competition COPY fix.
+- Source-secret scanning: zero findings on committed source, with live synthetic
+  detection and empty controls; no raw secret report retained.
 
 P03 and P07 repository implementation is present. P01/P02/P04/P05/P06/P09/P10/P13/
 P14/P23 are partial; P08/P11/P12/P15–P22 remain incomplete. The pre-existing user fix in
