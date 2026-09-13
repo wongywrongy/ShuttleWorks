@@ -109,7 +109,7 @@ export function StickyTotalBar({
       )}
       {/* Filled by `entry-wizard.js` when the selection changes after a
           quote; empty and hidden in the server document. */}
-      <p data-quote-status hidden role="status" className="text-xs text-status-attention" />
+      <p data-quote-status hidden role="status" className="text-xs text-status-warning-fg" />
       {state.kind === 'quoted' && !currencyKnown ? (
         <p className="text-xs text-muted-foreground">
           The organizer has not stated a currency. Confirm the amount with them before paying.
