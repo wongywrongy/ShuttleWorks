@@ -448,7 +448,7 @@ def test_confirm_is_operator_only(client, workspace):
     _login(client, "viewer@example.com")
 
     r = client.post(f"/tournaments/{tid}/entries/{entry_id}/confirm", headers=CSRF)
-    assert r.status_code == 403, r.text
+    assert r.status_code == 404, r.text
     # …and nothing moved.
     assert client.get(f"/tournaments/{tid}/entries").json()[0]["state"] == "pending"
 
@@ -464,7 +464,7 @@ def test_an_operator_succeeds_on_the_same_request(client, workspace):
         client.post(
             f"/tournaments/{tid}/entries/{entry_id}/confirm", headers=CSRF
         ).status_code
-        == 403
+        == 404
     )
 
     _login(client, "op@example.com")
@@ -490,7 +490,7 @@ def test_confirm_refuses_a_wrong_state_with_a_specific_code(client, workspace, s
     assert r.json()["detail"]["code"] == "ENTRY_INVALID_STATE"
 
 
-def test_confirm_on_an_unknown_entry_is_a_404_with_its_own_code(client, workspace):
+def test_confirm_on_an_unknown_entry_uses_the_uniform_404(client, workspace):
     tid = workspace
     _login(client, "op@example.com")
 
@@ -498,7 +498,7 @@ def test_confirm_on_an_unknown_entry_is_a_404_with_its_own_code(client, workspac
         f"/tournaments/{tid}/entries/{uuid.uuid4()}/confirm", headers=CSRF
     )
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "ENTRY_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_an_entry_id_from_another_workspace_is_not_reachable(client, workspace):
@@ -513,7 +513,7 @@ def test_an_entry_id_from_another_workspace_is_not_reachable(client, workspace):
     _login(client, "op@example.com")
     r = client.post(f"/tournaments/{tid}/entries/{foreign_id}/confirm", headers=CSRF)
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "ENTRY_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 # ---- commit -------------------------------------------------------------
@@ -584,7 +584,7 @@ def test_commit_is_operator_only(client, workspace):
 
     _login(client, "viewer@example.com")
     r = client.post(f"/tournaments/{tid}/competition/bind", json={"requestId": "bind-test"}, headers=CSRF)
-    assert r.status_code == 403, r.text
+    assert r.status_code == 404, r.text
     assert _roster(client, tid) == []
 
     # Negative control — the operator's identical request goes through.

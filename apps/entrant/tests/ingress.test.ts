@@ -582,15 +582,15 @@ describe('SP-HOST-1 D-6: the public tier carries the tighter CSP', () => {
     // nothing else in the suite would notice.
     const playPort = String(listenPorts('play')[0]);
     for (const name of ['sw_connect_src', 'sw_frame_ancestors', 'sw_frame_options']) {
-      expect(Object.keys(portMap(name)).sort()).toEqual(['default', playPort].sort());
+      expect(Object.keys(portMap(name)).sort()).toEqual(['default', playPort, '8444'].sort());
     }
   });
 
   it('keeps same-origin connections while tightening framing on public tier', () => {
     const playPort = String(listenPorts('play')[0]);
-    expect(portMap('sw_connect_src')).toEqual({ default: "'self'", [playPort]: "'self'" });
-    expect(portMap('sw_frame_ancestors')).toEqual({ default: "'self'", [playPort]: "'none'" });
-    expect(portMap('sw_frame_options')).toEqual({ default: 'SAMEORIGIN', [playPort]: 'DENY' });
+    expect(portMap('sw_connect_src')).toEqual({ default: "'self'", [playPort]: "'self'", 8444: "'self'" });
+    expect(portMap('sw_frame_ancestors')).toEqual({ default: "'self'", [playPort]: "'none'", 8444: "'none'" });
+    expect(portMap('sw_frame_options')).toEqual({ default: 'SAMEORIGIN', [playPort]: 'DENY', 8444: 'DENY' });
   });
 
   it('defaults to the OPERATOR value, so a new tier fails safe-ish rather than public-strict', () => {

@@ -24,8 +24,55 @@ to assert. Cloud mode is the deployed posture and the one that matters.
 from __future__ import annotations
 
 import uuid
+from copy import deepcopy
 
 import pytest
+
+
+def _assert_public_schema_is_explicit(document):
+    def visit(schema, location, seen=frozenset()):
+        assert isinstance(schema, dict) and schema, location
+        if "$ref" in schema:
+            name = schema["$ref"].split("/")[-1]
+            if name not in seen:
+                visit(document["components"]["schemas"][name], location + " -> " + name, seen | {name})
+            return
+        assert any(key in schema for key in ("type", "enum", "const", "anyOf", "oneOf", "allOf")), location
+        assert schema.get("additionalProperties") is not True, location
+        for name, child in schema.get("properties", {}).items():
+            visit(child, location + "." + name, seen)
+        for key in ("items", "additionalProperties"):
+            if isinstance(schema.get(key), dict):
+                visit(schema[key], location + "." + key, seen)
+        for key in ("anyOf", "oneOf", "allOf"):
+            for child in schema.get(key, []):
+                visit(child, location, seen)
+
+    checked = 0
+    for method, path in PUBLIC_BY_DESIGN:
+        operation = document["paths"][path][method.lower()]
+        for status, response in operation["responses"].items():
+            if not status.startswith("2"):
+                continue
+            content = response.get("content", {}).get("application/json")
+            if content is not None:
+                visit(content.get("schema"), f"{method} {path}")
+                checked += 1
+    assert checked > 15, "the public response inventory must not be empty"
+
+
+def test_every_public_json_response_has_a_recursive_explicit_contract(cloud_client):
+    client, _ = cloud_client
+    _assert_public_schema_is_explicit(client.app.openapi())
+
+
+@pytest.mark.parametrize("unsafe", [{}, {"type": "object", "additionalProperties": True}, {"type": "array", "items": {}}])
+def test_public_contract_gate_rejects_untyped_nested_fields(cloud_client, unsafe):
+    client, _ = cloud_client
+    document = deepcopy(client.app.openapi())
+    document["components"]["schemas"]["DisplayPlayerDTO"]["properties"]["privateExtra"] = unsafe
+    with pytest.raises(AssertionError, match="DisplayPlayerDTO.privateExtra"):
+        _assert_public_schema_is_explicit(document)
 
 # (METHOD, PATH) reachable without a session, each with the reason it must be.
 #

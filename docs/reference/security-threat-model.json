@@ -40,12 +40,15 @@
       "owner": "identity-module-owner",
       "verdict": "FAIL",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r2",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r2",
       "enforcedBy": [
         "apps/api/src/core/dependencies.py",
         "apps/api/src/entries/entries_public.py",
         "apps/api/src/identity/invites.py",
-        "apps/api/src/display/display.py"
+        "apps/api/src/display/display.py",
+        "apps/api/src/core/error_codes.py",
+        "apps/api/src/core/main.py",
+        "apps/api/src/sync/routes.py"
       ],
       "evidence": [
         "tests/backend/test_tenant_isolation.py",
@@ -55,7 +58,7 @@
         "tests/backend/test_publication_matrix.py"
       ],
       "gaps": [
-        "SGR-20260913-02: insufficient roles return 403; multiple not-found formats; no committed four-way byte comparison."
+        "SGR-20260913-02: role denial and HTTP/protocol 404 envelopes now converge, with a four-way byte test; unpublished collection endpoints still return published=false with 200 and require a policy/consumer migration."
       ]
     },
     {
@@ -64,14 +67,15 @@
       "owner": "identity-module-owner",
       "verdict": "FAIL",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r3",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r3",
       "enforcedBy": [
         "apps/api/src/db/models.py",
         "apps/api/src/core/dependencies.py",
         "apps/api/src/core/config.py",
         "apps/api/src/identity/invites.py",
         "infra/nginx/console.conf",
-        "infra/nginx/play.conf"
+        "infra/nginx/play.conf",
+        "apps/api/src/core/roles.py"
       ],
       "evidence": [
         "tests/backend/unit/test_baseline_schema.py",
@@ -81,7 +85,7 @@
         "tests/backend/test_tenant_isolation.py"
       ],
       "gaps": [
-        "SGR-20260913-03: sync_outbox.operation_id remains a single-column FK; its tenant is inherited, so this is structural debt rather than a demonstrated cross-tenant escape."
+        "SGR-20260913-03: role vocabulary is shared; sole-parent SyncOutbox FK ownership still needs an explicit invariant test before claiming literal composite-FK compliance."
       ]
     },
     {
@@ -90,23 +94,32 @@
       "owner": "identity-module-owner",
       "verdict": "FAIL",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r4",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r4",
       "enforcedBy": [
         "apps/api/src/identity/auth.py",
         "apps/api/src/identity/entrants.py",
         "apps/api/src/identity/offline_sessions.py",
         "apps/api/src/entries/partners.py",
-        "apps/api/src/sync/service.py"
+        "apps/api/src/sync/service.py",
+        "infra/nginx/log-redaction.conf",
+        "apps/api/src/core/capability_policy.py",
+        "apps/api/src/repositories/local.py",
+        "apps/api/src/alembic/versions/0003_finite_staff_invites.py"
       ],
       "evidence": [
         "tests/backend/unit/test_auth_service.py",
         "tests/backend/unit/test_auth_characterization.py",
         "tests/backend/test_entrant_auth_routes.py",
         "tests/backend/unit/test_offline_operator_sessions.py",
-        "tests/backend/test_display_public.py"
+        "tests/backend/test_display_public.py",
+        "tools/check-nginx.sh",
+        "tools/check-nginx-runtime.py",
+        "tests/backend/unit/test_invite_expiry.py",
+        "tests/backend/unit/test_repositories.py",
+        "tests/backend/unit/test_baseline_schema.py"
       ],
       "gaps": [
-        "SGR-20260913-04: display tokens and invite UUID capabilities stored raw and repeatedly disclosed; no nginx log redaction; local console email logs token-bearing bodies."
+        "SGR-20260913-04: nginx capability/query/referer leakage is covered; raw display/staff invitation storage, repeated disclosure and console email logging remain open."
       ]
     },
     {
@@ -115,23 +128,26 @@
       "owner": "sync-module-owner",
       "verdict": "FAIL",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r5",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r5",
       "enforcedBy": [
         "apps/api/src/sync/service.py",
         "apps/api/src/sync/recovery.py",
         "apps/api/src/core/state_machine.py",
         "apps/api/src/db/models.py",
-        "apps/api/src/core/dependencies.py"
+        "apps/api/src/core/dependencies.py",
+        "apps/api/src/alembic/versions/0002_authority_creation_audit.py"
       ],
       "evidence": [
         "tests/backend/unit/test_event_node_identity.py",
         "tests/backend/unit/test_authority_lifecycle.py",
         "tests/backend/unit/test_sync_concurrency.py",
         "tests/backend/unit/test_state_transition_history.py",
-        "tests/backend/test_state_transition_routes.py"
+        "tests/backend/test_state_transition_routes.py",
+        "tests/backend/unit/test_sync_protocol.py",
+        "tests/backend/unit/test_checkpoint_import.py"
       ],
       "gaps": [
-        "SGR-20260913-05: initial checkout, checkpoint import, and standalone epoch creation do not append tournament_authority_transitions; initial-checkout probe produced zero audit rows."
+        "SGR-20260913-05: checkout/import/local initialization now append epoch-creation audit rows; nullable actors, remaining lifecycle registration and authority key rotation remain open."
       ]
     },
     {
@@ -165,7 +181,7 @@
       "owner": "identity-module-owner",
       "verdict": "FAIL",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r7",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r7",
       "enforcedBy": [
         "apps/api/src/core/body_limit.py",
         "apps/api/src/core/main.py",
@@ -179,34 +195,38 @@
         "tests/backend/test_derived_output_encoding.py",
         "tests/backend/test_entrant_auth_routes.py",
         "tests/backend/unit/test_turnstile.py",
-        "tests/backend/test_abuse_limits.py"
+        "tests/backend/test_abuse_limits.py",
+        "tests/backend/unit/test_golden_rule_input_bounds.py"
       ],
       "gaps": [
-        "SGR-20260913-07: free-text fields remain without per-field bounds; operator registration has throttling but no Turnstile."
+        "SGR-20260913-07: explicit nested bounds added for competition, director/repair, bracket and import fields; operator signup Turnstile and remaining free-text/map coverage remain open."
       ]
     },
     {
       "id": "R8",
       "statement": "The edge is a control. Security headers on every nginx level with always; script CSP without unsafe-inline; HSTS on HTTPS; the public tier on its own port with the stricter policy; server_tokens off.",
       "owner": "platform-oncall",
-      "verdict": "FAIL",
+      "verdict": "PASS",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r8",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r8",
       "enforcedBy": [
         "infra/nginx/security-headers.conf",
         "infra/nginx/http-shared.conf",
         "infra/nginx/console.conf",
         "infra/nginx/play.conf",
         "infra/nginx/lan-tls.conf",
-        "infra/nginx/docs.conf"
+        "infra/nginx/docs.conf",
+        "docs/.vitepress/externalize-scripts.mjs",
+        ".github/workflows/ci.yml"
       ],
       "evidence": [
         "apps/entrant/tests/ingress.test.ts",
-        "tests/backend/unit/test_lan_tls_config.py"
+        "tests/backend/unit/test_lan_tls_config.py",
+        "tools/check-nginx.sh",
+        "tools/check-nginx-runtime.py",
+        "tools/tests/docs-csp.test.mjs"
       ],
-      "gaps": [
-        "SGR-20260913-08: LAN edge errors have no local security headers; docs locations omit the shared policy; no nginx syntax gate or CI stub includes."
-      ]
+      "gaps": []
     },
     {
       "id": "R9",
@@ -214,20 +234,25 @@
       "owner": "release-owner",
       "verdict": "FAIL",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r9",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r9",
       "enforcedBy": [
         ".github/workflows/publish-release.yml",
         ".github/workflows/security.yml",
         ".github/workflows/ci.yml",
         ".github/workflows/phase4-observability-rehearsal.yml",
-        "infra/compose/docker-compose.release.yml"
+        "infra/compose/docker-compose.release.yml",
+        "tools/verify-release.py",
+        "tools/check-source-secrets.py",
+        ".github/dependabot.yml"
       ],
       "evidence": [
         "tools/tests/release-workflow.test.mjs",
-        "tests/backend/unit/test_event_node_update.py"
+        "tests/backend/unit/test_event_node_update.py",
+        "tests/backend/unit/test_release_admission.py",
+        "tests/backend/unit/test_source_secret_scan.py"
       ],
       "gaps": [
-        "SGR-20260913-09: mutable Compose images and unchecked TAG values; no deployment-side image verification; broad workflow write permissions."
+        "SGR-20260913-09: Compose digest pins and exact-source admission are implemented; real signed-release admission and complete release/scan rehearsals remain unexecuted."
       ]
     },
     {
@@ -236,24 +261,28 @@
       "owner": "identity-module-owner",
       "verdict": "FAIL",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r10",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r10",
       "enforcedBy": [
         "apps/api/src/entries/retention.py",
         "apps/api/src/entries/entries_routes.py",
         "apps/api/src/entries/entries_me.py",
         "apps/api/src/entries/entries_public.py",
         "apps/api/src/display/display.py",
-        "apps/api/src/ops/health.py"
+        "apps/api/src/ops/health.py",
+        "apps/api/src/display/projection.py",
+        "apps/api/src/identity/responses.py"
       ],
       "evidence": [
         "tests/backend/test_money_and_retention.py",
         "tests/backend/unit/test_public_projection_erasure.py",
         "tests/backend/test_publication_matrix.py",
         "tests/backend/test_display_public.py",
-        "tests/backend/test_health_surface.py"
+        "tests/backend/test_health_surface.py",
+        "tests/backend/test_auth_surface.py",
+        "apps/console/src/api/__tests__/displayProjection.test.ts"
       ],
       "gaps": [
-        "SGR-20260913-10: public Any/untyped mappings, public players.availability, health version/role disclosure, and operator-invoked retention with no scheduled caller."
+        "SGR-20260913-10: public JSON schema inventory is typed, private board fields are filtered and health is status-only; organizer retention policy and an audited scheduled sweep remain open."
       ]
     },
     {
@@ -262,31 +291,34 @@
       "owner": "platform-oncall",
       "verdict": "NO-TEST",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r11",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r11",
       "enforcedBy": [
         "apps/api/src/recovery/bundles.py",
         "apps/api/src/recovery/scheduler.py",
         "tools/demo-compose.sh",
         "infra/postgres/restore-drill.sh",
-        "infra/observability/prometheus-rules.yaml"
+        "infra/observability/prometheus-rules.yaml",
+        "tools/recovery-drill.py",
+        "docs/how-to/security-operations.md"
       ],
       "evidence": [
         "tests/backend/unit/test_recovery_bundle.py",
         "tests/backend/unit/test_backup_scheduler.py",
         "tests/backend/unit/test_postgres_dr_assets.py",
-        "tests/backend/unit/test_operational_telemetry.py"
+        "tests/backend/unit/test_operational_telemetry.py",
+        "docs/reviews/recovery-drill-2026-09-13.json"
       ],
       "gaps": [
-        "SGR-20260913-11: no dated operational restore-drill run record found; unit restore preflight and script presence do not prove a rehearsed recovery."
+        "SGR-20260913-11: synthetic isolated restore, tamper/wrong-key refusal and cleanup are recorded; a deployed event-node/Postgres recovery exercise and alert-delivery rehearsal are not yet recorded."
       ]
     },
     {
       "id": "R12",
       "statement": "Every rule has an executable check and every threat has an owner.",
       "owner": "release-owner",
-      "verdict": "NO-TEST",
+      "verdict": "PASS",
       "reviewedAt": "2026-09-13",
-      "review": "docs/reviews/security-golden-rules-2026-09-13.md#r12",
+      "review": "docs/reviews/security-remediation-2026-09-13.md#r12",
       "enforcedBy": [
         "tests/backend/unit/test_security_threat_model.py",
         ".github/workflows/ci.yml"
@@ -294,9 +326,7 @@
       "evidence": [
         "tests/backend/unit/test_security_threat_model.py"
       ],
-      "gaps": [
-        "SGR-20260913-12: existing register tests validate threats only and ignore missing or malformed principles; NO-TEST gaps have proposed checks in the debt log."
-      ]
+      "gaps": []
     }
   ],
   "threats": [

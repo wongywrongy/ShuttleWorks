@@ -616,7 +616,7 @@ def test_invite_link_repo_create_and_list(repo):
     assert link.id is not None
     assert link.role == "viewer"
     assert link.created_by == creator
-    assert link.expires_at is None
+    assert link.expires_at - link.created_at == timedelta(days=7)
     assert link.revoked_at is None
 
     listed = repo.invite_links.list_for_tournament(tid)
@@ -798,3 +798,27 @@ def test_an_unversioned_blob_reads_as_v1_and_is_rewritten_stamped(session):
     repo.tournaments.upsert_data(row.id, dict(legacy.data))
     session.expire_all()
     assert repo.tournaments.get_by_id(row.id).data["version"] == 1
+
+
+def test_repository_clamps_invite_lifetime(repo):
+    workspace = repo.tournaments.create(name="Finite invites")
+
+    row = repo.invite_links.create(
+        workspace.id, "viewer", uuid.uuid4(),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=365),
+    )
+    assert row.expires_at - row.created_at == timedelta(days=7)
+
+
+def test_direct_model_invite_default_uses_its_creation_time(repo, session):
+    workspace = repo.tournaments.create(name="Finite model default")
+    created = datetime.now(timezone.utc) - timedelta(days=8)
+    row = InviteLink(
+        tournament_id=workspace.id, role="viewer", created_by=uuid.uuid4(),
+        created_at=created,
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    assert row.expires_at - row.created_at == timedelta(days=7)
+    assert not repo.invite_links.count_active_by_tournament([workspace.id])

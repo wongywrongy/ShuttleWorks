@@ -1,9 +1,18 @@
 # Release security controls
 
-Every pull request and push runs the security workflow. It performs CodeQL
+Every pull request and push to main runs the security workflow. It performs CodeQL
 analysis for the Python and TypeScript surfaces, reviews changed dependency
 files, audits runtime dependencies, scans each container for high and critical
-CVEs, and publishes an SPDX source SBOM as a workflow artifact.
+CVEs, scans the checked-out commit for secrets, and publishes an SPDX source SBOM
+as a workflow artifact.
+
+Run `python3 tools/check-source-secrets.py` from the repository on Linux with
+Docker available to reproduce the source-secret gate. It uses a digest-pinned
+image and the [Trivy secret scanner](https://trivy.dev/docs/latest/scanner/secret/)
+built-in rules and exclusions. An unissued synthetic token must be detected and
+an empty control must pass before the committed tree is scanned. Matched values
+are never printed or uploaded; only file, line and rule identifiers leave the
+temporary report. This scan does not inspect uncommitted files or Git history.
 
 Release publication remains gated on the latest completed successful CI and
 security runs for the exact source commit. A missing, queued, stale, cancelled,
@@ -13,11 +22,13 @@ the pushed image digest, emits a GitHub artifact attestation, and signs that
 digest with Sigstore keyless signing through GitHub's OIDC token. The workflow
 immediately verifies the signature's issuer and workflow identity.
 
-Deployments must use an exact `vMAJOR.MINOR.PATCH` release tag or the
-`sha-<40-character-commit>` image tag
-rendered by `docker-compose.release.yml`. There is intentionally no `latest`
-tag. A registry digest is the strongest deployment reference when a promotion
-must be independently audited.
+Release Compose requires image digests produced by `tools/verify-release.py`.
+The command resolves `sha-<40-character-commit>` tags, verifies cosign's
+semver-tagged release-workflow identity and exact-source GitHub provenance for
+all three images, then writes the deployment env file. A failure produces no new
+file. `TAG` is not an image selector. See [security operations](security-operations.md#verify-a-release-before-installing)
+for the command and its limits; real signed-image admission and manual-dispatch
+artifact policy remain unverified work. No deployment is performed by this tool.
 
 Event-node packages also have a transport-neutral signed update descriptor
 (``shuttleworks.event_node.update.v1``). It authenticates the package digest,

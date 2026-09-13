@@ -290,7 +290,7 @@ def test_a_viewer_cannot_record_a_payment(client, world):
         json={"amountCents": 4000, "currency": "USD", "requestId": "payment-1"},
         headers=CSRF,
     )
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 # ---- retention -----------------------------------------------------------

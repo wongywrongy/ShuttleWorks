@@ -20,18 +20,16 @@ Please do **not** open a public GitHub issue for a vulnerability.
 
 ## Standard
 
-Audited against **OWASP ASVS 5.0** — Level 1 across the board, Level 2 for the
-authentication, session management, access control, and validation chapters.
-Those are the chapters that matter for a public multi-tenant application
-holding personal data about minors.
+OWASP ASVS 5.0 is the review framework. Level 1 overall and Level 2 for
+identity, sessions, access control and validation are **targets, not a claim of
+conformance**. Operator MFA, idle expiry, sensitive-action reauthentication and
+other controls remain incomplete.
 
-Level 3 is explicitly not targeted; it is for high-assurance systems and is not
-proportionate here. Where a finding sits above the target level but had a live
-exploit path, it was remediated anyway — CSV formula injection (`v5.0.0-1.2.10`,
-L3) is the example.
-
-Current residual debt is tracked in `docs/reference/debt-log.md`; this document is the
-current security policy and control record.
+The [2026-09-13 golden-rule review](docs/reviews/security-golden-rules-2026-09-13.md)
+records the verified baseline, including failures and missing tests. The
+[remediation program](docs/reference/security-debt-remediation.md) tracks current
+implementation; the [debt log](docs/reference/debt-log.md) retains residual work.
+A passing test for one control does not establish chapter-wide conformance.
 
 ## Threat model
 
@@ -84,41 +82,32 @@ service against Cloudflare's edge, and social engineering of tournament staff.
 | Response headers | CSP (`script-src 'self'`, no `unsafe-inline`), `nosniff`, `Referrer-Policy`, `Permissions-Policy`, `frame-ancestors`, conditional HSTS |
 | Operational endpoints | `/health/ready\|deep\|metrics` require `X-ShuttleWorks-Ops-Token`; `/health` stays open as dependency-free liveness |
 | API documentation | `/docs`, `/redoc`, `/openapi.json` disabled in cloud mode |
-| Secrets | File-backed, so values never appear in `docker inspect` or a process listing |
+| Secrets | File-backed settings are supported; the [inventory](docs/how-to/security-operations.md) names current exceptions and remaining rotation work |
 | Database | Postgres bound to the tailnet, never `0.0.0.0` |
 
-### Verified clean rather than rebuilt
+Control claims are scoped to their recorded evidence. Historical findings do not
+establish that a growing codebase has no injection, outbound-request or rendering
+surfaces; the current review and executable checks must identify the actual paths.
 
-The audit confirmed, rather than assumed: no raw SQL anywhere (SQLAlchemy ORM
-throughout; the only `text()` uses are static literals), no DOM XSS sinks in the
-frontend or design system, no SSRF surface (the server makes no outbound HTTP
-requests at all), no path traversal in backup restore (backups are
-database-keyed, not filesystem paths), and no privilege-field mass assignment.
+### Verification policy
 
-### Every control is adversarially tested
-
-A control asserted but not tested is not a control. Each security test in this
-repository has been demonstrated **failing** with its control removed; the
-original mutation records remain in Git history. This practice exists because
-this codebase has caught itself three times shipping tests that passed while
-checking nothing.
+Safety tests must fail when their guard is removed. Record that negative control
+alongside the passing check; missing evidence remains an open finding. The dated
+review separates executed checks from source inspection and untested claims.
 
 ## Known gaps and accepted risks
 
 Stated rather than hidden. Each carries the condition that would change the
 decision.
 
-- **No multi-factor authentication** (`v5.0.0-6.3.3`). Accepted for now. Trigger
-  to revisit: any account holding data for more than one organisation, or the
-  first report of account compromise.
-- **No session inactivity timeout, and no self-service session list or remote
-  logout** (`v5.0.0-7.3.1`, `7.5.2`). Sessions have an absolute expiry and are
-  revoked on password change. Trigger: shared or venue-owned devices becoming a
-  normal way to operate an event.
-- **Password minimum is 8 characters.** ASVS L1 requires 8 and recommends 15;
-  NIST 800-63B Rev 4 states 15 for single-factor. This is a policy choice, not a
-  conformance gap, and raising it invalidates existing accounts. The Rev 4 item
-  that *was* a conformance gap — the blocklist — is fixed.
+- **Operator/owner MFA is not implemented.** It is required by the approved
+  remediation policy, including offline operators; this is an open gap.
+- **Operator sessions currently last 30 days without idle expiry or sensitive-action
+  reauthentication.** The approved target is 12 hours absolute, one hour idle and
+  five-minute authentication freshness for sensitive actions. Those targets are
+  not yet enforced.
+- **Password minimum is eight characters.** Stronger single-factor policy remains
+  an open authentication decision; existing accounts do not establish conformance.
 - **`style-src` permits `unsafe-inline`.** The display board computes lane
   colours and a configurable accent into inline `style` attributes. Inline style
   is a far weaker vector than inline script, `script-src` permits neither
@@ -138,6 +127,5 @@ decision.
 In scope for a report: anything in the threat model above, on the deployed
 application or in this repository.
 
-Out of scope: missing security headers on the internal documentation container,
-denial of service, automated scanner output without a demonstrated impact, and
+Out of scope: denial of service, automated scanner output without a demonstrated impact, and
 prompt-injection reports (see above — there is no LLM in the request path).

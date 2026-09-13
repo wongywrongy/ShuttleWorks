@@ -101,6 +101,17 @@ transport would be a cleaner future but is out of scope. See
 [Operations → Display (Seam D)](/reference/contracts/operations-display).
 :::
 
+## Public projection boundary
+
+Public JSON uses explicit recursive models in `apps/api/src/display/projection.py`.
+Meet player availability, operator notes, private person/entry provenance and
+arbitrary bracket config/score metadata are excluded. Public bracket output is
+separate from the operator `TournamentOut`; the console's
+`apps/console/src/api/displayProjection.ts` supplies neutral local defaults for
+shared read-only helpers. The public schema gate in `tests/backend/test_auth_surface.py`
+rejects untyped nested fields, while display HTTP tests seed private sentinels to
+check the actual response filtering.
+
 ## The display dependency rule
 
 Display is an **output**, not an engine, so the control plane enforces that it can only be enabled

@@ -60,6 +60,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from db.short_reference import new_reference
 from db.blob_version import CURRENT_TOURNAMENT_SCHEMA_VERSION, VersionedJSON
+from core.capability_policy import STAFF_INVITE_LIFETIME
 
 
 class MatchStatus(str, enum.Enum):
@@ -496,8 +497,9 @@ class InviteLink(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=lambda context: context.get_current_parameters()["created_at"] + STAFF_INVITE_LIFETIME,
     )
     revoked_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -837,7 +839,8 @@ class AuthorityTransition(Base):
             "created_at",
         ),
         CheckConstraint(
-            "transition_type IN ('return_to_cloud', 'planned_transfer', 'lost_node_recovery')",
+            "transition_type IN ('return_to_cloud', 'planned_transfer', 'lost_node_recovery', "
+            "'checkout', 'checkpoint_import', 'local_initialization')",
             name="ck_authority_transition_type",
         ),
     )

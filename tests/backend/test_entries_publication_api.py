@@ -128,7 +128,7 @@ def test_no_page_is_an_honest_operator_404(client):
             url, **({"json": {}, "headers": CSRF} if method == "patch" else {})
         )
         assert response.status_code == 404
-        assert response.json()["detail"]["code"] == "ENTRY_PAGE_NOT_FOUND"
+        assert response.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_unknown_workspace_gets_the_uniform_tenancy_404(client):

@@ -331,6 +331,20 @@ app.add_middleware(
 )
 
 
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exception_handlers import http_exception_handler
+from core.error_codes import resource_not_found
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error_handler(request: Request, exc: StarletteHTTPException):
+    # Includes framework route misses and legacy route-local 404s. No caller
+    # can accidentally disclose the resource type through a not-found body.
+    if exc.status_code == 404:
+        exc = resource_not_found()
+    return await http_exception_handler(request, exc)
+
+
 from competition.service import CompetitionError
 from sqlalchemy.orm.exc import StaleDataError
 

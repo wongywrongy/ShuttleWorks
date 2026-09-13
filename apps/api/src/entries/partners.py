@@ -85,10 +85,8 @@ def is_doubles(event: Any) -> bool:
 def invite_ttl_days() -> float:
     """How long a partner has to accept.
 
-    Reuses ``invite_ttl_days`` — the operator invite's budget — rather than
-    inventing a second knob. The two are the same kind of thing (a mailed
-    link to a person who must then create or use an account) and a second
-    setting is a second thing to configure wrong.
+    ``invite_ttl_days`` remains the partner-nomination setting. Staff
+    workspace invitations use a separate fixed seven-day policy.
     """
     return float(settings.invite_ttl_days)
 

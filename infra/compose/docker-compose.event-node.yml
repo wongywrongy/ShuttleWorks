@@ -79,7 +79,7 @@ services:
       - /tmp
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.155.0
+    image: otel/opentelemetry-collector-contrib@sha256:4935caa35e9a4cb387e35732e8fb22b2b5759af8d12e7043357f03837f6e8df5
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     environment:
       - OTEL_GATEWAY_ENDPOINT=${OTEL_GATEWAY_ENDPOINT:-https://gateway:4318}

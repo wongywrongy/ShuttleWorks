@@ -1415,28 +1415,19 @@ def create_invite_link(
             "user id is not a UUID",
         )
     email = None
-    expires_at = None
     if body.email:
-        # Email invite (SP-CLOUD-2): validated address, bounded lifetime,
-        # delivered via the email seam (console backend in local mode).
-        from datetime import datetime, timedelta, timezone
-
-        from core.config import settings
+        # Both link and email invites share the repository's finite lifetime.
         from identity.auth import AuthError, normalize_email
 
         try:
             email = normalize_email(body.email)
         except AuthError as exc:
             raise http_error(400, ErrorCode.INVALID_INPUT, exc.message)
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            days=settings.invite_ttl_days
-        )
     invite = repo.invite_links.create(
         tournament_id=tournament_id,
         role=body.role,
         created_by=user_uuid,
         email=email,
-        expires_at=expires_at,
     )
     if email:
         from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
@@ -1453,7 +1444,7 @@ def create_invite_link(
             body=(
                 f"You've been invited as {invite.role}.\n\n"
                 f"Accept here: {origin}/invite/{invite.id}\n\n"
-                f"This invite expires {expires_at:%Y-%m-%d}."
+                f"This invite expires {invite.expires_at:%Y-%m-%d}."
                 f"\n\n{BRAND_SIGNATURE}"
             ),
         )

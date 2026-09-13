@@ -120,6 +120,7 @@ COPY infra/nginx/play.conf /etc/nginx/conf.d/20-play.conf
 # One snippet serves both tiers; the three directives that differ are maps on
 # $server_port declared in http-shared.conf.
 COPY infra/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY infra/nginx/log-redaction.conf /etc/nginx/snippets/log-redaction.conf
 
 # nginx-unprivileged already owns /usr/share/nginx/html as UID 101.
 COPY --from=builder --chown=101:101 \

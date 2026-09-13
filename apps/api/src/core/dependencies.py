@@ -14,7 +14,7 @@ depends on (SP-CLOUD-2):
 ``require_tournament_access(min_role)`` is the TENANCY seam: it reads
 the path's ``tournament_id``, looks up the caller's role in
 ``tournament_members``, and answers the uniform 404 for non-members
-(Rule 5) / 403 for members with an insufficient role. It has **no
+(Rule 5), including members with an insufficient role. It has **no
 bypass** — local-dev records real member rows, so the same code path
 runs in both modes.
 
@@ -38,7 +38,8 @@ from fastapi import Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel
 
 from core.config import settings
-from core.error_codes import ErrorCode, http_error
+from core.error_codes import ErrorCode, http_error, resource_not_found
+from core.roles import ROLE_LEVELS as _ROLE_LEVELS, Role
 from repositories import LocalRepository, get_repository
 from identity import auth as auth_service
 from identity import entrants as entrant_service
@@ -305,16 +306,15 @@ def get_current_entrant(
 
 # ---- Role-based access -----------------------------------------------
 
-_ROLE_LEVELS = {"viewer": 0, "operator": 1, "owner": 2}
 
 
-def require_tournament_access(min_role: str):
+def require_tournament_access(min_role: Role):
     """Factory: returns a FastAPI dependency that gates a route on
     ``tournament_members.role >= min_role`` for the current user.
 
     The dep resolves ``tournament_id`` from the path, the caller from
     ``get_current_user``, and the role from the ``tournament_members``
-    table. 403s on missing or insufficient role. The check has no
+    table. 404s on missing or insufficient role. The check has no
     bypass mode — local-dev creates real member rows via ``POST
     /tournaments``, so the same code path runs in both modes.
     """
@@ -328,16 +328,8 @@ def require_tournament_access(min_role: str):
         repo: LocalRepository = Depends(get_repository),
     ) -> AuthUser:
         user_uuid = user.as_uuid()
-        # Rule 5 (SP-CLOUD-2): a caller without membership gets 404 —
-        # never 403 — so "doesn't exist" and "exists but not yours" are
-        # indistinguishable. Existence is information. Insufficient
-        # *role* for an actual member stays 403 (they already know the
-        # workspace exists).
-        not_found = http_error(
-            status.HTTP_404_NOT_FOUND,
-            ErrorCode.TOURNAMENT_NOT_FOUND,
-            "Tournament not found",
-        )
+        # Missing, foreign and insufficient-role resources share one response.
+        not_found = resource_not_found()
         if user_uuid is None:
             raise not_found
         role = repo.members.get_role(tournament_id, user_uuid)
@@ -345,10 +337,7 @@ def require_tournament_access(min_role: str):
             raise not_found
         actual_level = _ROLE_LEVELS.get(role, -1)
         if actual_level < required_level:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role '{role}' is insufficient (requires '{min_role}')",
-            )
+            raise not_found
         repo.stage(set_transition_actor, "operator", user_uuid)
         return user
 

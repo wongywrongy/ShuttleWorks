@@ -715,6 +715,7 @@ def import_checkpoint(
                     raise ProtocolError(409, "invalid_checkpoint", f"Row in {collection} has the wrong tournament")
                 session.add(model(**values))
             session.flush()
+        _record_epoch_creation(session, authority, "checkpoint_import")
         session.commit()
     except ProtocolError:
         session.rollback()
@@ -724,7 +725,6 @@ def import_checkpoint(
         raise ProtocolError(409, "checkpoint_import_failed", "Checkpoint import was rolled back") from exc
     if on_imported is not None:
         on_imported(tournament_id)
-    record_authority_transition("checkpoint_import")
     return authority
 
 
@@ -945,6 +945,7 @@ def begin_checkout(
                 highest_contiguous_sequence=0,
             )
         )
+        _record_epoch_creation(session, authority, "checkout", previous_epoch=latest)
         session.commit()
     except Exception as exc:
         session.rollback()
@@ -955,7 +956,6 @@ def begin_checkout(
             "authority_already_granted",
             "Tournament already has an active or preparing authority",
         ) from exc
-    record_authority_transition("checkout")
     return authority, capability, checkpoint
 
 
@@ -1065,6 +1065,39 @@ def _next_epoch(session: Session, tournament_id: uuid.UUID) -> int:
         )
     )
     return int(latest or 0) + 1
+
+
+def _record_epoch_creation(
+    session: Session,
+    authority: TournamentAuthority,
+    transition_type: str,
+    *,
+    previous_epoch: int | None = None,
+) -> None:
+    """Persist creation evidence in the same transaction as the epoch.
+
+    Human routes stage their authenticated operator on the repository session.
+    Checkpoint installation is performed by the verified node; standalone
+    initialization is a system action on that node, never an invented human.
+    """
+    actor = session.info.get("transition_actor")
+    actor_id = uuid.UUID(actor["id"]) if actor else authority.node_id
+    actor_type = actor["type"] if actor else (
+        "device" if transition_type == "checkpoint_import" else "system"
+    )
+    _append_transition(
+        session,
+        tournament_id=authority.tournament_id,
+        transition_type=transition_type,
+        from_epoch=previous_epoch,
+        to_epoch=authority.epoch,
+        actor_id=actor_id,
+        device_id=authority.node_id,
+        reason=transition_type,
+        declared_last_sequence=0,
+        evidence_hash=authority.checkpoint_hash,
+        detail={"actorType": actor_type, "grantKeyId": authority.grant_key_id},
+    )
 
 
 def _append_transition(
@@ -1456,6 +1489,7 @@ def ensure_local_authority(
     session.add(authority)
     session.flush()
     _ensure_operation_sequence(session, tournament_id, authority.epoch)
+    _record_epoch_creation(session, authority, "local_initialization", previous_epoch=latest)
     return authority
 
 

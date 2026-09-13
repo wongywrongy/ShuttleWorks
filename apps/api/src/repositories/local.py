@@ -52,10 +52,11 @@ def _conflict_error_class():
     return mod.ConflictError
 
 from fastapi import Request
-from sqlalchemy import delete, func, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.orm import Session, attributes
 
 from core.config import cloud_modules_enabled
+from core.capability_policy import STAFF_INVITE_LIFETIME
 from core.time_utils import now_iso
 from db.models import (
     CLOUD_ONLY_MODULES,
@@ -372,30 +373,38 @@ class _LocalTournamentRepo:
     ) -> Tournament:
         """Replace the ``data`` blob on an explicit tournament.
 
-        ``expected_version`` makes the write a genuine compare-and-swap: the
-        version is re-read and compared immediately before the mutation, so
-        two requests that both passed an earlier API-layer check cannot both
-        commit. Omitted by writers with no caller-supplied token (bracket
-        persistence, plan-finalized, restore), which keep last-write-wins.
+        A conditional UPDATE reserves the next version in the database before
+        any roster/projection mutation. The reservation and the payload share
+        one transaction, so rollback also releases the version. ORM cache
+        freshness cannot turn an expired precondition into a successful write.
+        Writers without a precondition retain explicit last-write-wins behavior.
         """
         row = self.get_by_id(tournament_id)
         if row is None:
             raise KeyError(tournament_id)
-        if expected_version is not None and (row.state_version or 0) != expected_version:
-            # Reuses the repository layer's existing optimistic-concurrency
-            # signal rather than inventing a second one — _LocalMatchRepo has
-            # raised ConflictError from ``expected_version`` since the
-            # match-state work, and one mechanism beats two that drift apart.
+        reservation = update(Tournament).where(Tournament.id == tournament_id)
+        if expected_version is not None:
+            reservation = reservation.where(Tournament.state_version == expected_version)
+        next_version = self.session.scalar(
+            reservation.values(state_version=Tournament.state_version + 1)
+            .returning(Tournament.state_version)
+            .execution_options(synchronize_session=False)
+        )
+        if next_version is None:
+            current_version = self.session.scalar(
+                select(Tournament.state_version).where(Tournament.id == tournament_id)
+            )
+            if current_version is None:
+                raise KeyError(tournament_id)
             raise _conflict_error_class()(
                 match_id=str(tournament_id),
-                current_version=row.state_version or 0,
+                current_version=current_version,
                 seen_version=expected_version,
-                message=(
-                    f"tournament {tournament_id} state_version moved from "
-                    f"{expected_version} to {row.state_version or 0} while "
-                    "this write was in flight"
-                ),
+                message=f"workspace state changed from {expected_version} to {current_version}",
             )
+        # The UPDATE already persisted this value. Do not emit another ORM
+        # version write at flush time, or overwrite it from a cached row.
+        attributes.set_committed_value(row, "state_version", next_version)
         stamped = _stamp_payload(payload)
         from competition.roster import ingest_document
         ingest_document(self.session, row, stamped)
@@ -421,20 +430,6 @@ class _LocalTournamentRepo:
         if isinstance(dates_data, dict) and dates_data.get("tournamentEnd"):
             row.tournament_end_date = str(dates_data["tournamentEnd"])[:10]
         row.schema_version = CURRENT_TOURNAMENT_SCHEMA_VERSION
-        # Every committed blob write advances the optimistic-concurrency
-        # counter (SP-CLOUD-4). This is the only method that assigns
-        # ``row.data``, so bumping here cannot be forgotten by a future writer
-        # the way a per-endpoint bump could.
-        #
-        # It is NOT reached only through ``commit_tournament_state``. Direct
-        # callers today: ``bracket/brackets.py`` (session metadata, clear),
-        # ``workspaces/tournaments.py::set_plan_finalized``, and
-        # ``restore_tournament_from_backup`` below. An earlier version of this
-        # comment claimed a single caller path, and that false premise is
-        # exactly why three of those shipped without returning the new token.
-        # Any response that rewrites the blob must feed the new value back to
-        # the client, or the client's next save spuriously conflicts.
-        row.state_version = (row.state_version or 0) + 1
         self._sync_meet_events(tournament_id, stamped)
         from competition.projection import project
         project(self.session, tournament_id, advance_version=False)
@@ -1684,12 +1679,17 @@ class _LocalInviteLinkRepo:
         email: Optional[str] = None,
         expires_at: Optional[datetime] = None,
     ) -> InviteLink:
+        created_at = datetime.now(timezone.utc)
+        deadline = created_at + STAFF_INVITE_LIFETIME
+        if expires_at is not None:
+            deadline = min(deadline, _ensure_utc_aware(expires_at))
         row = InviteLink(
             tournament_id=tournament_id,
             role=role,
             created_by=created_by,
             email=email,
-            expires_at=expires_at,
+            created_at=created_at,
+            expires_at=deadline,
         )
         self.session.add(row)
         self.session.commit()
@@ -1734,7 +1734,7 @@ class _LocalInviteLinkRepo:
             .where(
                 InviteLink.tournament_id.in_(tournament_ids),
                 InviteLink.revoked_at.is_(None),
-                or_(InviteLink.expires_at.is_(None), InviteLink.expires_at > now),
+                InviteLink.expires_at > now,
             )
             .group_by(InviteLink.tournament_id)
         ).all()
@@ -1771,13 +1771,10 @@ def is_invite_valid(invite: InviteLink, *, now: Optional[datetime] = None) -> bo
 
     Exported so route handlers and tests share the same definition.
     """
-    if invite.revoked_at is not None:
+    if invite.revoked_at is not None or invite.expires_at is None:
         return False
-    if invite.expires_at is not None:
-        cutoff = now or datetime.now(timezone.utc)
-        if _ensure_utc_aware(invite.expires_at) < _ensure_utc_aware(cutoff):
-            return False
-    return True
+    cutoff = now or datetime.now(timezone.utc)
+    return _ensure_utc_aware(invite.expires_at) > _ensure_utc_aware(cutoff)
 
 
 

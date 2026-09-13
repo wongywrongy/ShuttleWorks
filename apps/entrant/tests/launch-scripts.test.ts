@@ -331,7 +331,7 @@ test('the Tailscale demo has isolated lifecycle targets and guarded config', () 
   expect(demoLauncher).toContain('DEMO_RESTORE_CONFIRM=restore-demo');
   expect(demoLauncher).toContain('DEMO_RESET_CONFIRM=reset-demo');
   expect(demoOverride).toContain('DEMO_HOST_GID');
-  expect(demoOverride).toContain('image: postgres:16-alpine');
+  expect(demoOverride).toMatch(/image: postgres@sha256:[a-f0-9]{64}/);
   expect(demoOverride).toContain('DATABASE_URL_FILE: /run/secrets/demo_database_url');
   expect(demoOverride).toContain('8092:8000');
   expect(demoOverride).toContain('8090:8080');

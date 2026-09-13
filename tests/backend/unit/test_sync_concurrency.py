@@ -12,6 +12,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import pytest
+
+pytestmark = pytest.mark.shared_postgres
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 

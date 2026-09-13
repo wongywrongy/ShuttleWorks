@@ -80,7 +80,7 @@ def test_create_invite_returns_token_and_url(client, tid):
 def test_create_invite_requires_owner(client, tid):
     _set_role("operator", tid)
     r = client.post(f"/tournaments/{tid}/invites", json={"role": "viewer"})
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 def test_create_invite_rejects_owner_role(client, tid):
@@ -108,7 +108,7 @@ def test_list_invites_returns_active_and_revoked(client, tid):
 def test_list_invites_requires_owner(client, tid):
     _set_role("viewer", tid)
     r = client.get(f"/tournaments/{tid}/invites")
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 def test_list_members_includes_owner(client, tid):
@@ -158,7 +158,7 @@ def test_resolve_revoked_is_not_resolvable(client, tid):
     client.delete(f"/invites/{token}")
     r = client.get(f"/invites/{token}")
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "INVITE_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_resolve_expired_is_not_resolvable(client, tid):
@@ -184,7 +184,7 @@ def test_resolve_expired_is_not_resolvable(client, tid):
 
     r = client.get(f"/invites/{token}")
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "INVITE_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_resolve_unknown_token_returns_404(client):
@@ -260,7 +260,7 @@ def test_accept_rejects_revoked_invite(client, tid):
 
     r = client.post(f"/invites/{token}/accept")
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "INVITE_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_accept_unknown_token_returns_404(client):
@@ -298,7 +298,7 @@ def test_revoke_requires_owner(client, tid):
     ).json()["token"]
     _set_role("operator", tid)
     r = client.delete(f"/invites/{token}")
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 def test_revoke_unknown_token_returns_404(client):
