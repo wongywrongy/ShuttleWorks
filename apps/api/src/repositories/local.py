@@ -52,10 +52,11 @@ def _conflict_error_class():
     return mod.ConflictError
 
 from fastapi import Request
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, attributes
 
 from core.config import cloud_modules_enabled
+from core.capability_policy import STAFF_INVITE_LIFETIME
 from core.time_utils import now_iso
 from db.models import (
     CLOUD_ONLY_MODULES,
@@ -1678,12 +1679,17 @@ class _LocalInviteLinkRepo:
         email: Optional[str] = None,
         expires_at: Optional[datetime] = None,
     ) -> InviteLink:
+        created_at = datetime.now(timezone.utc)
+        deadline = created_at + STAFF_INVITE_LIFETIME
+        if expires_at is not None:
+            deadline = min(deadline, _ensure_utc_aware(expires_at))
         row = InviteLink(
             tournament_id=tournament_id,
             role=role,
             created_by=created_by,
             email=email,
-            expires_at=expires_at,
+            created_at=created_at,
+            expires_at=deadline,
         )
         self.session.add(row)
         self.session.commit()
@@ -1728,7 +1734,7 @@ class _LocalInviteLinkRepo:
             .where(
                 InviteLink.tournament_id.in_(tournament_ids),
                 InviteLink.revoked_at.is_(None),
-                or_(InviteLink.expires_at.is_(None), InviteLink.expires_at > now),
+                InviteLink.expires_at > now,
             )
             .group_by(InviteLink.tournament_id)
         ).all()
@@ -1765,13 +1771,10 @@ def is_invite_valid(invite: InviteLink, *, now: Optional[datetime] = None) -> bo
 
     Exported so route handlers and tests share the same definition.
     """
-    if invite.revoked_at is not None:
+    if invite.revoked_at is not None or invite.expires_at is None:
         return False
-    if invite.expires_at is not None:
-        cutoff = now or datetime.now(timezone.utc)
-        if _ensure_utc_aware(invite.expires_at) < _ensure_utc_aware(cutoff):
-            return False
-    return True
+    cutoff = now or datetime.now(timezone.utc)
+    return _ensure_utc_aware(invite.expires_at) > _ensure_utc_aware(cutoff)
 
 
 

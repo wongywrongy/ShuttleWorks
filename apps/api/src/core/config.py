@@ -335,7 +335,8 @@ class Settings(BaseSettings):
     # entry surface composes its links from here too rather than growing a
     # second, subtly different origin setting.
     public_app_origin: str = ""
-    # Cloud email invites expire; local link invites may be eternal.
+    # Entrant partner nominations use this lifetime. Staff workspace invites
+    # have the fixed seven-day policy in core.capability_policy.
     invite_ttl_days: float = 14.0
 
     # ---- Entries: public write surface (SP-E1-1) -----------------------

@@ -19,8 +19,13 @@ from _helpers import upgrade_test_database
 SCRIPTS = Path(__file__).resolve().parents[3] / "apps/api/src/alembic"
 
 
+@pytest.fixture
+def initial_revision(request):
+    return getattr(request, "param", "head")
+
+
 @pytest.fixture(params=["sqlite", "postgresql"])
-def migrated(request, tmp_path):
+def migrated(request, tmp_path, initial_revision):
     from db.session import normalize_database_url
 
     if request.param == "postgresql":
@@ -33,7 +38,14 @@ def migrated(request, tmp_path):
             conn.exec_driver_sql("CREATE SCHEMA public")
     else:
         engine = sa.create_engine(f"sqlite:///{tmp_path / 'baseline.db'}")
-    upgrade_test_database(engine)
+    if initial_revision == "head":
+        upgrade_test_database(engine)
+    else:
+        cfg = Config()
+        cfg.set_main_option("script_location", str(SCRIPTS))
+        with engine.connect() as conn:
+            cfg.attributes["connection"] = conn
+            command.upgrade(cfg, initial_revision)
     try:
         yield engine
     finally:
@@ -232,3 +244,39 @@ def test_alembic_check_detects_a_model_column_without_a_revision(migrated):
                 command.check(cfg)
     finally:
         table._columns.remove(probe)
+
+
+@pytest.mark.parametrize("initial_revision", ["0002"], indirect=True)
+def test_invitation_migration_caps_existing_links_without_extending_them(migrated):
+    from datetime import datetime, timedelta, timezone
+
+    from db.models import InviteLink, Tournament
+
+    created = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    workspace_id = uuid.uuid4()
+    expiries = [None, created + timedelta(days=14), created + timedelta(days=1)]
+    ids = [uuid.uuid4() for _ in expiries]
+    with migrated.begin() as conn:
+        conn.execute(Tournament.__table__.insert().values(id=workspace_id, name="Old links"))
+        for row_id, expiry in zip(ids, expiries):
+            conn.execute(InviteLink.__table__.insert().values(
+                id=row_id, tournament_id=workspace_id, role="viewer",
+                created_by=uuid.uuid4(), created_at=created, expires_at=expiry,
+            ))
+        assert conn.scalar(sa.select(sa.func.count()).select_from(InviteLink).where(
+            InviteLink.expires_at.is_(None)
+        )) == 1  # Negative control: the old schema really accepts eternal links.
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(SCRIPTS))
+    with migrated.connect() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "head")
+        for row_id, days in zip(ids, [7, 7, 1]):
+            expiry = conn.scalar(sa.select(InviteLink.expires_at).where(InviteLink.id == row_id))
+            assert expiry.replace(tzinfo=timezone.utc) == created + timedelta(days=days)
+        assert conn.scalar(sa.select(sa.func.count()).select_from(InviteLink)) == 3
+    with pytest.raises(sa.exc.IntegrityError, match="(?i)not.null"), migrated.begin() as conn:
+        conn.execute(InviteLink.__table__.update().where(InviteLink.id == ids[0]).values(
+            expires_at=None,
+        ))

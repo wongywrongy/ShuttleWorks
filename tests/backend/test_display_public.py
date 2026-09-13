@@ -281,6 +281,8 @@ def test_token_management_is_owner_gated(client, workspace):
 
 
 def test_email_invite_rides_the_seam_and_expires(client, workspace, caplog):
+    from datetime import datetime, timedelta
+
     tid, _ = workspace
     with caplog.at_level(logging.INFO, logger="scheduler.email"):
         r = client.post(
@@ -295,24 +297,29 @@ def test_email_invite_rides_the_seam_and_expires(client, workspace, caplog):
     listed = client.get(f"/tournaments/{tid}/invites").json()
     row = next(i for i in listed if i["token"] == token)
     assert row["email"] == "friend@example.com"
-    assert row["expiresAt"] is not None  # email invites are bounded
+    assert datetime.fromisoformat(row["expiresAt"]) - datetime.fromisoformat(
+        row["createdAt"]
+    ) == timedelta(days=7)
 
     # Public resolve never exposes the invitee's address.
     client.cookies.clear()
     resolved = client.get(f"/invites/{token}").json()
     assert "email" not in resolved or resolved.get("email") is None
 
-    # Link-style invites stay eternal (local mode behavior preserved).
+def test_link_invite_expires_after_seven_days(client, workspace):
+    from datetime import datetime, timedelta
 
-
-def test_link_invite_still_eternal(client, workspace):
     tid, _ = workspace
     r = client.post(f"/tournaments/{tid}/invites", json={"role": "operator"})
     assert r.status_code == 201
     assert r.json()["token"]
     listed = client.get(f"/tournaments/{tid}/invites").json()
     row = next(i for i in listed if i["token"] == r.json()["token"])
-    assert row["expiresAt"] is None and row["email"] is None
+    assert row["email"] is None
+    assert row["expiresAt"] is not None
+    assert datetime.fromisoformat(row["expiresAt"]) - datetime.fromisoformat(
+        row["createdAt"]
+    ) == timedelta(days=7)
 
 
 # ---- SEC-13: the public state route is cached ------------------------

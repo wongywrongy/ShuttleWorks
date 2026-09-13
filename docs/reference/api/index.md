@@ -293,7 +293,7 @@ header, every state write answers `412`.
 
 | `POST /tournaments/{id}/plan-finalized` | toggle the persisted `planFinalized` flag (Run surface). Writes the blob, so the response carries a fresh `ETag` |
 | `GET /tournaments/{id}/modules`, `PATCH …/modules/{moduleId}` | the `workspace_modules` control plane |
-| `POST · GET /tournaments/{id}/invites`, `GET …/members` | create / list invites (owner-gated) + list members. `POST` with an `email` makes an **email invite**: delivered via the email seam (`apps/api/src/core/email.py` — console backend locally, SMTP in cloud) with a bounded lifetime (`invite_ttl_days`); without `email` it stays a copy-the-URL link invite with no expiry |
+| `POST · GET /tournaments/{id}/invites`, `GET …/members` | create / list invites (owner-gated) + list members. Both email and copy-the-URL staff invitations expire seven days after creation. `POST` with an `email` delivers through `apps/api/src/core/email.py` (console backend locally, SMTP in cloud). Migration 0003 caps existing links without extending shorter deadlines. `INVITE_TTL_DAYS` now applies only to entrant partner nominations. |
 | `GET /invites/{token}` (public) · `POST …/accept` (auth) · `DELETE …/{token}` (owner, revoke) | resolve / accept / revoke an invite link |
 
 :::info The schedule lock on `PUT …/state`

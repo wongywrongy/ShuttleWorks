@@ -47,8 +47,8 @@ class InviteCreateDTO(StrictModel):
     """Body for ``POST /tournaments/{id}/invites``.
 
     ``email`` (SP-CLOUD-2) turns this into an email invite: the link is
-    delivered via the email seam and the invite expires. Omitted =
-    local link-style invite (copy the URL yourself).
+    delivered via the email seam. Omitted = local link-style invite
+    (copy the URL yourself). Both expire seven days after issuance.
 
     The address is bounded here and validated for shape by
     ``normalize_email`` at the handler — that regex rejects all
