@@ -10,6 +10,8 @@
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
+import { parse } from 'parse5';
+import { documentText } from './helpers/documentText';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 
 import entryPageFixture from './helpers/entryPage.fixture.json';
@@ -305,7 +307,7 @@ describe('the panels', () => {
     // Regulations became a DOCUMENT ROW: identity + version + updated date
     // + a link to the routed reader — the text itself no longer inlines.
     expect(html).toContain('Tournament regulations');
-    expect(html.replace(/<!--.*?-->/g, '')).toContain('Version 3');
+    expect(documentText(parse(html)).replace(/\s+/g, ' ')).toContain('Version 3');
     expect(html).toContain('href="/e/spring-open/regulations"');
     expect(html).not.toContain('BWF laws apply.');
     expect(html).not.toContain('<details');

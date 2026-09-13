@@ -21,6 +21,7 @@ class CompetitionError(ValueError):
     def __init__(self, code, message):
         super().__init__(message)
         self.code = code
+        self.message = message
 
 
 def lock_workspace(session, tournament_id):
@@ -250,7 +251,7 @@ def bind(
                 results.extend(group)
                 seen.update(uuid.UUID(item["entryId"]) for item in group if item["entryId"])
         except CompetitionError as exc:
-            skipped.append({"entryId": str(entry_id), "reason": exc.code, "message": str(exc)})
+            skipped.append({"entryId": str(entry_id), "reason": exc.code, "message": exc.message})
     session.flush()
     if any(result["outcome"] == "bound" for result in results):
         from competition.operations import emit

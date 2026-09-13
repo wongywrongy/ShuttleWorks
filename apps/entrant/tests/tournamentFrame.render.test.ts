@@ -18,15 +18,11 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
-import { parse, type DefaultTreeAdapterTypes } from 'parse5';
+import { parse } from 'parse5';
+import { documentText } from './helpers/documentText';
 
 import entryPageFixture from './helpers/entryPage.fixture.json';
 
-function documentText(node: DefaultTreeAdapterTypes.Node): string {
-  if ('tagName' in node && (node.tagName === 'script' || node.tagName === 'style')) return '';
-  if ('value' in node) return node.value;
-  return 'childNodes' in node ? node.childNodes.map(documentText).join(' ') : '';
-}
 
 const PAGE = {
   ...entryPageFixture,

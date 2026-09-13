@@ -16,6 +16,8 @@
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
+import { parse } from 'parse5';
+import { documentText } from './helpers/documentText';
 import { createRequestHandler, type ServerBuild } from 'react-router';
 
 /**
@@ -305,7 +307,7 @@ describe('the entry form, unhydrated', () => {
     const html = await render();
 
     expect(html).toContain('How the total is calculated');
-    expect(html.replace(/<!--.*?-->/g, '')).toContain('2 events');
+    expect(documentText(parse(html)).replace(/\s+/g, ' ')).toContain('2 events');
     expect(html).toContain('25.00');
   });
 

@@ -90,7 +90,7 @@ def command(repo, operation, *args, **kwargs):
     try:
         return repo.execute_transaction(operation, *args, **kwargs)
     except service.CompetitionError as exc:
-        raise HTTPException(409, detail={"code": exc.code, "message": str(exc)}) from exc
+        raise HTTPException(409, detail={"code": exc.code, "message": exc.message}) from exc
     except (IntegrityError, StaleDataError) as exc:
         raise HTTPException(
             409,
