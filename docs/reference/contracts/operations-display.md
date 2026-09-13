@@ -24,6 +24,15 @@ standings view. Display also reads two more DTOs to complete the picture:
   static layout from.
 - **`BracketTournamentDTO`** — the bracket snapshot, for bracket events.
 
+These are the shared in-console read models. The public capability API instead
+returns `DisplayMatchStateDTO`, `DisplayStateDTO` and `DisplayBracketDTO` from
+`apps/api/src/display/display.py` and `apps/api/src/display/projection.py`.
+Those recursive allow-lists exclude operator notes, player availability, private
+entry/person provenance and arbitrary bracket metadata. The console adapts the
+public state into its read-only store with neutral defaults; it does not fetch
+the missing private fields. The in-shell authenticated preview continues to use
+the operator endpoints.
+
 Display is **read-only**: it consumes these three and produces nothing. The edge it reacts to is the
 match-state write — `matchStateChanged`.
 

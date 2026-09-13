@@ -3,6 +3,7 @@
  * Communicates with the stateless scheduling backend
  */
 import axios, { type AxiosInstance } from 'axios';
+import { displayStateForStore, type DisplayStateDTO } from './displayProjection';
 import { useUiStore } from '../store/uiStore';
 import type {
   TournamentConfig,
@@ -630,12 +631,12 @@ class ApiClient {
 
   /** The meet-board projection. `null` when the workspace has no data yet (204). */
   async getDisplayState(token: string): Promise<TournamentStateDTO | null> {
-    const r = await this.client.get<TournamentStateDTO>(
+    const r = await this.client.get<DisplayStateDTO>(
       `/display/${encodeURIComponent(token)}/state`,
       { validateStatus: (s) => s === 200 || s === 204 },
     );
     if (r.status === 204) return null;
-    return r.data;
+    return displayStateForStore(r.data);
   }
 
   async getDisplayMatchStates(

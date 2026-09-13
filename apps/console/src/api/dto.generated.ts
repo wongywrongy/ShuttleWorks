@@ -3537,15 +3537,10 @@ export interface paths {
         };
         /**
          * Display Bracket
-         * @description Bracket board read — same serialized session the viewer-gated
-         *     ``GET /bracket`` returns (it is already a projection DTO with no
-         *     operator-only material), served through the short-TTL cache.
+         * @description Project the cached session through a recursive spectator allow-list.
          *
-         *     ``response_model`` is ``TournamentOut`` — the exact type
-         *     ``_serialize_session`` already returns (F-DM-30: the route was untyped,
-         *     not un-shaped). Declaring it changes no key; it puts the shape in the
-         *     OpenAPI document, which is what the generated types and the parity
-         *     oracle read.
+         *     Private roster provenance, arbitrary format configuration, score metadata
+         *     and operator notes cannot leave through the public response model.
          */
         get: operations["display_bracket_display__token__bracket_get"];
         put?: never;
@@ -3743,6 +3738,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptedDTO */
+        AcceptedDTO: {
+            /**
+             * Status
+             * @default accepted
+             * @constant
+             */
+            status: "accepted";
+        };
         /**
          * AccountErasedDTO
          * @description What erasure did, stated so the entrant can check it.
@@ -4695,6 +4699,218 @@ export interface components {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
         };
+        /** DisplayAssignmentDTO */
+        DisplayAssignmentDTO: {
+            /** Matchid */
+            matchId: string;
+            /** Slotid */
+            slotId: number;
+            /** Courtid */
+            courtId: number;
+            /**
+             * Durationslots
+             * @default 1
+             */
+            durationSlots: number;
+        };
+        /** DisplayBracketConfigDTO */
+        DisplayBracketConfigDTO: {
+            /** Scoringformat */
+            scoringFormat?: ("simple" | "badminton") | null;
+            /** Setstowin */
+            setsToWin?: number | null;
+            /** Pointsperset */
+            pointsPerSet?: number | null;
+            /** Deuceenabled */
+            deuceEnabled?: boolean | null;
+            /** Pointcap */
+            pointCap?: number | null;
+            /** Grand Final Reset */
+            grand_final_reset?: boolean | null;
+            /** Consolation */
+            consolation?: string | null;
+            /** Swiss Rounds */
+            swiss_rounds?: number | null;
+        };
+        /** DisplayBracketDTO */
+        DisplayBracketDTO: {
+            /** Courts */
+            courts: number;
+            /** Total Slots */
+            total_slots: number;
+            /** Rest Between Rounds */
+            rest_between_rounds: number;
+            /** Interval Minutes */
+            interval_minutes: number;
+            /** Start Time */
+            start_time?: string | null;
+            /** Events */
+            events: components["schemas"]["DisplayEventDTO"][];
+            /** Participants */
+            participants: components["schemas"]["DisplayParticipantDTO"][];
+            /** Play Units */
+            play_units: components["schemas"]["DisplayPlayUnitDTO"][];
+            /** Assignments */
+            assignments: components["schemas"]["AssignmentOut"][];
+            /** Results */
+            results: components["schemas"]["DisplayResultDTO"][];
+        };
+        /** DisplayBracketScoreDTO */
+        DisplayBracketScoreDTO: {
+            /** Sets */
+            sets?: components["schemas"]["DisplayGameDTO"][];
+        };
+        /** DisplayClosureDTO */
+        DisplayClosureDTO: {
+            /** Courtid */
+            courtId: number;
+            /** Fromtime */
+            fromTime?: string | null;
+            /** Totime */
+            toTime?: string | null;
+        };
+        /** DisplayConfigDTO */
+        DisplayConfigDTO: {
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /** Meetmode */
+            meetMode?: ("dual" | "tri") | null;
+            /**
+             * Intervalminutes
+             * @default 15
+             */
+            intervalMinutes: number;
+            /**
+             * Daystart
+             * @default 08:00
+             */
+            dayStart: string;
+            /**
+             * Dayend
+             * @default 18:00
+             */
+            dayEnd: string;
+            /** Tournamentdate */
+            tournamentDate?: string | null;
+            /**
+             * Courtcount
+             * @default 1
+             */
+            courtCount: number;
+            /** Scoringformat */
+            scoringFormat?: ("simple" | "badminton") | null;
+            /** Setstowin */
+            setsToWin?: number | null;
+            /** Pointsperset */
+            pointsPerSet?: number | null;
+            /** Deuceenabled */
+            deuceEnabled?: boolean | null;
+            /** Pointcap */
+            pointCap?: number | null;
+            /** Tvdisplaymode */
+            tvDisplayMode?: ("auto" | "strip" | "grid" | "list") | null;
+            /** Tvaccent */
+            tvAccent?: string | null;
+            /** Tvpreset */
+            tvPreset?: string | null;
+            /** Tvgridcolumns */
+            tvGridColumns?: number | null;
+            /** Tvcardsize */
+            tvCardSize?: ("auto" | "compact" | "comfortable" | "large") | null;
+            /** Tvshowscores */
+            tvShowScores?: boolean | null;
+            /** Courtorder */
+            courtOrder?: number[] | null;
+            /** Hiddencourts */
+            hiddenCourts?: number[] | null;
+            /** Standingsmode */
+            standingsMode?: ("off" | "side" | "rotate") | null;
+            /** Tvrotationslides */
+            tvRotationSlides?: ("courts" | "standings" | "upNext")[] | null;
+            /** Tvrotationdwellseconds */
+            tvRotationDwellSeconds?: number | null;
+            /** Courtpolicy */
+            courtPolicy?: ("pinned" | "queue") | null;
+            /** Courtoverrides */
+            courtOverrides?: {
+                [key: string]: "pinned" | "pool";
+            } | null;
+            /** Ondeckcount */
+            onDeckCount?: number | null;
+            /** Closedcourts */
+            closedCourts?: number[];
+            /** Courtclosures */
+            courtClosures?: components["schemas"]["DisplayClosureDTO"][];
+            /** Clockshiftminutes */
+            clockShiftMinutes?: number | null;
+        };
+        /** DisplayEventDTO */
+        DisplayEventDTO: {
+            /** Id */
+            id: string;
+            /** Discipline */
+            discipline: string;
+            /** Format */
+            format: string;
+            /** Bracket Size */
+            bracket_size?: number | null;
+            /** Participant Count */
+            participant_count: number;
+            /** Rounds */
+            rounds: string[][];
+            /** Segments */
+            segments?: components["schemas"]["SegmentOut"][] | null;
+            /** Standings */
+            standings?: components["schemas"]["StandingRow"][] | null;
+            /** Status */
+            status?: string | null;
+            /** Seeded Count */
+            seeded_count?: number | null;
+            /** Rr Rounds */
+            rr_rounds?: number | null;
+            config?: components["schemas"]["DisplayBracketConfigDTO"];
+            /** Participants */
+            participants?: components["schemas"]["DisplayParticipantDTO"][];
+        };
+        /** DisplayGameDTO */
+        DisplayGameDTO: {
+            /** Sidea */
+            sideA: number;
+            /** Sideb */
+            sideB: number;
+        };
+        /** DisplayGroupDTO */
+        DisplayGroupDTO: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** DisplayMatchDTO */
+        DisplayMatchDTO: {
+            /** Id */
+            id: string;
+            /** Matchnumber */
+            matchNumber?: number | null;
+            /** Sidea */
+            sideA?: string[];
+            /** Sideb */
+            sideB?: string[];
+            /** Sidec */
+            sideC?: string[] | null;
+            /**
+             * Matchtype
+             * @default dual
+             */
+            matchType: string;
+            /** Eventrank */
+            eventRank?: string | null;
+            /**
+             * Durationslots
+             * @default 1
+             */
+            durationSlots: number;
+        };
         /** DisplayMatchScoreDTO */
         DisplayMatchScoreDTO: {
             /** Sidea */
@@ -4733,8 +4949,6 @@ export interface components {
             /** Actualendtime */
             actualEndTime?: string | null;
             score?: components["schemas"]["DisplayMatchScoreDTO"] | null;
-            /** Notes */
-            notes?: string | null;
             /** Updatedat */
             updatedAt?: string | null;
             /** Originalslotid */
@@ -4742,43 +4956,103 @@ export interface components {
             /** Originalcourtid */
             originalCourtId?: number | null;
         };
+        /** DisplayParticipantDTO */
+        DisplayParticipantDTO: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Members */
+            members?: string[] | null;
+            /** Seed */
+            seed?: number | null;
+            /** Representation */
+            representation?: string | null;
+        };
+        /** DisplayPlayUnitDTO */
+        DisplayPlayUnitDTO: {
+            /** Id */
+            id: string;
+            /** Event Id */
+            event_id: string;
+            /** Round Index */
+            round_index: number;
+            /** Match Index */
+            match_index: number;
+            /** Side A */
+            side_a?: string[] | null;
+            /** Side B */
+            side_b?: string[] | null;
+            /** Duration Slots */
+            duration_slots: number;
+            /** Dependencies */
+            dependencies?: string[];
+            slot_a: components["schemas"]["BracketSlotOut"];
+            slot_b: components["schemas"]["BracketSlotOut"];
+            /** Sides */
+            sides?: components["schemas"]["MatchSideDTO"][];
+            /** Segment */
+            segment?: string | null;
+        };
+        /** DisplayPlayerDTO */
+        DisplayPlayerDTO: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Groupid
+             * @default
+             */
+            groupId: string;
+            /** Ranks */
+            ranks?: string[];
+            /** Representation */
+            representation?: string | null;
+        };
+        /** DisplayResultDTO */
+        DisplayResultDTO: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Winner Side */
+            winner_side: string;
+            /**
+             * Walkover
+             * @default false
+             */
+            walkover: boolean;
+            /** Finished At Slot */
+            finished_at_slot?: number | null;
+            score?: components["schemas"]["DisplayBracketScoreDTO"] | null;
+            /** Reason */
+            reason?: ("walkover" | "retired" | "forfeit") | null;
+        };
+        /** DisplayScheduleDTO */
+        DisplayScheduleDTO: {
+            /** Assignments */
+            assignments?: components["schemas"]["DisplayAssignmentDTO"][];
+            /** Unscheduledmatches */
+            unscheduledMatches?: string[];
+            /** Status */
+            status?: string | null;
+            /** Effectivepolicy */
+            effectivePolicy?: ("pinned" | "queue") | null;
+        };
         /**
          * DisplayStateDTO
-         * @description The meet board's projection of the workspace state blob (F-DM-30).
-         *
-         *     Until SP-DM-3 P1 this route had NO ``response_model``: the one
-         *     unauthenticated data plane in the product was the one with no declared
-         *     shape, and its allow-list was a Python tuple with a prose comment naming
-         *     its TS consumer. This class IS that allow-list now, and
-         *     ``tests/backend/test_display_public.py`` pins its key set exactly.
-         *
-         *     Notably ABSENT vs the raw blob, and deliberately: ``scheduleHistory``
-         *     (the operator revert pool), ``scheduleVersion``, ``bracketPlayers``,
-         *     ``planFinalized``.
-         *
-         *     ponytail: the six pass-through fields are typed ``Any``, not with their
-         *     real DTOs. Ceiling named: this is the public plane reading a blob that
-         *     predates the strict DTOs, so validating it through ``TournamentConfig`` /
-         *     ``PlayerDTO`` / ... (all ``StrictModel``, ``extra="forbid"``) would turn a
-         *     legacy key into a 500 on a screen in a public hall, or — worse, with
-         *     ``extra="ignore"`` — silently DROP keys the board renders. Upgrade path:
-         *     tighten one field at a time behind P2's blob versioning, each with its own
-         *     key-set test. What P1 buys is the KEY SET being declared, which is what
-         *     F-DM-30 is about.
+         * @description Public fields only, including every nested member of the stored blob.
          */
         DisplayStateDTO: {
-            /** Config */
-            config?: unknown;
+            config?: components["schemas"]["DisplayConfigDTO"] | null;
             /** Groups */
-            groups?: unknown;
+            groups?: components["schemas"]["DisplayGroupDTO"][] | null;
             /** Players */
-            players?: unknown;
+            players?: components["schemas"]["DisplayPlayerDTO"][] | null;
             /** Matches */
-            matches?: unknown;
-            /** Schedule */
-            schedule?: unknown;
+            matches?: components["schemas"]["DisplayMatchDTO"][] | null;
+            schedule?: components["schemas"]["DisplayScheduleDTO"] | null;
             /** Scheduleisstale */
-            scheduleIsStale?: unknown;
+            scheduleIsStale?: boolean | null;
             /** Standings */
             standings?: components["schemas"]["MeetStandingRowDTO"][];
         };
@@ -6172,6 +6446,15 @@ export interface components {
             /** Incompletepairs */
             incompletePairs?: string[];
         };
+        /** LivenessDTO */
+        LivenessDTO: {
+            /**
+             * Status
+             * @default healthy
+             * @constant
+             */
+            status: "healthy";
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -7270,7 +7553,7 @@ export interface components {
             maxEventsPerPerson?: number | null;
             /** Disciplinecaps */
             disciplineCaps?: {
-                [key: string]: unknown;
+                [key: string]: number;
             } | null;
             /**
              * Collectphone
@@ -13730,7 +14013,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AcceptedDTO"];
                 };
             };
             /** @description Form post: redirect to the sent page */
@@ -14032,9 +14315,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AcceptedDTO"];
                 };
             };
             /** @description Validation Error */
@@ -14191,7 +14472,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TournamentOut"];
+                    "application/json": components["schemas"]["DisplayBracketDTO"];
                 };
             };
             /** @description Validation Error */
@@ -14348,7 +14629,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LivenessDTO"];
                 };
             };
         };

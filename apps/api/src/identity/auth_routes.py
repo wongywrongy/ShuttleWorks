@@ -28,6 +28,7 @@ from repositories import LocalRepository, get_repository
 from core import throttle
 from identity import auth as auth_service
 from identity.auth import AuthError
+from identity.responses import AcceptedDTO
 
 log = logging.getLogger("scheduler.identity.auth_routes")
 
@@ -361,7 +362,7 @@ def change_password(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/request-password-reset", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/request-password-reset", response_model=AcceptedDTO, status_code=status.HTTP_202_ACCEPTED)
 def request_password_reset(
     body: RequestPasswordResetRequest,
     request: Request,

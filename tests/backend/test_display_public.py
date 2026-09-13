@@ -82,6 +82,92 @@ def test_projection_is_unauthenticated_and_strips_operator_material(
     assert ms.status_code == 200 and ms.json() == {}
 
 
+def test_projection_strips_private_fields_at_every_nested_surface(client, workspace):
+    import uuid
+    from db.models import Tournament
+    from db.session import SessionLocal
+
+    tid, token = workspace
+    with SessionLocal() as session:
+        row = session.get(Tournament, uuid.UUID(tid))
+        row.data = {
+            "config": {"tournamentName": "Board", "operatorNote": "private-config"},
+            "groups": [{"id": "g", "name": "Club", "metadata": {"email": "private-group"}}],
+            "players": [{
+                "id": "p", "name": "Player", "groupId": "g",
+                "availability": [{"start": "09:00", "end": "10:00"}],
+                "notes": "private-player", "sourceEntryId": "private-entry",
+            }],
+            "matches": [{"id": "m", "sideA": ["p"], "sideB": [], "tags": ["private-match"]}],
+            "schedule": {
+                "assignments": [{"matchId": "m", "slotId": 1, "courtId": 1,
+                                 "operatorNote": "private-assignment"}],
+                "infeasibleReasons": ["private-schedule"],
+            },
+        }
+        session.commit()
+    response = client.get(f"/display/{token}/state")
+    assert response.status_code == 200, response.text
+    assert "private-" not in response.text
+    assert "availability" not in response.text
+    body = response.json()
+    assert body["players"][0]["name"] == "Player"
+    assert body["schedule"]["assignments"][0]["courtId"] == 1
+
+
+@pytest.mark.parametrize("model_name", ["DisplayStateDTO", "DisplayBracketDTO"])
+def test_display_schema_has_no_untyped_nested_values(client, model_name):
+    from display.display import DisplayStateDTO
+    from display.projection import DisplayBracketDTO
+
+    schema = {"DisplayStateDTO": DisplayStateDTO, "DisplayBracketDTO": DisplayBracketDTO}[model_name].model_json_schema()
+
+    def visit(value):
+        if not isinstance(value, dict):
+            return
+        assert value.get("additionalProperties") is not True, value
+        for field in value.get("properties", {}).values():
+            assert any(key in field for key in ("type", "$ref", "anyOf", "allOf")), field
+            visit(field)
+        for child in value.get("$defs", {}).values():
+            visit(child)
+        for key in ("anyOf", "allOf"):
+            for child in value.get(key, []):
+                visit(child)
+        for key in ("items", "additionalProperties"):
+            if isinstance(value.get(key), dict):
+                assert value[key], value
+                visit(value[key])
+
+    visit(schema)
+
+
+def test_public_bracket_discards_private_cached_operator_fields(client, workspace):
+    import uuid
+    from bracket import response_cache
+
+    tid, token = workspace
+    participant = {"id": "p", "name": "Player", "sourceEntryId": "private-entry", "personId": "private-person"}
+    response_cache.put(uuid.UUID(tid), {
+        "courts": 1, "total_slots": 16, "rest_between_rounds": 1, "interval_minutes": 15,
+        "participants": [participant], "assignments": [], "play_units": [],
+        "events": [{"id": "event", "discipline": "MS", "format": "se", "participant_count": 1,
+                    "rounds": [], "participants": [participant],
+                    "config": {"pointsPerSet": 21, "operatorNote": "private-config"}}],
+        "results": [{"play_unit_id": "m", "winner_side": "A", "reason": "private-medical-note",
+                     "score": {"sets": [{"sideA": 21, "sideB": 10, "notes": "private-game"}],
+                               "notes": "private-score"}}],
+    })
+    response = client.get(f"/display/{token}/bracket")
+    assert response.status_code == 200, response.text
+    assert "private-" not in response.text
+    body = response.json()
+    assert body["participants"][0]["name"] == "Player"
+    assert body["events"][0]["config"]["pointsPerSet"] == 21
+    assert body["results"][0]["score"] == {"sets": [{"sideA": 21, "sideB": 10}]}
+    assert body["results"][0]["reason"] is None
+
+
 def test_summary_kind_follows_enabled_modules_not_the_kind_column(
     client, workspace
 ):
@@ -560,7 +646,7 @@ def test_an_unrecorded_zero_zero_is_not_published_as_a_score(client, workspace):
         repo.match_states.upsert(
             _uuid.UUID(tid),
             "m-real",
-            {"status": "started", "score_side_a": 2, "score_side_b": 1},
+            {"status": "started", "score_side_a": 2, "score_side_b": 1, "notes": "private-medical-note"},
         )
     finally:
         session.close()
@@ -571,6 +657,7 @@ def test_an_unrecorded_zero_zero_is_not_published_as_a_score(client, workspace):
     # A recorded 0–0 outcome is a real (if unusual) result; publish it.
     assert body["m-done"]["score"] == {"sideA": 0, "sideB": 0}
     assert body["m-real"]["score"] == {"sideA": 2, "sideB": 1}
+    assert "notes" not in body["m-real"]
 
 
 def test_two_first_display_opens_converge_on_one_capability(client, monkeypatch):

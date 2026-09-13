@@ -19,16 +19,20 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from typing import Any, Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Path, Response
 from pydantic import BaseModel, Field
 
-from bracket.brackets import TournamentOut, _hydrate_session, _serialize_session
+from bracket.brackets import _hydrate_session, _serialize_session
 from core.dependencies import require_tournament_access
 from core.error_codes import ErrorCode, http_error
 from core.limits import HexColor
 from core.schemas import MeetStandingRowDTO
+from display.projection import (
+    DisplayConfigDTO, DisplayGroupDTO, DisplayPlayerDTO, DisplayMatchDTO,
+    DisplayScheduleDTO, DisplayBracketDTO,
+)
 from db.models import (
     MatchState,
     Tournament,
@@ -233,35 +237,14 @@ def display_summary(
 
 
 class DisplayStateDTO(BaseModel):
-    """The meet board's projection of the workspace state blob (F-DM-30).
+    """Public fields only, including every nested member of the stored blob."""
 
-    Until SP-DM-3 P1 this route had NO ``response_model``: the one
-    unauthenticated data plane in the product was the one with no declared
-    shape, and its allow-list was a Python tuple with a prose comment naming
-    its TS consumer. This class IS that allow-list now, and
-    ``tests/backend/test_display_public.py`` pins its key set exactly.
-
-    Notably ABSENT vs the raw blob, and deliberately: ``scheduleHistory``
-    (the operator revert pool), ``scheduleVersion``, ``bracketPlayers``,
-    ``planFinalized``.
-
-    ponytail: the six pass-through fields are typed ``Any``, not with their
-    real DTOs. Ceiling named: this is the public plane reading a blob that
-    predates the strict DTOs, so validating it through ``TournamentConfig`` /
-    ``PlayerDTO`` / ... (all ``StrictModel``, ``extra="forbid"``) would turn a
-    legacy key into a 500 on a screen in a public hall, or — worse, with
-    ``extra="ignore"`` — silently DROP keys the board renders. Upgrade path:
-    tighten one field at a time behind P2's blob versioning, each with its own
-    key-set test. What P1 buys is the KEY SET being declared, which is what
-    F-DM-30 is about.
-    """
-
-    config: Any = None
-    groups: Any = None
-    players: Any = None
-    matches: Any = None
-    schedule: Any = None
-    scheduleIsStale: Any = None
+    config: Optional[DisplayConfigDTO] = None
+    groups: Optional[List[DisplayGroupDTO]] = None
+    players: Optional[List[DisplayPlayerDTO]] = None
+    matches: Optional[List[DisplayMatchDTO]] = None
+    schedule: Optional[DisplayScheduleDTO] = None
+    scheduleIsStale: Optional[bool] = None
     standings: List[MeetStandingRowDTO] = Field(default_factory=list)
 
 
@@ -351,7 +334,6 @@ class DisplayMatchStateDTO(BaseModel):
     actualStartTime: Optional[str] = None
     actualEndTime: Optional[str] = None
     score: Optional[DisplayMatchScoreDTO] = None
-    notes: Optional[str] = None
     updatedAt: Optional[str] = None
     originalSlotId: Optional[int] = None
     originalCourtId: Optional[int] = None
@@ -404,7 +386,6 @@ def _row_to_display_state(row: MatchState) -> DisplayMatchStateDTO:
         actualStartTime=row.actual_start_time,
         actualEndTime=row.actual_end_time,
         score=score,
-        notes=row.notes,
         updatedAt=row.updated_at.isoformat() if row.updated_at else None,
         originalSlotId=row.original_slot_id,
         originalCourtId=row.original_court_id,
@@ -423,20 +404,15 @@ def display_match_states(
     return {row.match_id: _row_to_display_state(row) for row in rows}
 
 
-@public_router.get("/{token}/bracket", response_model=TournamentOut)
+@public_router.get("/{token}/bracket", response_model=DisplayBracketDTO)
 def display_bracket(
     token: str,
     repo: LocalRepository = Depends(get_repository),
 ):
-    """Bracket board read — same serialized session the viewer-gated
-    ``GET /bracket`` returns (it is already a projection DTO with no
-    operator-only material), served through the short-TTL cache.
+    """Project the cached session through a recursive spectator allow-list.
 
-    ``response_model`` is ``TournamentOut`` — the exact type
-    ``_serialize_session`` already returns (F-DM-30: the route was untyped,
-    not un-shaped). Declaring it changes no key; it puts the shape in the
-    OpenAPI document, which is what the generated types and the parity
-    oracle read.
+    Private roster provenance, arbitrary format configuration, score metadata
+    and operator notes cannot leave through the public response model.
     """
     t = _resolve(repo, token)
     from bracket import response_cache

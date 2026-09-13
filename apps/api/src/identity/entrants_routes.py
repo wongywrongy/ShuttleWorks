@@ -51,6 +51,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import IntegrityError
+from identity.responses import AcceptedDTO
 
 from entries import lifecycle
 from entries.entries_json import require_form_csrf
@@ -946,6 +947,7 @@ def resend_verification(
 
 @router.post(
     "/request-password-reset",
+    response_model=AcceptedDTO,
     status_code=status.HTTP_202_ACCEPTED,
     responses={303: {"description": "Form post: redirect to the sent page"}},
 )
