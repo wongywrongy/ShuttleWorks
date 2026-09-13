@@ -168,7 +168,7 @@ def test_return_closes_node_and_creates_audited_cloud_epoch() -> None:
     assert previous.state == "closed"
     assert cloud.state == "cloud"
     assert cloud.epoch == authority.epoch + 1
-    transition = session.scalar(select(AuthorityTransition))
+    transition = session.scalars(select(AuthorityTransition).where(AuthorityTransition.transition_type != "checkout")).one()
     assert transition.transition_type == "return_to_cloud"
     assert transition.from_epoch == authority.epoch
     assert transition.to_epoch == cloud.epoch
@@ -193,7 +193,7 @@ def test_return_rejects_projection_hash_mismatch_without_closing_authority() -> 
 
     assert raised.value.code == "snapshot_hash_mismatch"
     assert session.get(TournamentAuthority, (tournament_id, authority.epoch)).state == "active"
-    assert session.scalar(select(AuthorityTransition)) is None
+    assert list(session.scalars(select(AuthorityTransition.transition_type))) == ["checkout"]
 
 
 @pytest.mark.parametrize("declared_sequence", [0, 2])
@@ -223,7 +223,7 @@ def test_return_rejects_cloud_ahead_or_node_ahead_without_overwrite(
 
     assert raised.value.code == "operations_not_drained"
     assert session.get(TournamentAuthority, (tournament_id, authority.epoch)).state == "active"
-    assert session.scalar(select(AuthorityTransition)) is None
+    assert list(session.scalars(select(AuthorityTransition.transition_type))) == ["checkout"]
 
 
 def test_planned_transfer_relinquishes_old_node_and_prepares_new_epoch() -> None:
@@ -252,7 +252,7 @@ def test_planned_transfer_relinquishes_old_node_and_prepares_new_epoch() -> None
     assert replacement.state == "preparing"
     assert replacement.node_id == new_node
     assert replacement_capability
-    transition = session.scalar(select(AuthorityTransition))
+    transition = session.scalars(select(AuthorityTransition).where(AuthorityTransition.transition_type != "checkout")).one()
     assert transition.transition_type == "planned_transfer"
     assert session.scalar(
         select(TournamentAuthority).where(
@@ -296,7 +296,7 @@ def test_lost_node_recovery_binds_exact_checkpoint_and_records_replay_evidence()
 
     assert previous.state == "recovered"
     assert replacement.state == "preparing"
-    transition = session.scalar(select(AuthorityTransition))
+    transition = session.scalars(select(AuthorityTransition).where(AuthorityTransition.transition_type != "checkout")).one()
     assert transition.transition_type == "lost_node_recovery"
     assert transition.declared_last_sequence == 0
     assert transition.detail["possiblyMissingOperations"] is False
@@ -488,4 +488,4 @@ def test_privileged_transitions_require_confirmation_and_active_capability() -> 
     assert raised.value.code == "confirmation_required"
 
     # No transition was persisted by the rejected request.
-    assert session.scalar(select(AuthorityTransition)) is None
+    assert list(session.scalars(select(AuthorityTransition.transition_type))) == ["checkout"]

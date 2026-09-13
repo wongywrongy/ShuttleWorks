@@ -837,7 +837,8 @@ class AuthorityTransition(Base):
             "created_at",
         ),
         CheckConstraint(
-            "transition_type IN ('return_to_cloud', 'planned_transfer', 'lost_node_recovery')",
+            "transition_type IN ('return_to_cloud', 'planned_transfer', 'lost_node_recovery', "
+            "'checkout', 'checkpoint_import', 'local_initialization')",
             name="ck_authority_transition_type",
         ),
     )
