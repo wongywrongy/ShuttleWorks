@@ -7,7 +7,7 @@ import re
 
 _CAPABILITY = re.compile(r"(?i)((?:/|%2f|%252f)(?:display|invites?|partners?)(?:/|%2f|%252f))[^\s?\#\"'<>]+")
 _QUERY = re.compile(r"\?[^\s\"'<>]+")
-_URL_CREDENTIALS = re.compile(r"(?i)([a-z][a-z0-9+.-]*://)[^/@\s]+@")
+_URL_CREDENTIALS = re.compile(r"(?i)(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*://)[^/@\s]+@")
 _BEARER = re.compile(r"(?i)(\bBearer\s+)[^\s,\"'<>]+")
 _COOKIE_HEADER = re.compile(r"(?im)(\b(?:set-)?cookie\s*:\s*)[^\r\n]+")
 _SECRET_FIELD = re.compile(

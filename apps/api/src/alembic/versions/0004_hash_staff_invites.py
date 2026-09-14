@@ -1,4 +1,4 @@
-"""Store staff invite digests and replace bearer-valued row identifiers.
+"""data — hash staff invites and replace bearer IDs (security program P05).
 
 Existing links retain their bounded validity. No child references invite IDs.
 Revision-local hashing freezes the deployed token representation.
