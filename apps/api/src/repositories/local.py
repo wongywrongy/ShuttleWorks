@@ -52,7 +52,7 @@ def _conflict_error_class():
     return mod.ConflictError
 
 from fastapi import Request
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session, attributes
 
 from core.config import cloud_modules_enabled
@@ -77,6 +77,7 @@ from db.models import (
     MatchStatus,
     MeetEvent,
     Tournament,
+    TournamentAuthority,
     TournamentBackup,
     TournamentMember,
     User,
@@ -2174,6 +2175,24 @@ class LocalRepository:
     ) -> _Result:
         """Execute a session-aware read without exposing the session."""
         return operation(self.session, *args, **kwargs)
+
+    def authority_key_usage(self) -> list[dict]:
+        """Read grouped grant history without changing an epoch or its actor."""
+        rows = self.session.execute(select(
+            TournamentAuthority.grant_key_id, TournamentAuthority.state, func.count(),
+        ).group_by(TournamentAuthority.grant_key_id, TournamentAuthority.state))
+        return [{"keyId": key, "state": state, "epochs": count} for key, state, count in rows]
+
+    def authority_key_has_open_epochs(self, retiring_key_id: str, trusted_ids: Iterable[str]) -> bool:
+        """Unknown legacy attribution also blocks retirement until reconciled."""
+        return self.session.execute(select(TournamentAuthority.tournament_id).where(
+            TournamentAuthority.state.in_(("preparing", "active")),
+            or_(
+                TournamentAuthority.grant_key_id == retiring_key_id,
+                TournamentAuthority.grant_key_id.is_(None),
+                TournamentAuthority.grant_key_id.not_in(tuple(trusted_ids)),
+            ),
+        ).limit(1)).first() is not None
 
     def stage(
         self,

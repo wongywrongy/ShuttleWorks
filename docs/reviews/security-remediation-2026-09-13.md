@@ -16,7 +16,7 @@ source revisions.
 | R2 | PASS | `core/error_codes.py`, `core/dependencies.py`, `core/main.py`, `sync/routes.py` | `tests/backend/test_tenant_isolation.py`, `test_invite_oracle.py` | Role, missing and unpublished denials converge; collection gates run before cache validators and entrant SSR maps publication races to the same 404. |
 | R3 | FAIL | `core/roles.py`, `db/models.py`, `identity/invites.py` | `tests/backend/test_host_split.py`, `unit/test_baseline_schema.py` | One shared role ladder; sole-parent outbox exception has executable ownership evidence and remains distinct from literal composite-FK compliance. |
 | R4 | PASS | `infra/nginx/log-redaction.conf`, `core/log_redaction.py`, `core/email.py`, `core/tokens.py`, `repositories/local.py`, `display/display.py`, migration `0005` | `tools/check-nginx.sh`, `tests/backend/test_invites.py`, `test_display_public.py`, `unit/test_log_redaction.py`, `unit/test_email_transport.py`, `unit/test_baseline_schema.py` | Staff/display credentials are hashed, finite and issued once; API/nginx/email logging controls pass. Independent review remains pending. |
-| R5 | FAIL | `sync/service.py`, `alembic/versions/0002_authority_creation_audit.py` | `tests/backend/unit/test_sync_protocol.py`, `test_authority_lifecycle.py`, `test_checkpoint_import.py` | Epoch creation is audited; complete actor/lifecycle coverage and key rotation remain. |
+| R5 | FAIL | `sync/service.py`, `alembic/versions/0002_authority_creation_audit.py` | `tests/backend/unit/test_sync_protocol.py`, `test_authority_lifecycle.py`, `test_checkpoint_import.py` | Epoch creation is audited; complete actor/lifecycle coverage remains; key overlap and retirement checks are implemented, with deployed rehearsal pending. |
 | R6 | PASS | `core/config.py`, `core/main.py`, `sync/compatibility.py` | Existing startup, migration and compatibility suites | Existing fail-closed controls retained. |
 | R7 | FAIL | `competition/routes.py`, `meet/schedule_director.py`, `meet/schedule_repair.py`, `bracket/brackets.py`, `entries/entries_routes.py` | `tests/backend/unit/test_golden_rule_input_bounds.py`, derived-output tests | Nested scalar/list/map references bounded; operator Turnstile and remaining input inventory still open. |
 | R8 | PASS | All `infra/nginx/*.conf`, `docs/.vitepress/externalize-scripts.mjs` | Native syntax/runtime checks; `apps/entrant/tests/ingress.test.ts`; `tools/tests/docs-csp.test.mjs` | Operator/public/LAN/docs policies cover upstream and edge-generated failures. |
@@ -200,7 +200,22 @@ omitting a precondition still have last-write-wins semantics.
 
 Residual: nullable/unattributed state actors, unregistered lifecycle domains,
 complete creation-path negative controls, individually authenticated offline
-operators and overlapping authority signing-key rotation remain P08/P10 work.
+operators remain P08/P10 work.
+
+The September 14 authority-key delivery accepts a bounded PEM trust bundle,
+selects the exact issuer key fingerprint, and refuses missing/forged IDs and malformed
+trust. Both old and new real checkout grants import after the signer changes.
+The retirement checker refuses the active signer and open, unattributed or unknown-key
+epochs, preserving closed/recovered history. Its CLI uses read-only database
+connections and creates only a new candidate file; publication requires quiesced
+issuance across every cloud process. It does not deploy trust or fence offline nodes.
+
+The six initial overlap/key-ID/bundle regressions failed before implementation.
+Removing the open-epoch guard fails four retirement cases; removing the active-signer
+guard fails its check. CLI checks prove existing trust files survive and invalid
+database credentials do not enter output. A deployed rotation and emergency
+revocation rehearsal remain unverified; R5 stays FAIL for the residual actor/lifecycle
+work, not because a candidate file is mistaken for operational completion.
 
 ## R6
 
@@ -420,3 +435,32 @@ the collection follow-up began. These results do not certify later source change
 Collection/outbox documentation passes 62 checks (six optional skips), the
 production docs build and all 18 threat-register checks. Ruff passes across the
 repository. The documentation subprocess check requires the host environment.
+
+
+The authority-key PostgreSQL partition passes **225 tests with one expected skip**
+in 7m04s, including retirement and CLI write-refusal checks on both databases.
+The repository boundary check initially caught the new retirement SQL in the sync
+module. Those reads now live in `repositories/local.py`; the architecture inventory
+passes without increasing its counts, and all 15 import contracts pass. The initial
+broad run was stopped at 470 passes for that correction; it is not counted as a
+complete gate. The final backend partition passes **2,545 tests in 15m13s**, with one existing
+SQLAlchemy cascade warning, against the corrected authority implementation.
+The 36 focused crypto/CLI/architecture/register checks pass; the binary-key test
+fails before its raw-byte preservation fix. Removing read-only connection mode
+makes the CLI write-refusal test fail. Documentation passes 62 checks with six skips
+and its production build.
+
+
+P01 historical reconciliation: DL-083's point-cap field already exists in the
+Setup and engine schemas/UI; its backend round-trip/bounds cases pass in the full
+backend run and both engine forms pass their focused tests. DL-086's venue timezone
+already flows through `display/display.py` summary and the shared public board to
+`MeetDisplayPage`; the backend summary and venue-clock assertions pass. DL-085's
+unreachable `display-config` switch case is already deleted; the surrounding
+workspace routing checks pass, without claiming a dedicated dead-code reachability
+check. The focused console run for these areas passes 47 tests. DL-090's short
+submission reference is already minted, unique and consumed by the receipt route;
+`unit/test_short_reference.py` passes in the full backend run. DL-091's AST scan
+already ignores prose while counting executable blob/SQL references; all three
+architecture-inventory checks pass. These are verified historical fixes, not new
+implementations in this delivery.

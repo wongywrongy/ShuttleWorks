@@ -50,6 +50,7 @@ from sqlalchemy.orm import Session
 
 from sync.compatibility import supports_checkpoint_schema, supports_operation_schema
 from sync.errors import ProtocolError
+from sync.signing_keys import decode_key_material as _decode_key_material, key_id, read_verification_keys
 from sync.schemas import (
     CURRENT_CHECKPOINT_SCHEMA_VERSION,
     OperationEnvelope,
@@ -87,22 +88,6 @@ ALLOWED_COMMAND_CLASSES = (
 )
 
 
-def _decode_key_material(raw: bytes) -> bytes:
-    value = raw.strip()
-    if len(value) in (64, 128):
-        try:
-            return bytes.fromhex(value.decode("ascii"))
-        except (ValueError, UnicodeDecodeError):
-            pass
-    try:
-        decoded = base64.urlsafe_b64decode(value + b"=" * (-len(value) % 4))
-        if len(decoded) in (32, 64):
-            return decoded
-    except (ValueError, TypeError):
-        pass
-    return value
-
-
 def _local_bootstrap_private_key() -> Ed25519PrivateKey:
     return Ed25519PrivateKey.from_private_bytes(
         hashlib.sha256(b"shuttleworks-local-authority-bootstrap-v1").digest()
@@ -138,37 +123,35 @@ def _private_signing_key() -> Ed25519PrivateKey:
         ) from exc
 
 
-def _public_verification_key() -> Ed25519PublicKey:
+def _public_verification_key(grant_key_id: object) -> Ed25519PublicKey:
     from core.config import settings
 
     if settings.authority_signing_public_key_file:
         try:
-            raw = Path(settings.authority_signing_public_key_file).read_bytes()
-            try:
-                key = serialization.load_pem_public_key(raw)
-                if isinstance(key, Ed25519PublicKey):
-                    return key
-            except ValueError:
-                pass
-            material = _decode_key_material(raw)
-            if len(material) != 32:
-                raise ValueError("Ed25519 public keys must contain 32 bytes")
-            return Ed25519PublicKey.from_public_bytes(material)
+            trusted = read_verification_keys(settings.authority_signing_public_key_file)
         except (OSError, ValueError, TypeError) as exc:
             raise ProtocolError(
                 503, "authority_signing_key_unavailable", "Authority public key cannot be loaded"
             ) from exc
-    if settings.environment == "cloud" or settings.deployment_profile == "cloud":
+    elif settings.environment == "cloud" or settings.deployment_profile == "cloud":
         # Cloud can verify its own grants when running import tests, but an
         # event node must configure the public key file explicitly.
-        return _private_signing_key().public_key()
-    if settings.deployment_profile == "event_node":
+        key = _private_signing_key().public_key()
+        trusted = {key_id(key): key}
+    elif settings.deployment_profile == "event_node":
         raise ProtocolError(
             503,
             "authority_signing_key_unavailable",
             "Event-node authority verification key is not configured",
         )
-    return _local_bootstrap_private_key().public_key()
+    else:
+        key = _local_bootstrap_private_key().public_key()
+        trusted = {key_id(key): key}
+    # The hint selects exactly one locally trusted key. A forged hint cannot
+    # change the signing identity by falling back to another key in the bundle.
+    if not isinstance(grant_key_id, str) or grant_key_id not in trusted:
+        raise ProtocolError(403, "invalid_authority_grant_signature", "Authority grant signature is invalid")
+    return trusted[grant_key_id]
 
 
 def _public_key_fingerprint(public_key: str) -> str:
@@ -205,11 +188,7 @@ def _authority_grant(
     signature = base64.urlsafe_b64encode(signer.sign(_canonical_json(payload))).decode().rstrip("=")
     return {
         **payload,
-        "keyId": hashlib.sha256(
-            signer.public_key().public_bytes(
-                serialization.Encoding.Raw, serialization.PublicFormat.Raw
-            )
-        ).hexdigest()[:16],
+        "keyId": key_id(signer.public_key()),
         "signature": signature,
     }
 
@@ -367,7 +346,7 @@ def _verify_authority_grant(
         signature = base64.urlsafe_b64decode(
             str(grant["signature"]).encode() + b"=" * (-len(str(grant["signature"])) % 4)
         )
-        _public_verification_key().verify(signature, _canonical_json(expected))
+        _public_verification_key(grant.get("keyId")).verify(signature, _canonical_json(expected))
     except (InvalidSignature, ValueError, TypeError) as exc:
         raise ProtocolError(403, "invalid_authority_grant_signature", "Authority grant signature is invalid") from exc
     return grant

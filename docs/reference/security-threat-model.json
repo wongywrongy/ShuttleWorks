@@ -152,7 +152,7 @@
       "statement": "Authority is explicit, signed, and audited. One node and epoch hold write authority under an Ed25519 grant; every state change records its actor.",
       "owner": "sync-module-owner",
       "verdict": "FAIL",
-      "reviewedAt": "2026-09-13",
+      "reviewedAt": "2026-09-14",
       "review": "docs/reviews/security-remediation-2026-09-13.md#r5",
       "enforcedBy": [
         "apps/api/src/sync/service.py",
@@ -160,7 +160,11 @@
         "apps/api/src/core/state_machine.py",
         "apps/api/src/db/models.py",
         "apps/api/src/core/dependencies.py",
-        "apps/api/src/alembic/versions/0002_authority_creation_audit.py"
+        "apps/api/src/alembic/versions/0002_authority_creation_audit.py",
+        "apps/api/src/sync/signing_keys.py",
+        "apps/api/src/sync/key_rotation.py",
+        "apps/api/src/repositories/local.py",
+        "tools/authority-keyring.py"
       ],
       "evidence": [
         "tests/backend/unit/test_event_node_identity.py",
@@ -169,10 +173,13 @@
         "tests/backend/unit/test_state_transition_history.py",
         "tests/backend/test_state_transition_routes.py",
         "tests/backend/unit/test_sync_protocol.py",
-        "tests/backend/unit/test_checkpoint_import.py"
+        "tests/backend/unit/test_checkpoint_import.py",
+        "tests/backend/unit/test_authority_key_rotation.py",
+        "tests/backend/unit/test_authority_key_retirement.py"
       ],
       "gaps": [
-        "SGR-20260913-05: checkout/import/local initialization now append epoch-creation audit rows; nullable actors, remaining lifecycle registration and authority key rotation remain open."
+        "SGR-20260913-05: epoch creation is audited; nullable actors, remaining lifecycle registration and complete creation-path negative controls remain open.",
+        "SGR-20260913-K3: key overlap and retirement-candidate checks are implemented; deployed multi-issuer/node rotation and emergency revocation remain unverified."
       ]
     },
     {

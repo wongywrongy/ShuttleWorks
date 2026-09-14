@@ -97,7 +97,8 @@ class Settings(BaseSettings):
     sync_poll_interval_seconds: float = 2.0
     sync_batch_size: int = 100
     # Cloud signs authority grants with Ed25519.  The private key is only
-    # read by the cloud API; event nodes configure the matching public key.
+    # read by the cloud API; event nodes configure a public key or a bounded
+    # PEM trust bundle containing overlapping rotation keys.
     authority_signing_key_file: str = Field(
         default="",
         validation_alias=AliasChoices(

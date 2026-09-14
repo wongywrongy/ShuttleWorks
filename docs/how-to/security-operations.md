@@ -32,19 +32,59 @@ Compose input is file-backed.
 
 ## Authority signing key rotation
 
-The current verifier accepts one configured public key. A live key replacement
-while old epochs remain open is **not a supported rotation procedure**. Preserve
-the old key pair until the sync owner has reconciled every open epoch, returned
-or fenced its authority, and verified the audit history and acknowledged sequence.
-Then replace the cloud private key and every node's trusted public key, restart
-consumers, and issue fresh grants. Verify old grants fail and newly signed grants
-succeed. Never delete authority history to make verification succeed.
+`AUTHORITY_SIGNING_PUBLIC_KEY_FILE` accepts a single existing PEM/raw/hex/base64
+Ed25519 public key or a PEM bundle of up to 16 distinct Ed25519 public keys
+(16 KiB maximum). The grant's key ID selects exactly one trusted key; missing,
+unknown or forged IDs are refused. Malformed bundles fail closed at verification.
+The signing file still holds exactly one private key. Public bundles never contain
+private material and are distributed through the existing event-node public-key mount.
 
-Overlapping key IDs, retirement conditions tied to open epochs, emergency key
-revocation and individually authenticated offline operators remain P08/P10 work.
-If an old private key is compromised, stop new checkouts and isolate affected
-nodes while the maintainer coordinates containment; normal planned rotation
-cannot make already issued offline authority disappear from a disconnected node.
+Planned rotation proceeds in this order:
+
+1. Generate the replacement Ed25519 pair in the restricted key-management process.
+   Record both public-key fingerprints and the rollout owner. Keep private material
+   out of shell arguments, logs and this repository.
+2. Distribute an old-plus-new public PEM bundle to every participating node, and to
+   any cloud process that verifies checkpoint imports. Restart those consumers and
+   prove both keys verify. Account for disconnected nodes before switching issuance;
+   they retain their current epoch but cannot consume a new-key grant until updated.
+3. Replace only the cloud issuer's private-key file, restart every issuer, and prove
+   a newly issued grant names the new key. Existing epochs keep their original signed
+   grants, actor history and sequence; rotation does not create a second write owner.
+4. Return or fence all epochs using the retiring key through the existing audited
+   authority operations. Reconcile their acknowledged operations first. Do not delete
+   historical epochs or re-sign their stored evidence to make a check pass.
+5. Pause checkout/transfer/recovery grant issuance across **every** cloud process.
+   Using the cloud process's database and key-file configuration, run the read-only
+   inventory and candidate tool from this checkout:
+
+   ```bash
+   .venv/bin/python tools/authority-keyring.py
+   .venv/bin/python tools/authority-keyring.py --retire-key-id OLD_KEY_ID --output /tmp/reviewed-authority-trust.pem
+   ```
+
+   Configure `AUTHORITY_SIGNING_PUBLIC_KEY_FILE` to the current overlap bundle for
+   this command. It refuses the active signer, unknown keys, any preparing/active
+   epoch using the old key, and unattributed/untrusted open epochs. SQLite/PostgreSQL
+   connections are read-only. It creates a new candidate file exclusively; it never
+   overwrites live trust, modifies epochs or publishes a configuration.
+6. Review the inventory and candidate, distribute the candidate to all consumers,
+   restart, prove old-key import fails and new-key import succeeds, then resume
+   issuance. Keep the public old-key material with restricted historical evidence
+   for offline audit; remove it from live verification trust. Record the source
+   revision, deployment identities, key IDs, epoch disposition and verification result.
+
+The tool observes one database snapshot. It cannot fence another issuer, prove that
+an offline node received a trust update, or authorize deletion of private material.
+Issuance must remain paused between its check and distribution. This source delivery
+has executable overlap/import/retirement controls; a deployed rotation rehearsal and
+emergency revocation remain unverified P10/P14 work.
+
+For compromise, stop new issuance and isolate affected nodes while the maintainer
+coordinates containment. Planned rotation cannot revoke authority on a disconnected
+node: fence its epoch centrally, preserve local operations for reconciliation, and
+replace the node's trust before reconnecting it. Individually authenticated offline
+operators remain P08 work.
 
 ## Incident response
 

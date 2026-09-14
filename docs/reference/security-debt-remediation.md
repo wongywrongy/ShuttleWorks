@@ -130,15 +130,15 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-080 | Work package 20 — activity history readable / V3-20-3 | List/object-valued fields (courts, dailySessions, events, contacts) diff as whole-array old/new JSON | P23 | Unreconciled |
 | DL-081 | Work package 15 — publication and entrant privacy / V3-15-1 | V3-OC13.2's acceptance also asks for distinct field-validation vs. image-fetch-failure messages | P23 | Unreconciled |
 | DL-082 | Work package 13 — finish tournament setup / V3-13-1 | partnerRules (Setup → Entry rules → "Partner instructions") has no reader anywhere. | P06 | Unreconciled |
-| DL-083 | Work package 13 — finish tournament setup / V3-13-2 | pointCap (ruling C3) was added only to the Setup rules section document | P23 | Unreconciled |
+| DL-083 | Work package 13 — finish tournament setup / V3-13-2 | pointCap (ruling C3) was added only to the Setup rules section document | P23 | Historical fix verified; see reconciled source entry; review pending |
 | DL-084 | Work package 13 — finish tournament setup / V3-13-3 | The out-of-window session conflict (SETUP_DATES_SESSION_OUT_OF_WINDOW, V3-OC07.1) renders as a page-level Notice naming the session, not literally inline nex… | P23 | Unreconciled |
-| DL-085 | Work package 16 — venue-board publishing / V3-16-1 | WorkspaceShellSurface.tsx's case 'display-config': switch branch (renders DisplayConfig alone, without SharingTab) is dead code. | P18 | Unreconciled |
-| DL-086 | Work package 17 — signage / V3-17-1 | The real venue timezone never reaches the board's wire data. | P18 | Unreconciled |
+| DL-085 | Work package 16 — venue-board publishing / V3-16-1 | WorkspaceShellSurface.tsx's case 'display-config': switch branch (renders DisplayConfig alone, without SharingTab) is dead code. | P18 | Historical fix verified; see reconciled source entry; review pending |
+| DL-086 | Work package 17 — signage / V3-17-1 | The real venue timezone never reaches the board's wire data. | P18 | Historical fix verified; see reconciled source entry; review pending |
 | DL-087 | Work package 17 — signage / V3-22-1 | The organizer's "report N minutes before their match is called" rule (V3-PE15.1) has no observable reference to bind it to. | P17 | Unreconciled |
 | DL-088 | Work package 23 — account, confirmation and reset journeys / V3-23-1 | V3-PE23.2 (Turnstile's "For testing only" widget copy) cannot be retired from this package. | P23 | Unreconciled |
 | DL-089 | Work package 23 — account, confirmation and reset journeys / V3-23-2 | tests/e2e/check-account-journeys.py deliberately does NOT re-verify "the old password is refused after a reset" over live HTTP | P17 | Unreconciled |
-| DL-090 | Work package 24 — invitations, My entries and receipts / V3-24-1 | The short entry reference (V3-PE39.1 / plan §3 "Short entry reference") is designed here, not implemented. | P17 | Unreconciled |
-| DL-091 | Work package 29 — structured sides on the wire / V3-29-1 | Closed 2026-09-08. | P23 | Unreconciled |
+| DL-090 | Work package 24 — invitations, My entries and receipts / V3-24-1 | The short entry reference (V3-PE39.1 / plan §3 "Short entry reference") is designed here, not implemented. | P17 | Historical fix verified; see reconciled source entry; review pending |
+| DL-091 | Work package 29 — structured sides on the wire / V3-29-1 | Closed 2026-09-08. | P23 | Historical fix verified; see reconciled source entry; review pending |
 | DL-092 | Work package 29 — structured sides on the wire / V3-29-2 | apps/console/src/api/bracketDto.ts still carries the @deprecated side_a/side_b pre-joined fields. | P20 | Unreconciled |
 | DL-093 | Work package 30 — short entry reference / V3-30-1 | An organizer cannot look up a quoted entry reference. | P17 | Unreconciled |
 | DL-094 | Work package 30 — short entry reference / V3-30-2 | Migrations with row-level SQL are only exercised on SQLite by default. | P23 | Implementation verified; see reconciled source entry; review pending |
