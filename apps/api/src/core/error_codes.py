@@ -180,6 +180,8 @@ class ErrorCode(str, Enum):
     AUTH_MFA_INVALID = "AUTH_MFA_INVALID"
     AUTH_REAUTH_REQUIRED = "AUTH_REAUTH_REQUIRED"
     AUTH_MFA_UNAVAILABLE = "AUTH_MFA_UNAVAILABLE"
+    # Turning off the authenticator is refused where deployment policy requires it.
+    AUTH_MFA_ENFORCED = "AUTH_MFA_ENFORCED"
     # A retired credential-issuing route. Node credentials are minted only by
     # individual activation and sign-in (identity/node_routes.py, P08).
     AUTH_ENDPOINT_GONE = "AUTH_ENDPOINT_GONE"

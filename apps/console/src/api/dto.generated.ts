@@ -3523,6 +3523,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reissue Recovery Codes
+         * @description Replace all recovery codes; a current authenticator code is the proof.
+         */
+        post: operations["reissue_recovery_codes_auth_mfa_recovery_codes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disable
+         * @description Turn off a voluntary authenticator. Refused where policy requires one.
+         */
+        delete: operations["disable_auth_mfa_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/activity": {
         parameters: {
             query?: never;
@@ -7949,6 +7989,11 @@ export interface components {
             /** Seen Version */
             seen_version?: number | null;
         };
+        /** RecoveryCodesDTO */
+        RecoveryCodesDTO: {
+            /** Recoverycodes */
+            recoveryCodes: string[];
+        };
         /**
          * RefusalDTO
          * @description A refusal the entrant can act on.
@@ -9326,6 +9371,16 @@ export interface components {
              */
             mfaRequired: boolean;
             /**
+             * Mfaenforced
+             * @default false
+             */
+            mfaEnforced: boolean;
+            /**
+             * Mfaavailable
+             * @default false
+             */
+            mfaAvailable: boolean;
+            /**
              * Mfaenrolled
              * @default false
              */
@@ -9335,6 +9390,8 @@ export interface components {
              * @default false
              */
             mfaAuthenticated: boolean;
+            /** Mfarecoverycodesremaining */
+            mfaRecoveryCodesRemaining?: number | null;
             /**
              * Passwordconfigured
              * @default true
@@ -14572,6 +14629,72 @@ export interface operations {
         };
     };
     verify_auth_mfa_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reissue_recovery_codes_auth_mfa_recovery_codes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_auth_mfa_delete: {
         parameters: {
             query?: never;
             header?: never;

@@ -272,3 +272,37 @@ def test_rewrap_without_the_old_key_refuses_and_writes_nothing(account):
     repo.session.expire_all()
     factor = repo.mfa.get(user_id)
     assert factor.secret_ciphertext == before and factor.key_id == options["keys"].active_id
+
+
+def test_reissue_needs_a_current_code_and_replaces_every_recovery_code(account):
+    repo, user_id, options = account
+    seed, _, recovery = enroll(account)
+    later = NOW + timedelta(seconds=30)
+    with pytest.raises(mfa.MfaError, match="MFA_INVALID_CODE"), repo.transaction():
+        mfa.reissue_recovery_codes(repo, user_id, recovery[0], **dict(options, now=later))
+    with repo.transaction():
+        codes = mfa.reissue_recovery_codes(repo, user_id, totp_code(seed, later.timestamp()), **dict(options, now=later))
+    factor = repo.mfa.get(user_id)
+    stored = set(repo.session.scalars(select(OperatorRecoveryCode.token_hash).where(OperatorRecoveryCode.factor_id == factor.id)))
+    assert stored == {_hash_token(normalize_recovery_code(code)) for code in codes}
+    assert not stored & {_hash_token(normalize_recovery_code(code)) for code in recovery}
+    events = repo.session.scalars(select(StateTransition.event).where(StateTransition.subject_id == str(factor.id))).all()
+    assert "reissue_recovery_codes" in events
+
+
+def test_disable_clears_the_seed_and_codes_and_revokes_other_sessions(account):
+    repo, user_id, options = account
+    _, generation, recovery = enroll(account)
+    other = AuthSession(user_id=user_id, token_hash="d" * 64, expires_at=NOW + timedelta(hours=1))
+    repo.session.add(other)
+    repo.session.commit()
+    with repo.transaction():
+        mfa.disable_factor(repo, user_id, recovery[0], session_id=SESSION_ID, **options)
+    factor = repo.mfa.get(user_id)
+    assert factor.status == "unconfigured" and factor.generation == generation + 1
+    assert factor.secret_ciphertext is None and factor.key_id is None and factor.last_counter == -1
+    assert repo.mfa.count_recovery_codes(factor.id) == 0
+    repo.session.refresh(other)
+    assert other.revoked_at is not None
+    transition = repo.session.scalars(select(StateTransition).where(StateTransition.event == "disable")).one()
+    assert (transition.from_state, transition.to_state, transition.actor_id) == ("active", "unconfigured", str(user_id))

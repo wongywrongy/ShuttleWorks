@@ -23,7 +23,7 @@ describe('individual node enrollment', () => {
     vi.mocked(apiClient.activateNodeOperator).mockResolvedValue({
       id: 'operator', email: 'node@example.test', displayName: null, emailVerified: false,
       isBootstrap: false, authMode: 'local', emailConfigured: false, passwordConfigured: true,
-      mfaRequired: true, mfaEnrolled: false, mfaAuthenticated: false, offlineWorkspaceId: workspaceId,
+      mfaRequired: true, mfaEnforced: true, mfaAvailable: true, mfaEnrolled: false, mfaAuthenticated: false, offlineWorkspaceId: workspaceId,
     });
     render(<MemoryRouter initialEntries={[`/node-enrollment?workspaceId=${workspaceId}`]}><NodeEnrollmentPage /></MemoryRouter>);
     await interact.type(screen.getByLabelText('Email'), 'node@example.test');

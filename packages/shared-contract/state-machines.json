@@ -413,6 +413,28 @@
           "description": ""
         },
         {
+          "event": "reissue_recovery_codes",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "disable",
+          "from_states": [
+            "active"
+          ],
+          "to": "unconfigured",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
           "event": "administrator_reset",
           "from_states": [
             "active",
@@ -435,8 +457,10 @@
         "administrator_reset": "administrator_reset",
         "authenticate": "authenticate",
         "begin": "begin",
+        "disable": "disable",
         "password_change": "password_change",
-        "recover": "recover"
+        "recover": "recover",
+        "reissue_recovery_codes": "reissue_recovery_codes"
       }
     },
     "solve_job": {

@@ -82,6 +82,10 @@ class MfaRepository:
             for value in hashes
         ])
 
+    def count_recovery_codes(self, factor_id: uuid.UUID) -> int:
+        return self.session.scalar(select(func.count()).select_from(OperatorRecoveryCode).where(
+            OperatorRecoveryCode.factor_id == factor_id)) or 0
+
     def consume_recovery_code(self, factor_id: uuid.UUID, digest: str) -> bool:
         result = self.session.execute(delete(OperatorRecoveryCode).where(
             OperatorRecoveryCode.factor_id == factor_id, OperatorRecoveryCode.token_hash == digest,

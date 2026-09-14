@@ -268,3 +268,105 @@ def test_password_reset_does_not_remove_or_bypass_the_factor(authenticated_app):
     assert client.get("/tournaments").status_code == 401
     assert client.post("/auth/mfa/verify", json={"currentPassword": replacement, "code": recovery[0]}).status_code == 200
     assert client.get("/tournaments").status_code == 200
+
+
+@pytest.fixture
+def voluntary_app(tmp_path, monkeypatch):
+    """AUTH_MODE=local with a key ring: MFA is offered, never enforced."""
+    from core.secret_keys import create_secret_keyring
+    path = tmp_path / "operator-keys.json"
+    create_secret_keyring(path)
+    monkeypatch.setenv("MFA_KEYRING_FILE", str(path))
+    monkeypatch.setenv("AUTH_MODE", "local")
+    monkeypatch.setenv("EMBEDDED_WORKER", "false")
+    isolate_test_database(tmp_path, monkeypatch)
+    from core.main import app
+    from fastapi.testclient import TestClient
+    clock = {"now": datetime.now(timezone.utc).replace(microsecond=0)}
+    for name in ("identity.auth", "identity.mfa_routes", "core.dependencies"):
+        if name in sys.modules:
+            monkeypatch.setattr(import_module(name), "_utcnow", lambda: clock["now"], raising=False)
+    with TestClient(app, headers=CSRF) as client:
+        yield client, clock
+
+
+def _totp(seed, clock):
+    from identity.mfa_crypto import totp_code
+    clock["now"] += timedelta(seconds=30)  # each time step is one-use
+    return totp_code(seed, clock["now"].timestamp())
+
+
+def test_voluntary_factor_is_offered_challenged_at_login_and_can_be_turned_off(voluntary_app):
+    client, clock = voluntary_app
+    me = register(client).json()
+    assert (me["mfaRequired"], me["mfaEnforced"], me["mfaAvailable"], me["mfaEnrolled"]) == (False, False, True, False)
+    assert me["mfaRecoveryCodesRemaining"] is None
+    assert client.get("/tournaments").status_code == 200
+    seed, recovery = enroll(client, clock)
+    me = client.get("/auth/me").json()
+    assert (me["mfaRequired"], me["mfaEnforced"], me["mfaEnrolled"], me["mfaAuthenticated"]) == (True, False, True, True)
+    assert me["mfaRecoveryCodesRemaining"] == 8
+    first_session = client.cookies.get("sw_session")
+
+    # An enrolled operator is challenged at the next sign-in, as in cloud mode.
+    client.cookies.clear()
+    assert client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD}).json()["mfaAuthenticated"] is False
+    pending = client.get("/tournaments")
+    assert pending.status_code == 401 and pending.json()["detail"]["code"] == "AUTH_MFA_REQUIRED"
+    assert client.post("/auth/mfa/verify", json={"currentPassword": PASSWORD, "code": recovery[0]}).status_code == 200
+    assert client.get("/auth/me").json()["mfaRecoveryCodesRemaining"] == 7
+
+    # Reissue: the password names itself; a recovery code cannot mint more codes.
+    wrong = client.post("/auth/mfa/recovery-codes", json={"currentPassword": "not it", "code": _totp(seed, clock)})
+    assert wrong.status_code == 401 and wrong.json()["detail"]["code"] == "AUTH_INVALID_CREDENTIALS"
+    by_recovery = client.post("/auth/mfa/recovery-codes", json={"currentPassword": PASSWORD, "code": recovery[1]})
+    assert by_recovery.status_code == 401 and by_recovery.json()["detail"]["code"] == "AUTH_MFA_INVALID"
+    reissued = client.post("/auth/mfa/recovery-codes", json={"currentPassword": PASSWORD, "code": _totp(seed, clock)})
+    assert reissued.status_code == 200, reissued.text
+    assert reissued.headers["cache-control"] == "no-store"
+    fresh_codes = reissued.json()["recoveryCodes"]
+    assert len(fresh_codes) == 8 and not set(fresh_codes) & set(recovery)
+    assert client.get("/auth/me").json()["mfaRecoveryCodesRemaining"] == 8
+
+    # Five minutes later both management actions need fresh proof first.
+    clock["now"] += timedelta(minutes=5)
+    stale = client.request("DELETE", "/auth/mfa", json={"currentPassword": PASSWORD, "code": _totp(seed, clock)})
+    assert stale.status_code == 401 and stale.json()["detail"]["code"] == "AUTH_REAUTH_REQUIRED"
+    assert client.post("/auth/mfa/verify", json={"currentPassword": PASSWORD, "code": fresh_codes[0]}).status_code == 200
+
+    disabled = client.request("DELETE", "/auth/mfa", json={"currentPassword": PASSWORD, "code": _totp(seed, clock)})
+    assert disabled.status_code == 200, disabled.text
+    assert (disabled.json()["mfaEnrolled"], disabled.json()["mfaRequired"]) == (False, False)
+    assert client.get("/tournaments").status_code == 200  # this session survives
+    client.cookies.set("sw_session", first_session, domain="testserver.local", path="/")
+    assert client.get("/auth/me").json()["isBootstrap"] is True  # the other session was revoked
+    client.cookies.clear()
+    login = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+    assert login.json()["mfaRequired"] is False
+    assert client.get("/tournaments").status_code == 200
+
+
+def test_turning_off_a_required_authenticator_is_refused(authenticated_app):
+    client, clock = authenticated_app
+    register(client)
+    seed, _ = enroll(client, clock)
+    assert client.get("/auth/me").json()["mfaEnforced"] is True
+    refused = client.request("DELETE", "/auth/mfa", json={"currentPassword": PASSWORD, "code": _totp(seed, clock)})
+    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "AUTH_MFA_ENFORCED"
+    assert client.get("/auth/me").json()["mfaEnrolled"] is True
+
+
+def test_an_api_without_a_key_ring_reports_mfa_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTH_MODE", "local")
+    monkeypatch.setenv("EMBEDDED_WORKER", "false")
+    isolate_test_database(tmp_path, monkeypatch)  # migrates, and provisions a ring we then withdraw
+    monkeypatch.setenv("MFA_KEYRING_FILE", "")
+    from tests.backend._helpers import purge_backend_modules
+    purge_backend_modules()
+    from core.main import app
+    from fastapi.testclient import TestClient
+    with TestClient(app, headers=CSRF) as client:
+        assert register(client).json()["mfaAvailable"] is False
+        unavailable = client.post("/auth/mfa/enroll", json={"currentPassword": PASSWORD})
+        assert unavailable.status_code == 503
+        assert unavailable.json()["detail"]["code"] == "AUTH_MFA_UNAVAILABLE"

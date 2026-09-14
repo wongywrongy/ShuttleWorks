@@ -86,9 +86,17 @@ class UserDTO(BaseModel):
     # 18, V3-OC25.1) instead of always presenting a choice the local
     # deployment never delivers on.
     emailConfigured: bool = False
+    # mfaRequired is this session's obligation (deployment policy OR an
+    # enrolled factor); mfaEnforced is the policy alone, so the console can
+    # tell a voluntary factor (which may be turned off) from a mandatory one.
     mfaRequired: bool = False
+    mfaEnforced: bool = False
+    # Whether this API holds an authenticator key ring at all. Without one,
+    # enrollment answers 503 AUTH_MFA_UNAVAILABLE, so offering it would mislead.
+    mfaAvailable: bool = False
     mfaEnrolled: bool = False
     mfaAuthenticated: bool = False
+    mfaRecoveryCodesRemaining: Optional[int] = None
     passwordConfigured: bool = True
     offlineWorkspaceId: Optional[str] = None
     authenticatedAt: Optional[datetime] = None
@@ -174,7 +182,10 @@ def _user_dto(user_row, *, email: str, repo: LocalRepository, principal: AuthUse
         authMode=settings.auth_mode,
         emailConfigured=settings.email_backend == "smtp",
         mfaRequired=settings.operator_mfa_required or enrolled,
+        mfaEnforced=settings.operator_mfa_required,
+        mfaAvailable=bool(settings.mfa_keyring_file),
         mfaEnrolled=enrolled,
+        mfaRecoveryCodesRemaining=repo.mfa.count_recovery_codes(factor.id) if enrolled else None,
         mfaAuthenticated=bool(principal and principal.mfa_authenticated),
         passwordConfigured=bool(user_row.password_hash),
         offlineWorkspaceId=principal.offline_tournament_id if principal else None,

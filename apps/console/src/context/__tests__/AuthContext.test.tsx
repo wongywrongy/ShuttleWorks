@@ -42,6 +42,8 @@ const accountUser = {
   emailConfigured: false,
   passwordConfigured: true,
   mfaRequired: true,
+  mfaEnforced: true,
+  mfaAvailable: true,
   mfaEnrolled: true,
   mfaAuthenticated: true,
   authenticatedAt: '2026-09-14T10:00:00Z',

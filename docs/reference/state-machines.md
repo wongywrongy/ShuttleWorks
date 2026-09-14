@@ -62,6 +62,8 @@ Initial: unconfigured. Terminal: none.
 | authenticate | active | active | operator | — | true |  |
 | recover | active | active | operator | — | true |  |
 | password_change | active | active | operator | — | true |  |
+| reissue_recovery_codes | active | active | operator | — | true |  |
+| disable | active | unconfigured | operator | — | true |  |
 | administrator_reset | active, unconfigured | unconfigured | system | — | true |  |
 
 ## solve_job (version 1)

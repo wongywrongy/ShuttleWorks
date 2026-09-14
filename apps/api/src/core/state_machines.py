@@ -24,6 +24,8 @@ OPERATOR_MFA_FACTOR = machine("operator_mfa_factor", "unconfigured active", "unc
     edge("authenticate", "active", "active"),
     edge("recover", "active", "active"),
     edge("password_change", "active", "active"),
+    edge("reissue_recovery_codes", "active", "active"),
+    edge("disable", "active", "unconfigured"),
     edge("administrator_reset", "unconfigured active", "unconfigured", "system"),
 ])
 

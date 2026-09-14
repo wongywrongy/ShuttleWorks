@@ -86,29 +86,71 @@ def confirm_enrollment(repo: LocalRepository, user_id: uuid.UUID, code: str, *,
     return factor.generation, recovery
 
 
-def verify_factor(repo: LocalRepository, user_id: uuid.UUID, code: str, *,
-                  scope: str, keys: SecretKeyring, now: datetime) -> int:
+def _prove(repo: LocalRepository, factor, user_id: uuid.UUID, code: str, *,
+           scope: str, keys: SecretKeyring, now: datetime, allow_recovery: bool = True) -> str:
+    """Consume one proof against an active factor and return its audit event."""
+    recovery = normalize_recovery_code(code)
+    if recovery is not None:
+        if not allow_recovery or not repo.mfa.consume_recovery_code(factor.id, _hash_token(recovery)):
+            raise MfaError("MFA_INVALID_CODE")
+        return "recover"
+    seed = decrypt_factor(factor.secret_ciphertext, keys.key(factor.key_id), user_id=user_id, scope=scope)
+    counter = matching_counter(seed, code, now.timestamp(), after_counter=factor.last_counter)
+    if counter is None:
+        raise MfaError("MFA_INVALID_CODE")
+    factor.last_counter = counter
+    # Successful proof migrates custody without changing factor generation.
+    if factor.key_id != keys.active_id:
+        factor.secret_ciphertext = encrypt_factor(seed, keys.active_key, user_id=user_id, scope=scope)
+        factor.key_id = keys.active_id
+    return "authenticate"
+
+
+def _active_factor(repo: LocalRepository, user_id: uuid.UUID, scope: str, now: datetime):
     factor = repo.mfa.reserve(user_id, scope, now)
     if factor is None or factor.status != "active":
         raise MfaError("MFA_NOT_ENROLLED")
-    recovery = normalize_recovery_code(code)
-    if recovery is not None:
-        if not repo.mfa.consume_recovery_code(factor.id, _hash_token(recovery)):
-            raise MfaError("MFA_INVALID_CODE")
-        event = "recover"
-    else:
-        seed = decrypt_factor(factor.secret_ciphertext, keys.key(factor.key_id), user_id=user_id, scope=scope)
-        counter = matching_counter(seed, code, now.timestamp(), after_counter=factor.last_counter)
-        if counter is None:
-            raise MfaError("MFA_INVALID_CODE")
-        factor.last_counter = counter
-        # Successful proof migrates custody without changing factor generation.
-        if factor.key_id != keys.active_id:
-            factor.secret_ciphertext = encrypt_factor(seed, keys.active_key, user_id=user_id, scope=scope)
-            factor.key_id = keys.active_id
-        event = "authenticate"
+    return factor
+
+
+def verify_factor(repo: LocalRepository, user_id: uuid.UUID, code: str, *,
+                  scope: str, keys: SecretKeyring, now: datetime) -> int:
+    factor = _active_factor(repo, user_id, scope, now)
+    event = _prove(repo, factor, user_id, code, scope=scope, keys=keys, now=now)
     _audit(repo, factor, event, now)
     return factor.generation
+
+
+def reissue_recovery_codes(repo: LocalRepository, user_id: uuid.UUID, code: str, *,
+                           scope: str, keys: SecretKeyring, now: datetime) -> list[str]:
+    """Replace every recovery code. Only a current authenticator code proves possession:
+    a recovery code cannot mint more recovery codes."""
+    factor = _active_factor(repo, user_id, scope, now)
+    _prove(repo, factor, user_id, code, scope=scope, keys=keys, now=now, allow_recovery=False)
+    recovery = new_recovery_codes()
+    repo.mfa.replace_recovery_codes(factor.id, [_hash_token(normalize_recovery_code(v)) for v in recovery], now)
+    _audit(repo, factor, "reissue_recovery_codes", now)
+    return recovery
+
+
+def disable_factor(repo: LocalRepository, user_id: uuid.UUID, code: str, *,
+                   scope: str, keys: SecretKeyring, now: datetime, session_id: uuid.UUID) -> None:
+    """Voluntary removal. Callers refuse it where policy enforces MFA.
+
+    The generation bump invalidates every assurance issued under the factor; the
+    caller's own session stays valid because nothing then requires MFA, and every
+    other session is revoked so a stolen one cannot outlive the change.
+    """
+    factor = _active_factor(repo, user_id, scope, now)
+    _prove(repo, factor, user_id, code, scope=scope, keys=keys, now=now)
+    factor.secret_ciphertext = factor.key_id = None
+    factor.pending_ciphertext = factor.pending_key_id = factor.pending_expires_at = None
+    factor.pending_session_id = None
+    factor.last_counter = -1
+    factor.generation += 1
+    repo.mfa.replace_recovery_codes(factor.id, [], now)
+    repo.mfa.revoke_sessions(user_id, now, except_session_id=session_id)
+    _audit(repo, factor, "disable", now)
 
 
 def rewrap_factors(repo: LocalRepository, *, keys: SecretKeyring, now: datetime) -> dict[str, int]:

@@ -9,7 +9,7 @@ vi.mock('../../../api/client', () => ({ apiClient: { beginMfa: vi.fn(), confirmM
 const user: UserDTO = {
   id: 'operator-1', email: 'operator@example.test', displayName: null, emailVerified: true,
   isBootstrap: false, authMode: 'cloud', emailConfigured: false, passwordConfigured: true,
-  mfaRequired: true, mfaEnrolled: false, mfaAuthenticated: false,
+  mfaRequired: true, mfaEnforced: true, mfaAvailable: true, mfaEnrolled: false, mfaAuthenticated: false,
 };
 beforeEach(() => { vi.clearAllMocks(); });
 

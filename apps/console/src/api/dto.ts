@@ -1126,9 +1126,18 @@ export interface UserDTO {
    *  ``smtp`` backend, vs. the local ``console`` backend that only logs).
    *  Gates whether the console offers "send by email" invitations. */
   emailConfigured: boolean;
+  /** This session's obligation: deployment policy OR an enrolled factor. */
   mfaRequired: boolean;
+  /** Deployment policy alone. False means an enrolled factor is voluntary
+   *  and may be turned off. */
+  mfaEnforced: boolean;
+  /** Whether the API holds an authenticator key ring; without one,
+   *  enrollment answers 503, so it is not offered. */
+  mfaAvailable: boolean;
   mfaEnrolled: boolean;
   mfaAuthenticated: boolean;
+  /** Unused recovery codes, when enrolled. */
+  mfaRecoveryCodesRemaining?: number | null;
   passwordConfigured: boolean;
   offlineWorkspaceId?: string | null;
   authenticatedAt?: string | null;

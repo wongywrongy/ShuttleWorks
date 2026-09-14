@@ -21,6 +21,11 @@ caller's transaction. Refusals and failed session grants roll back both the
 factor/code mutation and its history. Cloud and node HTTP ceremonies compose
 factor verification with session rotation in that transaction. The console keeps
 unsent forms mounted behind its session lock and resumes only the same identity.
+`reissue_recovery_codes` replaces every recovery code and accepts only a current
+authenticator code as proof. `disable` returns a voluntary factor to
+`unconfigured`, bumps its generation and revokes the account's other sessions;
+the API refuses it with `AUTH_MFA_ENFORCED` wherever deployment policy requires
+MFA, so only a factor enrolled on a non-enforcing deployment can be turned off.
 
 `node_operator_enrollment` records individual activation issuance and consumption.
 The local administrator is attributed to the node UUID; activation is attributed

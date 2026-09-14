@@ -45,6 +45,10 @@ class ConfirmationDTO(BaseModel):
     recoveryCodes: list[str] = Field(min_length=8, max_length=8)
 
 
+class RecoveryCodesDTO(BaseModel):
+    recoveryCodes: list[str] = Field(min_length=8, max_length=8)
+
+
 def _keys():
     try:
         return read_secret_keyring(settings.mfa_keyring_file)
@@ -140,15 +144,67 @@ def verify(body: VerifyRequest, request: Request, response: Response,
     keys, now = _keys(), _utcnow()
     try:
         with repo.transaction():
-            account = repo.mfa.reserve_account(user.as_uuid())
-            if account is None or not account.password_hash or not auth.verify_password(account.password_hash, body.currentPassword):
-                raise mfa.MfaError("MFA_INVALID_CREDENTIALS")
-            credential = _credential(repo, user, now)
+            _, credential = _reserve_with_password(repo, user, body.currentPassword, now)
             generation = mfa.verify_factor(repo, user.as_uuid(), body.code,
                 scope=settings.operator_mfa_scope, keys=keys, now=now)
             return _complete(repo, user, credential, generation, response, now)
     except (mfa.MfaError, SecretKeyringError, FactorSecretError) as exc:
         raise _failure(repo, exc, attempts) from None
+
+
+def _require_verified(user: AuthUser) -> None:
+    """Factor management needs a completed ceremony, then a fresh one."""
+    if user.mfa_required and not user.mfa_authenticated:
+        raise http_error(401, ErrorCode.AUTH_MFA_REQUIRED, "Complete authenticator verification")
+    require_fresh_authentication(user)
+
+
+def _reserve_with_password(repo: LocalRepository, user: AuthUser, password: str, now: datetime):
+    account = repo.mfa.reserve_account(user.as_uuid())
+    if account is None or not account.password_hash or not auth.verify_password(account.password_hash, password):
+        raise mfa.MfaError("MFA_INVALID_CREDENTIALS")
+    return account, _credential(repo, user, now)
+
+
+@router.post("/mfa/recovery-codes", response_model=RecoveryCodesDTO)
+def reissue_recovery_codes(body: VerifyRequest, request: Request, response: Response,
+                           user: AuthUser = Depends(get_pending_user), repo: LocalRepository = Depends(get_repository)):
+    """Replace all recovery codes; a current authenticator code is the proof."""
+    _require_verified(user)
+    attempts = _attempt_keys(user, request, repo)
+    keys, now = _keys(), _utcnow()
+    try:
+        with repo.transaction():
+            _reserve_with_password(repo, user, body.currentPassword, now)
+            codes = mfa.reissue_recovery_codes(repo, user.as_uuid(), body.code,
+                scope=settings.operator_mfa_scope, keys=keys, now=now)
+    except (mfa.MfaError, SecretKeyringError, FactorSecretError) as exc:
+        raise _failure(repo, exc, attempts) from None
+    response.headers["Cache-Control"] = "no-store"
+    return RecoveryCodesDTO(recoveryCodes=codes)
+
+
+@router.delete("/mfa", response_model=UserDTO)
+def disable(body: VerifyRequest, request: Request, response: Response,
+            user: AuthUser = Depends(get_pending_user), repo: LocalRepository = Depends(get_repository)):
+    """Turn off a voluntary authenticator. Refused where policy requires one."""
+    if settings.operator_mfa_required:
+        raise http_error(409, ErrorCode.AUTH_MFA_ENFORCED, "This deployment requires an authenticator")
+    _require_verified(user)
+    attempts = _attempt_keys(user, request, repo)
+    keys, now = _keys(), _utcnow()
+    try:
+        with repo.transaction():
+            account, credential = _reserve_with_password(repo, user, body.currentPassword, now)
+            mfa.disable_factor(repo, user.as_uuid(), body.code, scope=settings.operator_mfa_scope,
+                               keys=keys, now=now, session_id=user.session_id)
+            principal = _session_principal(repo, account, credential)
+    except (mfa.MfaError, SecretKeyringError, FactorSecretError) as exc:
+        raise _failure(repo, exc, attempts) from None
+    if principal is None:
+        raise http_error(401, ErrorCode.AUTH_NOT_SIGNED_IN, "Sign in again")
+    response.headers["Cache-Control"] = "no-store"
+    return _user_dto(account, email=account.email, repo=repo, principal=principal)
 
 
 @router.post("/activity", status_code=204)
