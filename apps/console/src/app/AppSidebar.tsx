@@ -20,6 +20,8 @@ export function AppSidebar() {
   const { user, signOut, isBootstrap, authMode } = useAuth();
   const onSettings = location.pathname === '/settings';
   const onHub = location.pathname === '/';
+  const nodeWorkspace = user?.offlineWorkspaceId;
+  const accountPath = nodeWorkspace ? `/settings?workspaceId=${encodeURIComponent(nodeWorkspace)}` : '/settings';
   // Prefer the display name; fall back to the address — presented, so the
   // local-mode bootstrap placeholder never reaches a title or accessible name.
   const identity =
@@ -37,7 +39,7 @@ export function AppSidebar() {
       {/* The brand monogram remains the go-home affordance; the target wrapper,
           not the mark itself, owns the shared selected treatment. */}
       <ActiveChoice
-        to="/"
+        to={nodeWorkspace ? `/tournaments/${nodeWorkspace}` : '/'}
         active={onHub}
         geometry="row"
         semantics="page"
@@ -50,7 +52,7 @@ export function AppSidebar() {
 
       <div className="mt-2 flex flex-1 flex-col items-center gap-1">
         <ActiveChoice
-          to="/settings"
+          to={accountPath}
           active={onSettings}
           geometry="row"
           semantics="page"
@@ -68,7 +70,7 @@ export function AppSidebar() {
           is the fact it actually carries and the only thing that tells the two
           /settings links apart in a screen reader. */}
       <Link
-        to="/settings?section=profile"
+        to={`${accountPath}${nodeWorkspace ? '&' : '?'}section=profile`}
         title={identity}
         aria-label={identity}
         className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-xs font-semibold text-muted-foreground hover:text-foreground"

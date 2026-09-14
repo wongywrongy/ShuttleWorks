@@ -166,7 +166,7 @@ def get_display_token_status(
             workspace.tournament_end_date, workspace.tournament_date, workspace.time_zone))
 
 
-@manage_router.post("/rotate", response_model=DisplayTokenDTO, dependencies=[_OWNER])
+@manage_router.post("/rotate", response_model=DisplayTokenDTO, dependencies=[Depends(require_tournament_access("owner", fresh=True))])
 def rotate_display_token(
     response: Response,
     body: Optional[DisplayTokenRequest] = None,

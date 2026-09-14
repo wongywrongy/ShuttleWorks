@@ -132,6 +132,11 @@ def test_public_contract_gate_rejects_untyped_nested_fields(cloud_client, unsafe
 PUBLIC_BY_DESIGN: dict[tuple[str, str], str] = {
     ("POST", "/auth/register"): "account creation — cannot require an account",
     ("POST", "/auth/login"): "the login endpoint itself",
+    ("POST", "/auth/node/activate"): (
+        "Node-only individual activation: a private administrator-issued, hashed, "
+        "one-use token selects an imported member, workspace, node and epoch. "
+        "It grants only a pending MFA session; cloud profiles refuse the route."
+    ),
     ("POST", "/auth/logout"): "idempotent; no session to destroy is a no-op",
     ("POST", "/auth/request-password-reset"): "reached when locked out",
     ("POST", "/auth/reset-password"): "reached when locked out; token-guarded",

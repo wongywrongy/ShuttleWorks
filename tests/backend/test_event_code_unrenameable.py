@@ -57,6 +57,11 @@ CSRF = {"X-ShuttleWorks-CSRF": "1"}
 # points at the old value.
 _CODE_WRITERS = {("POST", "/tournaments/{tournament_id}/entry-events")}
 
+# These exact endpoints consume authenticator/recovery proofs; their `code`
+# field has no relationship to an entry event or its public sporting key.
+# Keep the exception exact so a new event-update route still fails the pin.
+_AUTH_PROOF_READERS = {("POST", "/auth/mfa/confirm"), ("POST", "/auth/mfa/verify")}
+
 _VIOLATION = (
     "R-DM-11(b): a PUBLISHED entry event's ``code`` is the entrant tier's "
     "public event key and must not be renameable. If you are adding an "
@@ -168,7 +173,7 @@ def test_no_request_body_outside_the_create_carries_a_code_field(app):
             for media in (body.get("content") or {}).values():
                 if "code" in _body_properties(spec, media.get("schema") or {}):
                     found.add((method.upper(), path))
-    assert found == _CODE_WRITERS, f"{_VIOLATION}\nfound: {sorted(found)}"
+    assert found == _CODE_WRITERS | _AUTH_PROOF_READERS, f"{_VIOLATION}\nfound: {sorted(found)}"
 
 
 def test_the_body_derivation_descends_into_nested_and_array_shapes():

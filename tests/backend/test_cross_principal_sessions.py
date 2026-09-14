@@ -142,7 +142,9 @@ def _operator_cookie(client) -> str:
         headers=CSRF,
     )
     assert r.status_code == 201, r.text
-    return r.cookies[settings.session_cookie_name]
+    from tests.backend._helpers import enroll_operator_mfa
+    enroll_operator_mfa(client, GOOD_PW)
+    return client.cookies[settings.session_cookie_name]
 
 
 def _entrant_cookie(client) -> str:

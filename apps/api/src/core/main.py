@@ -21,6 +21,8 @@ from entries import entries_routes as entries_api  # SP-E1-1 — the operator's 
 from entries import entries_site as entries_site_api  # SP-P7 — public draws/player pages
 from entries import partner_routes as partner_invites_api  # E3 (Phase 8) — the doubles partner invite
 from identity import auth_routes as auth_api  # SP-CLOUD-2 — self-hosted accounts + cookie sessions
+from identity import mfa_routes as mfa_api
+from identity import node_routes as node_identity_api
 from identity import entrants_routes as entrants_api  # SP-E1-2 — the entrant principal's auth surface
 from identity import invites  # Step 7 — invite-link generate / resolve / accept / revoke
 from meet import (
@@ -646,6 +648,8 @@ app.include_router(invites.router)
 # Auth: register/login/reset are necessarily public; /me and
 # /change-password declare ``get_current_user`` themselves.
 app.include_router(auth_api.router)
+app.include_router(mfa_api.router)
+app.include_router(node_identity_api.router)
 # Display: the public projection routes are the app's only
 # unauthenticated data plane (capability token, read-only — Rule 8);
 # the manage router carries its own owner-role dependency.

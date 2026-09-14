@@ -22,8 +22,8 @@ Please do **not** open a public GitHub issue for a vulnerability.
 
 OWASP ASVS 5.0 is the review framework. Level 1 overall and Level 2 for
 identity, sessions, access control and validation are **targets, not a claim of
-conformance**. Operator MFA, idle expiry, sensitive-action reauthentication and
-other controls remain incomplete.
+conformance**. The controls below have implementation evidence; rollout,
+operational rehearsals and remaining findings are tracked separately.
 
 The [2026-09-13 golden-rule review](docs/reviews/security-golden-rules-2026-09-13.md)
 records the verified baseline, including failures and missing tests. The
@@ -100,14 +100,17 @@ review separates executed checks from source inspection and untested claims.
 Stated rather than hidden. Each carries the condition that would change the
 decision.
 
-- **Operator/owner MFA is not yet enforced by the API.** Encrypted factor and
-  recovery-code storage have tested lifecycle primitives; HTTP enrollment,
-  independently enrolled offline operators and the console ceremony remain open.
-- **New operator sessions still use 30-day issuance without idle expiry or
-  sensitive-action reauthentication.** Migration 0006 caps pre-existing sessions
-  at 12 hours without inventing MFA assurance. The approved runtime target is
-  12 hours absolute, one hour idle and five-minute authentication freshness;
-  the tested policy helpers are not yet wired into request handling.
+- **Operator MFA rollout remains in progress.** Cloud password-stage cookies
+  are limited to authentication ceremonies. API enforcement and the console
+  enrollment/recovery ceremony have executable checks. Offline operators enroll
+  individually with node-local credentials; local administrator recovery revokes
+  their existing credentials and records its reason. Production rollout and
+  disconnected recovery/reconnection rehearsals remain open.
+- **Operator sessions use 12-hour absolute and one-hour idle limits.** Reads
+  do not refresh idle activity. Named sensitive actions require authentication
+  within five minutes, and the console locks while retaining the same user's
+  unsent forms. Encryption-key retirement and operational recovery evidence remain
+  part of the open rollout; these controls do not establish ASVS conformance.
 - **Password minimum is eight characters.** Stronger single-factor policy remains
   an open authentication decision; existing accounts do not establish conformance.
 - **`style-src` permits `unsafe-inline`.** The display board computes lane

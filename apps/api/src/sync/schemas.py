@@ -77,7 +77,7 @@ class DeviceResponse(BaseModel):
 class OfflineSessionRequest(BaseModel):
     node_id: uuid.UUID
     authority_epoch: int = Field(ge=1)
-    ttl_hours: int = Field(default=72, ge=1, le=168)
+    ttl_hours: int = Field(default=12, ge=1, le=12)
 
 
 class OfflineSessionBootstrapRequest(OfflineSessionRequest):

@@ -24,6 +24,7 @@ import { EYEBROW_CLASS, TEXT_MUTED_XS, TEXT_TITLE_SM } from '../../lib/utils';
 import { useViewportBelow } from '../../hooks/useViewportBelow';
 import { SHELL_RAIL_MIN_WIDTH } from '../../platform/product-shell/WorkspaceShell';
 import { ActiveChoice } from '../../components/ActiveChoice';
+import { MfaCeremony } from '../../platform/auth/MfaCeremony';
 
 // Profile/security editing is locked for the local-mode bootstrap identity
 // (no password, no real account); a signed-in account (cloud mode, or any
@@ -161,7 +162,8 @@ function ProfilePage() {
 }
 
 function SecurityPage() {
-  const { isBootstrap } = useAuth();
+  const { isBootstrap, user, refresh } = useAuth();
+  const [showAuthenticator, setShowAuthenticator] = useState(false);
   const locked = isBootstrap;
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -183,7 +185,7 @@ function SecurityPage() {
     setMismatch(null);
     setFeedback(null);
     try {
-      await apiClient.changePassword({ currentPassword: current, newPassword: next });
+      await apiClient.changePassword({ currentPassword: current, newPassword: next }, !!user?.offlineWorkspaceId);
       setFeedback({ kind: 'success', message: 'Password updated.' });
       setCurrent('');
       setNext('');
@@ -252,6 +254,19 @@ function SecurityPage() {
           last
         />
       </Section>
+
+      {!locked && user?.mfaRequired && <Section title="Authenticator and recovery codes" defaultOpen>
+        {showAuthenticator ? <MfaCeremony user={user} replace={user.mfaEnrolled} cancelLabel="Cancel"
+          onCancel={async () => { setShowAuthenticator(false); }}
+          onComplete={async () => { await refresh(); setShowAuthenticator(false); }} /> : <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">Replace your authenticator to issue a new set of recovery codes. Existing codes are never displayed again.</p>
+          <Button onClick={() => {
+            void apiClient.requireFreshAuthentication().then(() => setShowAuthenticator(true)).catch((failure) => {
+              setFeedback({ kind: 'error', message: failure instanceof Error ? failure.message : 'Verify your identity to continue.' });
+            });
+          }}>Replace authenticator and recovery codes</Button>
+        </div>}
+      </Section>}
 
       {locked ? (
         <Note>Password management is available once you sign in with an account.</Note>
@@ -333,6 +348,11 @@ function AppearancePage() {
 
 export function GlobalSettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const selectSection = (section: string) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    next.set('section', section);
+    return next;
+  });
   const requested = searchParams.get('section');
   const section = SECTION_IDS.includes(requested ?? '') ? (requested as string) : 'profile';
   const compact = useViewportBelow(SHELL_RAIL_MIN_WIDTH);
@@ -354,7 +374,7 @@ export function GlobalSettingsPage() {
               id="global-settings-section"
               data-testid="global-settings-select"
               value={section}
-              onChange={(event) => setSearchParams({ section: event.target.value })}
+              onChange={(event) => selectSection(event.target.value)}
               className="h-9 w-full rounded-sm border border-border-control bg-bg-elev px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {NAV.map((group) => (
@@ -380,7 +400,7 @@ export function GlobalSettingsPage() {
                     geometry="row"
                     semantics="page"
                     data-testid={`global-settings-${it.id}`}
-                    onClick={() => setSearchParams({ section: it.id })}
+                    onClick={() => selectSection(it.id)}
                     className="block w-full px-2 py-1.5 text-sm"
                   >
                     {it.label}

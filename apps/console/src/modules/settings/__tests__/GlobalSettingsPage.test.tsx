@@ -14,7 +14,7 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { GlobalSettingsPage } from '../GlobalSettingsPage';
 import { SHELL_RAIL_MIN_WIDTH } from '../../../platform/product-shell/WorkspaceShell';
 
@@ -48,6 +48,15 @@ afterEach(() => {
 });
 
 describe('GlobalSettingsPage nav', () => {
+  it('retains a node session workspace selector when changing sections', () => {
+    function LocationProbe() { return <output data-testid="location">{useLocation().search}</output>; }
+    render(<MemoryRouter initialEntries={['/settings?workspaceId=node-workspace&section=profile']}>
+      <GlobalSettingsPage /><LocationProbe />
+    </MemoryRouter>);
+    act(() => { screen.getByTestId('global-settings-security').click(); });
+    expect(screen.getByTestId('location')).toHaveTextContent('workspaceId=node-workspace');
+    expect(screen.getByTestId('location')).toHaveTextContent('section=security');
+  });
   it('keeps the destinations that answer something', () => {
     mount();
     for (const id of ['profile', 'security', 'sessions', 'appearance']) {

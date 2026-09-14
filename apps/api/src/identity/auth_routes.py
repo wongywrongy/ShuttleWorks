@@ -13,6 +13,8 @@ rides the email seam without placing the token in application logs.
 from __future__ import annotations
 
 import logging
+import uuid
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -21,14 +23,15 @@ from pydantic import BaseModel
 from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
 from core.client_ip import client_ip
 from core.config import settings
-from core.dependencies import AuthUser, get_current_user
-from core.error_codes import ErrorCode, http_error
+from core.dependencies import AuthUser, _session_principal, get_current_user, get_pending_user, require_fresh_authentication
+from core.error_codes import ErrorCode, http_error, resource_not_found
 from core.limits import Email, Name, Password, StrictModel, Token
 from repositories import LocalRepository, get_repository
 from core import throttle
 from identity import auth as auth_service
 from identity.auth import AuthError
 from identity.responses import AcceptedDTO
+from core.time_utils import _aware, _utcnow
 
 log = logging.getLogger("scheduler.identity.auth_routes")
 
@@ -83,16 +86,25 @@ class UserDTO(BaseModel):
     # 18, V3-OC25.1) instead of always presenting a choice the local
     # deployment never delivers on.
     emailConfigured: bool = False
+    mfaRequired: bool = False
+    mfaEnrolled: bool = False
+    mfaAuthenticated: bool = False
+    passwordConfigured: bool = True
+    offlineWorkspaceId: Optional[str] = None
+    authenticatedAt: Optional[datetime] = None
 
 
 # ---- Helpers ---------------------------------------------------------
 
 
-def _set_session_cookie(response: Response, token: str) -> None:
+def _set_session_cookie(response: Response, token: str, *, expires_at=None) -> None:
+    from core.time_utils import _aware
+    max_age = int(settings.session_ttl_days * 86400) if expires_at is None else max(0, int((_aware(expires_at) - _utcnow()).total_seconds()))
+    response.headers["Cache-Control"] = "no-store"
     response.set_cookie(
         key=settings.session_cookie_name,
         value=token,
-        max_age=int(settings.session_ttl_days * 86400),
+        max_age=max_age,
         httponly=True,
         secure=settings.session_cookie_secure,
         samesite="lax",
@@ -109,6 +121,18 @@ def _clear_session_cookie(response: Response) -> None:
     )
 
 
+def _set_offline_session_cookie(response: Response, token: str, expires_at: datetime) -> None:
+    response.set_cookie(settings.offline_session_cookie_name, token, httponly=True,
+                        secure=settings.session_cookie_secure, samesite="lax", path="/",
+                        max_age=max(0, int((_aware(expires_at) - _utcnow()).total_seconds())))
+    response.headers["Cache-Control"] = "no-store"
+
+
+def _require_account_origin() -> None:
+    if settings.deployment_profile == "event_node":
+        raise resource_not_found()
+
+
 # Real client IP, honouring ``CF-Connecting-IP`` only from a configured
 # trusted proxy (``core/client_ip.py``). Behind a tunnel the raw socket
 # peer is the connector for every request, which would collapse every
@@ -117,6 +141,8 @@ _client_ip = client_ip
 
 
 def _auth_error(exc: AuthError):
+    if exc.code == "AUTH_INVALID_CREDENTIALS":
+        return http_error(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_INVALID_CREDENTIALS, exc.message)
     code = {
         "EMAIL_TAKEN": ErrorCode.AUTH_EMAIL_TAKEN,
         "INVALID_EMAIL": ErrorCode.AUTH_INVALID_EMAIL,
@@ -136,7 +162,9 @@ def _throttle_guard(repo: LocalRepository, *keys: str) -> None:
             )
 
 
-def _user_dto(user_row, *, email: str) -> UserDTO:
+def _user_dto(user_row, *, email: str, repo: LocalRepository, principal: AuthUser | None = None) -> UserDTO:
+    factor = repo.mfa.get(user_row.id)
+    enrolled = factor is not None and factor.status == "active"
     return UserDTO(
         id=str(user_row.id),
         email=email,
@@ -145,6 +173,12 @@ def _user_dto(user_row, *, email: str) -> UserDTO:
         isBootstrap=user_row.id == auth_service.BOOTSTRAP_USER_UUID,
         authMode=settings.auth_mode,
         emailConfigured=settings.email_backend == "smtp",
+        mfaRequired=settings.operator_mfa_required or enrolled,
+        mfaEnrolled=enrolled,
+        mfaAuthenticated=bool(principal and principal.mfa_authenticated),
+        passwordConfigured=bool(user_row.password_hash),
+        offlineWorkspaceId=principal.offline_tournament_id if principal else None,
+        authenticatedAt=principal.authenticated_at if principal else None,
     )
 
 
@@ -178,6 +212,10 @@ def _register_account(
 
 
 def _complete_login(session, user, password: str, account_key: str):
+    from repositories.mfa import MfaRepository
+    user = MfaRepository(session).reserve_account(user.id)
+    if user is None or not user.password_hash or not auth_service.verify_password(user.password_hash, password):
+        raise AuthError("AUTH_INVALID_CREDENTIALS", "Invalid email or password")
     if auth_service.password_needs_rehash(user.password_hash):
         user.password_hash = auth_service.hash_password(password)
     auth_service.throttle_record_success(session, account_key)
@@ -191,7 +229,14 @@ def _change_password(
     new_password: str,
     account_key: str,
     current_token: Optional[str],
+    current_password: str,
 ) -> None:
+    from repositories.mfa import MfaRepository
+    user = MfaRepository(session).reserve_account(user.id)
+    if user is None or not user.password_hash or not auth_service.verify_password(user.password_hash, current_password):
+        raise AuthError("AUTH_INVALID_CREDENTIALS", "Current password is incorrect")
+    if current_token is not None and auth_service.resolve_session_record(session, current_token) is None:
+        raise AuthError("AUTH_INVALID_CREDENTIALS", "Sign in again")
     user.password_hash = auth_service.hash_password(new_password)
     auth_service.revoke_all_sessions(
         session, user.id, except_token=current_token
@@ -221,6 +266,7 @@ def register(
     response: Response,
     repo: LocalRepository = Depends(get_repository),
 ) -> UserDTO:
+    _require_account_origin()
     ip = _client_ip(request)
     ip_key = f"ip:{ip}"
     reg_key = auth_service.registration_key(ip)
@@ -244,7 +290,7 @@ def register(
         repo.execute_transaction(_record_registration_failures, ip_key, reg_key)
         raise _auth_error(exc)
     _set_session_cookie(response, token)
-    return _user_dto(user, email=email)
+    return _user_dto(user, email=email, repo=repo)
 
 
 @router.post("/login", response_model=UserDTO)
@@ -281,11 +327,28 @@ def login(
         )
 
     assert user is not None
-    token = repo.execute_transaction(
-        _complete_login, user, body.password, account_key
-    )
+    if settings.deployment_profile == "event_node":
+        from identity import node_identity
+        from identity.mfa import MfaError
+        try:
+            workspace_id = uuid.UUID(request.query_params.get("workspaceId", ""))
+            with repo.transaction():
+                token, credential = node_identity.login(repo, account=user,
+                    password=body.password, tournament_id=workspace_id, node_id=uuid.UUID(settings.node_id))
+        except (ValueError, MfaError):
+            repo.execute_transaction(_record_failures, account_key, ip_key)
+            raise http_error(401, ErrorCode.AUTH_INVALID_CREDENTIALS, "Invalid email, password or workspace") from None
+        _set_offline_session_cookie(response, token, credential.expires_at)
+        principal = _session_principal(repo, user, credential)
+        principal.offline_tournament_id = str(workspace_id)
+        return _user_dto(user, email=user.email, repo=repo, principal=principal)
+    try:
+        token = repo.execute_transaction(_complete_login, user, body.password, account_key)
+    except AuthError as exc:
+        repo.execute_transaction(_record_failures, account_key, ip_key)
+        raise _auth_error(exc) from None
     _set_session_cookie(response, token)
-    return _user_dto(user, email=user.email)
+    return _user_dto(user, email=user.email, repo=repo)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -294,6 +357,15 @@ def logout(
     response: Response,
     repo: LocalRepository = Depends(get_repository),
 ) -> Response:
+    if settings.deployment_profile == "event_node":
+        from identity import offline_sessions
+        token = request.cookies.get(settings.offline_session_cookie_name)
+        if token:
+            repo.execute_transaction(offline_sessions.revoke_cookie, token)
+        response.delete_cookie(settings.offline_session_cookie_name, path="/")
+        response.headers["Cache-Control"] = "no-store"
+        response.status_code = status.HTTP_204_NO_CONTENT
+        return response
     token = request.cookies.get(settings.session_cookie_name)
     if token:
         repo.execute_transaction(auth_service.revoke_session, token)
@@ -304,14 +376,17 @@ def logout(
 
 @router.get("/me", response_model=UserDTO)
 def me(
-    user: AuthUser = Depends(get_current_user),
+    response: Response,
+    user: AuthUser = Depends(get_pending_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> UserDTO:
+    response.headers["Cache-Control"] = "no-store"
     user_uuid = user.as_uuid()
     row = repo.get_user_identity(user_uuid) if user_uuid else None
     if row is None:
-        # Bearer-era identities or the pre-bootstrap synthetic user may
-        # have no local row yet; synthesize the DTO.
+        if user.id != str(auth_service.BOOTSTRAP_USER_UUID):
+            raise http_error(401, ErrorCode.AUTH_NOT_SIGNED_IN, "Not signed in")
+        # A pre-bootstrap local developer process may not have its row yet.
         return UserDTO(
             id=user.id,
             email=user.email or "",
@@ -319,7 +394,7 @@ def me(
             authMode=settings.auth_mode,
             emailConfigured=settings.email_backend == "smtp",
         )
-    return _user_dto(row, email=row.email)
+    return _user_dto(row, email=row.email, repo=repo, principal=user)
 
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
@@ -337,6 +412,7 @@ def change_password(
             ErrorCode.AUTH_INVALID_CREDENTIALS,
             "This identity has no password to change",
         )
+    require_fresh_authentication(user)
     account_key = f"account:{row.email.lower()}"
     _throttle_guard(repo, account_key)
     if not auth_service.verify_password(row.password_hash, body.currentPassword):
@@ -352,13 +428,12 @@ def change_password(
         raise _auth_error(exc)
     # OWASP: changing the credential invalidates every other session.
     current_token = request.cookies.get(settings.session_cookie_name)
-    repo.execute_transaction(
-        _change_password,
-        row,
-        body.newPassword,
-        account_key,
-        current_token,
-    )
+    try:
+        repo.execute_transaction(_change_password, row, body.newPassword, account_key,
+                                 current_token, body.currentPassword)
+    except AuthError as exc:
+        repo.execute_transaction(_record_failures, account_key)
+        raise _auth_error(exc) from None
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -370,6 +445,7 @@ def request_password_reset(
 ) -> dict:
     """Always 202 (no account-existence oracle). The token rides the
     email seam; it is never returned in this response or logged."""
+    _require_account_origin()
     ip_key = f"ip:{_client_ip(request)}"
     _throttle_guard(repo, ip_key)
     try:
@@ -419,6 +495,7 @@ def reset_password(
     request: Request,
     repo: LocalRepository = Depends(get_repository),
 ) -> Response:
+    _require_account_origin()
     ip_key = f"ip:{_client_ip(request)}"
     _throttle_guard(repo, ip_key)
     try:

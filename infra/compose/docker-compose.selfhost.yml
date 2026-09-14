@@ -207,10 +207,12 @@ services:
       # Ed25519 authority grants are signed only by the cloud API. The key is
       # file-backed and never falls back to the deterministic development key.
       - AUTHORITY_SIGNING_KEY_FILE=/run/secrets/authority_signing_key
+      - MFA_KEYRING_FILE=/run/secrets/operator_mfa_keys
     secrets:
       - database_url
       - ops_token
       - authority_signing_key
+      - operator_mfa_keys
     networks:
       default:
         aliases:
@@ -442,3 +444,5 @@ secrets:
     file: ../../secrets/ops_token
   authority_signing_key:
     file: ../../secrets/authority_signing_key
+  operator_mfa_keys:
+    file: ${MFA_KEYRING_FILE:-../../secrets/operator_mfa_keys.json}

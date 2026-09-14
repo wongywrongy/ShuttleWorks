@@ -11,6 +11,16 @@ credentials, browser storage is never authoritative, telemetry is never part
 of command success, and neither a reachable LAN nor possession of a public
 display URL grants operator authority.
 
+Cloud and node operators complete app-owned MFA. Password-stage cookies cannot
+operate a workspace. Each node operator enrolls a separate password and factor
+using a private, one-use activation credential issued by a trusted local OS
+administrator; the shared authority capability cannot establish an individual.
+Operator sessions have a twelve-hour absolute limit and a one-hour idle limit;
+sensitive actions require proof within five minutes. Password changes, reset and
+MFA grants serialize on the account so concurrent grants cannot escape revocation.
+The [security operations runbook](../how-to/security-operations.md) describes key
+custody and audited local recovery, including outstanding operational rehearsals.
+
 Each threat names its STRIDE category, severity, repository controls,
 executable evidence, owner, and residual risk. A `critical` or `high` item may
 ship only when it is mitigated or the named owner records an explicit release

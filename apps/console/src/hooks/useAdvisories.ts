@@ -22,10 +22,12 @@ import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { useUiStore } from '../store/uiStore';
 import { useAlertStore } from '../store/alertStore';
 import { useTournamentIdOrNull } from './useTournamentId';
+import { useSessionRevision } from './useSessionRevision';
 
 const POLL_MS = 15_000;
 
 export function useAdvisories(): null {
+  const sessionRevision = useSessionRevision();
   const tid = useTournamentIdOrNull();
   const setAdvisories = useUiStore((s) => s.setAdvisories);
 
@@ -88,7 +90,7 @@ export function useAdvisories(): null {
       if (timer) clearTimeout(timer);
       unsubscribe();
     };
-  }, [tid, setAdvisories]);
+  }, [tid, setAdvisories, sessionRevision]);
 
   return null;
 }

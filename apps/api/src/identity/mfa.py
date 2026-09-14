@@ -42,7 +42,7 @@ def _audit(repo: LocalRepository, factor, event: str, now: datetime) -> None:
 def begin_enrollment(repo: LocalRepository, user_id: uuid.UUID, password: str, *,
                      scope: str, keys: SecretKeyring, now: datetime, fresh: bool,
                      session_id: uuid.UUID) -> str:
-    user = repo.get_user_identity(user_id)
+    user = repo.mfa.reserve_account(user_id)
     if user is None or not user.password_hash or not verify_password(user.password_hash, password):
         raise MfaError("MFA_INVALID_CREDENTIALS")
     factor = repo.mfa.reserve(user_id, scope, now, create=True)
@@ -80,8 +80,8 @@ def confirm_enrollment(repo: LocalRepository, user_id: uuid.UUID, code: str, *,
     factor.last_counter = counter
     recovery = new_recovery_codes()
     repo.mfa.replace_recovery_codes(factor.id, [_hash_token(normalize_recovery_code(v)) for v in recovery], now)
-    # The enclosing HTTP ceremony rotates its own session after this revocation.
-    repo.mfa.revoke_sessions(user_id, now)
+    # The enclosing HTTP ceremony rotates its own session in this transaction.
+    repo.mfa.revoke_sessions(user_id, now, except_session_id=session_id)
     _audit(repo, factor, "activate", now)
     return factor.generation, recovery
 

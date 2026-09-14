@@ -6,7 +6,6 @@ operator remains a tournament member; cloud auth remains in ``auth.py``.
 """
 from __future__ import annotations
 
-import hashlib
 import hmac
 import secrets
 import uuid
@@ -14,7 +13,9 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from core.time_utils import _aware, _utcnow
+from core.time_utils import _utcnow
+from core.operator_sessions import session_is_live
+from core.tokens import _hash_token as _digest
 from db.models import (
     OfflineOperatorSession,
     TournamentAuthority,
@@ -23,11 +24,7 @@ from db.models import (
 )
 
 TOKEN_BYTES = 32
-DEFAULT_TTL_HOURS = 72
-
-
-def _digest(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+DEFAULT_TTL_HOURS = 12
 
 
 def issue(
@@ -43,21 +40,23 @@ def issue(
     authority = session.get(TournamentAuthority, (tournament_id, authority_epoch))
     if authority is None or authority.state != "active" or authority.node_id != device_id:
         raise ValueError("active authority does not match session scope")
-    if not 1 <= ttl_hours <= 168:
-        raise ValueError("offline session lifetime must be between 1 and 168 hours")
+    if not 1 <= ttl_hours <= 12:
+        raise ValueError("offline session lifetime must be between 1 and 12 hours")
     if session.get(User, user_id) is None:
         raise ValueError("operator does not exist")
     membership = session.get(TournamentMember, (tournament_id, user_id))
     if membership is None or membership.role not in {"operator", "owner"}:
         raise ValueError("operator is not authorized for this tournament")
     token = secrets.token_urlsafe(TOKEN_BYTES)
+    now = _utcnow()
     row = OfflineOperatorSession(
         token_hash=_digest(token),
         user_id=user_id,
         tournament_id=tournament_id,
         authority_epoch=authority_epoch,
         device_id=device_id,
-        expires_at=_utcnow() + timedelta(hours=ttl_hours),
+        created_at=now, last_seen_at=now,
+        expires_at=now + timedelta(hours=ttl_hours),
     )
     session.add(row)
     session.flush()
@@ -90,7 +89,7 @@ def bootstrap(
         or authority.node_id != device_id
         or not capability
         or not hmac.compare_digest(
-            authority.capability_digest, hashlib.sha256(capability.encode("utf-8")).hexdigest()
+            authority.capability_digest, _digest(capability)
         )
     ):
         raise ValueError("node capability does not match active authority")
@@ -110,6 +109,20 @@ def resolve(
     *,
     tournament_id: uuid.UUID,
 ) -> tuple[User, OfflineOperatorSession] | None:
+    resolved = resolve_identity(session, token)
+    if resolved is None:
+        return None
+    user, row = resolved
+    if row.tournament_id != tournament_id:
+        return None
+    membership = session.get(TournamentMember, (row.tournament_id, row.user_id))
+    if membership is None or membership.role not in {"operator", "owner"}:
+        return None
+    return user, row
+
+
+def resolve_identity(session: Session, token: str) -> tuple[User, OfflineOperatorSession] | None:
+    """Validate the credential; HTTP tenant/role denial remains the 404 seam."""
     if not token:
         return None
     row = session.execute(
@@ -117,9 +130,7 @@ def resolve(
             OfflineOperatorSession.token_hash == _digest(token)
         )
     ).scalar_one_or_none()
-    if row is None or row.revoked_at is not None or (_aware(row.expires_at) <= _utcnow()):
-        return None
-    if row.tournament_id != tournament_id:
+    if not session_is_live(row, _utcnow()):
         return None
     authority = session.get(
         TournamentAuthority, (row.tournament_id, row.authority_epoch)
@@ -130,14 +141,20 @@ def resolve(
         or authority.node_id != row.device_id
     ):
         return None
-    membership = session.get(TournamentMember, (row.tournament_id, row.user_id))
-    if membership is None or membership.role not in {"operator", "owner"}:
-        return None
     user = session.get(User, row.user_id)
     if user is None:
         return None
-    row.last_seen_at = _utcnow()
     return user, row
+
+
+def revoke_cookie(session: Session, token: str) -> bool:
+    """Logout revokes the supplied node cookie even outside a workspace route."""
+    row = session.scalar(select(OfflineOperatorSession).where(OfflineOperatorSession.token_hash == _digest(token)))
+    if row is None or row.revoked_at is not None:
+        return False
+    row.revoked_at = _utcnow()
+    row.revocation_reason = "operator logout"
+    return True
 
 
 def revoke(

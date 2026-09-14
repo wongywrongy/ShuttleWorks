@@ -239,6 +239,7 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
     'console-browser-contracts.spec.ts',
     'console-pagination.spec.ts',
     'entrant-a11y.spec.ts',
+    'operator-mfa.spec.ts',
     'public-pagination.spec.ts',
   ]);
   expect(interaction).toMatch(/E2E_TAIPEI_TID/);

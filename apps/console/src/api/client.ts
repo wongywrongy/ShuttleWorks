@@ -404,7 +404,11 @@ export function handleApiResponseError(error: any): never {
   // nulls the session in cloud mode → AuthGuard redirects to /login);
   // pollers stop via isTerminalPollError. getMe itself never lands
   // here (it maps 401 → null via validateStatus), so this can't loop.
-  if (error.response?.status === 401) {
+  const isAuthRequest = /(?:^|\/)auth\//.test(error.config?.url ?? '');
+  const needsFreshAuth = code === 'AUTH_REAUTH_REQUIRED';
+  if (needsFreshAuth) {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('sw:reauth-required'));
+  } else if (error.response?.status === 401 && (!isAuthRequest || code === 'AUTH_NOT_SIGNED_IN')) {
     try {
       window.dispatchEvent(new CustomEvent('sw:session-expired'));
     } catch {
@@ -414,7 +418,7 @@ export function handleApiResponseError(error: any): never {
   }
 
   const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
-  const suppress = isLockCode || isMemberCode || _shouldSuppressErrorToast(dedupeKey);
+  const suppress = isAuthRequest || needsFreshAuth || isLockCode || isMemberCode || _shouldSuppressErrorToast(dedupeKey);
   if (!suppress) {
     try {
       useUiStore.getState().pushToast({
@@ -462,6 +466,16 @@ export function handleApiResponseError(error: any): never {
 
 class ApiClient {
   private client: AxiosInstance;
+  private authWorkspaceId: string | undefined;
+
+  /** A route selector only. The server still checks the scoped node cookie. */
+  setAuthWorkspaceId(workspaceId: string | undefined): void {
+    this.authWorkspaceId = workspaceId;
+  }
+
+  private authOptions() {
+    return this.authWorkspaceId ? { params: { workspaceId: this.authWorkspaceId } } : undefined;
+  }
 
   constructor(baseURL: string = API_BASE_URL) {
     this.client = axios.create({
@@ -500,7 +514,7 @@ class ApiClient {
 
   /** Email + password sign-in. Sets the httpOnly session cookie. */
   async login(body: { email: string; password: string }): Promise<UserDTO> {
-    const r = await this.client.post<UserDTO>('/auth/login', body);
+    const r = await this.client.post<UserDTO>('/auth/login', body, this.authOptions());
     return r.data;
   }
 
@@ -517,17 +531,46 @@ class ApiClient {
    */
   async getMe(): Promise<UserDTO | null> {
     const r = await this.client.get<UserDTO>('/auth/me', {
+      ...this.authOptions(),
       validateStatus: (s) => s === 200 || s === 401,
     });
     if (r.status === 401) return null;
     return r.data;
   }
 
+  async beginMfa(currentPassword: string): Promise<{ secret: string; expiresAt: string; issuer: string }> {
+    const response = await this.client.post('/auth/mfa/enroll', { currentPassword }, this.authOptions());
+    return response.data;
+  }
+
+  async activateNodeOperator(body: { workspaceId: string; email: string; activationToken: string; newPassword: string }): Promise<UserDTO> {
+    const response = await this.client.post<UserDTO>('/auth/node/activate', body);
+    return response.data;
+  }
+
+  async confirmMfa(code: string): Promise<{ user: UserDTO; recoveryCodes: string[] }> {
+    const response = await this.client.post('/auth/mfa/confirm', { code }, this.authOptions());
+    return response.data;
+  }
+
+  async verifyMfa(currentPassword: string, code: string): Promise<UserDTO> {
+    const response = await this.client.post<UserDTO>('/auth/mfa/verify', { currentPassword, code }, this.authOptions());
+    return response.data;
+  }
+
+  async recordAuthActivity(): Promise<void> {
+    await this.client.post('/auth/activity', undefined, this.authOptions());
+  }
+
+  async requireFreshAuthentication(): Promise<void> {
+    await this.client.post('/auth/reauth-check', undefined, this.authOptions());
+  }
+
   async changePassword(body: {
     currentPassword: string;
     newPassword: string;
-  }): Promise<void> {
-    await this.client.post('/auth/change-password', body);
+  }, offline = false): Promise<void> {
+    await this.client.post(offline ? '/auth/node/change-password' : '/auth/change-password', body, this.authOptions());
   }
 
   /** Always 202 (no account-existence oracle). */

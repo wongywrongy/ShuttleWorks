@@ -23,6 +23,14 @@ OPERATOR_MFA_FACTOR = machine("operator_mfa_factor", "unconfigured active", "unc
     edge("activate", "unconfigured active", "active"),
     edge("authenticate", "active", "active"),
     edge("recover", "active", "active"),
+    edge("password_change", "active", "active"),
+    edge("administrator_reset", "unconfigured active", "unconfigured", "system"),
+])
+
+NODE_OPERATOR_ENROLLMENT = machine("node_operator_enrollment", "pending consumed", "pending", "consumed", [
+    edge("issue", "pending", "pending", "system"),
+    edge("activate", "pending", "consumed", "operator"),
+    edge("administrator_reset", "pending consumed", "pending", "system"),
 ])
 
 

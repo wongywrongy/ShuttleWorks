@@ -18,6 +18,7 @@ import { useLiveTracking } from '../useLiveTracking';
 vi.mock('../../api/client', () => ({
   apiClient: {
     getMatchStates: vi.fn(),
+    getDisplayMatchStates: vi.fn(),
   },
   MatchVersionMismatch: class MatchVersionMismatch extends Error {},
 }));
@@ -102,6 +103,34 @@ describe('useLiveTracking — 5s sync pauses while hidden', () => {
 });
 
 describe('useLiveTracking — 5s sync stops on a terminal error', () => {
+  it('resumes a private poll after the same operator authenticates again', async () => {
+    vi.mocked(apiClient.getMatchStates).mockRejectedValue(Object.assign(new Error('Sign in'), { status: 401 }));
+    const { unmount } = renderHook(() => useLiveTracking(), { wrapper: wrap('t1') });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+    expect(apiClient.getMatchStates).toHaveBeenCalledTimes(1);
+    vi.mocked(apiClient.getMatchStates).mockResolvedValue({});
+    await act(async () => { window.dispatchEvent(new Event('sw:session-restored')); });
+    expect(apiClient.getMatchStates).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(apiClient.getMatchStates).toHaveBeenCalledTimes(3);
+    unmount();
+  });
+
+  it('does not revive an invalid public capability when an operator authenticates', async () => {
+    vi.mocked(apiClient.getDisplayMatchStates).mockRejectedValue(Object.assign(new Error('Gone'), { status: 404 }));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <MemoryRouter initialEntries={['/display?token=expired-public-link']}>{children}</MemoryRouter>
+    );
+    const { unmount } = renderHook(() => useLiveTracking(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { window.dispatchEvent(new Event('sw:session-restored')); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+    expect(apiClient.getDisplayMatchStates).toHaveBeenCalledTimes(1);
+    expect(apiClient.getMatchStates).not.toHaveBeenCalled();
+    unmount();
+  });
+
   it('a 404 (workspace gone / bad display token) ends the poll', async () => {
     vi.mocked(apiClient.getMatchStates).mockRejectedValue(
       Object.assign(new Error('Tournament not found'), { status: 404 }),

@@ -10,6 +10,7 @@
     "test:pagination": "playwright test --config playwright.pagination.config.ts",
     "test:console-contracts": "playwright test tests/console-browser-contracts.spec.ts",
     "test:console-a11y": "playwright test tests/console-a11y.spec.ts",
+    "test:operator-mfa": "playwright test tests/operator-mfa.spec.ts",
     "test:entrant-a11y": "playwright test tests/entrant-a11y.spec.ts",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",

@@ -65,6 +65,20 @@ afterEach(() => {
 });
 
 describe('useBracket — content-guarded shared poll', () => {
+  it('resumes the shared private poll after authentication without remounting consumers', async () => {
+    vi.mocked(apiClient.getBracket).mockRejectedValue(Object.assign(new Error('Sign in'), { status: 401 }));
+    const { result, unmount } = renderHook(() => useBracket(), { wrapper: wrap('restored-session') });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(apiClient.getBracket).toHaveBeenCalledTimes(1);
+    vi.mocked(apiClient.getBracket).mockResolvedValue(dtoA);
+    await act(async () => { window.dispatchEvent(new Event('sw:session-restored')); });
+    expect(result.current.data).toEqual(dtoA);
+    await act(async () => { await vi.advanceTimersByTimeAsync(2500); });
+    expect(apiClient.getBracket).toHaveBeenCalledTimes(3);
+    unmount();
+  });
+
   it('keeps the same snapshot object (no re-render) when a poll tick is unchanged', async () => {
     vi.mocked(apiClient.getBracket).mockResolvedValue(dtoA);
     const { result, unmount } = renderHook(() => useBracket(), { wrapper: wrap('t1') });

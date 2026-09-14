@@ -109,9 +109,31 @@ def isolate_test_database(tmp_path, monkeypatch) -> Path:
         sys.path.remove(_BACKEND_ROOT)
     sys.path.insert(0, _BACKEND_ROOT)
     purge_backend_modules()
+    # Isolated applications get real disposable key material, never a bypass
+    # of the MFA dependency. HTTP callers still have to complete enrollment.
+    import os
+    if not os.environ.get("MFA_KEYRING_FILE"):
+        from core.secret_keys import create_secret_keyring
+        key_path = tmp_path / "mfa-keys.json"
+        if not key_path.exists():
+            create_secret_keyring(key_path)
+        monkeypatch.setenv("MFA_KEYRING_FILE", str(key_path))
     from db.session import engine
     upgrade_test_database(engine)
     return db_path
+
+
+def enroll_operator_mfa(client, password: str) -> None:
+    """Complete the real cookie-bound enrollment in an isolated HTTP fixture."""
+    import base64
+    from core.time_utils import _utcnow
+    from identity.mfa_crypto import totp_code
+    headers = {"X-ShuttleWorks-CSRF": "1"}
+    started = client.post("/auth/mfa/enroll", json={"currentPassword": password}, headers=headers)
+    assert started.status_code == 201, started.text
+    seed = base64.b32decode(started.json()["secret"])
+    confirmed = client.post("/auth/mfa/confirm", json={"code": totp_code(seed, _utcnow().timestamp())}, headers=headers)
+    assert confirmed.status_code == 200, confirmed.text
 
 
 def seed_tournament(client, name: str = "Test") -> str:

@@ -1126,6 +1126,12 @@ export interface UserDTO {
    *  ``smtp`` backend, vs. the local ``console`` backend that only logs).
    *  Gates whether the console offers "send by email" invitations. */
   emailConfigured: boolean;
+  mfaRequired: boolean;
+  mfaEnrolled: boolean;
+  mfaAuthenticated: boolean;
+  passwordConfigured: boolean;
+  offlineWorkspaceId?: string | null;
+  authenticatedAt?: string | null;
 }
 
 /** The workspace's public display capability link (owner-gated mint/rotate).

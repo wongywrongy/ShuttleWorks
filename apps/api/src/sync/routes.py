@@ -84,7 +84,7 @@ def _bearer_capability(
 @authority_router.post(
     "/checkout",
     response_model=CheckoutResponse,
-    dependencies=[Depends(require_tournament_access("operator"))],
+    dependencies=[Depends(require_tournament_access("operator", fresh=True))],
 )
 def checkout(
     body: CheckoutRequest,
@@ -114,7 +114,7 @@ def checkout(
 @authority_router.post(
     "/devices",
     response_model=DeviceResponse,
-    dependencies=[Depends(require_tournament_access("operator"))],
+    dependencies=[Depends(require_tournament_access("operator", fresh=True))],
 )
 def enroll_event_node(
     body: DeviceEnrollmentRequest,
@@ -149,7 +149,7 @@ def enroll_event_node(
 @authority_router.post(
     "/devices/{node_id}/revoke",
     response_model=DeviceResponse,
-    dependencies=[Depends(require_tournament_access("operator"))],
+    dependencies=[Depends(require_tournament_access("operator", fresh=True))],
 )
 def revoke_event_node(
     body: DeviceRevocationRequest,
@@ -211,7 +211,7 @@ def create_offline_session(
     # The cookie value is minted here, never echoed: ``offline_sessions.issue``
     # returns ``secrets.token_urlsafe`` and stores only its SHA-256 digest, and
     # the name is a settings constant. Nothing from the request body reaches
-    # ``Set-Cookie`` — ``ttl_hours`` is an ``int`` bounded 1..168 by the schema
+    # ``Set-Cookie`` — ``ttl_hours`` is an ``int`` bounded 1..12 by the schema
     # and again by ``issue``. CodeQL ``py/cookie-injection`` here is a false
     # positive (2026-09-07).
     response.set_cookie(
@@ -262,7 +262,7 @@ def bootstrap_offline_session(
     # The cookie value is minted here, never echoed: ``offline_sessions.issue``
     # returns ``secrets.token_urlsafe`` and stores only its SHA-256 digest, and
     # the name is a settings constant. Nothing from the request body reaches
-    # ``Set-Cookie`` — ``ttl_hours`` is an ``int`` bounded 1..168 by the schema
+    # ``Set-Cookie`` — ``ttl_hours`` is an ``int`` bounded 1..12 by the schema
     # and again by ``issue``. CodeQL ``py/cookie-injection`` here is a false
     # positive (2026-09-07).
     response.set_cookie(
@@ -372,7 +372,7 @@ def _lifecycle_response(action: str, previous, current, capability=None, highest
 @authority_router.post(
     "/return",
     response_model=AuthorityLifecycleResponse,
-    dependencies=[Depends(require_tournament_access("operator"))],
+    dependencies=[Depends(require_tournament_access("operator", fresh=True))],
 )
 def return_authority(
     body: AuthorityReturnRequest,
@@ -400,7 +400,7 @@ def return_authority(
 @authority_router.post(
     "/transfer",
     response_model=AuthorityLifecycleResponse,
-    dependencies=[Depends(require_tournament_access("operator"))],
+    dependencies=[Depends(require_tournament_access("operator", fresh=True))],
 )
 def transfer_authority(
     body: PlannedTransferRequest,
@@ -429,7 +429,7 @@ def transfer_authority(
 @authority_router.post(
     "/recover",
     response_model=AuthorityLifecycleResponse,
-    dependencies=[Depends(require_tournament_access("operator"))],
+    dependencies=[Depends(require_tournament_access("operator", fresh=True))],
 )
 def recover_authority(
     body: LostNodeRecoveryRequest,

@@ -275,6 +275,66 @@
         "undo_finish": "undo_finish"
       }
     },
+    "node_operator_enrollment": {
+      "name": "node_operator_enrollment",
+      "version": 1,
+      "states": [
+        "consumed",
+        "pending"
+      ],
+      "initial": [
+        "pending"
+      ],
+      "terminal": [
+        "consumed"
+      ],
+      "transitions": [
+        {
+          "event": "issue",
+          "from_states": [
+            "pending"
+          ],
+          "to": "pending",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "activate",
+          "from_states": [
+            "pending"
+          ],
+          "to": "consumed",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "administrator_reset",
+          "from_states": [
+            "consumed",
+            "pending"
+          ],
+          "to": "pending",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        }
+      ],
+      "state_attribute": "status",
+      "state_keys": {
+        "consumed": "consumed",
+        "pending": "pending"
+      },
+      "event_keys": {
+        "activate": "activate",
+        "administrator_reset": "administrator_reset",
+        "issue": "issue"
+      }
+    },
     "operator_mfa_factor": {
       "name": "operator_mfa_factor",
       "version": 1,
@@ -342,6 +402,29 @@
           "guard": null,
           "consequential": true,
           "description": ""
+        },
+        {
+          "event": "password_change",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "administrator_reset",
+          "from_states": [
+            "active",
+            "unconfigured"
+          ],
+          "to": "unconfigured",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
         }
       ],
       "state_attribute": "status",
@@ -351,8 +434,10 @@
       },
       "event_keys": {
         "activate": "activate",
+        "administrator_reset": "administrator_reset",
         "authenticate": "authenticate",
         "begin": "begin",
+        "password_change": "password_change",
         "recover": "recover"
       }
     },

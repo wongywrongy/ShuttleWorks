@@ -13,8 +13,18 @@ import { AuthProvider } from '../context/AuthContext';
 import { useAppliedTheme } from '../hooks/useAppliedTheme';
 import { useAppliedDensity } from '../hooks/useAppliedDensity';
 import { AuthedLayout } from './AuthedLayout';
+import { authWorkspaceScope } from '../lib/authWorkspaceScope';
 
 const ICON_DEFAULTS = { weight: 'light' as const, size: '1em' as const, mirrored: false };
+
+const NodeEnrollmentPage = lazy(() => import('../platform/auth/NodeEnrollmentPage').then(m => ({ default: m.NodeEnrollmentPage })));
+
+function RoutedAuthProvider({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  return <AuthProvider workspaceId={authWorkspaceScope(location.pathname, location.search, location.state)}>
+    {children}
+  </AuthProvider>;
+}
 
 const PublicDisplayPage = lazy(() =>
   import('../modules/display/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
@@ -66,8 +76,9 @@ function App() {
     <ErrorBoundary>
       <IconContext.Provider value={ICON_DEFAULTS}>
         <BrowserRouter>
-          <AuthProvider>
+          <RoutedAuthProvider>
             <Routes>
+              <Route path="/node-enrollment" element={<Suspense fallback={<Fallback />}><NodeEnrollmentPage /></Suspense>} />
               {/* Public: login. */}
               <Route
                 path="/login"
@@ -120,7 +131,7 @@ function App() {
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>
-          </AuthProvider>
+          </RoutedAuthProvider>
         </BrowserRouter>
       </IconContext.Provider>
     </ErrorBoundary>

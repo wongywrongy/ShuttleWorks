@@ -27,8 +27,82 @@ Compose input is file-backed.
 | TLS private keys | LAN server key; OTLP client/server keys | platform-oncall | Replace certificate/key pairs atomically, verify SAN/chain/expiry and both HTTPS origins or mTLS export, then revoke old certificates. Keep TLS minimum at 1.2 or 1.3. |
 | Telemetry database credential | Collector `POSTGRES_TELEMETRY_PASSWORD` | platform-oncall | Replace the read-only monitoring login and Collector configuration, verify database metrics resume, revoke old login. |
 | Human session, reset and verification bearers | Identity tables; host-only cookies and one-use email links | identity-module-owner | Revoke affected sessions and outstanding reset/verification credentials through the identity service. Passwords are changed through the Argon2id service; never set a raw hash by hand. |
+| Operator authenticator encryption keys | API-only `MFA_KEYRING_FILE`; AES-GCM factor and pending-enrollment storage | identity-module-owner | Provision a separate random key ring per deployment. Preserve old keys while any active or pending factor, or retained backup, requires them. Never copy cloud factors or their encryption keys to an event node. See the provisioning section below. |
 | Display and invitation capabilities | Display management, workspace sharing and partner invitations | identity-module-owner | Revoke affected links and issue replacements. Staff links expire within seven days; migrations 0004/0005 hash staff/display bearers. Save newly issued links before leaving Sharing; later reads cannot retrieve them. Dated display links stop seven venue-local calendar days after the event; undated legacy links expire during migration and require an explicit replacement deadline. Historical database files and backups can retain pre-migration credentials until their retention window ends. |
 | Release publishing identity | GitHub Actions OIDC; registry permissions | release-owner | There is no persistent cosign signing password. Revoke compromised workflow/app access, protect release refs, rebuild from a reviewed commit and verify signature plus exact-source provenance before installation. |
+
+## Operator authenticator key provisioning
+
+Before starting a cloud or event-node API, create its private encryption file
+from the repository root using the deployment's Python environment:
+
+```sh
+.venv/bin/python tools/operator-mfa-keyring.py secrets/operator_mfa_keys.json
+```
+
+The parent directory must already exist and be private. The command creates a
+new file with mode `0600`, refuses to overwrite an existing file and prints only
+the key identifier. Mount it at the API's `MFA_KEYRING_FILE` path; the cloud and
+self-host Compose definitions use `secrets/operator_mfa_keys.json` by default.
+Event nodes use a separately generated `secrets/node_operator_mfa_keys.json`.
+Set the host file's owner to the API container UID 1001 while keeping it private.
+Workers and sync processes do not receive this key. Startup refuses a missing,
+unreadable, malformed or known-predictable key file; it never generates a
+replacement that would strand existing factors.
+
+Keep an encrypted, access-controlled copy alongside the deployment recovery
+material. Database backups contain encrypted factors but cannot decrypt them
+without these keys. The key-ring reader accepts up to four keys and writes with
+the selected active key. A successful authenticator verification re-encrypts
+an old factor with the active key; a recovery-code login alone does not do so.
+Do not delete an old key based on elapsed time or one successful login. Key-use
+inventory, bulk rewrapping and a rehearsed retirement procedure remain open;
+the file format alone does not establish safe rotation.
+
+## Individual offline operators
+
+Import the workspace checkpoint and verify the node holds its active authority
+epoch before enrolling a person. Their imported membership must be `operator`
+or `owner`. Cloud passwords, authenticator seeds and recovery codes are never
+copied to the node. Each person chooses a separate node password and enrolls an
+authenticator on that node.
+
+From the repository root, with the event-node API's database, node ID and private
+key environment, a trusted local OS administrator runs:
+
+```sh
+.venv/bin/python tools/node-operator-enrollment.py \
+  --workspace WORKSPACE_UUID --operator USER_UUID --output /private/new-activation.json
+```
+
+The output must be a new file in a private directory. The command writes mode
+`0600` and stores only the activation token's hash in the database. Deliver the
+file to the identified person over a private channel within ten minutes. They
+open the node console's `/node-enrollment?workspaceId=WORKSPACE_UUID`, enter the
+email and activation token from the file, choose a password, and complete the
+authenticator ceremony. Keep the recovery codes privately; the console presents
+them once. Remove the activation file after handoff. Never put its token in a
+URL, chat log or issue. Reissuing an unused activation invalidates its predecessor.
+
+Subsequent node sign-in uses `/login?workspaceId=WORKSPACE_UUID&node=1` and that
+person's node password plus authenticator or one-use recovery code. The shared
+authority capability cannot enroll an individual or grant MFA assurance. Node
+credentials grant access only to their workspace and active epoch.
+
+If both the authenticator and recovery codes are lost, verify the person out of
+band before local recovery. The same administrator command requires both
+`--reset-existing` and `--reason 'Verified recovery reason'` to replace configured
+credentials. This revokes the person's node password, factor, recovery codes and
+all sessions, records the node identity and reason, and issues a new activation
+file. It never grants an authenticated session. Without those explicit options,
+the command refuses to reset an already configured account. There is no LAN
+endpoint for administrator reset. An existing output path or failed transaction
+leaves the previous credentials intact.
+
+The person can change their node password or replace their authenticator from
+Account security after fresh authentication. Cloud email password reset does
+not recover node identity. Production handoff, lost-factor recovery and
+disconnected/reconnection rehearsals remain required operational evidence.
 
 ## Authority signing key rotation
 
@@ -83,8 +157,8 @@ emergency revocation remain unverified P10/P14 work.
 For compromise, stop new issuance and isolate affected nodes while the maintainer
 coordinates containment. Planned rotation cannot revoke authority on a disconnected
 node: fence its epoch centrally, preserve local operations for reconciliation, and
-replace the node's trust before reconnecting it. Individually authenticated offline
-operators remain P08 work.
+replace the node's trust before reconnecting it. Individual offline enrollment is described above; a disconnected recovery and
+reconnection rehearsal remains open.
 
 ## Incident response
 

@@ -267,7 +267,8 @@ class Settings(BaseSettings):
     # without a valid session cookie is 401. Explicit mode beats the old
     # implicit blank-secret keying it replaced.
     auth_mode: str = "local"  # local | cloud
-    session_ttl_days: float = 30.0
+    session_ttl_days: float = Field(default=0.5, gt=0, le=0.5)
+    mfa_keyring_file: str = ""
     session_cookie_name: str = "sw_session"
     offline_session_cookie_name: str = "sw_offline_operator"
     # Secure flag on the session cookie. Default off so plain-HTTP local
@@ -622,6 +623,39 @@ class Settings(BaseSettings):
                 + ", ".join(missing)
                 + ". Set these via your deployment host's secret manager."
             )
+        return self
+
+    @property
+    def operator_mfa_required(self) -> bool:
+        return (self.auth_mode == "cloud" or self.environment == "cloud"
+                or self.deployment_profile in {"cloud", "event_node"})
+
+    @property
+    def operator_mfa_scope(self) -> str:
+        if self.deployment_profile != "event_node":
+            return "cloud"
+        import uuid
+        return f"node:{uuid.UUID(self.node_id)}"
+
+    @model_validator(mode="after")
+    def _enforce_mfa_key_custody(self) -> "Settings":
+        if self.auth_mode not in {"local", "cloud"}:
+            raise ValueError("AUTH_MODE must be local or cloud")
+        if self.process_role != "api":
+            return self
+        if self.deployment_profile == "event_node":
+            try:
+                self.operator_mfa_scope
+            except ValueError:
+                raise ValueError("Event-node operator authentication requires a valid NODE_ID") from None
+        if self.operator_mfa_required and not self.mfa_keyring_file:
+            raise ValueError("MFA_KEYRING_FILE is required for operator authentication")
+        if self.mfa_keyring_file:
+            from core.secret_keys import SecretKeyringError, read_secret_keyring
+            try:
+                read_secret_keyring(self.mfa_keyring_file)
+            except SecretKeyringError:
+                raise ValueError("MFA_KEYRING_FILE must contain a valid private encryption key ring") from None
         return self
 
     @property

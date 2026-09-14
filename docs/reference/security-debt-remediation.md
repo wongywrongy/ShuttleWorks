@@ -25,7 +25,7 @@ Owners name repository responsibilities; the maintainer coordinates delivery. Pa
 | P05 | Hash and expire capabilities; redact logs | identity-module-owner / platform-oncall | P03 | Implemented; review pending |
 | P06 | Explicit public projections and bounded inputs | identity-module-owner | P03 | In progress |
 | P07 | Edge headers and native nginx checks | platform-oncall | P02 | Implemented; review pending |
-| P08 | App-owned MFA, sessions and recovery | identity-module-owner | P04, P05 | In progress: encrypted factor lifecycle and migration; HTTP/UI enforcement pending |
+| P08 | App-owned MFA, sessions and recovery | identity-module-owner | P04, P05 | In progress: cloud/node MFA, session locking and administrator recovery implemented; final regression and review follow-up pending |
 | P09 | Atomic writes and concurrency | architecture | P03 | In progress |
 | P10 | Authority history and key rotation | sync-module-owner | P09 | In progress |
 | P11 | Canonical membership and persisted match outcomes | architecture | P09 | Pending |

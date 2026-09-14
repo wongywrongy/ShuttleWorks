@@ -1628,6 +1628,26 @@ class OfflineOperatorSession(Base):
     )
 
 
+class NodeOperatorEnrollment(Base):
+    """One administrator-issued activation credential per node-local person."""
+    __tablename__ = "node_operator_enrollments"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, unique=True)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    authority_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    node_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(["tournament_id", "user_id"], ["tournament_members.tournament_id", "tournament_members.user_id"], ondelete="CASCADE", name="fk_node_enrollment_member"),
+        ForeignKeyConstraint(["tournament_id", "authority_epoch"], ["tournament_authority_epochs.tournament_id", "tournament_authority_epochs.epoch"], ondelete="CASCADE", name="fk_node_enrollment_authority"),
+        CheckConstraint("status IN ('pending', 'consumed')", name="ck_node_enrollment_status"),
+        CheckConstraint("authority_epoch > 0 AND expires_at > created_at", name="ck_node_enrollment_bounds"),
+    )
+
+
 class OperatorMfaFactor(Base):
     """One encrypted authenticator per operator in this deployment's identity store."""
 

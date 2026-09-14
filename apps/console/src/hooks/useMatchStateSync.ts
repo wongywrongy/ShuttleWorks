@@ -20,10 +20,12 @@ import { apiClient } from '../api/client';
 import { isTerminalPollError } from '../lib/pollPolicy';
 import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { mergeMatchStates } from '../lib/mergeMatchStates';
+import { useSessionRevision } from './useSessionRevision';
 
 const POLL_MS = 5000;
 
 export function useMatchStateSync(tid: string | null | undefined): void {
+  const sessionRevision = useSessionRevision();
   const setMatchStates = useMatchStateStore((s) => s.setMatchStates);
   // Set when a poll hits a terminal error (workspace deleted / access
   // revoked) — retrying every 5s can never succeed, so the loop stops.
@@ -65,5 +67,5 @@ export function useMatchStateSync(tid: string | null | undefined): void {
       clearInterval(interval);
       unsubscribe();
     };
-  }, [sync]);
+  }, [sync, sessionRevision]);
 }

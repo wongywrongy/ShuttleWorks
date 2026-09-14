@@ -279,6 +279,7 @@ jobs:
           touch ../../secrets/postgres_password ../../secrets/database_url ../../secrets/ops_token
           touch ../../secrets/sync_authority_capability ../../secrets/authority_signing_public_key
           touch ../../secrets/authority_signing_key ../../secrets/node_signing_key
+          touch ../../secrets/operator_mfa_keys.json ../../secrets/node_operator_mfa_keys.json
           touch ../../secrets/otel_gateway_ca.pem ../../secrets/otel_gateway_client_cert.pem
           touch ../../secrets/otel_gateway_client_key.pem
           status=0

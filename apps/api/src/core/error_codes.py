@@ -176,6 +176,10 @@ class ErrorCode(str, Enum):
     AUTH_NOT_SIGNED_IN = "AUTH_NOT_SIGNED_IN"
     AUTH_RESET_INVALID = "AUTH_RESET_INVALID"
     AUTH_CSRF_REQUIRED = "AUTH_CSRF_REQUIRED"
+    AUTH_MFA_REQUIRED = "AUTH_MFA_REQUIRED"
+    AUTH_MFA_INVALID = "AUTH_MFA_INVALID"
+    AUTH_REAUTH_REQUIRED = "AUTH_REAUTH_REQUIRED"
+    AUTH_MFA_UNAVAILABLE = "AUTH_MFA_UNAVAILABLE"
     # The bot challenge said no, or could not be reached (SP-E1-2 —
     # Turnstile moved from submit to entrant signup, spec Q4 R3 restack).
     # Distinct from AUTH_INVALID_CREDENTIALS because it is not about who

@@ -653,7 +653,7 @@ def update_tournament(
 @router.delete(
     "/{tournament_id}",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def delete_tournament(
     tournament_id: uuid.UUID = Path(...),
@@ -1191,7 +1191,7 @@ def create_tournament_backup(
 
 @router.get(
     "/{tournament_id}/state/backups/{filename}",
-    dependencies=[Depends(require_tournament_access("viewer"))],
+    dependencies=[Depends(require_tournament_access("viewer", fresh=True))],
 )
 def download_tournament_backup(
     filename: str,
@@ -1229,7 +1229,7 @@ def download_tournament_backup(
 @router.delete(
     "/{tournament_id}/state/backups/{filename}",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def delete_tournament_backup(
     filename: str,
@@ -1254,7 +1254,7 @@ def delete_tournament_backup(
 
 @router.post(
     "/{tournament_id}/state/restore/{filename}",
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def restore_tournament_backup(
     filename: str,
@@ -1392,7 +1392,7 @@ def set_plan_finalized(
     "/{tournament_id}/invites",
     response_model=InviteCreatedDTO,
     status_code=201,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def create_invite_link(
     body: InviteCreateDTO,
@@ -1590,7 +1590,7 @@ def leave_tournament(
 @router.delete(
     "/{tournament_id}/members/{user_id}",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def remove_tournament_member(
     tournament_id: uuid.UUID = Path(...),
@@ -1610,7 +1610,7 @@ def remove_tournament_member(
 @router.patch(
     "/{tournament_id}/members/{user_id}",
     response_model=TournamentMemberDTO,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def change_tournament_member_role(
     body: RoleChangeRequest,
@@ -1653,7 +1653,7 @@ def change_tournament_member_role(
 @router.post(
     "/{tournament_id}/transfer-ownership",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def transfer_tournament_ownership(
     body: TransferOwnershipRequest,

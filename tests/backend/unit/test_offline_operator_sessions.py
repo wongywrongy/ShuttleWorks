@@ -166,7 +166,7 @@ def test_route_sets_a_secure_httponly_scoped_cookie(session, monkeypatch):
     monkeypatch.setattr(settings, "session_cookie_secure", True)
 
     result = create_offline_session(
-        body=OfflineSessionRequest(node_id=node_id, authority_epoch=2, ttl_hours=24),
+        body=OfflineSessionRequest(node_id=node_id, authority_epoch=2, ttl_hours=12),
         response=response,
         tournament_id=tournament_id,
         user=AuthUser(id=str(user_id), email="operator@example.test"),
@@ -193,7 +193,7 @@ def test_bootstrap_route_sets_cookie_without_auth_user(session, monkeypatch):
             node_id=node_id,
             authority_epoch=2,
             operator_id=user_id,
-            ttl_hours=24,
+            ttl_hours=12,
         ),
         response=response,
         tournament_id=tournament_id,

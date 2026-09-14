@@ -37,6 +37,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from core.paths import WORDLISTS
+from core.operator_sessions import ABSOLUTE_LIFETIME, session_is_live
 from core.constants import BOOTSTRAP_ORG_NAME
 from core.config import settings
 # The counting engine and the two aware-datetime helpers moved to core in
@@ -46,6 +47,7 @@ from core.throttle import throttle_record_attempt
 from core.time_utils import _aware, _utcnow
 from core.tokens import _hash_token
 from db.models import AuthSession, AuthThrottle, Org, OrgMember, User
+from repositories.mfa import MfaRepository
 
 log = logging.getLogger("scheduler.auth_service")
 
@@ -305,34 +307,34 @@ def ensure_bootstrap_user(session: Session) -> User:
 def create_session(session: Session, user_id: uuid.UUID) -> tuple[str, AuthSession]:
     """Mint a session row; returns ``(raw_token, row)``. The raw token
     goes into the cookie and is never stored."""
+    MfaRepository(session).reserve_account(user_id)
     token = secrets.token_urlsafe(_SESSION_TOKEN_BYTES)
+    now = _utcnow()
     row = AuthSession(
         token_hash=_hash_token(token),
         user_id=user_id,
-        expires_at=_utcnow() + timedelta(days=settings.session_ttl_days),
+        created_at=now, last_seen_at=now,
+        expires_at=now + min(timedelta(days=settings.session_ttl_days), ABSOLUTE_LIFETIME),
     )
     session.add(row)
     session.flush()
     return token, row
 
 
-def resolve_session(session: Session, token: str) -> Optional[User]:
-    """Token → live user, or None. Touches ``last_seen_at`` (rolling)."""
+def resolve_session_record(session: Session, token: str) -> Optional[AuthSession]:
+    """Resolve a live credential without treating a read as human activity."""
     if not token:
         return None
     row = session.execute(
         select(AuthSession).where(AuthSession.token_hash == _hash_token(token))
     ).scalar_one_or_none()
-    if row is None or row.revoked_at is not None:
-        return None
-    now = _utcnow()
-    if _aware(row.expires_at) <= now:
-        return None
-    # Rolling activity stamp, thresholded so authenticated reads don't
-    # turn into a write per request.
-    if (now - _aware(row.last_seen_at)).total_seconds() > 300:
-        row.last_seen_at = now
-    return session.get(User, row.user_id)
+    return row if session_is_live(row, _utcnow()) else None
+
+
+def resolve_session(session: Session, token: str) -> Optional[User]:
+    """Compatibility identity read for CSRF; protected routes also require MFA."""
+    row = resolve_session_record(session, token)
+    return session.get(User, row.user_id) if row is not None else None
 
 
 def revoke_session(session: Session, token: str) -> bool:
@@ -350,6 +352,7 @@ def revoke_all_sessions(
 ) -> int:
     """Revoke every live session for a user (password change / reset —
     OWASP: credential change invalidates other sessions)."""
+    MfaRepository(session).reserve_account(user_id)
     keep_hash = _hash_token(except_token) if except_token else None
     rows = session.execute(
         select(AuthSession).where(
@@ -370,6 +373,7 @@ def revoke_all_sessions(
 
 
 def issue_reset_token(session: Session, user: User) -> str:
+    user = MfaRepository(session).reserve_account(user.id)
     token = secrets.token_urlsafe(_SESSION_TOKEN_BYTES)
     user.reset_token_hash = _hash_token(token)
     user.reset_token_expires_at = _utcnow() + timedelta(
@@ -389,7 +393,10 @@ def consume_reset_token(
     user = session.execute(
         select(User).where(User.reset_token_hash == token_hash)
     ).scalar_one_or_none()
-    if user is None or user.reset_token_expires_at is None:
+    if user is None:
+        return None
+    user = MfaRepository(session).reserve_account(user.id)
+    if user is None or user.reset_token_hash != token_hash or user.reset_token_expires_at is None:
         return None
     if _aware(user.reset_token_expires_at) <= _utcnow():
         return None

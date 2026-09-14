@@ -33,8 +33,8 @@ Sibling test names in a cell are relative to the first test's directory.
 Protected routes still derive their principal from server-side sessions through
 `core/dependencies.py`. No browser-storage authority was introduced. The auth and
 tenant inventories continue to derive the registered routes rather than relying
-on a hand-maintained protected-router list. Operator MFA, idle expiry and fresh
-authentication remain unfinished P08 work.
+on a hand-maintained protected-router list. P08 adds the stronger session
+controls described below; rollout and operational evidence remain open.
 
 The September 14 P08 foundation adds encrypted, principal/scope-bound TOTP
 seeds, a bounded file-only AES key ring, hashed single-use recovery codes and
@@ -42,9 +42,9 @@ an actor-attributed factor lifecycle. SQL and transaction reservations live in
 `repositories/mfa.py`; `identity/mfa.py` owns policy. Migration `0006` creates the
 factor tables, adds session assurance fields and caps old sessions at twelve
 hours from original issue, preserving shorter deadlines. It does not mark any
-existing session as MFA-authenticated. These are service/storage controls:
-HTTP challenges, startup key requirements, new-session/idle enforcement,
-offline enrollment and the console lock screen are not yet connected.
+existing session as MFA-authenticated. Commit `08b1c2fc` contains these
+service/storage controls. Its hosted CI and security checks pass, including
+backend, frontend, browser, entrant, secret scan and Compose checks.
 Pending enrollment is bound to its initiating server-session UUID, both in
 the row and the authenticated encryption context. A second session cannot
 confirm it, even with the current correct OTP; the original session can.
@@ -68,7 +68,57 @@ expiration-on-commit disabled. A further **79 crypto, key-file, lifetime-policy,
 register, graph and architecture checks** pass. Fourteen guard-removal controls
 fail as intended. The import gate keeps all 15 contracts; Ruff passes across the
 repository. Documentation passes 62 checks with six optional skips and builds.
-Full hosted validation of the MFA branch and independent review remain pending.
+The HTTP/UI implementation now limits cloud and node password-stage cookies to
+MFA ceremonies. Confirmation rotates the cookie atomically with proof consumption;
+new cookies retain the original absolute deadline. Reads never count as activity.
+Sensitive-action checks run after tenant/role denial, so freshness does not expose
+a foreign workspace. Nineteen route cases cover exports, backup/restore, workspace
+and member changes, display issue, node enrollment and authority changes. Client
+spreadsheet serialization also waits for a fresh server check.
+
+Migration `0007` adds hashed, ten-minute, one-use individual node activation,
+bound by composite foreign keys to the member and authority epoch. A trusted local
+OS administrator creates the private activation file. Shared authority capability
+bootstrap cannot set a person's password or grant MFA assurance. Node users choose
+their own password and authenticator; cloud credentials never enter a checkpoint.
+Node denial tests compare missing, foreign (including another owned workspace) and
+downgraded-member responses byte for byte. Local administrator recovery requires an
+explicit reset option and reason, revokes all credentials, records node-attributed
+history and requires individual activation again. This is not a remote reset API.
+
+The independent fresh-context review identified one P1 race: password reset/change
+selected old sessions while a concurrent MFA proof could insert a replacement that
+survived revocation. Three regression cases failed before the fix. All credential
+operations now reserve the account before the factor, refresh password/reset-token
+state, and serialize grants with revocation. The follow-up review found no further
+confirmed bypass or inconsistent lock ordering; its interleave concern prompted a
+bounded wait for the competing proof before releasing the reset transaction.
+
+Executed September 14 evidence (final broad backend gates still pending):
+
+- 71 authentication/factor/HTTP cases pass, with 19 PostgreSQL legs skipped in
+  that SQLite-focused run. The password-race cases pass after the fix.
+- All 2,429 console tests pass. Lint has zero errors (156 existing warnings);
+  dependency boundaries have zero errors (13 existing warnings).
+- All 1,254 entrant tests pass, including ingress checks. Its explicit browser
+  spec inventory now includes the new operator MFA journey.
+- The isolated real-browser journey passes again after the account-reservation fix: password-only denial, enrollment,
+  issue-once recovery codes, trusted activity, idle expiry, recovery sign-in and
+  preservation of the same unsent password form. It uses a disposable database,
+  random private key, loopback ports and teardown of only its own processes.
+- Nine backend guard removals reached assertion failures and restored exact source:
+  pending identity, fresh proof, revocation/absolute/idle/expiry compare-and-swap,
+  activation secret, node workspace binding and administrator session revocation.
+  Removing the shared account reservation also makes all three password-reset/
+  change/login race checks fail. Five console guard removals likewise failed for export freshness, draft retention,
+  different-user isolation, stale identity replies and terminal public polling.
+- Every nginx fragment parses with CI stub includes. Native app/LAN/docs header,
+  error-response and token-redaction checks pass. Compose parses all seven standalone
+  stacks and the combined event-node override. Documentation checks and build pass.
+
+Key-use inventory, safe encryption-key retirement, production handoff and
+lost-factor/disconnected/reconnection rehearsals remain open. Foundation hosted CI
+certifies `08b1c2fc` only; the later runtime changes still need their own hosted CI.
 
 ## R2
 

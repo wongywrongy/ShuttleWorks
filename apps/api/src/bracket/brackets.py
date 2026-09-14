@@ -3579,7 +3579,7 @@ async def import_tournament_csv(
     return _serialize_session(_hydrate_session(repo, tournament_id))
 
 
-@router.get("/export.json", response_model=TournamentOut, dependencies=[_VIEWER])
+@router.get("/export.json", response_model=TournamentOut, dependencies=[Depends(require_tournament_access("viewer", fresh=True))])
 def export_tournament_json(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -3595,7 +3595,7 @@ def export_tournament_json(
 @router.get(
     "/export.csv",
     response_class=PlainTextResponse,
-    dependencies=[_VIEWER],
+    dependencies=[Depends(require_tournament_access("viewer", fresh=True))],
 )
 def export_tournament_csv(
     tournament_id: uuid.UUID = Path(...),
@@ -3617,7 +3617,7 @@ def export_tournament_csv(
 @router.get(
     "/export.ics",
     response_class=PlainTextResponse,
-    dependencies=[_VIEWER],
+    dependencies=[Depends(require_tournament_access("viewer", fresh=True))],
 )
 def export_tournament_ics(
     tournament_id: uuid.UUID = Path(...),

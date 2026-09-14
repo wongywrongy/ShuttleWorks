@@ -3477,6 +3477,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/mfa/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enroll */
+        post: operations["enroll_auth_mfa_enroll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm */
+        post: operations["confirm_auth_mfa_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify */
+        post: operations["verify_auth_mfa_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activity */
+        post: operations["activity_auth_activity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/reauth-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reauth Check
+         * @description Fresh proof before an operator export assembled from already-loaded data.
+         */
+        post: operations["reauth_check_auth_reauth_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/node/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate */
+        post: operations["activate_auth_node_activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/node/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Password */
+        post: operations["change_password_auth_node_change_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/display/{token}/summary": {
         parameters: {
             query?: never;
@@ -4549,6 +4671,17 @@ export interface components {
             /** Assignments */
             assignments: components["schemas"]["BracketAssignmentIn"][];
         };
+        /** ConfirmRequest */
+        ConfirmRequest: {
+            /** Code */
+            code: string;
+        };
+        /** ConfirmationDTO */
+        ConfirmationDTO: {
+            user: components["schemas"]["UserDTO"];
+            /** Recoverycodes */
+            recoveryCodes: string[];
+        };
         /**
          * CourtClosure
          * @description A court closure window. ``fromTime`` / ``toTime`` are HH:mm
@@ -5281,6 +5414,26 @@ export interface components {
              * @default []
              */
             divisions: string[];
+        };
+        /** EnrollRequest */
+        EnrollRequest: {
+            /** Currentpassword */
+            currentPassword: string;
+        };
+        /** EnrollmentDTO */
+        EnrollmentDTO: {
+            /** Secret */
+            secret: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /**
+             * Issuer
+             * @default ShuttleWorks
+             */
+            issuer: string;
         };
         /**
          * EntrantConfigDTO
@@ -6976,6 +7129,20 @@ export interface components {
             /** Sideb */
             sideB?: string | null;
         };
+        /** NodeActivationRequest */
+        NodeActivationRequest: {
+            /**
+             * Workspaceid
+             * Format: uuid
+             */
+            workspaceId: string;
+            /** Email */
+            email: string;
+            /** Activationtoken */
+            activationToken: string;
+            /** Newpassword */
+            newPassword: string;
+        };
         /**
          * NodeResultDTO
          * @description Present only when ``results_published`` — its absence IS the gate.
@@ -7014,7 +7181,7 @@ export interface components {
             authority_epoch: number;
             /**
              * Ttl Hours
-             * @default 72
+             * @default 12
              */
             ttl_hours: number;
             /**
@@ -7034,7 +7201,7 @@ export interface components {
             authority_epoch: number;
             /**
              * Ttl Hours
-             * @default 72
+             * @default 12
              */
             ttl_hours: number;
         };
@@ -9216,6 +9383,30 @@ export interface components {
              * @default false
              */
             emailConfigured: boolean;
+            /**
+             * Mfarequired
+             * @default false
+             */
+            mfaRequired: boolean;
+            /**
+             * Mfaenrolled
+             * @default false
+             */
+            mfaEnrolled: boolean;
+            /**
+             * Mfaauthenticated
+             * @default false
+             */
+            mfaAuthenticated: boolean;
+            /**
+             * Passwordconfigured
+             * @default true
+             */
+            passwordConfigured: boolean;
+            /** Offlineworkspaceid */
+            offlineWorkspaceId?: string | null;
+            /** Authenticatedat */
+            authenticatedAt?: string | null;
         };
         /**
          * ValidateMoveRequest
@@ -9279,6 +9470,13 @@ export interface components {
             name?: string | null;
             /** Address */
             address?: string | null;
+        };
+        /** VerifyRequest */
+        VerifyRequest: {
+            /** Currentpassword */
+            currentPassword: string;
+            /** Code */
+            code: string;
         };
         /**
          * ViewerDTO
@@ -14359,6 +14557,205 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enroll_auth_mfa_enroll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrollRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_auth_mfa_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_auth_mfa_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activity_auth_activity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reauth_check_auth_reauth_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    activate_auth_node_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NodeActivationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_password_auth_node_change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
             };
         };
         responses: {

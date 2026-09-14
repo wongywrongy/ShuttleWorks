@@ -12,9 +12,10 @@
  */
 import { Navigate, useLocation, type Location } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { SessionLockScreen } from '../platform/auth/SessionLockScreen';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, loading, lockReason } = useAuth();
   const location: Location = useLocation();
 
   if (loading) {
@@ -25,9 +26,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!session) {
+  if (!session && !lockReason) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  return <>{children}</>;
+  const locked = !session || !!lockReason;
+  return <>
+    <div hidden={locked} inert={locked} className={locked ? undefined : 'contents'}>{children}</div>
+    {locked && <SessionLockScreen />}
+  </>;
 }

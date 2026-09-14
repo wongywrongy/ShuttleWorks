@@ -55,6 +55,8 @@ class FakeWorkbook {
   }
 }
 
+vi.mock('../../../../api/client', () => ({ apiClient: { requireFreshAuthentication: vi.fn().mockResolvedValue(undefined) } }));
+
 vi.mock('exceljs', () => ({ default: { Workbook: FakeWorkbook } }));
 
 beforeAll(() => {

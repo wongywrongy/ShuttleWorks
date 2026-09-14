@@ -18,8 +18,17 @@ P08 adds `operator_mfa_factor` for enrollment, activation, authentication and
 single-use recovery. `identity/mfa.py` supplies the operator UUID explicitly and
 persists every successful transition through `repositories/mfa.py` inside the
 caller's transaction. Refusals and failed session grants roll back both the
-factor/code mutation and its history. The encrypted factor service is implemented;
-HTTP MFA enforcement and the console ceremony remain in progress.
+factor/code mutation and its history. Cloud and node HTTP ceremonies compose
+factor verification with session rotation in that transaction. The console keeps
+unsent forms mounted behind its session lock and resumes only the same identity.
+
+`node_operator_enrollment` records individual activation issuance and consumption.
+The local administrator is attributed to the node UUID; activation is attributed
+to the operator UUID. Explicit administrator recovery records its reason on both
+enrollment and factor histories, revokes existing credentials, and returns the
+factor to `unconfigured`. It cannot be invoked through the LAN API. Migration
+`0007` binds enrollment to the member, workspace and authority epoch with composite
+foreign keys. See [the operating procedure](../how-to/security-operations.md).
 
 Run `npm run state-machines:generate` after editing definitions and
 `npm run state-machines:check` to check generated artifacts. The Documentation

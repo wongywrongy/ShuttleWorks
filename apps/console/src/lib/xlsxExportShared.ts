@@ -15,21 +15,6 @@ export function todayStamp(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export async function downloadXlsx(filename: string, workbook: ExcelJSNs.Workbook): Promise<void> {
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 /** Apply a fill + thin cell borders to every cell in a rectangle, optionally
  * ending with a thick black bottom rule so time groups stand apart. */
 export function applyRangeStyle(
