@@ -36,6 +36,40 @@ tenant inventories continue to derive the registered routes rather than relying
 on a hand-maintained protected-router list. Operator MFA, idle expiry and fresh
 authentication remain unfinished P08 work.
 
+The September 14 P08 foundation adds encrypted, principal/scope-bound TOTP
+seeds, a bounded file-only AES key ring, hashed single-use recovery codes and
+an actor-attributed factor lifecycle. SQL and transaction reservations live in
+`repositories/mfa.py`; `identity/mfa.py` owns policy. Migration `0006` creates the
+factor tables, adds session assurance fields and caps old sessions at twelve
+hours from original issue, preserving shorter deadlines. It does not mark any
+existing session as MFA-authenticated. These are service/storage controls:
+HTTP challenges, startup key requirements, new-session/idle enforcement,
+offline enrollment and the console lock screen are not yet connected.
+Pending enrollment is bound to its initiating server-session UUID, both in
+the row and the authenticated encryption context. A second session cannot
+confirm it, even with the current correct OTP; the original session can.
+
+Negative controls remove password proof, replacement freshness, enrollment
+expiry, TOTP/recovery replay refusal, actor-history persistence, session
+revocation, seed owner binding and predictable-key refusal. Every corresponding
+check fails. The original enrollment-expiry test was inadequate: its old OTP
+also failed after the guard was removed. It now supplies a current valid OTP
+after the enrollment window; removing the deadline fails that assertion.
+Production sessions disable autoflush, so the factor reservation explicitly
+flushes staged consumption before refreshing within a composed transaction.
+The regression verifies that a second call cannot restore an already consumed
+counter from the database. Runtime policy helpers separately cover the exact
+12-hour, one-hour and five-minute boundaries; passing those helpers is not
+reported as API enforcement.
+
+The final foundation run passes **66 factor, migration and schema cases across
+SQLite and PostgreSQL**, including production-style sessions with autoflush and
+expiration-on-commit disabled. A further **79 crypto, key-file, lifetime-policy,
+register, graph and architecture checks** pass. Fourteen guard-removal controls
+fail as intended. The import gate keeps all 15 contracts; Ruff passes across the
+repository. Documentation passes 62 checks with six optional skips and builds.
+Full hosted validation of the MFA branch and independent review remain pending.
+
 ## R2
 
 `resource_not_found()` defines the resource-denial envelope. Insufficient roles
@@ -464,3 +498,9 @@ submission reference is already minted, unique and consumed by the receipt route
 already ignores prose while counting executable blob/SQL references; all three
 architecture-inventory checks pass. These are verified historical fixes, not new
 implementations in this delivery.
+
+Hosted CI and security now pass on the exact authority-key commit `b40defc8`
+(CI run `34829926566`, security run `34829926651`), including backend, frontend,
+entrant, browser contracts, docs, Compose and observability jobs. This resolves
+the earlier pending hosted result for that commit and does not certify the
+subsequent MFA branch.

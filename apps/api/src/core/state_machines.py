@@ -17,6 +17,15 @@ DISPLAY_CAPABILITY = machine("display_capability", "inactive active", "inactive"
 ])
 
 
+OPERATOR_MFA_FACTOR = machine("operator_mfa_factor", "unconfigured active", "unconfigured", "", [
+    edge("begin", "unconfigured", "unconfigured"),
+    edge("begin", "active", "active"),
+    edge("activate", "unconfigured active", "active"),
+    edge("authenticate", "active", "active"),
+    edge("recover", "active", "active"),
+])
+
+
 MATCH = machine("match", "scheduled called playing finished retired", "scheduled", "retired", [
     edge("call", "scheduled", "called"),
     edge("start", "called", "playing"),

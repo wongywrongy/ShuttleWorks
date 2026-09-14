@@ -90,6 +90,7 @@ from db.models import (
 from db.blob_version import CURRENT_TOURNAMENT_SCHEMA_VERSION
 from db.session import SessionLocal
 from repositories.base import MemberIdentity
+from repositories.mfa import MfaRepository
 
 log = logging.getLogger("scheduler.repositories")
 _Result = TypeVar("_Result")
@@ -2133,6 +2134,7 @@ class LocalRepository:
         self.modules = _LocalModuleRepo(session)
         # E4 (Phase 9): the control plane's read of the Entries family.
         self.entry_signals = _LocalEntriesSignalRepo(session)
+        self.mfa = MfaRepository(session)
 
     # ---- High-level orchestration (id-explicit, Step 2+) ----------------
 

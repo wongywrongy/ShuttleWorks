@@ -275,6 +275,87 @@
         "undo_finish": "undo_finish"
       }
     },
+    "operator_mfa_factor": {
+      "name": "operator_mfa_factor",
+      "version": 1,
+      "states": [
+        "active",
+        "unconfigured"
+      ],
+      "initial": [
+        "unconfigured"
+      ],
+      "terminal": [],
+      "transitions": [
+        {
+          "event": "begin",
+          "from_states": [
+            "unconfigured"
+          ],
+          "to": "unconfigured",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "begin",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "activate",
+          "from_states": [
+            "active",
+            "unconfigured"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "authenticate",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "recover",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        }
+      ],
+      "state_attribute": "status",
+      "state_keys": {
+        "active": "active",
+        "unconfigured": "unconfigured"
+      },
+      "event_keys": {
+        "activate": "activate",
+        "authenticate": "authenticate",
+        "begin": "begin",
+        "recover": "recover"
+      }
+    },
     "solve_job": {
       "name": "solve_job",
       "version": 1,

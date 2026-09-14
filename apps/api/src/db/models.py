@@ -42,12 +42,14 @@ from typing import Optional
 from sqlalchemy import (
     JSON,
     Boolean,
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     MetaData,
     String,
     Text,
@@ -1575,6 +1577,8 @@ class AuthSession(Base):
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    authenticated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    mfa_generation: Mapped[Optional[int]] = mapped_column(Integer)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -1605,6 +1609,8 @@ class OfflineOperatorSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    authenticated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    mfa_generation: Mapped[Optional[int]] = mapped_column(Integer)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     revocation_reason: Mapped[Optional[str]] = mapped_column(String(500))
 
@@ -1619,6 +1625,50 @@ class OfflineOperatorSession(Base):
             ],
             ondelete="CASCADE",
         ),
+    )
+
+
+class OperatorMfaFactor(Base):
+    """One encrypted authenticator per operator in this deployment's identity store."""
+
+    __tablename__ = "operator_mfa_factors"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    scope: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="unconfigured")
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    secret_ciphertext: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
+    key_id: Mapped[Optional[str]] = mapped_column(String(16))
+    pending_ciphertext: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
+    pending_key_id: Mapped[Optional[str]] = mapped_column(String(16))
+    pending_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Binds the ceremony to either a cloud or node session; the encrypted
+    # pending seed authenticates this identifier as additional data, too.
+    pending_session_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    last_counter: Mapped[int] = mapped_column(BigInteger, nullable=False, default=-1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_operator_mfa_factors_user"),
+        CheckConstraint("status IN ('unconfigured', 'active')", name="ck_operator_mfa_factor_status"),
+        CheckConstraint("generation >= 0 AND revision >= 0 AND last_counter >= -1", name="ck_operator_mfa_factor_versions"),
+        CheckConstraint("status != 'active' OR (secret_ciphertext IS NOT NULL AND key_id IS NOT NULL AND generation > 0)", name="ck_operator_mfa_factor_active_secret"),
+        CheckConstraint("(pending_ciphertext IS NULL AND pending_key_id IS NULL AND pending_expires_at IS NULL AND pending_session_id IS NULL) OR (pending_ciphertext IS NOT NULL AND pending_key_id IS NOT NULL AND pending_expires_at IS NOT NULL AND pending_session_id IS NOT NULL)", name="ck_operator_mfa_factor_pending_secret"),
+    )
+
+
+class OperatorRecoveryCode(Base):
+    """A single-use lookup credential; successful consumption deletes its digest."""
+
+    __tablename__ = "operator_recovery_codes"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    factor_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("operator_mfa_factors.id", ondelete="CASCADE"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    __table_args__ = (
+        Index("uq_operator_recovery_codes_token_hash", "token_hash", unique=True),
+        Index("ix_operator_recovery_codes_factor", "factor_id"),
     )
 
 

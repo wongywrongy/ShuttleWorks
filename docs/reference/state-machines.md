@@ -40,6 +40,18 @@ Initial: scheduled. Terminal: retired.
 | postpone | called, playing | scheduled | operator | — | true |  |
 | undo_finish | finished | playing | operator | — | true | Undo finish corrects a live-day mis-tap and removes the match from standings again. Retirement remains terminal. |
 
+## operator_mfa_factor (version 1)
+
+Initial: unconfigured. Terminal: none.
+
+| Event | From | To | Actor | Guard | Consequential | Meaning |
+| --- | --- | --- | --- | --- | --- | --- |
+| begin | unconfigured | unconfigured | operator | — | true |  |
+| begin | active | active | operator | — | true |  |
+| activate | active, unconfigured | active | operator | — | true |  |
+| authenticate | active | active | operator | — | true |  |
+| recover | active | active | operator | — | true |  |
+
 ## solve_job (version 1)
 
 Initial: queued. Terminal: cancelled, failed, infeasible, succeeded.

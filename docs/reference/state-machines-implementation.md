@@ -14,6 +14,13 @@ append history in the same transaction as hash/deadline storage. Its active stat
 is derived from row presence and real-clock expiry, rather than another status
 column. Natural expiry performs no write; request resolution checks the deadline.
 
+P08 adds `operator_mfa_factor` for enrollment, activation, authentication and
+single-use recovery. `identity/mfa.py` supplies the operator UUID explicitly and
+persists every successful transition through `repositories/mfa.py` inside the
+caller's transaction. Refusals and failed session grants roll back both the
+factor/code mutation and its history. The encrypted factor service is implemented;
+HTTP MFA enforcement and the console ceremony remain in progress.
+
 Run `npm run state-machines:generate` after editing definitions and
 `npm run state-machines:check` to check generated artifacts. The Documentation
 CI job runs that check. The exporter uses only the Python standard library.

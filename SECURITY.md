@@ -100,12 +100,14 @@ review separates executed checks from source inspection and untested claims.
 Stated rather than hidden. Each carries the condition that would change the
 decision.
 
-- **Operator/owner MFA is not implemented.** It is required by the approved
-  remediation policy, including offline operators; this is an open gap.
-- **Operator sessions currently last 30 days without idle expiry or sensitive-action
-  reauthentication.** The approved target is 12 hours absolute, one hour idle and
-  five-minute authentication freshness for sensitive actions. Those targets are
-  not yet enforced.
+- **Operator/owner MFA is not yet enforced by the API.** Encrypted factor and
+  recovery-code storage have tested lifecycle primitives; HTTP enrollment,
+  independently enrolled offline operators and the console ceremony remain open.
+- **New operator sessions still use 30-day issuance without idle expiry or
+  sensitive-action reauthentication.** Migration 0006 caps pre-existing sessions
+  at 12 hours without inventing MFA assurance. The approved runtime target is
+  12 hours absolute, one hour idle and five-minute authentication freshness;
+  the tested policy helpers are not yet wired into request handling.
 - **Password minimum is eight characters.** Stronger single-factor policy remains
   an open authentication decision; existing accounts do not establish conformance.
 - **`style-src` permits `unsafe-inline`.** The display board computes lane

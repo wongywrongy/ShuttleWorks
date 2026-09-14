@@ -121,7 +121,11 @@
         "apps/api/src/core/log_redaction.py",
         "apps/api/src/core/config.py",
         "apps/console/src/api/client.ts",
-        "apps/console/src/modules/display/bracketDisplay/useBracketDisplaySync.ts"
+        "apps/console/src/modules/display/bracketDisplay/useBracketDisplaySync.ts",
+        "apps/api/src/identity/mfa_crypto.py",
+        "apps/api/src/identity/mfa.py",
+        "apps/api/src/repositories/mfa.py",
+        "apps/api/src/core/secret_keys.py"
       ],
       "evidence": [
         "tests/backend/unit/test_auth_service.py",
@@ -143,7 +147,10 @@
         "tests/e2e/check-account-journeys.py",
         "tests/backend/unit/test_log_redaction.py",
         "tests/backend/unit/test_config.py",
-        "apps/console/src/api/__tests__/displayCapability.test.tsx"
+        "apps/console/src/api/__tests__/displayCapability.test.tsx",
+        "tests/backend/unit/test_mfa_crypto.py",
+        "tests/backend/unit/test_operator_mfa.py",
+        "tests/backend/unit/test_secret_keys.py"
       ],
       "gaps": []
     },
