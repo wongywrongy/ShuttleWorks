@@ -7,7 +7,7 @@ import sys
 import time
 from pathlib import Path
 
-import httpx
+import httpx2 as httpx
 import pytest
 
 from core.log_redaction import RedactingFormatter, redact_credentials
