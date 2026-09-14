@@ -330,7 +330,7 @@ Every implementation package records focused checks and negative controls for sa
 The [implementation evidence](../reviews/security-remediation-2026-09-13.md)
 records changes and residual security gaps. P03/P07 repository checks are
 implemented, but independent review and hosted CI remain required. Other packages
-are incomplete; this branch is the first delivery, not closure of the program.
+are incomplete; the 2026-09-14 delivery to main is the first delivery, not closure of the program.
 Repository CAS complexity fell from 21 to 18 after replacing the cached version
 comparison with an atomic database update; the stale-session test failed before
 the fix and passed after it.

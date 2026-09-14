@@ -566,7 +566,7 @@ and 1,249 entrant tests. Its new spy reuse behavior requires explicit per-test
 call-history clearing; module mock implementations and all assertions are retained.
 Test-only Node types and precise callback mock signatures restore TypeScript checks.
 ExcelJS data-bar UUID generation and XLSX round-trip validation pass. These are
-branch results, not a claim that default-branch hosted alerts have closed.
+pre-merge results, not a claim that default-branch hosted alerts have closed.
 
 The display follow-up passes all 2,405 console tests and its production build,
 lint and dependency boundaries (zero errors; 154/13 existing warnings). Documentation
@@ -635,4 +635,4 @@ Hosted CI and security now pass on the exact authority-key commit `b40defc8`
 (CI run `34829926566`, security run `34829926651`), including backend, frontend,
 entrant, browser contracts, docs, Compose and observability jobs. This resolves
 the earlier pending hosted result for that commit and does not certify the
-subsequent MFA branch.
+later MFA commits.
