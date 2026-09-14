@@ -50,6 +50,7 @@ from sqlalchemy.orm import Session
 
 from sync.compatibility import supports_checkpoint_schema, supports_operation_schema
 from sync.errors import ProtocolError
+from sync.signing_keys import decode_key_material as _decode_key_material, key_id, read_verification_keys
 from sync.schemas import (
     CURRENT_CHECKPOINT_SCHEMA_VERSION,
     OperationEnvelope,
@@ -87,22 +88,6 @@ ALLOWED_COMMAND_CLASSES = (
 )
 
 
-def _decode_key_material(raw: bytes) -> bytes:
-    value = raw.strip()
-    if len(value) in (64, 128):
-        try:
-            return bytes.fromhex(value.decode("ascii"))
-        except (ValueError, UnicodeDecodeError):
-            pass
-    try:
-        decoded = base64.urlsafe_b64decode(value + b"=" * (-len(value) % 4))
-        if len(decoded) in (32, 64):
-            return decoded
-    except (ValueError, TypeError):
-        pass
-    return value
-
-
 def _local_bootstrap_private_key() -> Ed25519PrivateKey:
     return Ed25519PrivateKey.from_private_bytes(
         hashlib.sha256(b"shuttleworks-local-authority-bootstrap-v1").digest()
@@ -138,37 +123,35 @@ def _private_signing_key() -> Ed25519PrivateKey:
         ) from exc
 
 
-def _public_verification_key() -> Ed25519PublicKey:
+def _public_verification_key(grant_key_id: object) -> Ed25519PublicKey:
     from core.config import settings
 
     if settings.authority_signing_public_key_file:
         try:
-            raw = Path(settings.authority_signing_public_key_file).read_bytes()
-            try:
-                key = serialization.load_pem_public_key(raw)
-                if isinstance(key, Ed25519PublicKey):
-                    return key
-            except ValueError:
-                pass
-            material = _decode_key_material(raw)
-            if len(material) != 32:
-                raise ValueError("Ed25519 public keys must contain 32 bytes")
-            return Ed25519PublicKey.from_public_bytes(material)
+            trusted = read_verification_keys(settings.authority_signing_public_key_file)
         except (OSError, ValueError, TypeError) as exc:
             raise ProtocolError(
                 503, "authority_signing_key_unavailable", "Authority public key cannot be loaded"
             ) from exc
-    if settings.environment == "cloud" or settings.deployment_profile == "cloud":
+    elif settings.environment == "cloud" or settings.deployment_profile == "cloud":
         # Cloud can verify its own grants when running import tests, but an
         # event node must configure the public key file explicitly.
-        return _private_signing_key().public_key()
-    if settings.deployment_profile == "event_node":
+        key = _private_signing_key().public_key()
+        trusted = {key_id(key): key}
+    elif settings.deployment_profile == "event_node":
         raise ProtocolError(
             503,
             "authority_signing_key_unavailable",
             "Event-node authority verification key is not configured",
         )
-    return _local_bootstrap_private_key().public_key()
+    else:
+        key = _local_bootstrap_private_key().public_key()
+        trusted = {key_id(key): key}
+    # The hint selects exactly one locally trusted key. A forged hint cannot
+    # change the signing identity by falling back to another key in the bundle.
+    if not isinstance(grant_key_id, str) or grant_key_id not in trusted:
+        raise ProtocolError(403, "invalid_authority_grant_signature", "Authority grant signature is invalid")
+    return trusted[grant_key_id]
 
 
 def _public_key_fingerprint(public_key: str) -> str:
@@ -205,11 +188,7 @@ def _authority_grant(
     signature = base64.urlsafe_b64encode(signer.sign(_canonical_json(payload))).decode().rstrip("=")
     return {
         **payload,
-        "keyId": hashlib.sha256(
-            signer.public_key().public_bytes(
-                serialization.Encoding.Raw, serialization.PublicFormat.Raw
-            )
-        ).hexdigest()[:16],
+        "keyId": key_id(signer.public_key()),
         "signature": signature,
     }
 
@@ -367,7 +346,7 @@ def _verify_authority_grant(
         signature = base64.urlsafe_b64decode(
             str(grant["signature"]).encode() + b"=" * (-len(str(grant["signature"])) % 4)
         )
-        _public_verification_key().verify(signature, _canonical_json(expected))
+        _public_verification_key(grant.get("keyId")).verify(signature, _canonical_json(expected))
     except (InvalidSignature, ValueError, TypeError) as exc:
         raise ProtocolError(403, "invalid_authority_grant_signature", "Authority grant signature is invalid") from exc
     return grant
@@ -715,6 +694,7 @@ def import_checkpoint(
                     raise ProtocolError(409, "invalid_checkpoint", f"Row in {collection} has the wrong tournament")
                 session.add(model(**values))
             session.flush()
+        _record_epoch_creation(session, authority, "checkpoint_import")
         session.commit()
     except ProtocolError:
         session.rollback()
@@ -724,7 +704,6 @@ def import_checkpoint(
         raise ProtocolError(409, "checkpoint_import_failed", "Checkpoint import was rolled back") from exc
     if on_imported is not None:
         on_imported(tournament_id)
-    record_authority_transition("checkpoint_import")
     return authority
 
 
@@ -945,6 +924,7 @@ def begin_checkout(
                 highest_contiguous_sequence=0,
             )
         )
+        _record_epoch_creation(session, authority, "checkout", previous_epoch=latest)
         session.commit()
     except Exception as exc:
         session.rollback()
@@ -955,7 +935,6 @@ def begin_checkout(
             "authority_already_granted",
             "Tournament already has an active or preparing authority",
         ) from exc
-    record_authority_transition("checkout")
     return authority, capability, checkpoint
 
 
@@ -1065,6 +1044,39 @@ def _next_epoch(session: Session, tournament_id: uuid.UUID) -> int:
         )
     )
     return int(latest or 0) + 1
+
+
+def _record_epoch_creation(
+    session: Session,
+    authority: TournamentAuthority,
+    transition_type: str,
+    *,
+    previous_epoch: int | None = None,
+) -> None:
+    """Persist creation evidence in the same transaction as the epoch.
+
+    Human routes stage their authenticated operator on the repository session.
+    Checkpoint installation is performed by the verified node; standalone
+    initialization is a system action on that node, never an invented human.
+    """
+    actor = session.info.get("transition_actor")
+    actor_id = uuid.UUID(actor["id"]) if actor else authority.node_id
+    actor_type = actor["type"] if actor else (
+        "device" if transition_type == "checkpoint_import" else "system"
+    )
+    _append_transition(
+        session,
+        tournament_id=authority.tournament_id,
+        transition_type=transition_type,
+        from_epoch=previous_epoch,
+        to_epoch=authority.epoch,
+        actor_id=actor_id,
+        device_id=authority.node_id,
+        reason=transition_type,
+        declared_last_sequence=0,
+        evidence_hash=authority.checkpoint_hash,
+        detail={"actorType": actor_type, "grantKeyId": authority.grant_key_id},
+    )
 
 
 def _append_transition(
@@ -1456,6 +1468,7 @@ def ensure_local_authority(
     session.add(authority)
     session.flush()
     _ensure_operation_sequence(session, tournament_id, authority.epoch)
+    _record_epoch_creation(session, authority, "local_initialization", previous_epoch=latest)
     return authority
 
 

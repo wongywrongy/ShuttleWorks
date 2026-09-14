@@ -867,7 +867,7 @@ projection follows its defined visibility rules.*
 
 | Toggle | Governs | When off |
 | --- | --- | --- |
-| Audience (published / unpublished) | Whether the workspace has a public tier at all | `published: false`; no projection is served |
+| Audience (published / unpublished) | Whether the workspace has a public tier at all | Uniform 404; no projection is served |
 | Entrants content | Whether person identities are published | `_person_ref` yields `resolution='dead'`, `label='Player not published'` |
 | Results content | Whether scores and outcomes are published | No ledger, no outcome word beyond *Completed*; accessible summary says "Score not published" |
 | Per-event visibility | Whether a given event's people are published | `visible_events` gate in `_person_ref` |

@@ -2,7 +2,8 @@
 
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import Field
+from core.limits import Code, Identifier, StrictModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
@@ -16,24 +17,24 @@ from competition.catalog import catalog_id, seed_catalog, formats
 router = APIRouter(prefix="/tournaments/{tournament_id}/competition", tags=["competition"])
 
 
-class EventRequest(BaseModel):
+class EventRequest(StrictModel):
     categoryCode: str = Field(min_length=1, max_length=100)
-    formatKey: str
+    formatKey: Code
     formatVersion: int = Field(default=1, ge=1)
-    genderCategory: str | None = None
-    ageGroup: str | None = None
-    level: str | None = None
-    bracketEventId: str | None = None
-    meetEventId: str | None = None
+    genderCategory: Code | None = None
+    ageGroup: Code | None = None
+    level: Code | None = None
+    bracketEventId: Identifier | None = None
+    meetEventId: Identifier | None = None
 
 
-class BindRequest(BaseModel):
+class BindRequest(StrictModel):
     entryEventId: uuid.UUID | None = None
     competitionEventId: uuid.UUID | None = None
     requestId: str = Field(min_length=1, max_length=100)
 
 
-class RebindRequest(BaseModel):
+class RebindRequest(StrictModel):
     competitionEventId: uuid.UUID
     unitId: uuid.UUID | None = None
     expectedVersion: int = Field(ge=1)
@@ -41,12 +42,12 @@ class RebindRequest(BaseModel):
     requestId: str = Field(min_length=1, max_length=100)
 
 
-class DefaultTargetRequest(BaseModel):
+class DefaultTargetRequest(StrictModel):
     competitionEventId: uuid.UUID | None
     expectedVersion: int = Field(ge=1)
 
 
-class WithdrawUnitRequest(BaseModel):
+class WithdrawUnitRequest(StrictModel):
     expectedVersion: int = Field(ge=1)
 
 

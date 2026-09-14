@@ -41,9 +41,11 @@ services:
       - OTEL_RELEASE_CHANNEL=${OTEL_RELEASE_CHANNEL:-stable}
       - AUTHORITY_SIGNING_PUBLIC_KEY_FILE=/run/secrets/authority_signing_public_key
       - NODE_SIGNING_KEY_FILE=/run/secrets/node_signing_key
+      - MFA_KEYRING_FILE=/run/secrets/operator_mfa_keys
     secrets:
       - authority_signing_public_key
       - node_signing_key
+      - operator_mfa_keys
 
   # The node keeps solving available even when the WAN and telemetry gateway
   # are unavailable.  Its database is the same durable SQLite bind mount as
@@ -79,7 +81,7 @@ services:
       - /tmp
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.155.0
+    image: otel/opentelemetry-collector-contrib@sha256:4935caa35e9a4cb387e35732e8fb22b2b5759af8d12e7043357f03837f6e8df5
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     environment:
       - OTEL_GATEWAY_ENDPOINT=${OTEL_GATEWAY_ENDPOINT:-https://gateway:4318}
@@ -155,6 +157,8 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-shuttleworks-local}_event_node_otel
 
 secrets:
+  operator_mfa_keys:
+    file: ${MFA_KEYRING_FILE:-../../secrets/node_operator_mfa_keys.json}
   sync_authority_capability:
     file: ${SYNC_AUTHORITY_CAPABILITY_FILE:-../../secrets/sync_authority_capability}
   authority_signing_public_key:

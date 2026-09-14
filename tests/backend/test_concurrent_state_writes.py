@@ -495,33 +495,13 @@ def test_the_merge_list_is_exactly_bracket_session_and_nothing_else(client, tid)
         session.close()
 
 
-def test_a_stale_session_snapshot_defeats_the_cas_entirely(client, tid):
-    """Property 3 — THE TRAP, and it is worse than "the retry spins".
+def test_a_stale_session_cannot_overwrite_another_writer(client, tid):
+    """A cached ORM row must not defeat the database version precondition.
 
-    ``SessionLocal`` sets ``expire_on_commit=False``
-    (``db/session.py``), and ``get_by_id`` is ``session.get`` — which
-    answers from the identity map without touching the database. So the
-    compare-and-swap inside ``upsert_data`` compares against **the version
-    this session last saw**, not the version in the row.
-
-    Consequence, asserted below: when the competing write lands on a
-    *different* session (which is what genuine concurrency looks like — one
-    session per request), the CAS does not fire at all. The stale write is
-    accepted and the other writer's change is gone.
-
-    This is NOT contradicted by
-    ``test_the_write_is_a_compare_and_swap_not_just_a_precheck`` above: that
-    test's competing write goes through the SAME session, which refreshes
-    the instance on commit, so the second call does see the new version.
-    The guard works exactly when the two writers share a session and fails
-    exactly when they do not.
-
-    Recorded here, unfixed, because fixing it changes the behavior of a
-    shared load-bearing write path (SP-E1-1 forbids that under a seam
-    task). What it *obliges* is that the Entries commit seam must expire its
-    own snapshot before every attempt rather than trusting the CAS to catch
-    a cross-session move — which is what the next test pins.
+    Negative control: the old identity-map comparison accepts this stale
+    write and fails the expected ConflictError below.
     """
+    from core.exceptions import ConflictError
     import uuid as _uuid
 
     _seed(client, tid)
@@ -543,14 +523,15 @@ def test_a_stale_session_snapshot_defeats_the_cas_entirely(client, tid):
         # Our session still believes it is at ``seen`` — and the CAS agrees.
         assert repo.tournaments.get_by_id(tid_uuid) is row
         assert (row.state_version or 0) == seen
-        repo.tournaments.upsert_data(tid_uuid, mine, expected_version=seen)
+        with pytest.raises(ConflictError):
+            repo.tournaments.upsert_data(tid_uuid, mine, expected_version=seen)
+        session.rollback()
 
-        # …and the other writer's change is gone. A lost update, through a
-        # guard whose whole purpose is to prevent one.
+        # The winning write survives the rejected stale request.
         other_session.rollback()
         other_session.expire_all()
         final = other_repo.tournaments.get_by_id(tid_uuid)
-        assert final.data.get("planFinalized") is not True
+        assert final.data.get("planFinalized") is True
     finally:
         session.close()
         other_session.close()

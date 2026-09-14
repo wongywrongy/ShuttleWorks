@@ -44,6 +44,7 @@ references a longer source, it names the file rather than duplicating it.
 | [0030](/explanation/decisions/0030-registration-competition) | Registration intent and competition membership | Accepted (2026-09-12) |
 | [0031](/explanation/decisions/0031-state-machine-schema-rulings) | State-machine schema rulings and missing source tables | Proposed; five open rulings (2026-09-13) |
 | [0032](/explanation/decisions/0032-prelaunch-migration-policy) | Pre-launch migration policy and rollout rulings | Proposed; four open rulings (2026-09-13) |
+| [0033](/explanation/decisions/0033-fresh-proof-scope) | Fresh operator proof guards actions and artefacts that leave the browser, not the reads the console polls | Accepted (2026-09-14) |
 
 ## Format
 

@@ -12,17 +12,10 @@ script proves the BACKEND half of each journey: that the right thing actually
 happens when the button is pressed, so the SSR copy asserted elsewhere is
 describing a real outcome and not a hopeful guess.
 
-**Real tokens, not guessed ones.** Entrant email uses the `console` backend
-in every non-production stack (`core/email.py`), which logs the full mailed
-body — including the confirmation/reset URL and its token — via
-`log.info("email (console backend)...")` on the `scheduler.entrants` logger.
-`core/main.py` gives the root logger a handler at `settings.log_level`
-("info" by default), and `tools/fixture-up.sh` redirects the API server's
-stdout into `${FIXTURE_ROOT}/api.log`. This script tails that file for the token
-in the mail addressed to each throwaway account it creates, exactly as an
-entrant would follow a real link — never reading `verify_token_hash` or
-`reset_token_hash` out of the database, which store only the SHA-256 and
-would prove nothing about what a mailed link actually said.
+**Real delivered tokens.** The disposable fixture sends SMTP to its loopback
+mail capture process. That process holds only synthetic mail in bounded memory,
+never in API logs or files. The checks follow those delivered links without
+reading password-reset or verification digests from the database.
 
 Verifies, per plan §6:
 
@@ -64,7 +57,7 @@ Verifies, per plan §6:
 Run standalone against a fixture API:
 
     PYTHONPATH=simulator .venv/bin/python tests/e2e/check-account-journeys.py \\
-        --base-url http://127.0.0.1:8600 --api-log /tmp/fixture/api.log
+        --base-url http://127.0.0.1:8600 --mailbox-url http://127.0.0.1:MAILBOX_PORT
 """
 from __future__ import annotations
 
@@ -72,12 +65,9 @@ import argparse
 import re
 import secrets
 import sys
-import time
-from pathlib import Path
 
 from tournament_sim.client import ApiError, SimClient
-
-_TOKEN_URL_RE = re.compile(r"/e/(verify|reset)\?[^\s]*token=([A-Za-z0-9_-]+)")
+from tournament_sim.mailbox import wait_for_token
 
 # Any non-empty string clears `verify_turnstile`'s empty-token short-circuit;
 # the dummy sitekey/secret pair (`core/config.py` defaults, unchanged in this
@@ -91,29 +81,9 @@ def _fresh_email(tag: str) -> str:
     return f"e2e-{tag}-{secrets.token_hex(4)}@example.test"
 
 
-def _wait_for_mail_token(log_path: Path, to: str, kind: str, *, timeout_s: float = 10.0) -> str:
-    """Tail the API log for the most recent mailed link of `kind` ("verify"
-    or "reset") addressed to `to`, polling briefly since log flushing can lag
-    the HTTP response that triggered it by a beat."""
-    deadline = time.monotonic() + timeout_s
-    last_token: str | None = None
-    while time.monotonic() < deadline:
-        if log_path.exists():
-            text = log_path.read_text(encoding="utf-8", errors="replace")
-            # Mail bodies are logged as "To: <address>\nSubject: ...\n\n<body>";
-            # scan blocks in order and keep the LAST matching one, since a
-            # re-send must invalidate the earlier link (service docstring).
-            blocks = text.split("email (console backend)")
-            for block in blocks:
-                if f"To: {to}" not in block:
-                    continue
-                for match in _TOKEN_URL_RE.finditer(block):
-                    if match.group(1) == kind:
-                        last_token = match.group(2)
-        if last_token:
-            return last_token
-        time.sleep(0.25)
-    raise AssertionError(f"no {kind} token mailed to {to} found in {log_path} within {timeout_s}s")
+def _wait_for_mail_token(mailbox_url: str, to: str, kind: str) -> str:
+    pattern = re.compile(rf"/e/{re.escape(kind)}\?[^\s]*token=([A-Za-z0-9_-]+)")
+    return wait_for_token(mailbox_url, to, pattern)
 
 
 def _open_entry_page(base_url: str) -> tuple[str, str]:
@@ -192,7 +162,7 @@ def _submit_and_confirm_receipt(client: SimClient, slug: str, event_id: str) -> 
     return problems
 
 
-def check(base_url: str, api_log: Path) -> list[str]:
+def check(base_url: str, mailbox_url: str) -> list[str]:
     problems: list[str] = []
     client = SimClient(base_url)
     # The CSRF middleware only demands the header on a write that ALREADY
@@ -245,7 +215,7 @@ def check(base_url: str, api_log: Path) -> list[str]:
         if bad.json().get("detail", {}).get("code") != "AUTH_RESET_INVALID":
             problems.append(f"(3) bad verify token did not answer AUTH_RESET_INVALID: {bad.text}")
 
-        verify_token = _wait_for_mail_token(api_log, email, "verify")
+        verify_token = _wait_for_mail_token(mailbox_url, email, "verify")
         ok = client.request(
             "POST", "/e/account/verify", json={"token": verify_token}, expect={204}
         )
@@ -299,7 +269,7 @@ def check(base_url: str, api_log: Path) -> list[str]:
             },
             expect={202},
         )
-        verify_token2 = _wait_for_mail_token(api_log, reset_email, "verify")
+        verify_token2 = _wait_for_mail_token(mailbox_url, reset_email, "verify")
         client.request("POST", "/e/account/verify", json={"token": verify_token2}, expect={204})
 
         # Two independent sessions on the same account (7): the pre-reset one
@@ -328,7 +298,7 @@ def check(base_url: str, api_log: Path) -> list[str]:
                 "(5) password-reset-request answered differently for a known vs. unknown address"
             )
 
-        reset_token = _wait_for_mail_token(api_log, reset_email, "reset")
+        reset_token = _wait_for_mail_token(mailbox_url, reset_email, "reset")
 
         weak_attempt = client.request(
             "POST",
@@ -422,7 +392,7 @@ def check(base_url: str, api_log: Path) -> list[str]:
                 },
                 expect={202},
             )
-            pe17_verify_token = _wait_for_mail_token(api_log, signed_in_email, "verify")
+            pe17_verify_token = _wait_for_mail_token(mailbox_url, signed_in_email, "verify")
             signed_in_client.request(
                 "POST", "/e/account/verify", json={"token": pe17_verify_token}, expect={204}
             )
@@ -455,7 +425,7 @@ def check(base_url: str, api_log: Path) -> list[str]:
                 },
                 expect={202},
             )
-            pe18_verify_token = _wait_for_mail_token(api_log, new_account_email, "verify")
+            pe18_verify_token = _wait_for_mail_token(mailbox_url, new_account_email, "verify")
             new_account_client.request(
                 "POST", "/e/account/verify", json={"token": pe18_verify_token}, expect={204}
             )
@@ -483,9 +453,9 @@ def check(base_url: str, api_log: Path) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
-    parser.add_argument("--api-log", type=Path, required=True)
+    parser.add_argument("--mailbox-url", required=True)
     args = parser.parse_args()
-    problems = check(args.base_url, args.api_log)
+    problems = check(args.base_url, args.mailbox_url)
     if problems:
         for problem in problems:
             print(f"FAIL: {problem}", file=sys.stderr)

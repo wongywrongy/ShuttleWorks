@@ -11,14 +11,16 @@ that guarantees it can never become a writer.
 
 - Renders the standalone public surface at **`/display?token=<capability-token>`** (mounted
   *outside* `AppShell` — the token, not a session, is the credential) and the in-workspace
-  **Preview** (`tv`) surface. Both render the same `PublicDisplayPage`. The raw
+  **Board** settings preview. The legacy `tv` entry redirects to Board settings. The raw
   `/display?id=<tournament-id>` form still works for the in-shell preview and local mode, but it
   hits the viewer-gated owner-side endpoints — a raw workspace UUID is deliberately **not** a
   public key.
-- The token is per-workspace (`display_tokens` table, one row per tournament), minted on first
-  ask at `GET /tournaments/{id}/display-token` and revoked by rotation
-  (`POST …/display-token/rotate` — the old link dies the moment it returns). The Settings →
-  Sharing tab surfaces mint/copy/rotate.
+- The token is per-workspace (`display_tokens`, hash and finite deadline only).
+  Owner `GET /tournaments/{id}/display-token` reads status without minting or retrieving
+  a link. Explicit `POST …/display-token/rotate` issues a replacement once; `DELETE`
+  revokes without replacement. Copy the issued URL before leaving Board settings.
+  A dated event permits its final day plus seven local calendar days; undated events
+  require an explicit future expiry. Expiry and revocation use the uniform 404.
 - `PublicDisplayPage` is a **kind-router**: `useDisplayKind` reads the workspace `kind` — from the
   unauthenticated `/display/{token}/summary` projection in token mode, or `getTournament` with
   `?id=` — and renders `MeetDisplayPage` for meet workspaces or `bracketDisplay/BracketDisplayPage`
@@ -45,8 +47,8 @@ call no-ops and the page shows a "missing parameter" message rather than crashin
 | Kind | Owned |
 | --- | --- |
 | **Nav surfaces** | Preview (`tv`) · Configuration (`display-config`) — both declared in `displayContract.ownedSegments` and rendered by the workspace shell |
-| **Backend routes** | the public projection: `GET /display/{token}/{summary,state,match-states,bracket}` (`apps/api/src/display/display.py`) — every route `GET`, resolved by capability token only, serving a strict field allowlist (the meet projection omits operator material like `scheduleHistory`); plus the owner-side `GET·POST /tournaments/{id}/display-token(/rotate)` and the workspace-scoped `GET·PUT /tournaments/{id}/board-settings` |
-| **`apiClient` methods** | owned: `getDisplaySummary`, `getDisplayState`, `getDisplayMatchStates`, `getDisplayBracket` (`displayContract.ownedEndpoints`); it *consumes* `getTournamentState`, `getMatchStates`, `getBracket` (`displayContract.consumedEndpoints`) |
+| **Backend routes** | the public projection: `GET /display/{token}/{summary,state,match-states,bracket}` (`apps/api/src/display/display.py`) — every route `GET`, resolved by capability token only, serving a strict field allowlist; owner `GET·DELETE /tournaments/{id}/display-token` and `POST …/display-token/rotate`; workspace-scoped `GET·PUT /tournaments/{id}/board-settings` |
+| **`apiClient` methods** | owned: `getDisplaySummary`, `getDisplayState`, `getDisplayMatchStates`, `getDisplayBracket`, `getBoardSettings`, `updateBoardSettings`, `getDisplayToken`, `rotateDisplayToken`, `revokeDisplayToken` (`displayContract.ownedEndpoints`); it *consumes* `getTournamentState`, `getMatchStates`, `getBracket` (`displayContract.consumedEndpoints`) |
 | **Frontend code** | `modules/display/` — `DisplayProduct.tsx`, `PublicDisplayPage.tsx` (the kind-router), `MeetDisplayPage.tsx`, `bracketDisplay/`, the `publicDisplay/` view components + `useDisplaySync`, and the TV presets (`publicDisplay/displayPresets.ts`) |
 
 The single source of truth for these claims is `platform/contracts/moduleContract.ts` (`displayContract`),
@@ -100,6 +102,17 @@ changing first. The transport (the dual poll) is deliberately left as-is; a push
 transport would be a cleaner future but is out of scope. See
 [Operations → Display (Seam D)](/reference/contracts/operations-display).
 :::
+
+## Public projection boundary
+
+Public JSON uses explicit recursive models in `apps/api/src/display/projection.py`.
+Meet player availability, operator notes, private person/entry provenance and
+arbitrary bracket config/score metadata are excluded. Public bracket output is
+separate from the operator `TournamentOut`; the console's
+`apps/console/src/api/displayProjection.ts` supplies neutral local defaults for
+shared read-only helpers. The public schema gate in `tests/backend/test_auth_surface.py`
+rejects untyped nested fields, while display HTTP tests seed private sentinels to
+check the actual response filtering.
 
 ## The display dependency rule
 

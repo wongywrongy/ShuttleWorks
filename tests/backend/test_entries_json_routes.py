@@ -1271,7 +1271,8 @@ def test_a_browser_quote_redirects_back_to_the_entry_page_with_the_total(
     ]
 
 
-def test_a_browser_quote_never_puts_entrant_detail_in_a_url(client, page, entrant):
+@pytest.mark.parametrize("fingerprint", [None, "2012" + "a" * 60])
+def test_a_browser_quote_never_puts_entrant_detail_in_a_url(client, page, entrant, monkeypatch, fingerprint):
     """**The privacy control (2026-08-10 browser demo pass).**
 
     Found by driving the real stack, not by reading the code: pressing
@@ -1292,6 +1293,9 @@ def test_a_browser_quote_never_puts_entrant_detail_in_a_url(client, page, entran
     all server-authored, and the values are checked too — a field renamed on
     both sides would slip past a key-only check.
     """
+    if fingerprint is not None:
+        from entries import entries_json
+        monkeypatch.setattr(entries_json, "_reviewed_quote", lambda *args: fingerprint)
     r = client.post(
         f"/e/api/quote/{page['slug']}",
         data={
@@ -1312,8 +1316,17 @@ def test_a_browser_quote_never_puts_entrant_detail_in_a_url(client, page, entran
     assert r.status_code == 307, r.text
     location = r.headers["location"]
 
-    # Nothing but the three the server itself wrote.
-    assert set(_echo(r)) <= {"totalCents", "refusalCode", "refusalSubjects", "reviewedQuote"}
+    # A SHA-256 fingerprint can coincidentally contain a short decimal value.
+    # Validate it as a digest, then inspect every other byte of the URL.
+    echo = _echo(r)
+    assert set(echo) == {"totalCents", "reviewedQuote"}
+    assert echo["totalCents"] == ["4000"]
+    assert len(echo["reviewedQuote"]) == 1
+    proof = echo["reviewedQuote"][0]
+    assert re.fullmatch(r"[0-9a-f]{64}", proof)
+    if fingerprint is not None:
+        assert proof == fingerprint
+    location = location.replace(f"reviewedQuote={proof}", "reviewedQuote=[fingerprint]")
     # And no posted VALUE reached the header by any spelling — including the
     # transport fields, which are not typing but are still a spent
     # idempotency key and a session-derived CSRF digest in a shareable URL.

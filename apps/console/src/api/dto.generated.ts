@@ -1829,30 +1829,6 @@ export interface paths {
         patch: operations["patch_module_tournaments__tournament_id__modules__module_id__patch"];
         trace?: never;
     };
-    "/tournaments/{tournament_id}/authority/offline-session/bootstrap": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Bootstrap Offline Session
-         * @description Complete first-run node authentication without a cloud-origin cookie.
-         *
-         *     The signed checkout capability is the ceremony proof.  It is scoped to
-         *     this node/epoch by the authority row and is never persisted; only the
-         *     digest of the newly-issued event credential is stored.
-         */
-        post: operations["bootstrap_offline_session_tournaments__tournament_id__authority_offline_session_bootstrap_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/tournaments/{tournament_id}/authority/checkout": {
         parameters: {
             query?: never;
@@ -1914,13 +1890,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Offline Session
-         * @description Mint an event-node-only session for the already authenticated operator.
-         *
-         *     This endpoint is intentionally unavailable outside the event-node profile;
-         *     it cannot create a cloud login or broaden tournament membership.
+         * Create Offline Session Gone
+         * @deprecated
+         * @description 410 — shared node sessions retired with operator MFA.
          */
-        post: operations["create_offline_session_tournaments__tournament_id__authority_offline_session_post"];
+        post: operations["create_offline_session_gone_tournaments__tournament_id__authority_offline_session_post"];
         /**
          * Revoke Offline Session
          * @description Revoke the presented node-local credential and clear its cookie.
@@ -1931,6 +1905,27 @@ export interface paths {
          *     the offline cookie is part of the central credential-cookie registry.
          */
         delete: operations["revoke_offline_session_tournaments__tournament_id__authority_offline_session_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/offline-session/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bootstrap Offline Session Gone
+         * @deprecated
+         * @description 410 — a shared authority capability cannot establish an individual.
+         */
+        post: operations["bootstrap_offline_session_gone_tournaments__tournament_id__authority_offline_session_bootstrap_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3451,7 +3446,7 @@ export interface paths {
         /**
          * Request Password Reset
          * @description Always 202 (no account-existence oracle). The token rides the
-         *     email seam in Phase 3; until then it's logged server-side only.
+         *     email seam; it is never returned in this response or logged.
          */
         post: operations["request_password_reset_auth_request_password_reset_post"];
         delete?: never;
@@ -3471,6 +3466,168 @@ export interface paths {
         put?: never;
         /** Reset Password */
         post: operations["reset_password_auth_reset_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enroll */
+        post: operations["enroll_auth_mfa_enroll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm */
+        post: operations["confirm_auth_mfa_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify */
+        post: operations["verify_auth_mfa_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reissue Recovery Codes
+         * @description Replace all recovery codes; a current authenticator code is the proof.
+         */
+        post: operations["reissue_recovery_codes_auth_mfa_recovery_codes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disable
+         * @description Turn off a voluntary authenticator. Refused where policy requires one.
+         */
+        delete: operations["disable_auth_mfa_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activity */
+        post: operations["activity_auth_activity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/reauth-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reauth Check
+         * @description Fresh proof before an operator export assembled from already-loaded data.
+         */
+        post: operations["reauth_check_auth_reauth_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/node/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate */
+        post: operations["activate_auth_node_activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/node/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Password */
+        post: operations["change_password_auth_node_change_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3537,15 +3694,10 @@ export interface paths {
         };
         /**
          * Display Bracket
-         * @description Bracket board read — same serialized session the viewer-gated
-         *     ``GET /bracket`` returns (it is already a projection DTO with no
-         *     operator-only material), served through the short-TTL cache.
+         * @description Project the cached session through a recursive spectator allow-list.
          *
-         *     ``response_model`` is ``TournamentOut`` — the exact type
-         *     ``_serialize_session`` already returns (F-DM-30: the route was untyped,
-         *     not un-shaped). Declaring it changes no key; it puts the shape in the
-         *     OpenAPI document, which is what the generated types and the parity
-         *     oracle read.
+         *     Private roster provenance, arbitrary format configuration, score metadata
+         *     and operator notes cannot leave through the public response model.
          */
         get: operations["display_bracket_display__token__bracket_get"];
         put?: never;
@@ -3564,13 +3716,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Or Create Display Token
-         * @description The workspace's display link, minted on first ask.
+         * Get Display Token Status
+         * @description A read never issues or retrieves a capability.
          */
-        get: operations["get_or_create_display_token_tournaments__tournament_id__display_token_get"];
+        get: operations["get_display_token_status_tournaments__tournament_id__display_token_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Revoke Display Token */
+        delete: operations["revoke_display_token_tournaments__tournament_id__display_token_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3587,7 +3740,7 @@ export interface paths {
         put?: never;
         /**
          * Rotate Display Token
-         * @description Revoke-by-rotation: the old link dies the moment this returns.
+         * @description Explicit issuance; the old link dies and the new plaintext appears once.
          */
         post: operations["rotate_display_token_tournaments__tournament_id__display_token_rotate_post"];
         delete?: never;
@@ -3743,6 +3896,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptedDTO */
+        AcceptedDTO: {
+            /**
+             * Status
+             * @default accepted
+             * @constant
+             */
+            status: "accepted";
+        };
         /**
          * AccountErasedDTO
          * @description What erasure did, stated so the entrant can check it.
@@ -4544,6 +4706,17 @@ export interface components {
             /** Assignments */
             assignments: components["schemas"]["BracketAssignmentIn"][];
         };
+        /** ConfirmRequest */
+        ConfirmRequest: {
+            /** Code */
+            code: string;
+        };
+        /** ConfirmationDTO */
+        ConfirmationDTO: {
+            user: components["schemas"]["UserDTO"];
+            /** Recoverycodes */
+            recoveryCodes: string[];
+        };
         /**
          * CourtClosure
          * @description A court closure window. ``fromTime`` / ``toTime`` are HH:mm
@@ -4695,6 +4868,218 @@ export interface components {
                 [key: string]: components["schemas"]["MatchStateDTO"];
             };
         };
+        /** DisplayAssignmentDTO */
+        DisplayAssignmentDTO: {
+            /** Matchid */
+            matchId: string;
+            /** Slotid */
+            slotId: number;
+            /** Courtid */
+            courtId: number;
+            /**
+             * Durationslots
+             * @default 1
+             */
+            durationSlots: number;
+        };
+        /** DisplayBracketConfigDTO */
+        DisplayBracketConfigDTO: {
+            /** Scoringformat */
+            scoringFormat?: ("simple" | "badminton") | null;
+            /** Setstowin */
+            setsToWin?: number | null;
+            /** Pointsperset */
+            pointsPerSet?: number | null;
+            /** Deuceenabled */
+            deuceEnabled?: boolean | null;
+            /** Pointcap */
+            pointCap?: number | null;
+            /** Grand Final Reset */
+            grand_final_reset?: boolean | null;
+            /** Consolation */
+            consolation?: string | null;
+            /** Swiss Rounds */
+            swiss_rounds?: number | null;
+        };
+        /** DisplayBracketDTO */
+        DisplayBracketDTO: {
+            /** Courts */
+            courts: number;
+            /** Total Slots */
+            total_slots: number;
+            /** Rest Between Rounds */
+            rest_between_rounds: number;
+            /** Interval Minutes */
+            interval_minutes: number;
+            /** Start Time */
+            start_time?: string | null;
+            /** Events */
+            events: components["schemas"]["DisplayEventDTO"][];
+            /** Participants */
+            participants: components["schemas"]["DisplayParticipantDTO"][];
+            /** Play Units */
+            play_units: components["schemas"]["DisplayPlayUnitDTO"][];
+            /** Assignments */
+            assignments: components["schemas"]["AssignmentOut"][];
+            /** Results */
+            results: components["schemas"]["DisplayResultDTO"][];
+        };
+        /** DisplayBracketScoreDTO */
+        DisplayBracketScoreDTO: {
+            /** Sets */
+            sets?: components["schemas"]["DisplayGameDTO"][];
+        };
+        /** DisplayClosureDTO */
+        DisplayClosureDTO: {
+            /** Courtid */
+            courtId: number;
+            /** Fromtime */
+            fromTime?: string | null;
+            /** Totime */
+            toTime?: string | null;
+        };
+        /** DisplayConfigDTO */
+        DisplayConfigDTO: {
+            /** Tournamentname */
+            tournamentName?: string | null;
+            /** Meetmode */
+            meetMode?: ("dual" | "tri") | null;
+            /**
+             * Intervalminutes
+             * @default 15
+             */
+            intervalMinutes: number;
+            /**
+             * Daystart
+             * @default 08:00
+             */
+            dayStart: string;
+            /**
+             * Dayend
+             * @default 18:00
+             */
+            dayEnd: string;
+            /** Tournamentdate */
+            tournamentDate?: string | null;
+            /**
+             * Courtcount
+             * @default 1
+             */
+            courtCount: number;
+            /** Scoringformat */
+            scoringFormat?: ("simple" | "badminton") | null;
+            /** Setstowin */
+            setsToWin?: number | null;
+            /** Pointsperset */
+            pointsPerSet?: number | null;
+            /** Deuceenabled */
+            deuceEnabled?: boolean | null;
+            /** Pointcap */
+            pointCap?: number | null;
+            /** Tvdisplaymode */
+            tvDisplayMode?: ("auto" | "strip" | "grid" | "list") | null;
+            /** Tvaccent */
+            tvAccent?: string | null;
+            /** Tvpreset */
+            tvPreset?: string | null;
+            /** Tvgridcolumns */
+            tvGridColumns?: number | null;
+            /** Tvcardsize */
+            tvCardSize?: ("auto" | "compact" | "comfortable" | "large") | null;
+            /** Tvshowscores */
+            tvShowScores?: boolean | null;
+            /** Courtorder */
+            courtOrder?: number[] | null;
+            /** Hiddencourts */
+            hiddenCourts?: number[] | null;
+            /** Standingsmode */
+            standingsMode?: ("off" | "side" | "rotate") | null;
+            /** Tvrotationslides */
+            tvRotationSlides?: ("courts" | "standings" | "upNext")[] | null;
+            /** Tvrotationdwellseconds */
+            tvRotationDwellSeconds?: number | null;
+            /** Courtpolicy */
+            courtPolicy?: ("pinned" | "queue") | null;
+            /** Courtoverrides */
+            courtOverrides?: {
+                [key: string]: "pinned" | "pool";
+            } | null;
+            /** Ondeckcount */
+            onDeckCount?: number | null;
+            /** Closedcourts */
+            closedCourts?: number[];
+            /** Courtclosures */
+            courtClosures?: components["schemas"]["DisplayClosureDTO"][];
+            /** Clockshiftminutes */
+            clockShiftMinutes?: number | null;
+        };
+        /** DisplayEventDTO */
+        DisplayEventDTO: {
+            /** Id */
+            id: string;
+            /** Discipline */
+            discipline: string;
+            /** Format */
+            format: string;
+            /** Bracket Size */
+            bracket_size?: number | null;
+            /** Participant Count */
+            participant_count: number;
+            /** Rounds */
+            rounds: string[][];
+            /** Segments */
+            segments?: components["schemas"]["SegmentOut"][] | null;
+            /** Standings */
+            standings?: components["schemas"]["StandingRow"][] | null;
+            /** Status */
+            status?: string | null;
+            /** Seeded Count */
+            seeded_count?: number | null;
+            /** Rr Rounds */
+            rr_rounds?: number | null;
+            config?: components["schemas"]["DisplayBracketConfigDTO"];
+            /** Participants */
+            participants?: components["schemas"]["DisplayParticipantDTO"][];
+        };
+        /** DisplayGameDTO */
+        DisplayGameDTO: {
+            /** Sidea */
+            sideA: number;
+            /** Sideb */
+            sideB: number;
+        };
+        /** DisplayGroupDTO */
+        DisplayGroupDTO: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** DisplayMatchDTO */
+        DisplayMatchDTO: {
+            /** Id */
+            id: string;
+            /** Matchnumber */
+            matchNumber?: number | null;
+            /** Sidea */
+            sideA?: string[];
+            /** Sideb */
+            sideB?: string[];
+            /** Sidec */
+            sideC?: string[] | null;
+            /**
+             * Matchtype
+             * @default dual
+             */
+            matchType: string;
+            /** Eventrank */
+            eventRank?: string | null;
+            /**
+             * Durationslots
+             * @default 1
+             */
+            durationSlots: number;
+        };
         /** DisplayMatchScoreDTO */
         DisplayMatchScoreDTO: {
             /** Sidea */
@@ -4733,8 +5118,6 @@ export interface components {
             /** Actualendtime */
             actualEndTime?: string | null;
             score?: components["schemas"]["DisplayMatchScoreDTO"] | null;
-            /** Notes */
-            notes?: string | null;
             /** Updatedat */
             updatedAt?: string | null;
             /** Originalslotid */
@@ -4742,43 +5125,103 @@ export interface components {
             /** Originalcourtid */
             originalCourtId?: number | null;
         };
+        /** DisplayParticipantDTO */
+        DisplayParticipantDTO: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Members */
+            members?: string[] | null;
+            /** Seed */
+            seed?: number | null;
+            /** Representation */
+            representation?: string | null;
+        };
+        /** DisplayPlayUnitDTO */
+        DisplayPlayUnitDTO: {
+            /** Id */
+            id: string;
+            /** Event Id */
+            event_id: string;
+            /** Round Index */
+            round_index: number;
+            /** Match Index */
+            match_index: number;
+            /** Side A */
+            side_a?: string[] | null;
+            /** Side B */
+            side_b?: string[] | null;
+            /** Duration Slots */
+            duration_slots: number;
+            /** Dependencies */
+            dependencies?: string[];
+            slot_a: components["schemas"]["BracketSlotOut"];
+            slot_b: components["schemas"]["BracketSlotOut"];
+            /** Sides */
+            sides?: components["schemas"]["MatchSideDTO"][];
+            /** Segment */
+            segment?: string | null;
+        };
+        /** DisplayPlayerDTO */
+        DisplayPlayerDTO: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Groupid
+             * @default
+             */
+            groupId: string;
+            /** Ranks */
+            ranks?: string[];
+            /** Representation */
+            representation?: string | null;
+        };
+        /** DisplayResultDTO */
+        DisplayResultDTO: {
+            /** Play Unit Id */
+            play_unit_id: string;
+            /** Winner Side */
+            winner_side: string;
+            /**
+             * Walkover
+             * @default false
+             */
+            walkover: boolean;
+            /** Finished At Slot */
+            finished_at_slot?: number | null;
+            score?: components["schemas"]["DisplayBracketScoreDTO"] | null;
+            /** Reason */
+            reason?: ("walkover" | "retired" | "forfeit") | null;
+        };
+        /** DisplayScheduleDTO */
+        DisplayScheduleDTO: {
+            /** Assignments */
+            assignments?: components["schemas"]["DisplayAssignmentDTO"][];
+            /** Unscheduledmatches */
+            unscheduledMatches?: string[];
+            /** Status */
+            status?: string | null;
+            /** Effectivepolicy */
+            effectivePolicy?: ("pinned" | "queue") | null;
+        };
         /**
          * DisplayStateDTO
-         * @description The meet board's projection of the workspace state blob (F-DM-30).
-         *
-         *     Until SP-DM-3 P1 this route had NO ``response_model``: the one
-         *     unauthenticated data plane in the product was the one with no declared
-         *     shape, and its allow-list was a Python tuple with a prose comment naming
-         *     its TS consumer. This class IS that allow-list now, and
-         *     ``tests/backend/test_display_public.py`` pins its key set exactly.
-         *
-         *     Notably ABSENT vs the raw blob, and deliberately: ``scheduleHistory``
-         *     (the operator revert pool), ``scheduleVersion``, ``bracketPlayers``,
-         *     ``planFinalized``.
-         *
-         *     ponytail: the six pass-through fields are typed ``Any``, not with their
-         *     real DTOs. Ceiling named: this is the public plane reading a blob that
-         *     predates the strict DTOs, so validating it through ``TournamentConfig`` /
-         *     ``PlayerDTO`` / ... (all ``StrictModel``, ``extra="forbid"``) would turn a
-         *     legacy key into a 500 on a screen in a public hall, or — worse, with
-         *     ``extra="ignore"`` — silently DROP keys the board renders. Upgrade path:
-         *     tighten one field at a time behind P2's blob versioning, each with its own
-         *     key-set test. What P1 buys is the KEY SET being declared, which is what
-         *     F-DM-30 is about.
+         * @description Public fields only, including every nested member of the stored blob.
          */
         DisplayStateDTO: {
-            /** Config */
-            config?: unknown;
+            config?: components["schemas"]["DisplayConfigDTO"] | null;
             /** Groups */
-            groups?: unknown;
+            groups?: components["schemas"]["DisplayGroupDTO"][] | null;
             /** Players */
-            players?: unknown;
+            players?: components["schemas"]["DisplayPlayerDTO"][] | null;
             /** Matches */
-            matches?: unknown;
-            /** Schedule */
-            schedule?: unknown;
+            matches?: components["schemas"]["DisplayMatchDTO"][] | null;
+            schedule?: components["schemas"]["DisplayScheduleDTO"] | null;
             /** Scheduleisstale */
-            scheduleIsStale?: unknown;
+            scheduleIsStale?: boolean | null;
             /** Standings */
             standings?: components["schemas"]["MeetStandingRowDTO"][];
         };
@@ -4813,6 +5256,25 @@ export interface components {
             token: string;
             /** Url */
             url: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+        };
+        /** DisplayTokenRequest */
+        DisplayTokenRequest: {
+            /** Expiresat */
+            expiresAt?: string | null;
+        };
+        /** DisplayTokenStatusDTO */
+        DisplayTokenStatusDTO: {
+            /** Active */
+            active: boolean;
+            /** Expiresat */
+            expiresAt?: string | null;
+            /** Defaultexpiresat */
+            defaultExpiresAt?: string | null;
         };
         /**
          * Disruption
@@ -4987,6 +5449,26 @@ export interface components {
              * @default []
              */
             divisions: string[];
+        };
+        /** EnrollRequest */
+        EnrollRequest: {
+            /** Currentpassword */
+            currentPassword: string;
+        };
+        /** EnrollmentDTO */
+        EnrollmentDTO: {
+            /** Secret */
+            secret: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /**
+             * Issuer
+             * @default ShuttleWorks
+             */
+            issuer: string;
         };
         /**
          * EntrantConfigDTO
@@ -6074,8 +6556,8 @@ export interface components {
          * @description Body for ``POST /tournaments/{id}/invites``.
          *
          *     ``email`` (SP-CLOUD-2) turns this into an email invite: the link is
-         *     delivered via the email seam and the invite expires. Omitted =
-         *     local link-style invite (copy the URL yourself).
+         *     delivered via the email seam. Omitted = local link-style invite
+         *     (copy the URL yourself). Both expire seven days after issuance.
          *
          *     The address is bounded here and validated for shape by
          *     ``normalize_email`` at the handler — that regex rejects all
@@ -6100,6 +6582,8 @@ export interface components {
          *     origin in backend config.
          */
         InviteCreatedDTO: {
+            /** Id */
+            id: string;
             /** Token */
             token: string;
             /** Url */
@@ -6125,8 +6609,6 @@ export interface components {
          *     is unauthenticated and the invitee's address must not be probeable.
          */
         InviteResolveDTO: {
-            /** Token */
-            token: string;
             /** Tournamentid */
             tournamentId: string;
             /** Tournamentname */
@@ -6142,8 +6624,8 @@ export interface components {
          * @description Wire shape for active-invite listings on Settings → Share.
          */
         InviteSummaryDTO: {
-            /** Token */
-            token: string;
+            /** Id */
+            id: string;
             /** Tournamentid */
             tournamentId: string;
             /**
@@ -6171,6 +6653,15 @@ export interface components {
             matches?: components["schemas"]["MatchDTO"][];
             /** Incompletepairs */
             incompletePairs?: string[];
+        };
+        /** LivenessDTO */
+        LivenessDTO: {
+            /**
+             * Status
+             * @default healthy
+             * @constant
+             */
+            status: "healthy";
         };
         /** LoginRequest */
         LoginRequest: {
@@ -6673,6 +7164,20 @@ export interface components {
             /** Sideb */
             sideB?: string | null;
         };
+        /** NodeActivationRequest */
+        NodeActivationRequest: {
+            /**
+             * Workspaceid
+             * Format: uuid
+             */
+            workspaceId: string;
+            /** Email */
+            email: string;
+            /** Activationtoken */
+            activationToken: string;
+            /** Newpassword */
+            newPassword: string;
+        };
         /**
          * NodeResultDTO
          * @description Present only when ``results_published`` — its absence IS the gate.
@@ -6696,64 +7201,6 @@ export interface components {
             slug: string;
             /** Morecount */
             moreCount: number;
-        };
-        /**
-         * OfflineSessionBootstrapRequest
-         * @description Node-local bootstrap proof used before any offline cookie exists.
-         */
-        OfflineSessionBootstrapRequest: {
-            /**
-             * Node Id
-             * Format: uuid
-             */
-            node_id: string;
-            /** Authority Epoch */
-            authority_epoch: number;
-            /**
-             * Ttl Hours
-             * @default 72
-             */
-            ttl_hours: number;
-            /**
-             * Operator Id
-             * Format: uuid
-             */
-            operator_id: string;
-        };
-        /** OfflineSessionRequest */
-        OfflineSessionRequest: {
-            /**
-             * Node Id
-             * Format: uuid
-             */
-            node_id: string;
-            /** Authority Epoch */
-            authority_epoch: number;
-            /**
-             * Ttl Hours
-             * @default 72
-             */
-            ttl_hours: number;
-        };
-        /** OfflineSessionResponse */
-        OfflineSessionResponse: {
-            /**
-             * Tournament Id
-             * Format: uuid
-             */
-            tournament_id: string;
-            /**
-             * Node Id
-             * Format: uuid
-             */
-            node_id: string;
-            /** Authority Epoch */
-            authority_epoch: number;
-            /**
-             * Expires At
-             * Format: date-time
-             */
-            expires_at: string;
         };
         /** OperationEnvelope */
         OperationEnvelope: {
@@ -7270,7 +7717,7 @@ export interface components {
             maxEventsPerPerson?: number | null;
             /** Disciplinecaps */
             disciplineCaps?: {
-                [key: string]: unknown;
+                [key: string]: number;
             } | null;
             /**
              * Collectphone
@@ -7541,6 +7988,11 @@ export interface components {
             } | null;
             /** Seen Version */
             seen_version?: number | null;
+        };
+        /** RecoveryCodesDTO */
+        RecoveryCodesDTO: {
+            /** Recoverycodes */
+            recoveryCodes: string[];
         };
         /**
          * RefusalDTO
@@ -8913,6 +9365,42 @@ export interface components {
              * @default false
              */
             emailConfigured: boolean;
+            /**
+             * Mfarequired
+             * @default false
+             */
+            mfaRequired: boolean;
+            /**
+             * Mfaenforced
+             * @default false
+             */
+            mfaEnforced: boolean;
+            /**
+             * Mfaavailable
+             * @default false
+             */
+            mfaAvailable: boolean;
+            /**
+             * Mfaenrolled
+             * @default false
+             */
+            mfaEnrolled: boolean;
+            /**
+             * Mfaauthenticated
+             * @default false
+             */
+            mfaAuthenticated: boolean;
+            /** Mfarecoverycodesremaining */
+            mfaRecoveryCodesRemaining?: number | null;
+            /**
+             * Passwordconfigured
+             * @default true
+             */
+            passwordConfigured: boolean;
+            /** Offlineworkspaceid */
+            offlineWorkspaceId?: string | null;
+            /** Authenticatedat */
+            authenticatedAt?: string | null;
         };
         /**
          * ValidateMoveRequest
@@ -8976,6 +9464,13 @@ export interface components {
             name?: string | null;
             /** Address */
             address?: string | null;
+        };
+        /** VerifyRequest */
+        VerifyRequest: {
+            /** Currentpassword */
+            currentPassword: string;
+            /** Code */
+            code: string;
         };
         /**
          * ViewerDTO
@@ -12043,43 +12538,6 @@ export interface operations {
             };
         };
     };
-    bootstrap_offline_session_tournaments__tournament_id__authority_offline_session_bootstrap_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
-            path: {
-                tournament_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OfflineSessionBootstrapRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OfflineSessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     checkout_tournaments__tournament_id__authority_checkout_post: {
         parameters: {
             query?: never;
@@ -12186,7 +12644,7 @@ export interface operations {
             };
         };
     };
-    create_offline_session_tournaments__tournament_id__authority_offline_session_post: {
+    create_offline_session_gone_tournaments__tournament_id__authority_offline_session_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -12195,11 +12653,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OfflineSessionRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -12207,7 +12661,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OfflineSessionResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -12241,6 +12695,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bootstrap_offline_session_gone_tournaments__tournament_id__authority_offline_session_bootstrap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -13730,7 +14215,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AcceptedDTO"];
                 };
             };
             /** @description Form post: redirect to the sent page */
@@ -14032,9 +14517,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AcceptedDTO"];
                 };
             };
             /** @description Validation Error */
@@ -14058,6 +14541,271 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enroll_auth_mfa_enroll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrollRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_auth_mfa_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_auth_mfa_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reissue_recovery_codes_auth_mfa_recovery_codes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_auth_mfa_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activity_auth_activity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reauth_check_auth_reauth_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    activate_auth_node_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NodeActivationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_password_auth_node_change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
             };
         };
         responses: {
@@ -14191,7 +14939,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TournamentOut"];
+                    "application/json": components["schemas"]["DisplayBracketDTO"];
                 };
             };
             /** @description Validation Error */
@@ -14205,7 +14953,7 @@ export interface operations {
             };
         };
     };
-    get_or_create_display_token_tournaments__tournament_id__display_token_get: {
+    get_display_token_status_tournaments__tournament_id__display_token_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14222,8 +14970,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DisplayTokenDTO"];
+                    "application/json": components["schemas"]["DisplayTokenStatusDTO"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_display_token_tournaments__tournament_id__display_token_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -14245,7 +15022,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DisplayTokenRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -14348,7 +15129,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LivenessDTO"];
                 };
             };
         };

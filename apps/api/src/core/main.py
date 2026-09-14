@@ -21,6 +21,8 @@ from entries import entries_routes as entries_api  # SP-E1-1 — the operator's 
 from entries import entries_site as entries_site_api  # SP-P7 — public draws/player pages
 from entries import partner_routes as partner_invites_api  # E3 (Phase 8) — the doubles partner invite
 from identity import auth_routes as auth_api  # SP-CLOUD-2 — self-hosted accounts + cookie sessions
+from identity import mfa_routes as mfa_api
+from identity import node_routes as node_identity_api
 from identity import entrants_routes as entrants_api  # SP-E1-2 — the entrant principal's auth surface
 from identity import invites  # Step 7 — invite-link generate / resolve / accept / revoke
 from meet import (
@@ -51,6 +53,7 @@ from core.dependencies import (
 )
 from core.exceptions import ConflictError, PreconditionFailedError
 from core.form_csrf import form_csrf_proves
+from core.log_redaction import install_log_redaction
 from core.paths import ALEMBIC_SCRIPTS
 from core.telemetry.bootstrap import configure_telemetry
 from core.version import APP_VERSION
@@ -66,6 +69,7 @@ logging.basicConfig(
     level=settings.log_level.upper(),
     format="%(levelname)-8s %(name)s %(message)s",
 )
+install_log_redaction()
 
 log = logging.getLogger("scheduler.app")
 
@@ -331,6 +335,20 @@ app.add_middleware(
 )
 
 
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exception_handlers import http_exception_handler
+from core.error_codes import resource_not_found
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error_handler(request: Request, exc: StarletteHTTPException):
+    # Includes framework route misses and legacy route-local 404s. No caller
+    # can accidentally disclose the resource type through a not-found body.
+    if exc.status_code == 404:
+        exc = resource_not_found()
+    return await http_exception_handler(request, exc)
+
+
 from competition.service import CompetitionError
 from sqlalchemy.orm.exc import StaleDataError
 
@@ -567,7 +585,6 @@ app.include_router(setup_api.router, dependencies=_EVENT_DATA_DEP)
 app.include_router(workspace_modules.router, dependencies=_EVENT_DATA_DEP)
 # Capability-authenticated first-run ceremony. It must be mounted before and
 # separately from the operator-cookie-protected authority surface.
-app.include_router(sync_api.authority_bootstrap_router)
 app.include_router(sync_api.authority_router, dependencies=_AUTH_DEP)
 # Device-authenticated: deliberately not wrapped in the operator auth dependency.
 app.include_router(sync_api.sync_router)
@@ -630,6 +647,8 @@ app.include_router(invites.router)
 # Auth: register/login/reset are necessarily public; /me and
 # /change-password declare ``get_current_user`` themselves.
 app.include_router(auth_api.router)
+app.include_router(mfa_api.router)
+app.include_router(node_identity_api.router)
 # Display: the public projection routes are the app's only
 # unauthenticated data plane (capability token, read-only — Rule 8);
 # the manage router carries its own owner-role dependency.

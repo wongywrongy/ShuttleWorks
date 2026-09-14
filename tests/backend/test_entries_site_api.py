@@ -273,15 +273,12 @@ def bracket_page(client):
 # ---- draws index (§3.4) ---------------------------------------------------
 
 
-def test_unpublished_draws_answer_an_explicit_false_envelope(client):
+def test_unpublished_draws_answer_the_uniform_404(client):
     _make_workspace(client, slug="quiet-open")
-    body = client.get("/e/api/page/quiet-open/draws").json()
-    assert body == {
-        "published": False,
-        "resultsPublished": False,
-        "draws": [],
-        "divisions": [],
-    }
+    denied = client.get("/e/api/page/quiet-open/draws")
+    missing = client.get("/e/api/page/missing-open/draws")
+    assert denied.status_code == missing.status_code == 404
+    assert denied.content == missing.content
 
 
 def test_the_draws_index_lists_the_draw_with_exact_card_keys(client, bracket_page):
@@ -917,12 +914,10 @@ def test_an_unpublished_draw_keeps_a_person_out_of_the_history(client):
 
 def test_draw_players_are_hidden_until_draws_are_published(client):
     _make_workspace(client, slug="quiet-roster")
-    assert client.get("/e/api/page/quiet-roster/players").json() == {
-        "published": False,
-        "players": [],
-        "referencedPlayerCount": 0,
-        "missingNameCount": 0,
-    }
+    denied = client.get("/e/api/page/quiet-roster/players")
+    missing = client.get("/e/api/page/missing-roster/players")
+    assert denied.status_code == missing.status_code == 404
+    assert denied.content == missing.content
 
 
 def test_players_directory_preserves_confirmed_entrant_profiles_before_draws(client):
@@ -1083,9 +1078,10 @@ def test_divisions_are_withheld_while_draws_are_unpublished(client):
     division list, the same way it leaks no draw card."""
     tid = _make_workspace(client, slug="quiet-meet")
     _declare_divisions(client, tid, {"MS": 3})
-    body = client.get("/e/api/page/quiet-meet/draws").json()
-    assert body["published"] is False
-    assert body["divisions"] == []
+    denied = client.get("/e/api/page/quiet-meet/draws")
+    missing = client.get("/e/api/page/missing-meet/draws")
+    assert denied.status_code == missing.status_code == 404
+    assert denied.content == missing.content
 
 
 # ---- draw detail (§3.4) ---------------------------------------------------

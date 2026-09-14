@@ -612,11 +612,12 @@ def test_member_repo_cascade_on_tournament_delete(repo):
 def test_invite_link_repo_create_and_list(repo):
     tid = _seed_tournament(repo, name="A")
     creator = uuid.uuid4()
-    link = repo.invite_links.create(tid, role="viewer", created_by=creator)
+    token, link = repo.invite_links.create(tid, role="viewer", created_by=creator)
+    assert repo.invite_links.get(uuid.UUID(token)).id == link.id
     assert link.id is not None
     assert link.role == "viewer"
     assert link.created_by == creator
-    assert link.expires_at is None
+    assert link.expires_at - link.created_at == timedelta(days=7)
     assert link.revoked_at is None
 
     listed = repo.invite_links.list_for_tournament(tid)
@@ -653,13 +654,15 @@ def test_count_by_tournament_helpers(repo, session):
     session.add(TournamentMember(tournament_id=t1.id, user_id=_seed_user(repo), role="owner"))
     session.add(TournamentMember(tournament_id=t1.id, user_id=_seed_user(repo), role="viewer"))
     # Invites on t1: 1 active, 1 revoked, 1 expired → active count 1.
-    session.add(InviteLink(tournament_id=t1.id, role="operator", created_by=uuid.uuid4()))
+    session.add(InviteLink(tournament_id=t1.id, role="operator", created_by=uuid.uuid4(), token_hash="a" * 64))
     session.add(InviteLink(
         tournament_id=t1.id, role="viewer", created_by=uuid.uuid4(),
+        token_hash="b" * 64,
         revoked_at=now,
     ))
     session.add(InviteLink(
         tournament_id=t1.id, role="viewer", created_by=uuid.uuid4(),
+        token_hash="c" * 64,
         expires_at=now - timedelta(days=1),
     ))
     # Bracket data on t2 — use real column set (discipline/format/duration_slots).
@@ -798,3 +801,28 @@ def test_an_unversioned_blob_reads_as_v1_and_is_rewritten_stamped(session):
     repo.tournaments.upsert_data(row.id, dict(legacy.data))
     session.expire_all()
     assert repo.tournaments.get_by_id(row.id).data["version"] == 1
+
+
+def test_repository_clamps_invite_lifetime(repo):
+    workspace = repo.tournaments.create(name="Finite invites")
+
+    _token, row = repo.invite_links.create(
+        workspace.id, "viewer", uuid.uuid4(),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=365),
+    )
+    assert row.expires_at - row.created_at == timedelta(days=7)
+
+
+def test_direct_model_invite_default_uses_its_creation_time(repo, session):
+    workspace = repo.tournaments.create(name="Finite model default")
+    created = datetime.now(timezone.utc) - timedelta(days=8)
+    row = InviteLink(
+        tournament_id=workspace.id, role="viewer", created_by=uuid.uuid4(),
+        token_hash="d" * 64,
+        created_at=created,
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    assert row.expires_at - row.created_at == timedelta(days=7)
+    assert not repo.invite_links.count_active_by_tournament([workspace.id])

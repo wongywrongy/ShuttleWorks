@@ -51,9 +51,10 @@ import logging
 import secrets as _secrets
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel
 from sqlalchemy import text
 
 from core.paths import ALEMBIC_INI, ALEMBIC_SCRIPTS
@@ -148,10 +149,14 @@ def _expected_revision() -> Optional[str]:
         return None
 
 
-@router.get("/health")
+class LivenessDTO(BaseModel):
+    status: Literal["healthy"] = "healthy"
+
+
+@router.get("/health", response_model=LivenessDTO)
 async def health_check():
     """Liveness. Intentionally dependency-free — see the module docstring."""
-    return {"status": "healthy", "version": _VERSION, "role": settings.process_role}
+    return LivenessDTO()
 
 
 @router.get("/health/ready", dependencies=_OPS_DEP)

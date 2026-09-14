@@ -134,7 +134,7 @@ def test_role_change_on_a_non_member_is_404(client):
         headers=CSRF,
     )
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "MEMBER_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 # ---- Role matrix -----------------------------------------------------
@@ -150,15 +150,15 @@ def test_non_owners_cannot_manage_members(client, actor):
         f"/tournaments/{tid}/members/{ids['viewer']}",
         json={"role": "owner"},
         headers=CSRF,
-    ).status_code == 403
+    ).status_code == 404
     assert client.delete(
         f"/tournaments/{tid}/members/{ids['viewer']}", headers=CSRF
-    ).status_code == 403
+    ).status_code == 404
     assert client.post(
         f"/tournaments/{tid}/transfer-ownership",
         json={"userId": ids["op"]},
         headers=CSRF,
-    ).status_code == 403
+    ).status_code == 404
 
 
 def test_non_member_gets_404_not_403(client):
@@ -278,7 +278,7 @@ def test_transfer_to_a_non_member_is_404(client):
         headers=CSRF,
     )
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "MEMBER_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_former_owner_cannot_manage_after_transferring(client):
@@ -291,4 +291,4 @@ def test_former_owner_cannot_manage_after_transferring(client):
     )
     # Still signed in as the former owner, now an operator.
     r = client.delete(f"/tournaments/{tid}/members/{ids['viewer']}", headers=CSRF)
-    assert r.status_code == 403
+    assert r.status_code == 404

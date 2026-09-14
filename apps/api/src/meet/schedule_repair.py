@@ -37,9 +37,12 @@ from core.limits import (
     MAX_MATCHES,
     MAX_PLAYERS,
     Identifier,
+    Notes,
+    Timestamp,
     StrictModel,
 )
 from core.schemas import (
+    HHMMTime,
     MatchDTO,
     PlayerDTO,
     ScheduleAssignment,
@@ -84,15 +87,15 @@ class Disruption(StrictModel):
       - ``cancellation`` → ``matchId`` required
     """
     type: Literal["withdrawal", "court_closed", "overrun", "cancellation"]
-    playerId: Optional[str] = None
+    playerId: Optional[Identifier] = None
     courtId: Optional[int] = None
-    matchId: Optional[str] = None
+    matchId: Optional[Identifier] = None
     extraMinutes: Optional[int] = None
     # Optional time bounds for ``court_closed``. HH:mm in tournament
     # local time. Either or both may be omitted; see Disruption docstring.
-    fromTime: Optional[str] = None
-    toTime: Optional[str] = None
-    reason: Optional[str] = None
+    fromTime: Optional[HHMMTime] = None
+    toTime: Optional[HHMMTime] = None
+    reason: Optional[Notes] = None
 
 
 class RepairRequest(StrictModel):
@@ -102,7 +105,7 @@ class RepairRequest(StrictModel):
     matches: List[MatchDTO] = Field(..., max_length=MAX_MATCHES)
     matchStates: Dict[Identifier, MatchStateDTO] = Field(default_factory=dict, max_length=MAX_MATCHES)
     disruption: Disruption
-    nowIso: Optional[str] = None  # accepted for future "now slot" math
+    nowIso: Optional[Timestamp] = None  # accepted for future "now slot" math
     # Optional override for the solver's wall-clock budget. The
     # proposal pipeline uses this to request fast (~3 s) "quick look"
     # solves vs. the default 5 s for slice-based repair.

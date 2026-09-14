@@ -103,9 +103,6 @@ const NON_TEXT_OPACITY: Record<string, string[]> = {
   'apps/console/src/modules/display/bracketDisplay/BracketDisplayPage.tsx': [
     'opacity-60', // whole-subtree stale-data dimming when the poll freshness is 'stale'.
   ],
-  'apps/console/src/modules/display/DisplayProduct.tsx': [
-    'hover:opacity-90', // solid bg-primary button fill dims on hover — a background, not text.
-  ],
   'apps/console/src/modules/display/MeetDisplayPage.tsx': [
     'opacity-60', // whole-subtree stale-data dimming when the poll freshness is 'stale'.
   ],

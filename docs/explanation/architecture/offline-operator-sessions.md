@@ -3,8 +3,8 @@
 Event-node operator sessions are short-lived, tournament-scoped credentials
 for a WAN outage. They are separate from cloud `auth_sessions`: the token is
 stored only as a SHA-256 digest, carries one tournament, authority epoch, and
-device identity, and expires after a bounded window (72 hours by default,
-168 hours maximum).
+device identity, and follows the operator session policy (twelve hours
+absolute, one hour idle, five minutes for sensitive actions).
 
 Checkout schema v3 also carries an `operatorPolicy` snapshot (schema version
 1). It contains the checked-out membership roles plus email/display-name
@@ -14,21 +14,21 @@ as the tournament and authority epoch. Older checkpoints without this optional
 field remain import-compatible, but cannot provision an offline operator until
 a new checkout supplies the policy.
 
-`POST /tournaments/{id}/authority/offline-session` is available only in the
-`event_node` deployment profile and requires the caller to already be an
-authorized tournament operator. The node verifies that the authority epoch is
-active and belongs to the requested device before setting the HttpOnly
-`sw_offline_operator` cookie. Every request still passes the normal tournament
-membership check, so the credential cannot be used outside its event.
+Each person enrolls individually. A trusted local OS administrator issues a
+ten-minute, one-use activation file with `tools/node-operator-enrollment.py`;
+the operator exchanges it at `POST /auth/node/activate`, chooses a node-only
+password, and enrolls an authenticator on that node. Later sign-ins use
+`POST /auth/login?workspaceId=...` followed by the authenticator ceremony. The
+HttpOnly `sw_offline_operator` cookie carries the credential, and every request
+still passes the normal tournament membership check, so it cannot be used
+outside its event. See [security operations](../../how-to/security-operations.md#individual-offline-operators).
 
-On a freshly imported node there is no cloud-origin cookie to present. The
-installer/onboarding flow calls
-`POST /tournaments/{id}/authority/offline-session/bootstrap` with the signed
-checkout capability, node id/epoch, and the selected policy member's user id.
-The capability is checked against the active authority and is not stored; the
-new credential is returned only as an HttpOnly cookie and only its digest is
-persisted. This is a node bootstrap proof, not a cloud login or a LAN-wide
-anonymous password.
+The earlier shared-session routes, `POST /tournaments/{id}/authority/offline-session`
+and its capability-authenticated `/bootstrap` variant, were retired with operator
+MFA. They minted a cookie without an individual password or authenticator proof,
+so on an MFA-enforcing node the credential could never authenticate. Both now
+answer `410 AUTH_ENDPOINT_GONE` to a member, `404` to a non-member and `401`
+anonymously. A shared authority capability cannot establish an individual.
 
 Sessions are revoked through `DELETE
 /tournaments/{id}/authority/offline-session` and retain a revocation reason
@@ -39,7 +39,7 @@ offline credentials and offline credentials are never resolved by the cloud
 profile or by a route without that tournament in its path.
 
 Event-node requests do not fall back to the zero-friction `AUTH_MODE=local`
-bootstrap identity. Until the bootstrap endpoint establishes an offline
+bootstrap identity. Until an individual activation establishes an offline
 credential, protected tournament routes return `401`; this prevents a browser
 on the venue LAN from becoming an operator merely because the embedded runtime
 uses local settings. Device enrollment, signed authority checkout, and the

@@ -200,6 +200,8 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
     'utf8',
   );
   const runner = readFileSync(join(REPO_ROOT, 'tests/e2e/run-console-contracts.sh'), 'utf8');
+  const mfaRunner = readFileSync(join(REPO_ROOT, 'tests/e2e/run-operator-mfa.sh'), 'utf8');
+  const mfaJourney = readFileSync(join(REPO_ROOT, 'tests/e2e/tests/operator-mfa.spec.ts'), 'utf8');
   // The runner is a thin wrapper since v3 plan package 01; the seed and the
   // structural check live in the shared fixture script it execs.
   const fixture = readFileSync(join(REPO_ROOT, 'tools/fixture-up.sh'), 'utf8');
@@ -217,6 +219,7 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   expect(e2e['test:console-contracts']).toBe(
     'playwright test tests/console-browser-contracts.spec.ts',
   );
+  expect(e2e['test:operator-mfa']).toBe('playwright test tests/operator-mfa.spec.ts');
 
   const managed = recipeCommands(makefile, 'test-e2e');
   const rebuild = recipeCommands(makefile, 'test-e2e-rebuild');
@@ -239,6 +242,7 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
     'console-browser-contracts.spec.ts',
     'console-pagination.spec.ts',
     'entrant-a11y.spec.ts',
+    'operator-mfa.spec.ts',
     'public-pagination.spec.ts',
   ]);
   expect(interaction).toMatch(/E2E_TAIPEI_TID/);
@@ -249,6 +253,19 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   expect(fixture).toMatch(/--tournament T029 --tournament T030/);
   expect(fixture).toMatch(/check-console-fixture\.py/);
   expect(ci).toContain('bash tests/e2e/run-console-contracts.sh');
+  // The MFA journey self-skips without its disposable database, so the
+  // inventory above proves nothing unless CI actually runs the wrapper.
+  expect(ci).toContain('bash tests/e2e/run-operator-mfa.sh');
+  expect(mfaRunner).toMatch(/E2E_MFA_FIXTURE_DB/);
+  expect(mfaRunner).toMatch(/operator-mfa-keyring\.py create/);
+  expect(mfaRunner).toMatch(/SW_PYTHON/);
+  expect(mfaJourney).toMatch(/Issue new recovery codes/);
+  expect(mfaJourney).toMatch(/sw_session=\$\{passwordStage\}/);
+  // The event-node phase enrolls through the real administrator tool.
+  expect(mfaRunner).toMatch(/SHUTTLEWORKS_DEPLOYMENT_PROFILE=event_node/);
+  expect(mfaRunner).toMatch(/tools\/node-operator-enrollment\.py/);
+  expect(mfaJourney).toMatch(/E2E_NODE_BASE_URL/);
+  expect(mfaJourney).toMatch(/node-enrollment\?workspaceId=/);
   expect(setup).toMatch(/E2E_REQUIRE_PLAY/);
   expect(setup).toMatch(/npm_lifecycle_event/);
   // The readiness path must hit entrant SSR. `/e/api/config` is owned by
@@ -331,7 +348,7 @@ test('the Tailscale demo has isolated lifecycle targets and guarded config', () 
   expect(demoLauncher).toContain('DEMO_RESTORE_CONFIRM=restore-demo');
   expect(demoLauncher).toContain('DEMO_RESET_CONFIRM=reset-demo');
   expect(demoOverride).toContain('DEMO_HOST_GID');
-  expect(demoOverride).toContain('image: postgres:16-alpine');
+  expect(demoOverride).toMatch(/image: postgres@sha256:[a-f0-9]{64}/);
   expect(demoOverride).toContain('DATABASE_URL_FILE: /run/secrets/demo_database_url');
   expect(demoOverride).toContain('8092:8000');
   expect(demoOverride).toContain('8090:8080');

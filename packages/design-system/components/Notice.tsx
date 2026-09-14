@@ -56,6 +56,9 @@ export interface NoticeProps {
   /** Right-aligned action slot (e.g. a Button or Review link). */
   action?: ReactNode;
   placement?: 'inline' | 'full-bleed';
+  /** `alert` for a failure the user must act on now (assertive); defaults to
+   *  the polite `status` region. */
+  role?: 'status' | 'alert';
   className?: string;
   children?: ReactNode;
 }
@@ -66,6 +69,7 @@ export function Notice({
   icon,
   action,
   placement = 'inline',
+  role = 'status',
   className,
   children,
 }: NoticeProps) {
@@ -74,8 +78,8 @@ export function Notice({
 
   return (
     <div
-      role="status"
-      aria-live="polite"
+      role={role}
+      aria-live={role === 'alert' ? 'assertive' : 'polite'}
       className={cn(
         'flex items-start gap-2 border px-3 py-2',
         placement === 'full-bleed' ? 'border-x-0 border-t-0' : 'rounded',

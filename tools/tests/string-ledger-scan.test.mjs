@@ -1,17 +1,20 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(HERE, '../..')
 const SCAN_TOOL = path.join(REPO, 'tools/string-ledger-scan.mjs')
-const SCAN_OUTPUT = path.join(REPO, 'docs/audits/v3-consolidated/ledger/scan.json')
+const TEMP = mkdtempSync(path.join(tmpdir(), 'sw-ledger-test-'))
+const SCAN_OUTPUT = path.join(TEMP, 'scan.json')
+after(() => rmSync(TEMP, { recursive: true, force: true }))
 
 test('string-ledger-scan runs clean and writes scan.json', () => {
-  const stdout = execFileSync(process.execPath, [SCAN_TOOL], { cwd: REPO, encoding: 'utf8' })
+  const stdout = execFileSync(process.execPath, [SCAN_TOOL, '--output', SCAN_OUTPUT], { cwd: REPO, encoding: 'utf8' })
   assert.match(stdout, /string-ledger-scan: wrote \d+ deduped candidate strings/)
   assert.ok(existsSync(SCAN_OUTPUT), 'scan.json was not written')
 })

@@ -1126,13 +1126,42 @@ export interface UserDTO {
    *  ``smtp`` backend, vs. the local ``console`` backend that only logs).
    *  Gates whether the console offers "send by email" invitations. */
   emailConfigured: boolean;
+  /** This session's obligation: deployment policy OR an enrolled factor. */
+  mfaRequired: boolean;
+  /** Deployment policy alone. False means an enrolled factor is voluntary
+   *  and may be turned off. */
+  mfaEnforced: boolean;
+  /** Whether the API holds an authenticator key ring; without one,
+   *  enrollment answers 503, so it is not offered. */
+  mfaAvailable: boolean;
+  mfaEnrolled: boolean;
+  mfaAuthenticated: boolean;
+  /** Unused recovery codes, when enrolled. */
+  mfaRecoveryCodesRemaining?: number | null;
+  passwordConfigured: boolean;
+  offlineWorkspaceId?: string | null;
+  authenticatedAt?: string | null;
 }
+
+/** Authenticator ceremony shapes, aliased from the generated schema rather
+ *  than hand-copied (prior art: ``displayProjection.ts``). */
+export type EnrollmentDTO = components['schemas']['EnrollmentDTO'];
+export type ConfirmationDTO = components['schemas']['ConfirmationDTO'];
+export type RecoveryCodesDTO = components['schemas']['RecoveryCodesDTO'];
+export type NodeActivationRequest = components['schemas']['NodeActivationRequest'];
 
 /** The workspace's public display capability link (owner-gated mint/rotate).
  *  ``url`` is a relative path — frontend prepends ``window.location.origin``. */
 export interface DisplayTokenDTO {
   token: string;
   url: string;
+  expiresAt: string;
+}
+
+export interface DisplayTokenStatusDTO {
+  active: boolean;
+  expiresAt: string | null;
+  defaultExpiresAt: string | null;
 }
 
 /**
@@ -1232,6 +1261,7 @@ export interface InviteCreateDTO {
 }
 
 export interface InviteCreatedDTO {
+  id: string;
   token: string;
   /** Relative path — frontend prepends ``window.location.origin``. */
   url: string;
@@ -1243,7 +1273,7 @@ export interface InviteCreatedDTO {
 }
 
 export interface InviteSummaryDTO {
-  token: string;
+  id: string;
   tournamentId: string;
   role: InviteRole;
   createdAt: string;
@@ -1260,7 +1290,6 @@ export interface InviteSummaryDTO {
  *  read here. `InviteSummaryDTO` keeps them for the owner-facing
  *  listing, which is authenticated and may legitimately see them. */
 export interface InviteResolveDTO {
-  token: string;
   tournamentId: string;
   tournamentName: string | null;
   role: InviteRole;

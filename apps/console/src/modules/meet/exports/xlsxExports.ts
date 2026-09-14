@@ -1,3 +1,4 @@
+import { downloadXlsx } from '../../../api/xlsxDownload';
 /**
  * Meet roster + matches XLSX exports.
  *
@@ -18,7 +19,6 @@ import { meetMatchIdentityFromStored } from '../../../platform/domain/matchIdent
 import { formatSideLines, meetSideFromIds } from '../../../platform/domain/sides';
 import {
   applyRangeStyle,
-  downloadXlsx,
   todayStamp,
 } from '../../../lib/xlsxExportShared';
 type ExcelJSType = typeof ExcelJSNs;

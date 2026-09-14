@@ -1,13 +1,15 @@
 /**
  * Tests for BracketDataSection — the 'Tournament data' section inside
- * bracket Setup. Three plain <a href download> links to the
- * apiClient.bracketExport*Url builders plus the destructive "Reset
- * bracket" action (moved here from the per-view header), wrapped in
- * SettingsPrimitives chrome.
+ * bracket Setup. Three Export buttons that fetch through
+ * apiClient.downloadBracketExport (so a stale session asks to verify and
+ * the download resumes, rather than a link opening a raw 401) plus the
+ * destructive "Reset bracket" action, wrapped in SettingsPrimitives chrome.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BracketDataSection } from '../BracketDataSection';
+import { apiClient } from '../../../api/client';
 
 vi.mock('../../../hooks/useTournamentId', () => ({
   useTournamentId: () => 't1',
@@ -15,19 +17,22 @@ vi.mock('../../../hooks/useTournamentId', () => ({
 vi.mock('../../../api/bracketClient', () => ({
   useBracketApi: () => ({ remove: vi.fn() }),
 }));
+vi.mock('../../../api/client', () => ({
+  apiClient: { downloadBracketExport: vi.fn().mockResolvedValue(true) },
+}));
 vi.mock('../../../hooks/useBracket', () => ({
   useBracket: () => ({ setData: vi.fn() }),
 }));
 
 describe('<BracketDataSection />', () => {
-  it('renders three Export buttons with the correct hrefs', () => {
+  it('each Export button downloads its format for this workspace', async () => {
+    const interact = userEvent.setup();
     render(<BracketDataSection />);
-    const json = screen.getByRole('link', { name: /export json/i });
-    const csv = screen.getByRole('link', { name: /export csv/i });
-    const ics = screen.getByRole('link', { name: /export ics/i });
-    expect(json.getAttribute('href')).toMatch(/\/t1\/.*\.json/i);
-    expect(csv.getAttribute('href')).toMatch(/\/t1\/.*\.csv/i);
-    expect(ics.getAttribute('href')).toMatch(/\/t1\/.*\.ics/i);
+    for (const [name, format] of [['json', 'json'], ['csv', 'csv'], ['ics', 'ics']] as const) {
+      await interact.click(screen.getByRole('button', { name: new RegExp(`export ${name}`, 'i') }));
+      expect(apiClient.downloadBracketExport).toHaveBeenLastCalledWith('t1', format);
+    }
+    expect(screen.queryByRole('link', { name: /export/i })).not.toBeInTheDocument();
   });
 
   it('renders a section header', () => {

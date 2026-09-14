@@ -3,8 +3,8 @@
 Email is a seam, not a dependency (Rule 3): local mode must never need
 a mail provider. Two backends behind one function:
 
-- ``console`` — logs the message (local mode default, tests). The solo
-  operator never configures anything.
+- ``console`` — records that delivery was skipped, without message fields
+  (local mode default). The solo operator never configures anything.
 - ``smtp``    — generic SMTP via stdlib ``smtplib`` (cloud,
   env-configured). No provider SDKs; provider choice is a Track B
   concern.
@@ -36,6 +36,10 @@ from core.config import settings
 from core.telemetry.instruments import start_span
 
 log = logging.getLogger("scheduler.email")
+
+
+class EmailDeliveryError(RuntimeError):
+    """Public failure without provider replies, credentials or message content."""
 
 # Everything RFC 5322 treats as a line break, plus the lone characters
 # some agents fold on. Replaced with a space rather than removed so
@@ -80,15 +84,14 @@ def send_email(*, to: str, subject: str, body: str) -> None:
                 _send_smtp(to=to, subject=subject, body=body)
             except Exception:
                 span.set_attribute("shuttleworks.email.outcome", "error")
-                raise
+                # SMTP replies can echo recipients or bearer-bearing content.
+                # Callers may log this exception, so omit the sensitive chain.
+                raise EmailDeliveryError("SMTP delivery failed") from None
             span.set_attribute("shuttleworks.email.outcome", "success")
     else:
-        # Console backend: the full message goes to the server log.
-        # This is how local invite/reset flows are exercised end-to-end
-        # (the round-trip script greps for it) without any mail infra.
-        log.info(
-            "email (console backend)\nTo: %s\nSubject: %s\n\n%s", to, subject, body
-        )
+        # Arbitrary subjects and recipients can also contain credential material.
+        # Disposable journey fixtures capture SMTP in memory instead of logs.
+        log.info("email delivery skipped (console backend)")
 
 
 def _tls_context() -> ssl.SSLContext:

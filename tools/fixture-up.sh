@@ -110,6 +110,7 @@ MANIFEST_PATH="${RUN_DIR}/${SEED_KEY}.json"
 FIXTURE_JSON="${FIXTURE_ROOT}/fixture.json"
 
 API_PID=""
+MAIL_PID=""
 CONSOLE_PID=""
 ENTRANT_PID=""
 IDLE_PID=""
@@ -120,9 +121,10 @@ cleanup() {
   if [[ -n "${ENTRANT_PID}" ]]; then kill "${ENTRANT_PID}" 2>/dev/null || true; fi
   if [[ -n "${CONSOLE_PID}" ]]; then kill "${CONSOLE_PID}" 2>/dev/null || true; fi
   if [[ -n "${API_PID}" ]]; then kill "${API_PID}" 2>/dev/null || true; fi
+  if [[ -n "${MAIL_PID}" ]]; then kill "${MAIL_PID}" 2>/dev/null || true; fi
   # Servers below are direct child processes, not npm wrappers. Reap them
   # before removing the database or releasing the fixture pointer.
-  for fixture_pid in "${ENTRANT_PID}" "${CONSOLE_PID}" "${API_PID}"; do
+  for fixture_pid in "${ENTRANT_PID}" "${CONSOLE_PID}" "${API_PID}" "${MAIL_PID}"; do
     if [[ -n "${fixture_pid}" ]]; then wait "${fixture_pid}" 2>/dev/null || true; fi
   done
   if [[ -n "${FIXTURE_STATE_FILE:-}" ]]; then rm -f -- "${FIXTURE_STATE_FILE}"; fi
@@ -136,6 +138,21 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 mkdir -p "${RUN_DIR}" "${FIXTURE_ROOT}/data"
+# Synthetic mail stays in bounded memory on ephemeral loopback ports.
+PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" -m tournament_sim.mailbox \
+  --state "${FIXTURE_ROOT}/mailbox.json" > "${FIXTURE_ROOT}/mailbox.log" 2>&1 &
+MAIL_PID=$!
+for fixture_mail_attempt in $(seq 1 50); do
+  if [[ -s "${FIXTURE_ROOT}/mailbox.json" ]]; then break; fi
+  sleep 0.1
+done
+export EMAIL_BACKEND=smtp
+export SMTP_HOST=127.0.0.1
+export SMTP_PORT="$("${PYTHON_BIN}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["smtpPort"])' "${FIXTURE_ROOT}/mailbox.json")"
+export SMTP_USE_TLS=false
+export SMTP_USERNAME=""
+export SMTP_PASSWORD=""
+MAILBOX_URL="$("${PYTHON_BIN}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["url"])' "${FIXTURE_ROOT}/mailbox.json")"
 export DATABASE_URL="sqlite:///${DATABASE_PATH}"
 export BACKEND_DATA_DIR="${FIXTURE_ROOT}/data"
 export ENVIRONMENT="local"
@@ -180,6 +197,12 @@ PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" -m tournament_sim seed apply
   --seed-key "${SEED_KEY}" --run-dir "${RUN_DIR}" --base-url "${API_URL}" \
   >"${FIXTURE_ROOT}/seed-output.json"
 
+# Historical event dates are frozen for visual checks; credential validity is
+# real-clock security data. Seed finite synthetic credentials only in this
+# marked disposable DB, without relaxing the production issuance route.
+"${PYTHON_BIN}" "${REPO_ROOT}/tools/fixture-display.py" \
+  --database "${DATABASE_PATH}" --manifest "${MANIFEST_PATH}"
+
 PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" \
   "${REPO_ROOT}/tests/e2e/prepare-console-fixture.py" \
   --base-url "${API_URL}" --manifest "${MANIFEST_PATH}" --output "${FIXTURE_JSON}"
@@ -220,17 +243,17 @@ fi
 if [[ "${CHECK_ACCOUNT_JOURNEYS}" == "1" ]]; then
   # v3 consolidated plan work package 23: API-level proof that signup,
   # confirmation, login and password-reset actually work against a real
-  # running server with real mailed tokens (`console` email backend logged
-  # into api.log above). Independent of ${SKIP_ENTRANT} — it drives
+  # running server with real mailed tokens captured in process memory.
+  # Independent of ${SKIP_ENTRANT} — it drives
   # `/e/account/*` on the API directly, never the SSR pages — and of
   # ${APPLY_DEFECTS} — it only ever touches its own throwaway accounts, never
   # the seeded tournament rows the row-count gate and the defects pass care
-  # about. Cheap: a handful of HTTP calls plus polling one log file, well
+  # about. Cheap: a handful of HTTP calls plus polling the memory mailbox, well
   # under a second in practice.
   echo "Checking account, confirmation and reset journeys against ${API_URL}"
   PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" \
     "${REPO_ROOT}/tests/e2e/check-account-journeys.py" \
-    --base-url "${API_URL}" --api-log "${FIXTURE_ROOT}/api.log"
+    --base-url "${API_URL}" --mailbox-url "${MAILBOX_URL}"
 fi
 
 if [[ "${APPLY_DEFECTS}" == "1" ]]; then
@@ -266,7 +289,7 @@ if [[ "${FIXTURE_REVIEW_EXTRAS:-0}" == "1" ]]; then
   PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" \
     "${REPO_ROOT}/tools/prepare-review-fixture.py" \
     --base-url "${API_URL}" --fixture "${FIXTURE_JSON}" --manifest "${MANIFEST_PATH}" \
-    --api-log "${FIXTURE_ROOT}/api.log"
+    --mailbox-url "${MAILBOX_URL}"
 fi
 
 if [[ "${SKIP_CONSOLE_BUILD}" != "1" ]]; then

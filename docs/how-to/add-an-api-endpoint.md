@@ -40,11 +40,32 @@ Every route that acts on a workspace resource MUST (SP-CLOUD-2):
 
 The seam answers a **uniform 404** (`TOURNAMENT_NOT_FOUND`) for non-members and
 nonexistent ids alike — existence is information; never hand-roll a 403 for
-"not yours". A real member with an insufficient *role* gets `403`. This is not
+"not yours". A real member with an insufficient *role* gets the same 404. This is not
 merely convention: the cross-tenant isolation suite
 (`tests/backend/test_tenant_isolation.py`) discovers every `{tournament_id}` operation
 from the OpenAPI schema and fails CI if any of them leaks — a new endpoint that
 forgets the dependency is caught automatically, with no test to hand-write.
+
+For a **sensitive** action (deleting, exporting a file, issuing or revoking a
+link, changing membership or authority) pass `fresh=True` to the same
+dependency. After the tenant and role checks, a session whose MFA proof is older
+than five minutes gets `401 AUTH_REAUTH_REQUIRED`; the console raises its
+verification lock and retries the call once through `withFreshProof`
+(`apps/console/src/api/sessionRestore.ts`). Do not gate the JSON reads the
+console polls: the lock would reappear every five minutes
+([ADR 0033](/explanation/decisions/0033-fresh-proof-scope)).
+
+**Exception: auth-only ceremonies.** `/auth/mfa/*`, `/auth/activity`,
+`/auth/reauth-check`, `/auth/node/*` and `POST /auth/login?workspaceId=` run
+before any workspace route can, so on an event node they select the workspace
+with a `workspaceId` query parameter (or, for `/auth/node/activate`, a body
+field) instead of a `tournament_id` path parameter. The selector proves
+nothing by itself: `core/dependencies.py` still checks the node cookie's
+workspace, the member's operator/owner role, the node id and the active
+authority epoch, and `repositories/mfa.py` (`node_scope`) does the same for
+activation. They are outside the OpenAPI-derived isolation sweep on purpose;
+their denials are pinned in `tests/backend/test_node_operator_mfa_http.py`.
+Do not copy this shape for a route that acts on workspace data.
 
 The **only** unauthenticated data plane is the spectator display
 (`/display/{token}/*`, resolved by a capability token). Never add public routes

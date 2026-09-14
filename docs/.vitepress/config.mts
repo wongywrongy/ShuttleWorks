@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 import { BRAND } from '../../packages/brand/generated'
 import { execFileSync } from 'node:child_process'
+import { externalizeScripts } from './externalize-scripts.mjs'
 
 // Build-time provenance stamp: which commit this docs build was generated from.
 // Three one-off git calls at config load (NOT per page), so it adds nothing to
@@ -29,6 +30,7 @@ const STAMP = gitStamp()
 // link should fail `docs:build`, which is our verification gate.
 //
 export default defineConfig({
+  buildEnd: ({ outDir, site }) => externalizeScripts(outDir, site.base),
   title: BRAND.productName,
   description:
     `Architecture, module contracts, and data flow for ${BRAND.productName} by ${BRAND.companyName} — a CP-SAT tournament scheduling control plane (Entries · Meet · Bracket · Operations · Display) with an SSR-first public entrant tier and bounded same-origin route modules.`,

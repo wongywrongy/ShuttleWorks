@@ -1,3 +1,4 @@
+import { useSessionRevision } from './useSessionRevision';
 /**
  * Bracket polling hook — adapted from the tournament product's
  * ``useTournament``. Exposes the ``{ data, setData, loading, error,
@@ -214,6 +215,7 @@ function readSnapshot(tid: string): {
 
 export function useBracket() {
   const api = useBracketApi();
+  const sessionRevision = useSessionRevision();
   const tid = useTournamentId();
   const [snap, setSnap] = useState(() => readSnapshot(tid));
 
@@ -272,6 +274,10 @@ export function useBracket() {
       }
     };
   }, [tid, api.get]);
+
+  useEffect(() => {
+    if (sessionRevision > 0) void refresh();
+  }, [sessionRevision, refresh]);
 
   return {
     data: snap.data,

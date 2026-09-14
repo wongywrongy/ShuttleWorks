@@ -16,6 +16,14 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException
 
 
+def resource_not_found() -> HTTPException:
+    """One resource-denial envelope, independent of the reason or resource type."""
+    return HTTPException(
+        status_code=404,
+        detail={"code": "TOURNAMENT_NOT_FOUND", "message": "Tournament not found"},
+    )
+
+
 class ErrorCode(str, Enum):
     # State persistence
     STATE_TOO_NEW = "STATE_TOO_NEW"
@@ -168,6 +176,15 @@ class ErrorCode(str, Enum):
     AUTH_NOT_SIGNED_IN = "AUTH_NOT_SIGNED_IN"
     AUTH_RESET_INVALID = "AUTH_RESET_INVALID"
     AUTH_CSRF_REQUIRED = "AUTH_CSRF_REQUIRED"
+    AUTH_MFA_REQUIRED = "AUTH_MFA_REQUIRED"
+    AUTH_MFA_INVALID = "AUTH_MFA_INVALID"
+    AUTH_REAUTH_REQUIRED = "AUTH_REAUTH_REQUIRED"
+    AUTH_MFA_UNAVAILABLE = "AUTH_MFA_UNAVAILABLE"
+    # Turning off the authenticator is refused where deployment policy requires it.
+    AUTH_MFA_ENFORCED = "AUTH_MFA_ENFORCED"
+    # A retired credential-issuing route. Node credentials are minted only by
+    # individual activation and sign-in (identity/node_routes.py, P08).
+    AUTH_ENDPOINT_GONE = "AUTH_ENDPOINT_GONE"
     # The bot challenge said no, or could not be reached (SP-E1-2 —
     # Turnstile moved from submit to entrant signup, spec Q4 R3 restack).
     # Distinct from AUTH_INVALID_CREDENTIALS because it is not about who

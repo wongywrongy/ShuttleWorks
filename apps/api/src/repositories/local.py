@@ -53,10 +53,12 @@ def _conflict_error_class():
 
 from fastapi import Request
 from sqlalchemy import delete, func, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, attributes
 
 from core.config import cloud_modules_enabled
+from core.capability_policy import STAFF_INVITE_LIFETIME
 from core.time_utils import now_iso
+from core.tokens import _hash_token
 from db.models import (
     CLOUD_ONLY_MODULES,
     BracketEvent,
@@ -75,6 +77,7 @@ from db.models import (
     MatchStatus,
     MeetEvent,
     Tournament,
+    TournamentAuthority,
     TournamentBackup,
     TournamentMember,
     User,
@@ -87,6 +90,7 @@ from db.models import (
 from db.blob_version import CURRENT_TOURNAMENT_SCHEMA_VERSION
 from db.session import SessionLocal
 from repositories.base import MemberIdentity
+from repositories.mfa import MfaRepository
 
 log = logging.getLogger("scheduler.repositories")
 _Result = TypeVar("_Result")
@@ -372,30 +376,38 @@ class _LocalTournamentRepo:
     ) -> Tournament:
         """Replace the ``data`` blob on an explicit tournament.
 
-        ``expected_version`` makes the write a genuine compare-and-swap: the
-        version is re-read and compared immediately before the mutation, so
-        two requests that both passed an earlier API-layer check cannot both
-        commit. Omitted by writers with no caller-supplied token (bracket
-        persistence, plan-finalized, restore), which keep last-write-wins.
+        A conditional UPDATE reserves the next version in the database before
+        any roster/projection mutation. The reservation and the payload share
+        one transaction, so rollback also releases the version. ORM cache
+        freshness cannot turn an expired precondition into a successful write.
+        Writers without a precondition retain explicit last-write-wins behavior.
         """
         row = self.get_by_id(tournament_id)
         if row is None:
             raise KeyError(tournament_id)
-        if expected_version is not None and (row.state_version or 0) != expected_version:
-            # Reuses the repository layer's existing optimistic-concurrency
-            # signal rather than inventing a second one — _LocalMatchRepo has
-            # raised ConflictError from ``expected_version`` since the
-            # match-state work, and one mechanism beats two that drift apart.
+        reservation = update(Tournament).where(Tournament.id == tournament_id)
+        if expected_version is not None:
+            reservation = reservation.where(Tournament.state_version == expected_version)
+        next_version = self.session.scalar(
+            reservation.values(state_version=Tournament.state_version + 1)
+            .returning(Tournament.state_version)
+            .execution_options(synchronize_session=False)
+        )
+        if next_version is None:
+            current_version = self.session.scalar(
+                select(Tournament.state_version).where(Tournament.id == tournament_id)
+            )
+            if current_version is None:
+                raise KeyError(tournament_id)
             raise _conflict_error_class()(
                 match_id=str(tournament_id),
-                current_version=row.state_version or 0,
+                current_version=current_version,
                 seen_version=expected_version,
-                message=(
-                    f"tournament {tournament_id} state_version moved from "
-                    f"{expected_version} to {row.state_version or 0} while "
-                    "this write was in flight"
-                ),
+                message=f"workspace state changed from {expected_version} to {current_version}",
             )
+        # The UPDATE already persisted this value. Do not emit another ORM
+        # version write at flush time, or overwrite it from a cached row.
+        attributes.set_committed_value(row, "state_version", next_version)
         stamped = _stamp_payload(payload)
         from competition.roster import ingest_document
         ingest_document(self.session, row, stamped)
@@ -421,20 +433,6 @@ class _LocalTournamentRepo:
         if isinstance(dates_data, dict) and dates_data.get("tournamentEnd"):
             row.tournament_end_date = str(dates_data["tournamentEnd"])[:10]
         row.schema_version = CURRENT_TOURNAMENT_SCHEMA_VERSION
-        # Every committed blob write advances the optimistic-concurrency
-        # counter (SP-CLOUD-4). This is the only method that assigns
-        # ``row.data``, so bumping here cannot be forgotten by a future writer
-        # the way a per-endpoint bump could.
-        #
-        # It is NOT reached only through ``commit_tournament_state``. Direct
-        # callers today: ``bracket/brackets.py`` (session metadata, clear),
-        # ``workspaces/tournaments.py::set_plan_finalized``, and
-        # ``restore_tournament_from_backup`` below. An earlier version of this
-        # comment claimed a single caller path, and that false premise is
-        # exactly why three of those shipped without returning the new token.
-        # Any response that rewrites the blob must feed the new value back to
-        # the client, or the client's next save spuriously conflicts.
-        row.state_version = (row.state_version or 0) + 1
         self._sync_meet_events(tournament_id, stamped)
         from competition.projection import project
         project(self.session, tournament_id, advance_version=False)
@@ -1683,18 +1681,26 @@ class _LocalInviteLinkRepo:
         created_by: uuid.UUID,
         email: Optional[str] = None,
         expires_at: Optional[datetime] = None,
-    ) -> InviteLink:
+    ) -> tuple[str, InviteLink]:
+        """Return the bearer once alongside its independently identified row."""
+        token = str(uuid.uuid4())
+        created_at = datetime.now(timezone.utc)
+        deadline = created_at + STAFF_INVITE_LIFETIME
+        if expires_at is not None:
+            deadline = min(deadline, _ensure_utc_aware(expires_at))
         row = InviteLink(
+            token_hash=_hash_token(token),
             tournament_id=tournament_id,
             role=role,
             created_by=created_by,
             email=email,
-            expires_at=expires_at,
+            created_at=created_at,
+            expires_at=deadline,
         )
         self.session.add(row)
         self.session.commit()
         self.session.refresh(row)
-        return row
+        return token, row
 
     def list_for_tournament(
         self,
@@ -1709,7 +1715,15 @@ class _LocalInviteLinkRepo:
         )
 
     def get(self, token: uuid.UUID) -> Optional[InviteLink]:
-        return self.session.get(InviteLink, token)
+        return self.session.scalar(
+            select(InviteLink).where(InviteLink.token_hash == _hash_token(str(token)))
+        )
+
+    def get_for_management(self, reference: uuid.UUID) -> Optional[InviteLink]:
+        """Owner-only lookup by non-secret id or a previously issued link."""
+        return self.session.scalar(select(InviteLink).where(
+            (InviteLink.id == reference) | (InviteLink.token_hash == _hash_token(str(reference)))
+        ))
 
     def revoke(self, token: uuid.UUID) -> bool:
         row = self.session.get(InviteLink, token)
@@ -1734,7 +1748,7 @@ class _LocalInviteLinkRepo:
             .where(
                 InviteLink.tournament_id.in_(tournament_ids),
                 InviteLink.revoked_at.is_(None),
-                or_(InviteLink.expires_at.is_(None), InviteLink.expires_at > now),
+                InviteLink.expires_at > now,
             )
             .group_by(InviteLink.tournament_id)
         ).all()
@@ -1771,13 +1785,10 @@ def is_invite_valid(invite: InviteLink, *, now: Optional[datetime] = None) -> bo
 
     Exported so route handlers and tests share the same definition.
     """
-    if invite.revoked_at is not None:
+    if invite.revoked_at is not None or invite.expires_at is None:
         return False
-    if invite.expires_at is not None:
-        cutoff = now or datetime.now(timezone.utc)
-        if _ensure_utc_aware(invite.expires_at) < _ensure_utc_aware(cutoff):
-            return False
-    return True
+    cutoff = now or datetime.now(timezone.utc)
+    return _ensure_utc_aware(invite.expires_at) > _ensure_utc_aware(cutoff)
 
 
 
@@ -2123,6 +2134,7 @@ class LocalRepository:
         self.modules = _LocalModuleRepo(session)
         # E4 (Phase 9): the control plane's read of the Entries family.
         self.entry_signals = _LocalEntriesSignalRepo(session)
+        self.mfa = MfaRepository(session)
 
     # ---- High-level orchestration (id-explicit, Step 2+) ----------------
 
@@ -2165,6 +2177,24 @@ class LocalRepository:
     ) -> _Result:
         """Execute a session-aware read without exposing the session."""
         return operation(self.session, *args, **kwargs)
+
+    def authority_key_usage(self) -> list[dict]:
+        """Read grouped grant history without changing an epoch or its actor."""
+        rows = self.session.execute(select(
+            TournamentAuthority.grant_key_id, TournamentAuthority.state, func.count(),
+        ).group_by(TournamentAuthority.grant_key_id, TournamentAuthority.state))
+        return [{"keyId": key, "state": state, "epochs": count} for key, state, count in rows]
+
+    def authority_key_has_open_epochs(self, retiring_key_id: str, trusted_ids: Iterable[str]) -> bool:
+        """Unknown legacy attribution also blocks retirement until reconciled."""
+        return self.session.execute(select(TournamentAuthority.tournament_id).where(
+            TournamentAuthority.state.in_(("preparing", "active")),
+            or_(
+                TournamentAuthority.grant_key_id == retiring_key_id,
+                TournamentAuthority.grant_key_id.is_(None),
+                TournamentAuthority.grant_key_id.not_in(tuple(trusted_ids)),
+            ),
+        ).limit(1)).first() is not None
 
     def stage(
         self,
@@ -2228,47 +2258,67 @@ class LocalRepository:
         """Return an entrant account by id for identity application flows."""
         return self.session.get(EntrantAccount, account_id)
 
-    def get_or_create_display_token(
-        self,
-        tournament_id: uuid.UUID,
-        token: str,
-    ) -> str:
-        """Return the display capability, creating it atomically if absent."""
-        row = self.session.get(DisplayToken, tournament_id)
-        if row is not None:
-            return row.token
-        self.session.execute(update(Tournament).where(Tournament.id == tournament_id)
-                             .values(name=Tournament.name))
-        row = self.session.get(DisplayToken, tournament_id, populate_existing=True)
-        if row is None:
-            row = DisplayToken(tournament_id=tournament_id, token=token)
-            self.session.add(row)
-        _commit_transaction(self.session)
-        return row.token
+    def get_display_token(self, tournament_id: uuid.UUID) -> Optional[DisplayToken]:
+        """Read capability metadata without ever minting or disclosing a token."""
+        return self.session.get(DisplayToken, tournament_id)
+
+    def _audit_display_capability(self, tournament_id, previous, event, actor_id, expires_at=None):
+        from types import SimpleNamespace
+        from core.state_machine import apply
+        from core.state_machines import DISPLAY_CAPABILITY
+
+        subject = SimpleNamespace(id=tournament_id, tournament_id=tournament_id,
+                                  status=previous, __tablename__="display_tokens")
+        record = apply(DISPLAY_CAPABILITY, subject, event, "operator", guards={},
+                       session=self.session, actor_id=actor_id,
+                       detail={"expires_at": expires_at.isoformat()} if expires_at else {})
+        record.persist(self.session)
 
     def rotate_display_token(
         self,
         tournament_id: uuid.UUID,
         token: str,
-    ) -> str:
-        """Replace a display capability, serializing with first creation."""
+        expires_at: datetime,
+        actor_id: str,
+    ) -> Optional[DisplayToken]:
+        """Issue once, storing only the hash; serialize replacement and revocation."""
+        if expires_at.tzinfo is None or expires_at <= datetime.now(timezone.utc):
+            raise ValueError("Display expiry must be a future timezone-aware instant")
+        expires_at = expires_at.astimezone(timezone.utc)
+        locked = self.session.execute(update(Tournament).where(Tournament.id == tournament_id)
+                                      .values(name=Tournament.name))
+        if locked.rowcount != 1:
+            return None
+        row = self.session.get(DisplayToken, tournament_id, populate_existing=True)
+        previous = "active" if row and _ensure_utc_aware(row.expires_at) > datetime.now(timezone.utc) else "inactive"
+        if row is None:
+            row = DisplayToken(tournament_id=tournament_id, token_hash=_hash_token(token), expires_at=expires_at)
+            self.session.add(row)
+        else:
+            row.token_hash = _hash_token(token)
+            row.expires_at = expires_at
+            row.created_at = datetime.now(timezone.utc)
+        self._audit_display_capability(tournament_id, previous, "issue", actor_id, expires_at)
+        _commit_transaction(self.session)
+        return row
+
+    def revoke_display_token(self, tournament_id: uuid.UUID, actor_id: str) -> None:
         self.session.execute(update(Tournament).where(Tournament.id == tournament_id)
                              .values(name=Tournament.name))
         row = self.session.get(DisplayToken, tournament_id, populate_existing=True)
-        if row is None:
-            row = DisplayToken(tournament_id=tournament_id, token=token)
-            self.session.add(row)
-        else:
-            row.token = token
+        if row is not None:
+            previous = "active" if _ensure_utc_aware(row.expires_at) > datetime.now(timezone.utc) else "inactive"
+            self._audit_display_capability(tournament_id, previous, "revoke", actor_id)
+            self.session.delete(row)
         _commit_transaction(self.session)
-        return row.token
 
     def get_tournament_by_display_token(self, token: str) -> Optional[Tournament]:
         """Resolve a public display capability to its workspace."""
-        if not token:
+        if not token or len(token) > 64:
             return None
         row = self.session.scalar(
-            select(DisplayToken).where(DisplayToken.token == token)
+            select(DisplayToken).where(DisplayToken.token_hash == _hash_token(token),
+                                       DisplayToken.expires_at > datetime.now(timezone.utc))
         )
         return self.tournaments.get_by_id(row.tournament_id) if row else None
 

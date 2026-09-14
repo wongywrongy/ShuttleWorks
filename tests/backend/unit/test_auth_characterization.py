@@ -143,19 +143,20 @@ def test_expiry_is_the_configured_ttl(session, user):
     assert abs((row.expires_at - expected).total_seconds()) < 5
 
 
-def test_last_seen_is_thresholded_not_written_on_every_read(session, user):
-    """The rolling activity stamp is deliberately lazy: an authenticated
-    read must not become a write per request. 300 seconds is the threshold."""
+def test_reads_never_extend_operator_activity(session, user):
+    """P08 replaces the old 300-second touch policy: polling is never activity."""
     token, row = auth_service.create_session(session, user.id)
 
     first = row.last_seen_at
     auth_service.resolve_session(session, token)
-    assert row.last_seen_at == first  # inside the threshold: untouched
+    assert row.last_seen_at == first
 
+    row.created_at = _utcnow() - timedelta(seconds=600)
     row.last_seen_at = _utcnow() - timedelta(seconds=301)
     stale = row.last_seen_at
-    auth_service.resolve_session(session, token)
-    assert row.last_seen_at > stale
+    session.flush()
+    assert auth_service.resolve_session(session, token).id == user.id
+    assert row.last_seen_at == stale
 
 
 def test_revoke_all_can_keep_the_current_session(session, user):

@@ -479,7 +479,7 @@ def reset_all_match_states(
     return {"message": "All match states reset successfully"}
 
 
-@router.get("/export/download", dependencies=[_VIEWER])
+@router.get("/export/download", dependencies=[Depends(require_tournament_access("viewer", fresh=True))])
 def export_match_states(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),

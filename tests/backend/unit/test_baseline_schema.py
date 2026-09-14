@@ -7,6 +7,8 @@ import uuid
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.shared_postgres
 import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
@@ -17,8 +19,13 @@ from _helpers import upgrade_test_database
 SCRIPTS = Path(__file__).resolve().parents[3] / "apps/api/src/alembic"
 
 
+@pytest.fixture
+def initial_revision(request):
+    return getattr(request, "param", "head")
+
+
 @pytest.fixture(params=["sqlite", "postgresql"])
-def migrated(request, tmp_path):
+def migrated(request, tmp_path, initial_revision):
     from db.session import normalize_database_url
 
     if request.param == "postgresql":
@@ -31,7 +38,14 @@ def migrated(request, tmp_path):
             conn.exec_driver_sql("CREATE SCHEMA public")
     else:
         engine = sa.create_engine(f"sqlite:///{tmp_path / 'baseline.db'}")
-    upgrade_test_database(engine)
+    if initial_revision == "head":
+        upgrade_test_database(engine)
+    else:
+        cfg = Config()
+        cfg.set_main_option("script_location", str(SCRIPTS))
+        with engine.connect() as conn:
+            cfg.attributes["connection"] = conn
+            command.upgrade(cfg, initial_revision)
     try:
         yield engine
     finally:
@@ -173,6 +187,68 @@ def test_orphaned_entry_is_refused_by_the_unit_test_schema(migrated):
         )
 
 
+def test_tournament_child_foreign_keys_preserve_scope(migrated):
+    """New child references must carry tenancy; the outbox has one sole parent."""
+    inspector = sa.inspect(migrated)
+    columns = {
+        table: {column["name"] for column in inspector.get_columns(table)}
+        for table in inspector.get_table_names()
+    }
+    exceptions = set()
+    for table in columns:
+        for fk in inspector.get_foreign_keys(table):
+            parent = fk["referred_table"]
+            if parent == "tournaments" or "tournament_id" not in columns[parent]:
+                continue
+            pairs = set(zip(fk["constrained_columns"], fk["referred_columns"]))
+            if ("tournament_id", "tournament_id") not in pairs:
+                exceptions.add((table, tuple(fk["constrained_columns"]), parent))
+    assert exceptions == {("sync_outbox", ("operation_id",), "event_operations")}
+    # Adding independently scoped data requires replacing this exception with
+    # an explicit composite reference, even if that addition is nullable.
+    assert columns["sync_outbox"] == {
+        "operation_id", "attempt_count", "next_attempt_at", "acknowledged_at",
+        "permanently_blocked_at", "last_error_code", "created_at",
+    }
+    assert len(inspector.get_foreign_keys("sync_outbox")) == 1
+
+
+def test_outbox_inherits_one_parent_and_cascades_only_that_tenant(migrated):
+    from datetime import datetime, timezone
+
+    from db.models import EventOperation, SyncOutbox, Tournament, TournamentAuthority
+
+    tenants = [uuid.uuid4(), uuid.uuid4()]
+    operations = [uuid.uuid4(), uuid.uuid4()]
+    with migrated.begin() as conn:
+        for tenant, operation in zip(tenants, operations):
+            conn.execute(Tournament.__table__.insert().values(id=tenant, name="Outbox ownership"))
+            conn.execute(TournamentAuthority.__table__.insert().values(
+                tournament_id=tenant, epoch=1, node_id=uuid.uuid4(),
+                checkpoint_hash="a" * 64, checkpoint_schema_version=1,
+                capability_digest="b" * 64,
+            ))
+            conn.execute(EventOperation.__table__.insert().values(
+                operation_id=operation, tournament_id=tenant, authority_epoch=1,
+                node_id=uuid.uuid4(), actor_id=uuid.uuid4(), sequence=1,
+                command_type="match.record_result.v3", aggregate_type="bracket_match",
+                aggregate_id="match-1", payload={}, schema_version=1,
+                occurred_at_local=datetime.now(timezone.utc),
+            ))
+            conn.execute(SyncOutbox.__table__.insert().values(operation_id=operation))
+        for tenant, operation in zip(tenants, operations):
+            query = sa.select(SyncOutbox.operation_id).join(
+                EventOperation, SyncOutbox.operation_id == EventOperation.operation_id,
+            ).where(EventOperation.tournament_id == tenant)
+            assert conn.execute(query).scalars().all() == [operation]
+
+    with pytest.raises(sa.exc.IntegrityError, match="(?i)foreign key"), migrated.begin() as conn:
+        conn.execute(SyncOutbox.__table__.insert().values(operation_id=uuid.uuid4()))
+    with migrated.begin() as conn:
+        conn.execute(sa.delete(Tournament).where(Tournament.id == tenants[0]))
+        assert conn.execute(sa.select(SyncOutbox.operation_id)).scalars().all() == [operations[1]]
+
+
 @pytest.mark.parametrize(
     "table,column,value",
     [
@@ -230,3 +306,113 @@ def test_alembic_check_detects_a_model_column_without_a_revision(migrated):
                 command.check(cfg)
     finally:
         table._columns.remove(probe)
+
+
+@pytest.mark.parametrize("initial_revision", ["0002"], indirect=True)
+def test_invitation_migration_caps_existing_links_without_extending_them(migrated):
+    from datetime import datetime, timedelta, timezone
+
+    from db.models import InviteLink, Tournament
+
+    created = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    workspace_id = uuid.uuid4()
+    expiries = [None, created + timedelta(days=14), created + timedelta(days=1)]
+    ids = [uuid.uuid4() for _ in expiries]
+    with migrated.begin() as conn:
+        conn.execute(Tournament.__table__.insert().values(id=workspace_id, name="Old links"))
+        for row_id, expiry in zip(ids, expiries):
+            conn.execute(InviteLink.__table__.insert().values(
+                id=row_id, tournament_id=workspace_id, role="viewer",
+                created_by=uuid.uuid4(), created_at=created, expires_at=expiry,
+            ))
+        assert conn.scalar(sa.select(sa.func.count()).select_from(InviteLink).where(
+            InviteLink.expires_at.is_(None)
+        )) == 1  # Negative control: the old schema really accepts eternal links.
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(SCRIPTS))
+    with migrated.connect() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "0003")
+        for row_id, days in zip(ids, [7, 7, 1]):
+            expiry = conn.scalar(sa.select(InviteLink.expires_at).where(InviteLink.id == row_id))
+            assert expiry.replace(tzinfo=timezone.utc) == created + timedelta(days=days)
+        assert conn.scalar(sa.select(sa.func.count()).select_from(InviteLink)) == 3
+    with pytest.raises(sa.exc.IntegrityError, match="(?i)not.null"), migrated.begin() as conn:
+        conn.execute(InviteLink.__table__.update().where(InviteLink.id == ids[0]).values(
+            expires_at=None,
+        ))
+
+
+@pytest.mark.parametrize("initial_revision", ["0003"], indirect=True)
+def test_invite_hash_migration_preserves_links_and_removes_raw_ids(migrated):
+    from datetime import datetime, timedelta, timezone
+    from hashlib import sha256
+
+    from db.models import InviteLink, Tournament
+    from repositories.local import LocalRepository
+    from sqlalchemy.orm import Session
+
+    created = datetime(2026, 9, 14, tzinfo=timezone.utc)
+    workspace_id, creator = uuid.uuid4(), uuid.uuid4()
+    tokens = [uuid.uuid4(), uuid.uuid4()]
+    expiry = created + timedelta(days=7)
+    with migrated.begin() as conn:
+        conn.execute(Tournament.__table__.insert().values(id=workspace_id, name="Old links"))
+        for token, revoked in zip(tokens, [None, created]):
+            conn.execute(InviteLink.__table__.insert().values(
+                id=token, tournament_id=workspace_id, role="viewer", email="invite@example.test",
+                created_by=creator, created_at=created, expires_at=expiry, revoked_at=revoked,
+            ))
+        assert conn.scalar(sa.select(InviteLink.id).where(InviteLink.id == tokens[0])) == tokens[0]
+    cfg = Config()
+    cfg.set_main_option("script_location", str(SCRIPTS))
+    with migrated.connect() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "head")
+    with Session(migrated) as session:
+        repo = LocalRepository(session)
+        assert session.scalar(sa.select(sa.func.count()).select_from(InviteLink)) == 2
+        for token, revoked in zip(tokens, [None, created]):
+            row = repo.invite_links.get(token)
+            assert row is not None
+            assert row.id not in tokens
+            assert row.token_hash == sha256(str(token).encode()).hexdigest()
+            assert row.created_by == creator and row.tournament_id == workspace_id
+            assert row.email == "invite@example.test" and row.role == "viewer"
+            assert row.expires_at.replace(tzinfo=timezone.utc) == expiry
+            assert row.created_at.replace(tzinfo=timezone.utc) == created
+            assert (row.revoked_at.replace(tzinfo=timezone.utc) if row.revoked_at else None) == revoked
+            assert repo.invite_links.get(row.id) is None
+
+
+@pytest.mark.parametrize("initial_revision", ["0004"], indirect=True)
+def test_display_migration_hashes_links_and_expires_undated_rows(migrated):
+    from datetime import datetime, timezone
+    from hashlib import sha256
+    from db.models import Tournament, DisplayToken
+
+    workspaces = [uuid.uuid4() for _ in range(3)]
+    tokens = [f"old-display-{index}" for index in range(3)]
+    legacy = sa.table("display_tokens", sa.column("tournament_id", sa.Uuid),
+                      sa.column("token", sa.String), sa.column("created_at", sa.DateTime(timezone=True)))
+    before = datetime.now(timezone.utc)
+    with migrated.begin() as conn:
+        for workspace_id, token, end in zip(workspaces, tokens, ["2099-03-10", None, "invalid"]):
+            conn.execute(Tournament.__table__.insert().values(id=workspace_id,
+                name="Legacy display", tournament_end_date=end, time_zone="Asia/Taipei"))
+            conn.execute(legacy.insert().values(tournament_id=workspace_id, token=token, created_at=before))
+        assert conn.scalar(sa.select(legacy.c.token).where(legacy.c.tournament_id == workspaces[0])) == tokens[0]
+    upgrade_test_database(migrated)
+    after = datetime.now(timezone.utc)
+    with migrated.connect() as conn:
+        assert "token" not in {column["name"] for column in sa.inspect(conn).get_columns("display_tokens")}
+        for index, (workspace_id, token) in enumerate(zip(workspaces, tokens)):
+            row = conn.execute(sa.select(DisplayToken).where(DisplayToken.tournament_id == workspace_id)).mappings().one()
+            assert row["token_hash"] == sha256(token.encode()).hexdigest()
+            expiry = row["expires_at"].replace(tzinfo=timezone.utc)
+            assert row["created_at"].replace(tzinfo=timezone.utc) == before
+            if index == 0:
+                assert expiry == datetime(2099, 3, 17, 16, tzinfo=timezone.utc)
+            else:
+                assert before <= expiry <= after

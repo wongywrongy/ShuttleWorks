@@ -402,6 +402,16 @@
       "tournamentDataReferences": 1
     },
     {
+      "path": "repositories/mfa.py",
+      "module": "repositories",
+      "useCase": "operator-factor-persistence-adapter (P08; SQL remains below identity policy)",
+      "owner": "persistence-owner",
+      "repoSession": 0,
+      "commitCalls": 0,
+      "sqlalchemyImports": 4,
+      "tournamentDataReferences": 0
+    },
+    {
       "path": "solve_rail/solve_jobs.py",
       "module": "solve_rail",
       "useCase": "job-persistence",

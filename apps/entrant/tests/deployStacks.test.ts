@@ -136,7 +136,7 @@ describe('the release stack pulls images something actually builds', () => {
    * their own `:` and `{}` inside them (`${OWNER:-misogyu}`, `${TAG:-latest}`),
    * so the repo is "after the last slash, before the first colon there". */
   const repoName = (ref: string): string =>
-    ref.slice(ref.lastIndexOf('/') + 1).split(':')[0];
+    ref.split('@')[0].slice(ref.split('@')[0].lastIndexOf('/') + 1).split(':')[0];
 
   const built = [...matrixBlock.matchAll(/^\s*- name:\s*(\S+)\s*$/gm)].map((m) =>
     repoName(imagesLine).replace('${{ matrix.name }}', m[1]),

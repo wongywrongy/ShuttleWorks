@@ -11,6 +11,33 @@ def machine(name, states, initial, terminal, transitions, attribute="status"):
                             frozenset(terminal.split()), tuple(transitions), attribute))
 
 
+DISPLAY_CAPABILITY = machine("display_capability", "inactive active", "inactive", "", [
+    edge("issue", "inactive active", "active"),
+    edge("revoke", "inactive active", "inactive"),
+])
+
+
+OPERATOR_MFA_FACTOR = machine("operator_mfa_factor", "unconfigured active", "unconfigured", "", [
+    edge("begin", "unconfigured", "unconfigured"),
+    edge("begin", "active", "active"),
+    edge("activate", "unconfigured active", "active"),
+    edge("authenticate", "active", "active"),
+    edge("recover", "active", "active"),
+    edge("password_change", "active", "active"),
+    edge("reissue_recovery_codes", "active", "active"),
+    edge("disable", "active", "unconfigured"),
+    edge("administrator_reset", "unconfigured active", "unconfigured", "system"),
+])
+
+# No terminal state: explicit administrator recovery returns a consumed
+# enrollment row to pending, so `consumed` is an end of the happy path only.
+NODE_OPERATOR_ENROLLMENT = machine("node_operator_enrollment", "pending consumed", "pending", "", [
+    edge("issue", "pending", "pending", "system"),
+    edge("activate", "pending", "consumed", "operator"),
+    edge("administrator_reset", "pending consumed", "pending", "system"),
+])
+
+
 MATCH = machine("match", "scheduled called playing finished retired", "scheduled", "retired", [
     edge("call", "scheduled", "called"),
     edge("start", "called", "playing"),

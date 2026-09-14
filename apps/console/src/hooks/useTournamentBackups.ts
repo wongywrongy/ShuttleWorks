@@ -49,8 +49,9 @@ export interface TournamentBackups {
   restoreBackup: (filename: string) => Promise<void>;
   inspectBackup: (filename: string) => Promise<BackupSnapshotDTO>;
   deleteBackup: (filename: string) => Promise<void>;
-  /** Browser-native download URL for one snapshot (WSB-3). */
-  downloadUrl: (filename: string) => string;
+  /** Save one snapshot (WSB-3). Resumes after re-verification on a stale
+   *  session; the interceptor reports any other failure. */
+  downloadBackup: (filename: string) => Promise<void>;
 }
 
 export function useTournamentBackups(): TournamentBackups {
@@ -135,8 +136,10 @@ export function useTournamentBackups(): TournamentBackups {
     [tid, refresh],
   );
 
-  const downloadUrl = useCallback(
-    (filename: string) => apiClient.backupDownloadUrl(tid, filename),
+  const downloadBackup = useCallback(
+    async (filename: string) => {
+      await apiClient.downloadTournamentBackup(tid, filename).catch(() => false);
+    },
     [tid],
   );
 
@@ -150,7 +153,7 @@ export function useTournamentBackups(): TournamentBackups {
     restoreBackup,
     inspectBackup,
     deleteBackup,
-    downloadUrl,
+    downloadBackup,
   };
 }
 

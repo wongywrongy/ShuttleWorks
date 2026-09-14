@@ -110,6 +110,7 @@ COPY --chown=app:app apps/api/src/bracket/     ./src/bracket/
 COPY --chown=app:app apps/api/src/operations/  ./src/operations/
 COPY --chown=app:app apps/api/src/display/     ./src/display/
 COPY --chown=app:app apps/api/src/entries/     ./src/entries/
+COPY --chown=app:app apps/api/src/competition/ ./src/competition/
 COPY --chown=app:app apps/api/src/solve_rail/  ./src/solve_rail/
 COPY --chown=app:app apps/api/src/ops/         ./src/ops/
 COPY --chown=app:app apps/api/src/sync/        ./src/sync/

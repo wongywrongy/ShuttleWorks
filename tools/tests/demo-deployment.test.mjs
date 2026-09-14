@@ -41,8 +41,8 @@ test('demo uses the production Postgres major and cannot inherit SQLite', () => 
   const backendBlock = demo.slice(demo.indexOf('  backend:'), demo.indexOf('\n  frontend:'))
   const docsBlock = demo.slice(demo.indexOf('  docs:'))
 
-  assert.match(selfhost, /image: postgres:16-alpine/)
-  assert.match(postgresBlock, /image: postgres:16-alpine/)
+  assert.match(selfhost, /image: postgres@sha256:[a-f0-9]{64}/)
+  assert.match(postgresBlock, /image: postgres@sha256:[a-f0-9]{64}/)
   assert.doesNotMatch(postgresBlock, /\n    ports:/)
   assert.match(backendBlock, /environment: !override/)
   assert.match(backendBlock, /env_file: !reset \[\]/)

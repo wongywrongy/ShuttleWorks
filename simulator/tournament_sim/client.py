@@ -18,6 +18,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Optional
 
 import httpx
@@ -652,8 +653,13 @@ class SimClient:
     # ---- display -----------------------------------------------------------
 
     def display_token(self, tid: str) -> dict:
-        """The workspace's public capability token (created on first read)."""
-        return self._json("GET", f"/tournaments/{tid}/display-token")
+        """Explicitly issue a synthetic fixture link; completed events stay closed."""
+        status = self._json("GET", f"/tournaments/{tid}/display-token")
+        deadline = status.get("defaultExpiresAt")
+        if deadline and datetime.fromisoformat(deadline.replace("Z", "+00:00")) <= datetime.now(timezone.utc):
+            return {"token": None, "url": None, "expiresAt": deadline}
+        body = {} if deadline else {"expiresAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}
+        return self._json("POST", f"/tournaments/{tid}/display-token/rotate", json=body)
 
     def swiss_next_round(self, tid: str, event_id: str) -> httpx.Response:
         """409 is a legitimate answer here (all K rounds generated / round

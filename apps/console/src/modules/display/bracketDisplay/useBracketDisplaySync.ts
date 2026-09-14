@@ -45,6 +45,10 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
   const [terminal, setTerminal] = useState(false);
 
   useEffect(() => {
+    setData(null);
+    setLastSyncMs(null);
+    setSyncError(null);
+    setTerminal(false);
     if (!token && !tid) {
       setSyncError('Missing ?token=<display-token> (or ?id=) query parameter');
       return;
@@ -74,6 +78,8 @@ export function useBracketDisplaySync(now: Date): UseBracketDisplaySyncResult {
         // 10s at a TV nobody is watching. Same `lib/pollPolicy` contract every
         // other polling hook in the app honours.
         if (isTerminalPollError(err)) {
+          setData(null);
+          setLastSyncMs(null);
           setTerminal(true);
           stop();
         }

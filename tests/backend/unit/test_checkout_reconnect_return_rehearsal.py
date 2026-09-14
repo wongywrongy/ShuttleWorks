@@ -267,7 +267,7 @@ def test_checkout_reconnect_drain_rebuild_and_audited_return(monkeypatch, tmp_pa
         assert previous.state == "closed"
         assert cloud_epoch.state == "cloud"
         assert cloud_epoch.checkpoint_hash == final_snapshot_hash
-        transition = cloud.scalar(select(AuthorityTransition))
+        transition = cloud.scalars(select(AuthorityTransition).where(AuthorityTransition.transition_type == "return_to_cloud")).one()
         assert transition.transition_type == "return_to_cloud"
         assert transition.declared_last_sequence == 2
 

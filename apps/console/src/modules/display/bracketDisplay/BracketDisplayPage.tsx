@@ -205,7 +205,7 @@ export function BracketDisplayPage({
         {!data || contentSuppressed ? (
           <div className="flex h-full items-center justify-center p-12 text-center">
             <p className="text-2xl text-muted-foreground">
-              {!data && syncError ? 'Waiting to connect…' : !data ? 'Loading bracket…' : ''}
+              {terminal ? 'Board unavailable. Ask the organizer for a new link.' : !data && syncError ? 'Waiting to connect…' : !data ? 'Loading bracket…' : ''}
             </p>
           </div>
         ) : view === 'draw' ? (

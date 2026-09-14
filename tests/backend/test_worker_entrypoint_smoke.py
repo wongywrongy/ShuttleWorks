@@ -126,3 +126,7 @@ def test_standalone_worker_boots_under_the_cloud_profile(schema, tmp_path):
         except subprocess.TimeoutExpired:  # pragma: no cover - defensive
             proc.kill()
             proc.wait(timeout=15)
+
+
+# This module shares the disposable Postgres schema with other parity suites.
+pytestmark = [pytestmark, pytest.mark.shared_postgres]

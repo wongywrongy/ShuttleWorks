@@ -108,4 +108,4 @@ class TestErrorDisclosure:
             f"/tournaments/{tid}/state/restore/nope.json", headers=CSRF
         )
         assert r.status_code == 404
-        assert r.json()["detail"]["code"] == "BACKUP_NOT_FOUND"
+        assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"

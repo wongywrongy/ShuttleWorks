@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { SharingTab } from '../SharingTab';
 import { apiClient } from '../../../api/client';
 vi.mock('../../../hooks/useCanEdit', () => ({ useCanEdit: () => true }));
@@ -21,6 +21,7 @@ vi.mock('../../../api/client', () => ({
     revokeInvite: vi.fn(),
     getDisplayToken: vi.fn(),
     rotateDisplayToken: vi.fn(),
+    revokeDisplayToken: vi.fn(),
     getEntryPage: vi.fn(),
     patchEntryPagePublication: vi.fn(),
   },
@@ -45,16 +46,16 @@ describe('SharingTab', () => {
     vi.mocked(apiClient.revokeInvite).mockReset();
     vi.mocked(apiClient.getDisplayToken).mockReset();
     vi.mocked(apiClient.rotateDisplayToken).mockReset();
+    vi.mocked(apiClient.revokeDisplayToken).mockReset().mockResolvedValue(undefined);
     vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
-    vi.mocked(apiClient.createInvite).mockResolvedValue({ token: 'new' } as never);
+    vi.mocked(apiClient.createInvite).mockResolvedValue({ id: 'new-id', token: 'new', url: '/invite/new' } as never);
     vi.mocked(apiClient.revokeInvite).mockResolvedValue(undefined as never);
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
-      token: 'tok-abc',
-      url: '/display?token=tok-abc',
+      active: true, expiresAt: '2099-01-01T00:00:00Z', defaultExpiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.rotateDisplayToken).mockResolvedValue({
       token: 'tok-new',
-      url: '/display?token=tok-new',
+      url: '/display?token=tok-new', expiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.getEntryPage).mockReset();
     vi.mocked(apiClient.patchEntryPagePublication).mockReset();
@@ -65,19 +66,83 @@ describe('SharingTab', () => {
     );
   });
 
-  it('shows the capability display link fetched from getDisplayToken', async () => {
+  it('loads status without issuing or retrieving a capability', async () => {
     render(<SharingTab tid="t1" />);
-    // The surface shows a READABLE label; the real capability URL is what
-    // Copy puts on the clipboard and what `title` carries for hover/AT.
-    const link = await screen.findByTestId('display-link-label');
-    await waitFor(() =>
-      expect(link.getAttribute('title')).toContain('/display?token=tok-abc'),
-    );
-    expect(link.textContent).toContain('Venue board');
-    // The opaque token is not printed on the page.
-    expect(link.textContent).not.toContain('tok-abc');
+    await screen.findByText(/The existing link still works/);
     expect(apiClient.getDisplayToken).toHaveBeenCalledWith('t1');
-    expect(link.getAttribute('title')).not.toContain('?id=');
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('New venue board link')).toBeNull();
+    expect(screen.getByTestId('display-link-label')).not.toHaveAttribute('title');
+  });
+
+  it('shows an issued link once and forgets it on remount', async () => {
+    const view = render(<SharingTab tid="t1" />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacing the venue board link' }));
+    expect(await screen.findByLabelText('New venue board link')).toHaveValue(`${window.location.origin}/display?token=tok-new`);
+    view.unmount();
+    render(<SharingTab tid="t1" />);
+    await screen.findByText(/The existing link still works/);
+    expect(screen.queryByLabelText('New venue board link')).toBeNull();
+    expect(apiClient.rotateDisplayToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires an explicit expiry for an undated event', async () => {
+    vi.mocked(apiClient.getDisplayToken).mockResolvedValue({ active: false, expiresAt: null, defaultExpiresAt: null });
+    render(<SharingTab tid="t1" />);
+    const create = await screen.findByRole('button', { name: 'Create venue board link' });
+    expect(create).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Link expiry (your local time)'), { target: { value: '2099-01-01T12:00' } });
+    fireEvent.click(create);
+    await screen.findByLabelText('New venue board link');
+    expect(apiClient.rotateDisplayToken).toHaveBeenCalledWith('t1', new Date('2099-01-01T12:00').toISOString());
+  });
+
+  it('requires confirmation before revoking and issues no replacement', async () => {
+    render(<SharingTab tid="t1" />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke the venue board link' }));
+    expect(apiClient.revokeDisplayToken).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm revoking the venue board link' }));
+    await screen.findByText('No active board link.');
+    expect(apiClient.revokeDisplayToken).toHaveBeenCalledWith('t1');
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
+  });
+
+  it('ignores a late issuance after changing workspaces', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof apiClient.rotateDisplayToken>>) => void;
+    vi.mocked(apiClient.rotateDisplayToken).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const changed = vi.fn();
+    const view = render(<SharingTab tid="t1" onDisplayLinkChange={changed} />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacing the venue board link' }));
+    view.rerender(<SharingTab tid="t2" onDisplayLinkChange={changed} />);
+    await screen.findByText(/The existing link still works/);
+    await act(async () => finish({ token: 'late-old-workspace', url: '/display?token=late-old-workspace', expiresAt: '2099-01-01T00:00:00Z' }));
+    expect(screen.queryByLabelText('New venue board link')).toBeNull();
+    expect(changed).not.toHaveBeenCalledWith(expect.objectContaining({ tid: 't1' }));
+  });
+
+  it('does not carry replacement confirmation into another workspace', async () => {
+    const view = render(<SharingTab tid="t1" />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    view.rerender(<SharingTab tid="t2" />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Confirm replacing the venue board link' })).toBeInTheDocument();
+  });
+
+  it('retries a failed metadata read without issuing a link', async () => {
+    vi.mocked(apiClient.getDisplayToken).mockRejectedValueOnce(new Error('network'));
+    render(<SharingTab tid="t1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry board link' }));
+    await screen.findByText(/The existing link still works/);
+    expect(apiClient.getDisplayToken).toHaveBeenCalledTimes(2);
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
   });
 
   /* Rotate revokes the LIVE venue display link on the spot: mid-event, the
@@ -88,12 +153,12 @@ describe('SharingTab', () => {
   it('Rotate link does NOT rotate on the first click: it arms', async () => {
     render(<SharingTab tid="t1" />);
     const link = await screen.findByTestId('display-link-label');
-    await waitFor(() => expect(link.getAttribute('title')).toContain('tok-abc'));
+    await waitFor(() => expect(link.textContent).toContain('Venue board'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
 
     expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
-    expect(link.getAttribute('title')).toContain('tok-abc');
+    expect(link).not.toHaveAttribute('title');
     // Armed state names the consequence rather than repeating the label.
     expect(
       screen.getByRole('button', { name: 'Confirm replacing the venue board link' }),
@@ -103,7 +168,7 @@ describe('SharingTab', () => {
   it('Rotate link swaps in the new token on the confirming second click', async () => {
     render(<SharingTab tid="t1" />);
     const link = await screen.findByTestId('display-link-label');
-    await waitFor(() => expect(link.getAttribute('title')).toContain('tok-abc'));
+    await waitFor(() => expect(link.textContent).toContain('Venue board'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
     fireEvent.click(
@@ -111,15 +176,28 @@ describe('SharingTab', () => {
     );
 
     await waitFor(() => expect(link.getAttribute('title')).toContain('/display?token=tok-new'));
-    expect(apiClient.rotateDisplayToken).toHaveBeenCalledWith('t1');
+    expect(apiClient.rotateDisplayToken).toHaveBeenCalledWith('t1', undefined);
+  });
+
+  it('a cancelled verification leaves the link untouched and says so', async () => {
+    vi.mocked(apiClient.rotateDisplayToken).mockRejectedValue(
+      Object.assign(new Error('cancelled'), { code: 'AUTH_REAUTH_CANCELLED' }),
+    );
+    render(<SharingTab tid="t1" />);
+    const link = await screen.findByTestId('display-link-label');
+    await waitFor(() => expect(link.textContent).toContain('Venue board'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacing the venue board link' }));
+    expect(await screen.findByText('Board link unchanged: verification was cancelled.')).toBeInTheDocument();
+    expect(screen.queryByText(/could not be confirmed/)).not.toBeInTheDocument();
   });
 
   it('Escape disarms a Rotate armed by mistake', async () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        screen.getByTestId('display-link-label').getAttribute('title'),
-      ).toContain('tok-abc'),
+        screen.getByTestId('display-link-label').textContent,
+      ).toContain('Venue board'),
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
@@ -135,13 +213,16 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        screen.getByTestId('display-link-label').getAttribute('title'),
-      ).toContain('tok-abc'),
+        screen.getByTestId('display-link-label').textContent,
+      ).toContain('Venue board'),
     );
 
     // Copy and Open fullscreen share a parent with the link input. Rotate must
     // not: a destructive control 24px from two read-only ones, styled the same,
     // is the misclick this separation exists to prevent.
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacing the venue board link' }));
+    await screen.findByLabelText('New venue board link');
     const safeRow = screen.getByRole('button', { name: 'Copy' }).parentElement!;
     expect(within(safeRow).getByRole('button', { name: 'Open fullscreen' })).toBeInTheDocument();
     expect(
@@ -156,8 +237,8 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        screen.getByTestId('display-link-label').getAttribute('title'),
-      ).toContain('tok-abc'),
+        screen.getByTestId('display-link-label').textContent,
+      ).toContain('Venue board'),
     );
     const replaceButton = screen.getByRole('button', { name: 'Replace the venue board link' });
     expect(replaceButton.parentElement).toHaveTextContent(
@@ -226,8 +307,8 @@ describe('SharingTab', () => {
 
   it('renders the recipient email on invite rows that carry one', async () => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([
-      { token: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true, email: 'coach@club.org' },
-      { token: 'b', tournamentId: 't1', role: 'viewer', createdAt: '', expiresAt: null, revokedAt: null, valid: true, email: null },
+      { id: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true, email: 'coach@club.org' },
+      { id: 'b', tournamentId: 't1', role: 'viewer', createdAt: '', expiresAt: null, revokedAt: null, valid: true, email: null },
     ] as never);
     render(<SharingTab tid="t1" />);
     const row = await screen.findByTestId('invite-a');
@@ -235,10 +316,62 @@ describe('SharingTab', () => {
     expect(screen.getByTestId('invite-b')).not.toHaveTextContent('@');
   });
 
+  it('shows and copies a newly issued link even when the list refresh fails, then forgets it on remount', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const view = render(<SharingTab tid="t1" scope="team" />);
+    await screen.findByText('No invitations sent yet.');
+    vi.mocked(apiClient.listInvites).mockRejectedValue(new Error('refresh failed'));
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+    const link = await screen.findByLabelText('New invitation link');
+    expect(link).toHaveValue(`${window.location.origin}/invite/new`);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy invitation link' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/invite/new`));
+    await screen.findByTestId('invites-load-error');
+    expect(link).toBeInTheDocument();
+    view.unmount();
+    vi.mocked(apiClient.listInvites).mockResolvedValue([
+      { id: 'new-id', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true },
+    ]);
+    render(<SharingTab tid="t1" scope="team" />);
+    const row = await screen.findByTestId('invite-new-id');
+    expect(screen.queryByLabelText('New invitation link')).toBeNull();
+    expect(within(row).queryByRole('button', { name: /copy/i })).toBeNull();
+    expect(within(row).getByRole('button', { name: 'Revoke' })).toBeEnabled();
+  });
+
+  it('forgets the issued link when changing workspaces', async () => {
+    const view = render(<SharingTab tid="t1" scope="team" />);
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+    await screen.findByLabelText('New invitation link');
+    view.rerender(<SharingTab tid="t2" scope="team" />);
+    expect(screen.queryByLabelText('New invitation link')).toBeNull();
+    view.rerender(<SharingTab tid="t1" scope="team" />);
+    expect(screen.queryByLabelText('New invitation link')).toBeNull();
+  });
+
+  it('discards a late issuance response after leaving its workspace', async () => {
+    let issue!: (value: Awaited<ReturnType<typeof apiClient.createInvite>>) => void;
+    vi.mocked(apiClient.createInvite).mockReturnValue(new Promise((resolve) => { issue = resolve; }));
+    const view = render(<SharingTab tid="t1" scope="team" />);
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+    view.rerender(<SharingTab tid="t2" scope="team" />);
+    await act(async () => {
+      issue({ id: 'late-id', token: 'late-secret', url: '/invite/late-secret', tournamentId: 't1', role: 'viewer', createdAt: '' });
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create share link' })).toBeEnabled());
+    view.rerender(<SharingTab tid="t1" scope="team" />);
+    expect(screen.queryByLabelText('New invitation link')).toBeNull();
+    expect(apiClient.listInvites).toHaveBeenCalledTimes(3);
+  });
+
   it('active invite shows Revoke (calls revokeInvite); revoked invite shows none', async () => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([
-      { token: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true },
-      { token: 'b', tournamentId: 't1', role: 'viewer', createdAt: '', expiresAt: null, revokedAt: '2020-01-01T00:00:00Z', valid: false },
+      { id: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true },
+      { id: 'b', tournamentId: 't1', role: 'viewer', createdAt: '', expiresAt: null, revokedAt: '2020-01-01T00:00:00Z', valid: false },
     ] as never);
     render(<SharingTab tid="t1" />);
     await waitFor(() => expect(screen.getByTestId('invite-a')).toBeInTheDocument());
@@ -247,6 +380,20 @@ describe('SharingTab', () => {
     expect(
       within(screen.getByTestId('invite-b')).queryByRole('button', { name: 'Revoke' }),
     ).toBeNull();
+  });
+
+  it('does not reload an old workspace after a late revocation response', async () => {
+    let finish!: () => void;
+    vi.mocked(apiClient.revokeInvite).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    vi.mocked(apiClient.listInvites).mockResolvedValueOnce([
+      { id: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true },
+    ]).mockResolvedValue([]);
+    const view = render(<SharingTab tid="t1" scope="team" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
+    view.rerender(<SharingTab tid="t2" scope="team" />);
+    await act(async () => { finish(); });
+    expect(apiClient.listInvites).toHaveBeenCalledTimes(2);
+    expect(apiClient.listInvites).toHaveBeenLastCalledWith('t2');
   });
 });
 
@@ -259,8 +406,7 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
   beforeEach(() => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
-      token: 'tok-abc',
-      url: '/display?token=tok-abc',
+      active: true, expiresAt: '2099-01-01T00:00:00Z', defaultExpiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.getEntryPage).mockRejectedValue(
       Object.assign(new Error('404'), { response: { status: 404 } }),
@@ -327,8 +473,7 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
 describe('SharingTab — a failed read is not an empty invite list', () => {
   beforeEach(() => {
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
-      token: 'tok-abc',
-      url: '/display?token=tok-abc',
+      active: true, expiresAt: '2099-01-01T00:00:00Z', defaultExpiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.getEntryPage).mockRejectedValue(
       Object.assign(new Error('404'), { response: { status: 404 } }),
@@ -405,8 +550,7 @@ describe('V3-OC25.1: invitation mode matches what the server actually does', () 
   beforeEach(() => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
-      token: 'tok-abc',
-      url: '/display?token=tok-abc',
+      active: true, expiresAt: '2099-01-01T00:00:00Z', defaultExpiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.getEntryPage).mockRejectedValue(
       Object.assign(new Error('404'), { response: { status: 404 } }),

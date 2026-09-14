@@ -407,7 +407,7 @@ class PublicationDTO(BaseModel):
 
 class PolicyDTO(BaseModel):
     maxEventsPerPerson: Optional[int] = None
-    disciplineCaps: Optional[dict] = None
+    disciplineCaps: Optional[Dict[str, int]] = None
     collectPhone: bool = False
     waiverRequired: bool = False
 

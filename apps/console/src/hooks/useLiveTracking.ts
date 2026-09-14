@@ -1,3 +1,4 @@
+import { useSessionRevision } from './useSessionRevision';
 /**
  * Hook for live tracking page logic.
  *
@@ -55,6 +56,7 @@ export function useLiveTracking() {
   // useTournamentId() variant. With no id at all (e.g. /display
   // opened without a query string) every server call below no-ops.
   const routeTid = useTournamentIdOrNull();
+  const sessionRevision = useSessionRevision();
   const [searchParams] = useSearchParams();
   const tid = routeTid ?? searchParams.get('id') ?? '';
   // Public display capability link (SP-CLOUD-2): with no tournament id but a
@@ -129,6 +131,13 @@ export function useLiveTracking() {
   useEffect(() => {
     loadMatchStates();
   }, [loadMatchStates]);
+
+  useEffect(() => {
+    if (sessionRevision > 0 && tid) {
+      setTerminalFor(null);
+      void loadMatchStates();
+    }
+  }, [sessionRevision, tid, loadMatchStates]);
 
   useEffect(() => {
     // Nothing to wait for: this source can never answer. Don't even arm the

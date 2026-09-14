@@ -12,10 +12,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import time
 from pathlib import Path
 
 from tournament_sim.client import SimClient
+from tournament_sim.mailbox import wait_for_token
 from tournament_sim.demo_data import WORKSPACES, make_meet_blob
 
 MEET_SPEC = next(spec for spec in WORKSPACES if spec["key"] == "fk-junior-league")
@@ -31,35 +31,12 @@ PARTNER_RE = re.compile(r"/e/partner/([A-Za-z0-9_-]+)")
 RESET_RE = re.compile(r"/e/reset\?token=([A-Za-z0-9_-]+)")
 
 
-def _mail_token(api_log: Path, email: str, pattern: re.Pattern[str]) -> str | None:
-    if not api_log.exists():
-        return None
-    text = api_log.read_text(encoding="utf-8", errors="replace")
-    blocks = re.split(r"(?=email \(console backend\))", text)
-    for block in reversed(blocks):
-        if f"To: {email}" not in block:
-            continue
-        match = pattern.search(block)
-        if match:
-            return match.group(1)
-    return None
-
-
-def _wait_mail_token(api_log: Path, email: str, pattern: re.Pattern[str]) -> str:
-    for _ in range(30):
-        token = _mail_token(api_log, email, pattern)
-        if token:
-            return token
-        time.sleep(0.1)
-    raise SystemExit(f"no mailed token for {email} in {api_log}")
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True)
-    parser.add_argument("--api-log", type=Path, required=True)
+    parser.add_argument("--mailbox-url", required=True)
     args = parser.parse_args()
 
     seed_manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
@@ -127,7 +104,7 @@ def main() -> int:
             entrant.entrant_login(FEATURED_EMAIL, FEATURED_PASSWORD)
             account = entrant.entrant_me()
             if not account.get("emailVerified", False):
-                token = _wait_mail_token(args.api_log, FEATURED_EMAIL, TOKEN_RE)
+                token = wait_for_token(args.mailbox_url, FEATURED_EMAIL, TOKEN_RE)
                 entrant._prove_csrf()  # noqa: SLF001 — cookie write mirrors a browser form
                 entrant.request("POST", "/e/account/verify", json={"token": token}, expect={204})
             # Keep a real, single-use reset token for the reset form capture.
@@ -141,7 +118,7 @@ def main() -> int:
                     json={"email": FEATURED_EMAIL},
                     expect={202},
                 )
-                fixture["resetToken"] = _wait_mail_token(args.api_log, FEATURED_EMAIL, RESET_RE)
+                fixture["resetToken"] = wait_for_token(args.mailbox_url, FEATURED_EMAIL, RESET_RE)
             if not fixture.get("submissionId") or not fixture.get("partnerToken"):
                 page = entrant.entry_page_projection(fixture["koreaSlug"]).json()
                 event = next(item for item in page.get("events", []) if item.get("code") == "XD")
@@ -160,8 +137,8 @@ def main() -> int:
                 if receipt_match is None:
                     raise SystemExit(f"entry submission did not return a receipt: {location!r}")
                 fixture["submissionId"] = receipt_match.group(1)
-                fixture["partnerToken"] = _wait_mail_token(
-                    args.api_log, "featured.doubles@players.example.test", PARTNER_RE
+                fixture["partnerToken"] = wait_for_token(
+                    args.mailbox_url, "featured.doubles@players.example.test", PARTNER_RE
                 )
         finally:
             entrant.close()

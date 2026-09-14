@@ -37,6 +37,9 @@ def _wait_for_schema(timeout_seconds: float = 120.0) -> bool:
     from db.session import SessionLocal
 
     log = logging.getLogger("scheduler.worker")
+    from core.log_redaction import install_log_redaction
+
+    install_log_redaction()
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         session = SessionLocal()

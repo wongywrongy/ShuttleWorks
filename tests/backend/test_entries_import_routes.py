@@ -268,7 +268,7 @@ def test_import_is_operator_only_and_csrf_protected(tmp_path, monkeypatch):
         f"/tournaments/{tid}/entries/import",
         json=_body(tid, event_id, account_id, key="viewer-key"),
     )
-    assert viewer.status_code == 403
+    assert viewer.status_code == 404
 
     # Restore operator membership so the request reaches the route's global
     # cookie-write CSRF guard in a future configuration where local bootstrap

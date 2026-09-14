@@ -389,9 +389,15 @@ def test_entrants_toggle_gates_the_directory_list_not_draw_names(client, matrix_
 @pytest.mark.parametrize("draws_on", [False, True])
 def test_draws_toggle_gates_the_draw_index(client, matrix_workspace, draws_on):
     _set_flags(matrix_workspace["tid"], draws_published=draws_on)
-    body = client.get(f"/e/api/page/{matrix_workspace['slug']}/draws").json()
-    assert body["published"] is draws_on
-    assert (len(body["draws"]) > 0) is draws_on
+    response = client.get(f"/e/api/page/{matrix_workspace['slug']}/draws")
+    if draws_on:
+        assert response.status_code == 200
+        assert response.json()["published"] is True
+        assert response.json()["draws"]
+    else:
+        missing = client.get("/e/api/page/missing-workspace/draws")
+        assert response.status_code == missing.status_code == 404
+        assert response.content == missing.content
 
 
 @pytest.mark.parametrize("results_on", [False, True])
@@ -447,7 +453,8 @@ def test_no_restricted_person_fields_leak_anywhere(client, matrix_workspace):
 
 def test_no_restricted_fields_in_display_projection(client, matrix_workspace):
     tid = matrix_workspace["tid"]
-    token = client.get(f"/tournaments/{tid}/display-token").json()["token"]
+    from tests.backend.test_display_public import issue_display
+    token = issue_display(client, tid)
     for path in (f"/display/{token}/summary", f"/display/{token}/bracket"):
         r = client.get(path)
         assert r.status_code == 200, (path, r.text)

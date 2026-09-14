@@ -110,7 +110,7 @@ module router:
 | State + backups | `GET/PUT /tournaments/{id}/state`, `…/state/backups`, `…/state/backup`, `…/state/restore/{filename}` |
 | Module catalog | `GET /tournaments/{id}/modules`, `PATCH …/modules/{moduleId}` |
 | Collaboration | `GET …/members`, `POST …/invites` (link or email invites), and the public `/invites/{token}*` lookup/accept/delete |
-| Display link | `GET /tournaments/{id}/display-token` · `POST …/display-token/rotate` (owner-gated; see [Display](/reference/modules/display)) |
+| Display link | Owner `GET /tournaments/{id}/display-token` reads status only; `POST …/display-token/rotate` issues once with expiry; `DELETE …/display-token` revokes (see [Display](/reference/modules/display)) |
 
 See the [API reference](/reference/api/) for the full endpoint list and the
 [Workspace model](/explanation/architecture/workspace-model) for the module catalog's rules.

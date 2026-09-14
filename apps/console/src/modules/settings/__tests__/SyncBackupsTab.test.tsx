@@ -21,7 +21,7 @@ function setHook(over: Partial<ReturnType<typeof useTournamentBackups>> = {}) {
     restoreBackup,
     deleteBackup,
     inspectBackup,
-    downloadUrl: (f: string) => `/api/tournaments/t1/state/backups/${f}`,
+    downloadBackup: vi.fn().mockResolvedValue(undefined),
     ...over,
   });
 }

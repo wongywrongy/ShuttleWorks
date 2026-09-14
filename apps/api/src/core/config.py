@@ -97,7 +97,8 @@ class Settings(BaseSettings):
     sync_poll_interval_seconds: float = 2.0
     sync_batch_size: int = 100
     # Cloud signs authority grants with Ed25519.  The private key is only
-    # read by the cloud API; event nodes configure the matching public key.
+    # read by the cloud API; event nodes configure a public key or a bounded
+    # PEM trust bundle containing overlapping rotation keys.
     authority_signing_key_file: str = Field(
         default="",
         validation_alias=AliasChoices(
@@ -136,7 +137,12 @@ class Settings(BaseSettings):
     # `worker.py` sets this itself before importing config, so the
     # compose file does not have to; setting it explicitly is supported
     # and preferred for clarity.
-    process_role: str = "api"  # api | worker
+    #
+    # `admin` is for host-run administrator tools (for example
+    # tools/node-operator-enrollment.py). They open the database and
+    # nothing else, so every custody validator below skips them: they
+    # must not demand an MFA key ring they never read.
+    process_role: str = "api"  # api | worker | sync | admin
 
     # ---- Network ------------------------------------------------------
     # ``host``/``port`` are used by the ``python -m core.main`` entry
@@ -266,7 +272,8 @@ class Settings(BaseSettings):
     # without a valid session cookie is 401. Explicit mode beats the old
     # implicit blank-secret keying it replaced.
     auth_mode: str = "local"  # local | cloud
-    session_ttl_days: float = 30.0
+    session_ttl_days: float = Field(default=0.5, gt=0, le=0.5)
+    mfa_keyring_file: str = ""
     session_cookie_name: str = "sw_session"
     offline_session_cookie_name: str = "sw_offline_operator"
     # Secure flag on the session cookie. Default off so plain-HTTP local
@@ -318,7 +325,7 @@ class Settings(BaseSettings):
     # Password-reset token lifetime (delivery rides the email seam).
     reset_token_ttl_minutes: float = 60.0
     # ---- Email seam (SP-CLOUD-2 Phase 3) ------------------------------
-    # console = log the message (local default, tests); smtp = generic
+    # console = record skipped delivery without message fields; smtp = generic
     # SMTP (cloud). No provider SDKs — Rule 3 keeps local offline.
     email_backend: str = "console"  # console | smtp
     smtp_host: str = ""
@@ -335,7 +342,8 @@ class Settings(BaseSettings):
     # entry surface composes its links from here too rather than growing a
     # second, subtly different origin setting.
     public_app_origin: str = ""
-    # Cloud email invites expire; local link invites may be eternal.
+    # Entrant partner nominations use this lifetime. Staff workspace invites
+    # have the fixed seven-day policy in core.capability_policy.
     invite_ttl_days: float = 14.0
 
     # ---- Entries: public write surface (SP-E1-1) -----------------------
@@ -586,12 +594,9 @@ class Settings(BaseSettings):
             missing.append("AUTH_MODE=cloud (real accounts required)")
         if not self.session_cookie_secure:
             missing.append("SESSION_COOKIE_SECURE=true (HTTPS-only cookies)")
-        # The console email backend writes full messages — including
-        # raw reset/invite tokens — into the log stream. Fine locally;
-        # in a real cloud deployment that is credential leakage plus
-        # silent non-delivery, so refuse to start without SMTP.
+        # Console mode never delivers mail, so cloud startup requires SMTP.
         if self.email_backend != "smtp":
-            missing.append("EMAIL_BACKEND=smtp (console would log live tokens)")
+            missing.append("EMAIL_BACKEND=smtp (console does not deliver mail)")
         elif not self.smtp_host:
             missing.append("SMTP_HOST")
         # A cloud API is behind an ingress, and an ingress publishes a
@@ -623,6 +628,39 @@ class Settings(BaseSettings):
                 + ", ".join(missing)
                 + ". Set these via your deployment host's secret manager."
             )
+        return self
+
+    @property
+    def operator_mfa_required(self) -> bool:
+        return (self.auth_mode == "cloud" or self.environment == "cloud"
+                or self.deployment_profile in {"cloud", "event_node"})
+
+    @property
+    def operator_mfa_scope(self) -> str:
+        if self.deployment_profile != "event_node":
+            return "cloud"
+        import uuid
+        return f"node:{uuid.UUID(self.node_id)}"
+
+    @model_validator(mode="after")
+    def _enforce_mfa_key_custody(self) -> "Settings":
+        if self.auth_mode not in {"local", "cloud"}:
+            raise ValueError("AUTH_MODE must be local or cloud")
+        if self.process_role != "api":
+            return self
+        if self.deployment_profile == "event_node":
+            try:
+                self.operator_mfa_scope
+            except ValueError:
+                raise ValueError("Event-node operator authentication requires a valid NODE_ID") from None
+        if self.operator_mfa_required and not self.mfa_keyring_file:
+            raise ValueError("MFA_KEYRING_FILE is required for operator authentication")
+        if self.mfa_keyring_file:
+            from core.secret_keys import SecretKeyringError, read_secret_keyring
+            try:
+                read_secret_keyring(self.mfa_keyring_file)
+            except SecretKeyringError:
+                raise ValueError("MFA_KEYRING_FILE must contain a valid private encryption key ring") from None
         return self
 
     @property
@@ -731,6 +769,7 @@ class Settings(BaseSettings):
         return (*self.session_cookie_names, PLAY_CSRF_COOKIE)
 
     model_config = SettingsConfigDict(
+        hide_input_in_errors=True,
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,

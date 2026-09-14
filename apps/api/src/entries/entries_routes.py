@@ -247,7 +247,7 @@ class EntryImportPlayerDTO(StrictModel):
     birthYear: Optional[int] = Field(None, ge=1900, le=2200)
     remarks: Optional[Notes] = None
     eventIds: List[uuid.UUID] = Field(..., min_length=1, max_length=MAX_EVENTS)
-    partners: Dict[str, str] = Field(default_factory=dict, max_length=MAX_EVENTS)
+    partners: Dict[Identifier, Identifier] = Field(default_factory=dict, max_length=MAX_EVENTS)
 
 
 class EntryImportSubmissionDTO(StrictModel):

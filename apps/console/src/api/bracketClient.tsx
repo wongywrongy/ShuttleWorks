@@ -88,9 +88,6 @@ export interface BracketApi {
     text: string,
     params: BracketImportCsvParams,
   ) => Promise<BracketTournamentDTO>;
-  exportJsonUrl: () => string;
-  exportCsvUrl: () => string;
-  exportIcsUrl: () => string;
   eventUpsert: (eventId: string, body: BracketEventUpsertIn) => Promise<BracketTournamentDTO>;
   eventGenerate: (eventId: string, body: BracketEventGenerateIn) => Promise<BracketTournamentDTO>;
   /** Draft-only per-draw config edit — never touches participants. */
@@ -168,9 +165,6 @@ export function BracketApiProvider({
       importCsv: guardMutation((text, params) =>
         apiClient.importBracketCsv(tournamentId, text, params),
       ),
-      exportJsonUrl: () => apiClient.bracketExportJsonUrl(tournamentId),
-      exportCsvUrl: () => apiClient.bracketExportCsvUrl(tournamentId),
-      exportIcsUrl: () => apiClient.bracketExportIcsUrl(tournamentId),
       eventUpsert: guardMutation((eventId, body) =>
         apiClient.bracketEventUpsert(tournamentId, eventId, body),
       ),

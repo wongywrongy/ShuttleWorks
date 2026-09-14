@@ -25,7 +25,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('../../../api/client', () => ({
-  apiClient: { getDisplayToken: vi.fn().mockResolvedValue({ token: 'tok', url: '/display?token=tok' }) },
+  apiClient: { getDisplayToken: vi.fn().mockResolvedValue({ active: true, expiresAt: '2099-01-01T00:00:00Z', defaultExpiresAt: null }) },
 }));
 
 const signals = (over: Partial<WorkspaceSignalsDTO> = {}): WorkspaceSignalsDTO => ({

@@ -223,8 +223,8 @@ def _generate_draw(
 class ParticipantIn(StrictModel):
     id: Identifier
     name: Name
-    members: Optional[List[str]] = Field(
-        None,
+    members: Optional[List[Identifier]] = Field(
+        None, max_length=MAX_SIDE_MEMBERS,
         description=(
             "If present, this participant is a TEAM and these are the "
             "individual player ids (e.g. doubles pair)."
@@ -241,7 +241,7 @@ class ParticipantIn(StrictModel):
     # ``toUpsertParticipant``). StrictModel forbids extras, so a field on
     # ``ParticipantOut`` that is missing here makes the echo a 422 - or, if
     # the client strips it, silently erases the key on every roster edit.
-    entryPlayerId: Optional[str] = None
+    entryPlayerId: Optional[Identifier] = None
     # P6's cross-tournament identity for an IMPORTED person, the same pair
     # ``BracketPlayerDTO`` carries on the roster row: ``personId`` is the
     # source dataset's own player id and ``personSource`` names where it
@@ -557,7 +557,7 @@ class BracketClearCourtIn(StrictModel):
 class EventUpsertIn(StrictModel):
     """Body of POST /bracket/events/{event_id} — upsert one event."""
 
-    discipline: str
+    discipline: Code
     format: FormatId = "se"
     bracket_size: Optional[int] = None
     seeded_count: int = 0
@@ -637,7 +637,7 @@ class ImportEventIn(StrictModel):
     record_scope: Literal["full_draw", "completed_matches_only", "finals_only"] = "full_draw"
     historical: bool = False
     advertised_size: Optional[int] = Field(None, ge=2, le=MAX_PLAYERS)
-    round_labels: Optional[List[str]] = Field(None, max_length=MAX_ROUNDS)
+    round_labels: Optional[List[Name]] = Field(None, max_length=MAX_ROUNDS)
     round_codes: Optional[List[Code]] = Field(None, max_length=MAX_ROUNDS)
     topology_scope: Optional[Literal["none", "proven_winner_advancement"]] = None
     topology_edge_count: Optional[int] = Field(None, ge=0, le=MAX_MATCHES)
@@ -3579,7 +3579,7 @@ async def import_tournament_csv(
     return _serialize_session(_hydrate_session(repo, tournament_id))
 
 
-@router.get("/export.json", response_model=TournamentOut, dependencies=[_VIEWER])
+@router.get("/export.json", response_model=TournamentOut, dependencies=[Depends(require_tournament_access("viewer", fresh=True))])
 def export_tournament_json(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
@@ -3595,7 +3595,7 @@ def export_tournament_json(
 @router.get(
     "/export.csv",
     response_class=PlainTextResponse,
-    dependencies=[_VIEWER],
+    dependencies=[Depends(require_tournament_access("viewer", fresh=True))],
 )
 def export_tournament_csv(
     tournament_id: uuid.UUID = Path(...),
@@ -3617,7 +3617,7 @@ def export_tournament_csv(
 @router.get(
     "/export.ics",
     response_class=PlainTextResponse,
-    dependencies=[_VIEWER],
+    dependencies=[Depends(require_tournament_access("viewer", fresh=True))],
 )
 def export_tournament_ics(
     tournament_id: uuid.UUID = Path(...),

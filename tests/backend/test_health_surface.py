@@ -71,8 +71,7 @@ def test_liveness_is_dependency_free(client):
     r = client.get("/health")
     assert r.status_code == 200
     body = r.json()
-    assert body["status"] == "healthy"
-    assert body["role"] == "api"
+    assert body == {"status": "healthy"}
 
 
 # ---- Readiness -------------------------------------------------------

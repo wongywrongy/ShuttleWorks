@@ -11,6 +11,16 @@ credentials, browser storage is never authoritative, telemetry is never part
 of command success, and neither a reachable LAN nor possession of a public
 display URL grants operator authority.
 
+Cloud and node operators complete app-owned MFA. Password-stage cookies cannot
+operate a workspace. Each node operator enrolls a separate password and factor
+using a private, one-use activation credential issued by a trusted local OS
+administrator; the shared authority capability cannot establish an individual.
+Operator sessions have a twelve-hour absolute limit and a one-hour idle limit;
+sensitive actions require proof within five minutes. Password changes, reset and
+MFA grants serialize on the account so concurrent grants cannot escape revocation.
+The [security operations runbook](../how-to/security-operations.md) describes key
+custody and audited local recovery, including outstanding operational rehearsals.
+
 Each threat names its STRIDE category, severity, repository controls,
 executable evidence, owner, and residual risk. A `critical` or `high` item may
 ship only when it is mitigated or the named owner records an explicit release
@@ -41,3 +51,10 @@ boundary changes. CI checks its coverage and verifies that every entry has an
 owner and executable or inspectable evidence. That check does not replace a
 penetration test, hostile-LAN exercise, live-event rehearsal, or production
 risk review; those remain Phase 5 exit criteria.
+
+The register's `principles` array tracks exactly R1–R12 with `enforcedBy` and
+`evidence` paths, owner, dated review, verdict and residual debt. CI rejects
+missing/duplicate rules, malformed evidence and unsupported PASS claims. The
+[baseline review](../reviews/security-golden-rules-2026-09-13.md) is preserved;
+the [implementation review](../reviews/security-remediation-2026-09-13.md) records
+later changes and distinguishes synthetic checks from operational rehearsals.

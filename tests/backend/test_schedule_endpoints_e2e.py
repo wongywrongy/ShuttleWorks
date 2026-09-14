@@ -246,7 +246,7 @@ def test_job_list_and_scoping(client):
     # Cross-tournament access to the job id 404s.
     r = client.get(f"/tournaments/{other_tid}/solve-jobs/{job_id}")
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "SOLVE_JOB_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_repair_validates_disruption_payload(client):

@@ -77,10 +77,35 @@ def test_create_invite_returns_token_and_url(client, tid):
     assert body["tournamentId"] == tid
 
 
+def test_invitation_bearer_is_hashed_and_only_disclosed_at_issue(client, tid):
+    from sqlalchemy import select
+    from hashlib import sha256
+    from db.models import InviteLink
+    from db.session import SessionLocal
+
+    issued = client.post(f"/tournaments/{tid}/invites", json={"role": "viewer"}).json()
+    token = issued["token"]
+    with SessionLocal() as session:
+        row = session.scalar(select(InviteLink).where(InviteLink.tournament_id == uuid.UUID(tid)))
+        assert str(row.id) != token
+        assert row.token_hash == sha256(token.encode()).hexdigest()
+        assert token not in repr({column.name: getattr(row, column.name) for column in row.__table__.columns})
+    listing = client.get(f"/tournaments/{tid}/invites")
+    assert listing.json()[0]["id"] == issued["id"]
+    assert not {"token", "token_hash", "url"}.intersection(listing.json()[0])
+    assert token not in listing.text
+    assert token not in client.get(f"/invites/{token}").text
+    # A leaked management identifier cannot resolve or grant membership.
+    assert client.get(f"/invites/{issued['id']}").status_code == 404
+    assert client.post(f"/invites/{issued['id']}/accept").status_code == 404
+    assert client.delete(f"/invites/{issued['id']}").status_code == 204
+    assert client.get(f"/invites/{token}").status_code == 404
+
+
 def test_create_invite_requires_owner(client, tid):
     _set_role("operator", tid)
     r = client.post(f"/tournaments/{tid}/invites", json={"role": "viewer"})
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 def test_create_invite_rejects_owner_role(client, tid):
@@ -94,12 +119,12 @@ def test_create_invite_rejects_owner_role(client, tid):
 
 
 def test_list_invites_returns_active_and_revoked(client, tid):
-    t1 = client.post(f"/tournaments/{tid}/invites", json={"role": "viewer"}).json()["token"]
-    t2 = client.post(f"/tournaments/{tid}/invites", json={"role": "operator"}).json()["token"]
+    t1 = client.post(f"/tournaments/{tid}/invites", json={"role": "viewer"}).json()["id"]
+    t2 = client.post(f"/tournaments/{tid}/invites", json={"role": "operator"}).json()["id"]
     client.delete(f"/invites/{t1}")
 
     listing = client.get(f"/tournaments/{tid}/invites").json()
-    by_token = {entry["token"]: entry for entry in listing}
+    by_token = {entry["id"]: entry for entry in listing}
     assert by_token[t1]["valid"] is False  # revoked
     assert by_token[t1]["revokedAt"] is not None
     assert by_token[t2]["valid"] is True
@@ -108,7 +133,7 @@ def test_list_invites_returns_active_and_revoked(client, tid):
 def test_list_invites_requires_owner(client, tid):
     _set_role("viewer", tid)
     r = client.get(f"/tournaments/{tid}/invites")
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 def test_list_members_includes_owner(client, tid):
@@ -138,7 +163,7 @@ def test_resolve_returns_tournament_name_and_role(client, tid):
     r = client.get(f"/invites/{token}")
     assert r.status_code == 200
     body = r.json()
-    assert body["token"] == token
+    assert "token" not in body
     assert body["tournamentId"] == tid
     assert body["tournamentName"] == "T1"
     assert body["role"] == "operator"
@@ -158,7 +183,7 @@ def test_resolve_revoked_is_not_resolvable(client, tid):
     client.delete(f"/invites/{token}")
     r = client.get(f"/invites/{token}")
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "INVITE_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_resolve_expired_is_not_resolvable(client, tid):
@@ -171,12 +196,12 @@ def test_resolve_expired_is_not_resolvable(client, tid):
         f"/tournaments/{tid}/invites", json={"role": "viewer"},
     ).json()["token"]
 
-    from db.models import InviteLink
+    from repositories.local import LocalRepository
     from db.session import SessionLocal
 
     session = SessionLocal()
     try:
-        row = session.get(InviteLink, uuid.UUID(token))
+        row = LocalRepository(session).invite_links.get(uuid.UUID(token))
         row.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
         session.commit()
     finally:
@@ -184,7 +209,7 @@ def test_resolve_expired_is_not_resolvable(client, tid):
 
     r = client.get(f"/invites/{token}")
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "INVITE_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_resolve_unknown_token_returns_404(client):
@@ -260,7 +285,7 @@ def test_accept_rejects_revoked_invite(client, tid):
 
     r = client.post(f"/invites/{token}/accept")
     assert r.status_code == 404
-    assert r.json()["detail"]["code"] == "INVITE_NOT_FOUND"
+    assert r.json()["detail"]["code"] == "TOURNAMENT_NOT_FOUND"
 
 
 def test_accept_unknown_token_returns_404(client):
@@ -298,7 +323,7 @@ def test_revoke_requires_owner(client, tid):
     ).json()["token"]
     _set_role("operator", tid)
     r = client.delete(f"/invites/{token}")
-    assert r.status_code == 403
+    assert r.status_code == 404
 
 
 def test_revoke_unknown_token_returns_404(client):

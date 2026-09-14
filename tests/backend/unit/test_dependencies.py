@@ -70,6 +70,13 @@ def test_event_node_never_falls_back_to_anonymous_local_bootstrap(client, monkey
     assert client.get("/auth/me").status_code == 401
 
 
+def test_cloud_profile_never_falls_back_to_local_bootstrap(client, monkeypatch):
+    import core.dependencies as deps
+    monkeypatch.setattr(deps.settings, "deployment_profile", "cloud")
+    assert client.get("/auth/me").status_code == 401
+    assert client.get("/tournaments").status_code == 401
+
+
 def test_cloud_mode_dead_cookie_is_401(client, monkeypatch):
     import core.dependencies as deps
 

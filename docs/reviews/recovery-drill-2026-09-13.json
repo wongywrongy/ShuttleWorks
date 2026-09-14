@@ -1,0 +1,17 @@
+{
+  "runAt": "2026-09-13T06:25:34.075696+00:00",
+  "scope": "synthetic-sqlite",
+  "result": "PASS",
+  "checks": {
+    "isolatedRestore": "PASS",
+    "snapshotDigest": "PASS",
+    "sqliteIntegrity": "PASS",
+    "wrongPassphrase": "PASS",
+    "modifiedCiphertext": "PASS",
+    "temporaryDataRemoved": "PASS"
+  },
+  "bundleImplementationSha256": "7ae983931469ad070d4ed75c08e3f077083f9a89372f29df1f7e24786a3d470e",
+  "databaseBytes": 8192,
+  "elapsedSeconds": 0.309,
+  "drillImplementationSha256": "9756d5b8bb432831e40aa7f168bfea071ab67c07d56155a97a0eec57e594ae15"
+}

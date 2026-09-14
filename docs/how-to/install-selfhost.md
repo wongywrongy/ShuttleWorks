@@ -30,9 +30,8 @@ instead — this guide is strictly more complexity.
 
 - Ubuntu 24.04 with Docker Engine and the Compose plugin
 - A domain on Cloudflare (any plan, including free)
-- An SMTP account — cloud mode refuses to start without one, because the
-  console email backend would write live invite and password-reset tokens into
-  the log stream
+- An SMTP account — cloud mode refuses to start without mail delivery;
+  the local console backend only records that delivery was skipped
 - Tailscale (or equivalent) if a second machine will run workers
 
 ## 1. Directory layout
@@ -50,7 +49,7 @@ aimed at the homelab, should not be able to reach the product's database.
 
 ## 2. Secrets
 
-Three files, never committed (`secrets/` is gitignored):
+Four files, never committed (`secrets/` is gitignored):
 
 ```bash
 cd /opt/ShuttleWorks
@@ -67,7 +66,17 @@ openssl rand -hex 32 | tr -d '\n' > secrets/ops_token
 # hits the same wall as UID 999.
 chmod 700 secrets          # only you (and root) can traverse in
 chmod 644 secrets/*        # readable by the container users
+
+# Fourth: the operator authenticator key ring. Create it AFTER the chmod above,
+# which would otherwise widen it. It is written 0600; give it to the API user.
+python3 tools/operator-mfa-keyring.py create secrets/operator_mfa_keys.json
+sudo chown 1001:1001 secrets/operator_mfa_keys.json
 ```
+
+The key ring encrypts every operator's authenticator seed. Back it up with your
+recovery material: a database backup cannot decrypt factors without it, and the
+API refuses to start without it. See
+[security operations](/how-to/security-operations#operator-authenticator-key-provisioning).
 
 ::: danger The failure this prevents is silent and misleading
 With `chmod 600` on the files, `_read_file_backed_secrets()` raises
@@ -121,7 +130,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `ENVIRONMENT` | `local` | `local` | `cloud` | `cloud` | `cloud` turns on the fail-closed validator. Leaving it `local` in production silently accepts insecure cookies. |
 | `AUTH_MODE` | `local` | `local` | **`cloud`** | not read | `local` on a public deployment means every anonymous request acts as the bootstrap operator. |
 | `SESSION_COOKIE_SECURE` | `false` | `false` | **`true`** | not read | `false` lets the session cookie travel over plain HTTP. |
-| `EMAIL_BACKEND` | `console` | `console` | **`smtp`** | not read | `console` prints live invite/reset tokens into the logs. |
+| `EMAIL_BACKEND` | `console` | `console` | **`smtp`** | not read | `console` records skipped delivery without message content. |
 | `SMTP_HOST` | `''` | – | **required** | not read | Startup fails. Invites and resets silently never arrive. |
 | `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | `587` / `''` / `''` / `ShuttleWorks by Yunavero <no-reply@localhost>` | – | as your provider requires | not read | Mail silently fails. |
 | `PUBLIC_APP_ORIGIN` | `''` | – | **required** | not read | The **operator** origin (`https://${APP_HOSTNAME}`). Workspace invites and operator password resets come out relative and unclickable. |
@@ -129,7 +138,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `CORS_ORIGINS` | localhost list | default | **the operator hostname, alone** | not read | The browser blocks API calls. Never `*` — the API refuses to start, because Starlette answers a wildcard under `allow_credentials` by echoing whatever Origin asked. The **play** origin is deliberately absent: the entrant tier's route modules use same-origin calls, so there is nothing to allow. |
 | `TRUSTED_PROXY_IPS` | `[]` (trust nothing) | leave empty | **compose subnet** (defaulted) | not read | See §6 — this is the one that locks out every user at once. Must match the API's peer (`frontend` nginx), not cloudflared. |
 | `OPS_TOKEN` | `''` (guard off) | leave empty | **required** (`OPS_TOKEN_FILE`) | not read | Without it `/health/ready\|deep\|metrics` publish worker ids, live job ids and the schema revision to anyone who can reach the hostname. |
-| `PROCESS_ROLE` | `api` | – | `api` | `worker` (set automatically) | Set by `worker.py` itself; only override to be explicit. |
+| `PROCESS_ROLE` | `api` | – | `api` | `worker` (set automatically) | Set by `worker.py` itself; only override to be explicit. Host-run administrator tools set `admin`, which skips every key-custody check because they only open the database. |
 | `EMBEDDED_WORKER` | `true` | `true` | `true` or `false` | n/a | `false` with no remote worker means jobs queue and never run. |
 | `WORKER_CONCURRENCY` | `1` | `1` | `1` | tune | Concurrent solves compete for RAM; RAM is the ceiling, not cores. |
 | `WORKER_ID` | `''` (derived) | – | – | optional | Only affects legibility of `/health/metrics`. |
@@ -140,7 +149,9 @@ to start without it, or misbehaves in a way you will not notice.
 | `SOLVE_RANDOM_SEED` / `SOLVE_NUM_WORKERS` / `SOLVE_MAX_DETERMINISTIC_TIME` | `42` / `1` / `60.0` | – | ✓ | ✓ | **Do not change `SOLVE_NUM_WORKERS`.** Determinism depends on single-threaded search. |
 | `SOLVE_WALL_CLOCK_CEILING_SECONDS` | `300.0` | – | ✓ | ✓ | Outer safety kill only; must stay well above the deterministic budget. |
 | `AUTH_THROTTLE_MAX_FAILURES` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` | `5` / `900` / `60` | ✓ | ✓ | not read | Credential-stuffing backoff. |
-| `SESSION_TTL_DAYS` / `SESSION_COOKIE_NAME` / `SESSION_COOKIE_DOMAIN` | `30` / `sw_session` / `''` | ✓ | ✓ | not read | **`SESSION_COOKIE_DOMAIN` must stay blank and the API refuses to start otherwise.** Host-only cookies are the entire mechanism keeping the two hostnames apart; a `Domain=` cookie is sent to every subdomain, handing the operator session to the public entrant tier. `Path=` is not a substitute — it is not enforced against same-origin script. |
+| `MFA_KEYRING_FILE` | `''` | leave empty | **required** (`secrets/operator_mfa_keys.json`) | not read | Operators must enroll an authenticator in cloud mode, and the seeds are encrypted with this ring. The API refuses to start without a readable, valid ring. Losing it strands every enrolled operator; replacing it does the same. Keep it with your recovery material. |
+| `REGISTRATION_MAX_PER_IP` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` | `5` / `3600` / `300` | ✓ | ✓ | not read | Operator self-registration budget per client IP. First-run provisioning of more than a handful of staff accounts from one office IP hits it; invite staff instead, or raise it for the provisioning hour. |
+| `SESSION_TTL_DAYS` / `SESSION_COOKIE_NAME` / `SESSION_COOKIE_DOMAIN` | `0.5` (maximum) / `sw_session` / `''` | ✓ | ✓ | not read | `SESSION_TTL_DAYS` above `0.5` (twelve hours) is a startup error; older `.env` files carried `30` and must be edited. **`SESSION_COOKIE_DOMAIN` must stay blank and the API refuses to start otherwise.** Host-only cookies are the entire mechanism keeping the two hostnames apart; a `Domain=` cookie is sent to every subdomain, handing the operator session to the public entrant tier. `Path=` is not a substitute — it is not enforced against same-origin script. |
 | `PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH` / `RESET_TOKEN_TTL_MINUTES` | `8` / `128` / `60` | ✓ | ✓ | not read | NIST 800-63B: length only. |
 | `INVITE_TTL_DAYS` | `14.0` | ✓ | ✓ | not read | Email-invite expiry. |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | none — **required, no fallback** | leave | **real keys, both required** | not read | **The always-pass dummy defaults were removed 2026-09-07.** `${PLAY_HOSTNAME}` publishes a live public entry form, so an inert challenge is bot protection that is present, green, and does nothing. The API refuses to start under `ENVIRONMENT=cloud` on a blank key or a Cloudflare test key, and `docker-compose.selfhost.yml` now fails at `docker compose config` time before an image is pulled. Get a pair from Cloudflare → Turnstile; the secret belongs in a secret file (`TURNSTILE_SECRET_KEY_FILE`), not in `.env`. |

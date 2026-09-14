@@ -37,6 +37,7 @@ from core.limits import (
     MAX_MATCHES,
     MAX_PLAYERS,
     Identifier,
+    Timestamp,
     StrictModel,
 )
 from core.schemas import (
@@ -78,7 +79,7 @@ class WarmRestartRequest(StrictModel):
     matchStates: Dict[Identifier, MatchStateDTO] = Field(default_factory=dict, max_length=MAX_MATCHES)
     # 10 = Conservative (default), 5 = Balanced, 1 = Aggressive.
     stayCloseWeight: int = 10
-    nowIso: Optional[str] = None
+    nowIso: Optional[Timestamp] = None
     # Optional override for the solver's wall-clock budget. The
     # proposal pipeline uses this to request fast (~3 s) "quick look"
     # solves for advisor-driven recommendations vs. the default

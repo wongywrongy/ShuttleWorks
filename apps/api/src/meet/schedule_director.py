@@ -34,6 +34,7 @@ from core.error_codes import ErrorCode, http_error
 from repositories import LocalRepository, get_repository
 from operations.match_state import build_locked_assignments
 from core.limits import (
+    Notes,
     MAX_MATCHES,
     MAX_PLAYERS,
     Identifier,
@@ -81,7 +82,7 @@ class DirectorAction(StrictModel):
     minutes: Optional[int] = Field(None, ge=1, le=24 * 60)
     fromTime: Optional[HHMMTime] = None
     toTime: Optional[HHMMTime] = None
-    reason: Optional[str] = None
+    reason: Optional[Notes] = None
     blackoutIndex: Optional[int] = Field(None, ge=0)
     courtId: Optional[int] = Field(None, ge=1)
 

@@ -46,12 +46,13 @@ import { workflowHref } from '../../platform/product-shell/workspaceNav';
 function useDisplayShared(tid: string | null): boolean | null {
   const [shared, setShared] = useState<boolean | null>(null);
   useEffect(() => {
+    setShared(null);
     if (!tid) return;
     let alive = true;
     apiClient
       .getDisplayToken(tid)
       .then((t) => {
-        if (alive) setShared(Boolean(t?.token));
+        if (alive) setShared(t.active);
       })
       .catch(() => {
         if (alive) setShared(null);

@@ -38,7 +38,7 @@ name: shuttleworks-cloud
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     environment:
       - POSTGRES_USER=scheduler
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-scheduler}
@@ -75,6 +75,7 @@ services:
       - EMAIL_BACKEND=console
       - PUBLIC_APP_ORIGIN=${PUBLIC_APP_ORIGIN:-http://localhost:8600}
       - AUTHORITY_SIGNING_KEY_FILE=/run/secrets/authority_signing_key
+      - MFA_KEYRING_FILE=/run/secrets/operator_mfa_keys
       # Entries (SP-E1-1). Cloudflare's DOCUMENTED DUMMY keypair by default:
       # the sitekey/secret below always pass, which is what makes the smoke
       # stack work with no Cloudflare account and no network call to a third
@@ -89,6 +90,7 @@ services:
         condition: service_healthy
     secrets:
       - authority_signing_key
+      - operator_mfa_keys
     read_only: true
     tmpfs:
       - /tmp
@@ -138,5 +140,7 @@ volumes:
   pgdata:
 
 secrets:
+  operator_mfa_keys:
+    file: ${MFA_KEYRING_FILE:-../../secrets/operator_mfa_keys.json}
   authority_signing_key:
     file: ${AUTHORITY_SIGNING_KEY_FILE:-../../secrets/authority_signing_key}

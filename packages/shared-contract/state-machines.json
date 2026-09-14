@@ -1,5 +1,52 @@
 {
   "machines": {
+    "display_capability": {
+      "name": "display_capability",
+      "version": 1,
+      "states": [
+        "active",
+        "inactive"
+      ],
+      "initial": [
+        "inactive"
+      ],
+      "terminal": [],
+      "transitions": [
+        {
+          "event": "issue",
+          "from_states": [
+            "active",
+            "inactive"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "revoke",
+          "from_states": [
+            "active",
+            "inactive"
+          ],
+          "to": "inactive",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        }
+      ],
+      "state_attribute": "status",
+      "state_keys": {
+        "active": "active",
+        "inactive": "inactive"
+      },
+      "event_keys": {
+        "issue": "issue",
+        "revoke": "revoke"
+      }
+    },
     "entry": {
       "name": "entry",
       "version": 1,
@@ -226,6 +273,194 @@
         "retire": "retire",
         "start": "start",
         "undo_finish": "undo_finish"
+      }
+    },
+    "node_operator_enrollment": {
+      "name": "node_operator_enrollment",
+      "version": 1,
+      "states": [
+        "consumed",
+        "pending"
+      ],
+      "initial": [
+        "pending"
+      ],
+      "terminal": [],
+      "transitions": [
+        {
+          "event": "issue",
+          "from_states": [
+            "pending"
+          ],
+          "to": "pending",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "activate",
+          "from_states": [
+            "pending"
+          ],
+          "to": "consumed",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "administrator_reset",
+          "from_states": [
+            "consumed",
+            "pending"
+          ],
+          "to": "pending",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        }
+      ],
+      "state_attribute": "status",
+      "state_keys": {
+        "consumed": "consumed",
+        "pending": "pending"
+      },
+      "event_keys": {
+        "activate": "activate",
+        "administrator_reset": "administrator_reset",
+        "issue": "issue"
+      }
+    },
+    "operator_mfa_factor": {
+      "name": "operator_mfa_factor",
+      "version": 1,
+      "states": [
+        "active",
+        "unconfigured"
+      ],
+      "initial": [
+        "unconfigured"
+      ],
+      "terminal": [],
+      "transitions": [
+        {
+          "event": "begin",
+          "from_states": [
+            "unconfigured"
+          ],
+          "to": "unconfigured",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "begin",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "activate",
+          "from_states": [
+            "active",
+            "unconfigured"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "authenticate",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "recover",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "password_change",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "reissue_recovery_codes",
+          "from_states": [
+            "active"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "disable",
+          "from_states": [
+            "active"
+          ],
+          "to": "unconfigured",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "administrator_reset",
+          "from_states": [
+            "active",
+            "unconfigured"
+          ],
+          "to": "unconfigured",
+          "actor": "system",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        }
+      ],
+      "state_attribute": "status",
+      "state_keys": {
+        "active": "active",
+        "unconfigured": "unconfigured"
+      },
+      "event_keys": {
+        "activate": "activate",
+        "administrator_reset": "administrator_reset",
+        "authenticate": "authenticate",
+        "begin": "begin",
+        "disable": "disable",
+        "password_change": "password_change",
+        "recover": "recover",
+        "reissue_recovery_codes": "reissue_recovery_codes"
       }
     },
     "solve_job": {

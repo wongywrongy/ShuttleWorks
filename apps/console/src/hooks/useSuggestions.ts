@@ -16,10 +16,12 @@ import { isTerminalPollError } from '../lib/pollPolicy';
 import { isPageHidden, subscribeVisibility } from '../lib/pageVisibility';
 import { useUiStore } from '../store/uiStore';
 import { useTournamentIdOrNull } from './useTournamentId';
+import { useSessionRevision } from './useSessionRevision';
 
 const POLL_MS = 8_000;
 
 export function useSuggestions(): null {
+  const sessionRevision = useSessionRevision();
   const tid = useTournamentIdOrNull();
   const setSuggestions = useUiStore((s) => s.setSuggestions);
   const cancelledRef = useRef(false);
@@ -65,7 +67,7 @@ export function useSuggestions(): null {
       window.clearInterval(id);
       unsubscribe();
     };
-  }, [tid, setSuggestions]);
+  }, [tid, setSuggestions, sessionRevision]);
 
   return null;
 }

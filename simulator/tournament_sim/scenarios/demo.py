@@ -699,8 +699,8 @@ class Demo:
         )
 
         if spec["modules"].get("display") == "enabled":
-            token = client.display_token(ctx.tid)["token"]
-            ctx.notes.append(f"[{key}] display board: /display?token={token}")
+            issued = client.display_token(ctx.tid)
+            ctx.notes.append(f"[{key}] display board: {'issued' if issued['token'] else 'expired'}")
 
     # -- engines ------------------------------------------------------------
 

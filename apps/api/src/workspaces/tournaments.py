@@ -653,7 +653,7 @@ def update_tournament(
 @router.delete(
     "/{tournament_id}",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def delete_tournament(
     tournament_id: uuid.UUID = Path(...),
@@ -1175,7 +1175,9 @@ def list_tournament_backups(
 @router.post(
     "/{tournament_id}/state/backup",
     response_model=BackupCreatedDTO,
-    dependencies=[Depends(require_tournament_access("operator"))],
+    # Fresh like its download/delete/restore siblings: snapshots rotate, so a
+    # stale session could otherwise evict an older restore point.
+    dependencies=[Depends(require_tournament_access("operator", fresh=True))],
 )
 def create_tournament_backup(
     tournament_id: uuid.UUID = Path(...),
@@ -1191,7 +1193,7 @@ def create_tournament_backup(
 
 @router.get(
     "/{tournament_id}/state/backups/{filename}",
-    dependencies=[Depends(require_tournament_access("viewer"))],
+    dependencies=[Depends(require_tournament_access("viewer", fresh=True))],
 )
 def download_tournament_backup(
     filename: str,
@@ -1229,7 +1231,7 @@ def download_tournament_backup(
 @router.delete(
     "/{tournament_id}/state/backups/{filename}",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def delete_tournament_backup(
     filename: str,
@@ -1254,7 +1256,7 @@ def delete_tournament_backup(
 
 @router.post(
     "/{tournament_id}/state/restore/{filename}",
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def restore_tournament_backup(
     filename: str,
@@ -1392,7 +1394,7 @@ def set_plan_finalized(
     "/{tournament_id}/invites",
     response_model=InviteCreatedDTO,
     status_code=201,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def create_invite_link(
     body: InviteCreateDTO,
@@ -1415,28 +1417,19 @@ def create_invite_link(
             "user id is not a UUID",
         )
     email = None
-    expires_at = None
     if body.email:
-        # Email invite (SP-CLOUD-2): validated address, bounded lifetime,
-        # delivered via the email seam (console backend in local mode).
-        from datetime import datetime, timedelta, timezone
-
-        from core.config import settings
+        # Both link and email invites share the repository's finite lifetime.
         from identity.auth import AuthError, normalize_email
 
         try:
             email = normalize_email(body.email)
         except AuthError as exc:
             raise http_error(400, ErrorCode.INVALID_INPUT, exc.message)
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            days=settings.invite_ttl_days
-        )
-    invite = repo.invite_links.create(
+    token, invite = repo.invite_links.create(
         tournament_id=tournament_id,
         role=body.role,
         created_by=user_uuid,
         email=email,
-        expires_at=expires_at,
     )
     if email:
         from core.brand import BRAND_SIGNATURE, PRODUCT_NAME
@@ -1452,14 +1445,15 @@ def create_invite_link(
             subject=f"You're invited to {tournament.name or f'a {PRODUCT_NAME} workspace'}",
             body=(
                 f"You've been invited as {invite.role}.\n\n"
-                f"Accept here: {origin}/invite/{invite.id}\n\n"
-                f"This invite expires {expires_at:%Y-%m-%d}."
+                f"Accept here: {origin}/invite/{token}\n\n"
+                f"This invite expires {invite.expires_at:%Y-%m-%d}."
                 f"\n\n{BRAND_SIGNATURE}"
             ),
         )
     return InviteCreatedDTO(
-        token=str(invite.id),
-        url=f"/invite/{invite.id}",
+        id=str(invite.id),
+        token=token,
+        url=f"/invite/{token}",
         tournamentId=str(tournament_id),
         role=invite.role,  # type: ignore[arg-type]
         createdAt=invite.created_at.isoformat(),
@@ -1570,7 +1564,7 @@ def _member_error(exc: members_service.MemberError):
 @router.delete(
     "/{tournament_id}/members/me",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("viewer"))],
+    dependencies=[Depends(require_tournament_access("viewer", fresh=True))],
 )
 def leave_tournament(
     tournament_id: uuid.UUID = Path(...),
@@ -1598,7 +1592,7 @@ def leave_tournament(
 @router.delete(
     "/{tournament_id}/members/{user_id}",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def remove_tournament_member(
     tournament_id: uuid.UUID = Path(...),
@@ -1618,7 +1612,7 @@ def remove_tournament_member(
 @router.patch(
     "/{tournament_id}/members/{user_id}",
     response_model=TournamentMemberDTO,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def change_tournament_member_role(
     body: RoleChangeRequest,
@@ -1661,7 +1655,7 @@ def change_tournament_member_role(
 @router.post(
     "/{tournament_id}/transfer-ownership",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("owner"))],
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
 )
 def transfer_tournament_ownership(
     body: TransferOwnershipRequest,

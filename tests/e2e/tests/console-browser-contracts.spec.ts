@@ -222,6 +222,12 @@ test.describe("canonical console browser contracts", () => {
 
     const writes: string[] = [];
     page.on("request", (request) => {
+      // A viewer's real interaction maintains their own session. It grants
+      // no workspace write authority; keep every other mutation forbidden.
+      if (request.method() === "POST" && new URL(request.url()).pathname === "/api/auth/activity") {
+        expect(request.headers()["x-shuttleworks-csrf"]).toBe("1");
+        return;
+      }
       if (
         ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()) &&
         request.url().includes("/api/")

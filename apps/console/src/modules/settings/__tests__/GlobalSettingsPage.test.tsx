@@ -14,12 +14,15 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { GlobalSettingsPage } from '../GlobalSettingsPage';
 import { SHELL_RAIL_MIN_WIDTH } from '../../../platform/product-shell/WorkspaceShell';
 
+const auth = vi.hoisted(() => ({
+  current: { user: { id: 'u1', email: 'op@example.com' } as Record<string, unknown>, isBootstrap: true },
+}));
 vi.mock('../../../context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1', email: 'op@example.com' }, isBootstrap: true, signOut: vi.fn() }),
+  useAuth: () => ({ ...auth.current, signOut: vi.fn(), refresh: vi.fn() }),
 }));
 
 vi.mock('../../../api/client', () => ({
@@ -45,9 +48,37 @@ function setViewport(width: number) {
 
 afterEach(() => {
   window.innerWidth = DEFAULT_WIDTH;
+  auth.current = { user: { id: 'u1', email: 'op@example.com' }, isBootstrap: true };
+});
+
+describe('GlobalSettingsPage security', () => {
+  it('offers the authenticator to any signed-in account with a password, even where it is optional', () => {
+    auth.current = {
+      isBootstrap: false,
+      user: { id: 'u1', email: 'op@example.com', passwordConfigured: true, mfaRequired: false,
+        mfaEnforced: false, mfaAvailable: true, mfaEnrolled: false },
+    };
+    mount('?section=security');
+    expect(screen.getByText('Authenticator and recovery codes')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set up an authenticator' })).toBeInTheDocument();
+  });
+
+  it('hides the authenticator for the local bootstrap identity', () => {
+    mount('?section=security');
+    expect(screen.queryByText('Authenticator and recovery codes')).not.toBeInTheDocument();
+  });
 });
 
 describe('GlobalSettingsPage nav', () => {
+  it('retains a node session workspace selector when changing sections', () => {
+    function LocationProbe() { return <output data-testid="location">{useLocation().search}</output>; }
+    render(<MemoryRouter initialEntries={['/settings?workspaceId=node-workspace&section=profile']}>
+      <GlobalSettingsPage /><LocationProbe />
+    </MemoryRouter>);
+    act(() => { screen.getByTestId('global-settings-security').click(); });
+    expect(screen.getByTestId('location')).toHaveTextContent('workspaceId=node-workspace');
+    expect(screen.getByTestId('location')).toHaveTextContent('section=security');
+  });
   it('keeps the destinations that answer something', () => {
     mount();
     for (const id of ['profile', 'security', 'sessions', 'appearance']) {

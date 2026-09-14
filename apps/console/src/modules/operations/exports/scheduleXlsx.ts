@@ -1,3 +1,4 @@
+import { downloadXlsx } from '../../../api/xlsxDownload';
 /**
  * Operations schedule XLSX export (moved from meet/exports at SP-CONSOLE-4
  * B4: the Plan toolbar owns the schedule export; meet keeps the roster and
@@ -14,7 +15,6 @@ import { indexById } from '../../../lib/indexById';
 import { getActiveAssignments } from '../../../lib/getActiveAssignments';
 import {
   applyRangeStyle,
-  downloadXlsx,
   sideNames,
   todayStamp,
 } from '../../../lib/xlsxExportShared';

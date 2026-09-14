@@ -19,7 +19,7 @@
  * them. The server remains authoritative — ``validate_password`` also
  * rejects breached passwords, which the client cannot check.
  */
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams, type Location } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
@@ -27,6 +27,8 @@ import { Button, Card, TextField } from '@scheduler/design-system';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from './passwordPolicy';
 import { SwMonogram } from '../../components/ShuttleWorksMark';
 import { BRAND } from '@scheduler/brand';
+import type { UserDTO } from '../../api/dto';
+import { MfaCeremony } from './MfaCeremony';
 
 interface FromState {
   from?: Pick<Location, 'pathname' | 'search' | 'hash'>;
@@ -81,16 +83,16 @@ function authFailure(err: unknown): AuthFailure {
   }
 }
 
-export function LoginPage() {
+export function LoginPage({ locked = false }: { locked?: boolean } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { session, refresh } = useAuth();
+  const { session, user, pendingUser, refresh, signOut } = useAuth();
 
-  const resetToken = searchParams.get('reset');
+  const resetToken = locked ? null : searchParams.get('reset');
 
   const [mode, setMode] = useState<Mode>('signin');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(locked ? user?.email ?? '' : '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -100,8 +102,22 @@ export function LoginPage() {
   const [failure, setFailure] = useState<AuthFailure | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [challengeUser, setChallengeUser] = useState<UserDTO | null>(pendingUser ?? null);
 
-  const from = returnDestination(location.state);
+  useEffect(() => {
+    if (pendingUser) setChallengeUser((current) => current ?? pendingUser);
+  }, [pendingUser]);
+
+  useEffect(() => {
+    const expired = () => { setChallengeUser(null); setPassword(''); };
+    window.addEventListener('sw:session-expired', expired);
+    return () => window.removeEventListener('sw:session-expired', expired);
+  }, []);
+
+  const returnTo = returnDestination(location.state);
+  const offlineWorkspace = challengeUser?.offlineWorkspaceId ?? user?.offlineWorkspaceId;
+  const nodeLogin = !!offlineWorkspace || searchParams.get('node') === '1';
+  const from = returnTo === '/' && offlineWorkspace ? `/tournaments/${offlineWorkspace}` : returnTo;
 
   /** Form-level error: only what we could not anchor to a field. */
   const formError = failure && !failure.field ? failure.message : null;
@@ -188,7 +204,20 @@ export function LoginPage() {
 
   // Already authenticated (incl. the local-mode bootstrap session) —
   // skip the form entirely.
-  if (session) {
+  if (challengeUser) {
+    return <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+      <MfaCeremony user={challengeUser} mode={challengeUser.mfaEnrolled ? 'verify' : 'enroll'} initialPassword={password}
+        onComplete={async () => {
+          await refresh();
+          setPassword('');
+          setChallengeUser(null);
+          if (!locked) navigate(from, { replace: true });
+        }}
+        onCancel={locked ? undefined : signOut} />
+    </div>;
+  }
+
+  if (session && !locked) {
     return <Navigate to={from} replace />;
   }
 
@@ -208,17 +237,23 @@ export function LoginPage() {
         setInfo('If an account exists for that address, a reset link is on its way.');
         return;
       }
+      let resolved: UserDTO;
       if (mode === 'register') {
-        await apiClient.register({
+        resolved = await apiClient.register({
           email,
           password,
           displayName: displayName.trim() || undefined,
         });
       } else {
-        await apiClient.login({ email, password });
+        resolved = await apiClient.login({ email, password });
+      }
+      if (resolved?.mfaRequired && !resolved.mfaAuthenticated) {
+        setChallengeUser(resolved);
+        return;
       }
       await refresh();
-      navigate(from, { replace: true });
+      setPassword('');
+      if (!locked) navigate(from, { replace: true });
     } catch (err) {
       setFailure(authFailure(err));
     } finally {
@@ -270,7 +305,7 @@ export function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
-            disabled={submitting}
+            disabled={submitting || locked}
           />
           {mode !== 'forgot' && (
             <TextField
@@ -327,20 +362,20 @@ export function LoginPage() {
         <div className="flex items-center justify-between text-sm">
           {mode === 'signin' ? (
             <>
-              <button
+              {!nodeLogin && <button
                 type="button"
                 className="text-muted-foreground hover:text-foreground hover:underline"
                 onClick={() => switchMode('forgot')}
               >
                 Forgot password?
-              </button>
-              <button
+              </button>}
+              {!locked && !nodeLogin && <button
                 type="button"
                 className="text-accent hover:underline"
                 onClick={() => switchMode('register')}
               >
                 Create account
-              </button>
+              </button>}
             </>
           ) : (
             <button
@@ -352,6 +387,9 @@ export function LoginPage() {
             </button>
           )}
         </div>
+        {nodeLogin && <p className="text-sm text-muted-foreground">
+          Use the password you set up for this node. If you cannot sign in, contact the node administrator; email reset applies to your cloud account.
+        </p>}
       </Card>
     </div>
   );

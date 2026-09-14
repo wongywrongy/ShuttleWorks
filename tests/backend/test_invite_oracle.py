@@ -53,12 +53,12 @@ def _mint(client, tournament_id, role="viewer"):
 
 def _expire(token: str):
     """Age an invite out of its TTL, directly in the DB."""
-    from db.models import InviteLink
+    from repositories.local import LocalRepository
     from db.session import SessionLocal
 
     s = SessionLocal()
     try:
-        row = s.get(InviteLink, uuid.UUID(token))
+        row = LocalRepository(s).invite_links.get(uuid.UUID(token))
         row.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
         s.commit()
     finally:

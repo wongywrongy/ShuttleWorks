@@ -42,12 +42,14 @@ from typing import Optional
 from sqlalchemy import (
     JSON,
     Boolean,
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     MetaData,
     String,
     Text,
@@ -60,6 +62,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from db.short_reference import new_reference
 from db.blob_version import CURRENT_TOURNAMENT_SCHEMA_VERSION, VersionedJSON
+from core.capability_policy import STAFF_INVITE_LIFETIME
 
 
 class MatchStatus(str, enum.Enum):
@@ -483,8 +486,10 @@ class InviteLink(Base):
     """
 
     __tablename__ = "invite_links"
+    __table_args__ = (Index("uq_invite_links_token_hash", "token_hash", unique=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
     )
@@ -496,8 +501,9 @@ class InviteLink(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=lambda context: context.get_current_parameters()["created_at"] + STAFF_INVITE_LIFETIME,
     )
     revoked_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -837,7 +843,8 @@ class AuthorityTransition(Base):
             "created_at",
         ),
         CheckConstraint(
-            "transition_type IN ('return_to_cloud', 'planned_transfer', 'lost_node_recovery')",
+            "transition_type IN ('return_to_cloud', 'planned_transfer', 'lost_node_recovery', "
+            "'checkout', 'checkpoint_import', 'local_initialization')",
             name="ck_authority_transition_type",
         ),
     )
@@ -1490,10 +1497,8 @@ class User(Base):
 class DisplayToken(Base):
     """Capability token behind the public spectator display (Rule 8).
 
-    One row per workspace; the token is a random urlsafe string stored
-    RAW (unlike sessions) because the Sharing tab must re-display the
-    link and the capability it grants is read-only projection data —
-    revocation is rotation (new token) or row deletion. The public
+    One row per workspace; only the hash and a finite deadline survive
+    issuance. Revocation is rotation (new token) or row deletion. The public
     ``/display/{token}/*`` routes resolve through this table only;
     the raw tournament UUID never becomes a public capability.
     """
@@ -1503,12 +1508,13 @@ class DisplayToken(Base):
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
     )
-    token: Mapped[str] = mapped_column(String(64), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
 
-    __table_args__ = (Index("uq_display_tokens_token", "token", unique=True),)
+    __table_args__ = (Index("uq_display_tokens_token_hash", "token_hash", unique=True),)
 
 
 class Org(Base):
@@ -1571,6 +1577,8 @@ class AuthSession(Base):
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    authenticated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    mfa_generation: Mapped[Optional[int]] = mapped_column(Integer)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -1601,6 +1609,8 @@ class OfflineOperatorSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    authenticated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    mfa_generation: Mapped[Optional[int]] = mapped_column(Integer)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     revocation_reason: Mapped[Optional[str]] = mapped_column(String(500))
 
@@ -1615,6 +1625,71 @@ class OfflineOperatorSession(Base):
             ],
             ondelete="CASCADE",
         ),
+    )
+
+
+class NodeOperatorEnrollment(Base):
+    """One administrator-issued activation credential per node-local person."""
+    __tablename__ = "node_operator_enrollments"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, unique=True)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    authority_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    node_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(["tournament_id", "user_id"], ["tournament_members.tournament_id", "tournament_members.user_id"], ondelete="CASCADE", name="fk_node_enrollment_member"),
+        ForeignKeyConstraint(["tournament_id", "authority_epoch"], ["tournament_authority_epochs.tournament_id", "tournament_authority_epochs.epoch"], ondelete="CASCADE", name="fk_node_enrollment_authority"),
+        CheckConstraint("status IN ('pending', 'consumed')", name="ck_node_enrollment_status"),
+        CheckConstraint("authority_epoch > 0 AND expires_at > created_at", name="ck_node_enrollment_bounds"),
+    )
+
+
+class OperatorMfaFactor(Base):
+    """One encrypted authenticator per operator in this deployment's identity store."""
+
+    __tablename__ = "operator_mfa_factors"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    scope: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="unconfigured")
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    secret_ciphertext: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
+    key_id: Mapped[Optional[str]] = mapped_column(String(16))
+    pending_ciphertext: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
+    pending_key_id: Mapped[Optional[str]] = mapped_column(String(16))
+    pending_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Binds the ceremony to either a cloud or node session; the encrypted
+    # pending seed authenticates this identifier as additional data, too.
+    pending_session_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    last_counter: Mapped[int] = mapped_column(BigInteger, nullable=False, default=-1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    __table_args__ = (
+        # One factor per account and scope (cloud, or one event node): migration 0008.
+        UniqueConstraint("user_id", "scope", name="uq_operator_mfa_factors_user_scope"),
+        CheckConstraint("status IN ('unconfigured', 'active')", name="ck_operator_mfa_factor_status"),
+        CheckConstraint("generation >= 0 AND revision >= 0 AND last_counter >= -1", name="ck_operator_mfa_factor_versions"),
+        CheckConstraint("status != 'active' OR (secret_ciphertext IS NOT NULL AND key_id IS NOT NULL AND generation > 0)", name="ck_operator_mfa_factor_active_secret"),
+        CheckConstraint("(pending_ciphertext IS NULL AND pending_key_id IS NULL AND pending_expires_at IS NULL AND pending_session_id IS NULL) OR (pending_ciphertext IS NOT NULL AND pending_key_id IS NOT NULL AND pending_expires_at IS NOT NULL AND pending_session_id IS NOT NULL)", name="ck_operator_mfa_factor_pending_secret"),
+    )
+
+
+class OperatorRecoveryCode(Base):
+    """A single-use lookup credential; successful consumption deletes its digest."""
+
+    __tablename__ = "operator_recovery_codes"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    factor_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("operator_mfa_factors.id", ondelete="CASCADE"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    __table_args__ = (
+        Index("uq_operator_recovery_codes_token_hash", "token_hash", unique=True),
+        Index("ix_operator_recovery_codes_factor", "factor_id"),
     )
 
 

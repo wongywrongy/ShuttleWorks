@@ -13,6 +13,9 @@
     "apps/entrant"
   ],
   "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    },
     "js-yaml": "^4.3.2",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
@@ -58,8 +61,9 @@
     "state-machines:generate": "python3 tools/generate_state_machines.py"
   },
   "devDependencies": {
+    "exceljs": "4.4.0",
     "jscpd": "^5.0.11",
     "vitepress": "^1.6.4",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.11"
   }
 }

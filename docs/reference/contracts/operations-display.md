@@ -24,6 +24,15 @@ standings view. Display also reads two more DTOs to complete the picture:
   static layout from.
 - **`BracketTournamentDTO`** — the bracket snapshot, for bracket events.
 
+These are the shared in-console read models. The public capability API instead
+returns `DisplayMatchStateDTO`, `DisplayStateDTO` and `DisplayBracketDTO` from
+`apps/api/src/display/display.py` and `apps/api/src/display/projection.py`.
+Those recursive allow-lists exclude operator notes, player availability, private
+entry/person provenance and arbitrary bracket metadata. The console adapts the
+public state into its read-only store with neutral defaults; it does not fetch
+the missing private fields. The in-shell authenticated preview continues to use
+the operator endpoints.
+
 Display is **read-only**: it consumes these three and produces nothing. The edge it reacts to is the
 match-state write — `matchStateChanged`.
 
@@ -36,7 +45,8 @@ match-state write — `matchStateChanged`.
 | `TournamentStateDTO` (`/state`) | **Control plane** | shared; Display consumes |
 | `BracketTournamentDTO` (`/bracket`) | **Bracket** | Display consumes |
 | The public TV rendering | **Display** | `displayContract.consumedEndpoints = [getTournamentState, getMatchStates, getBracket]`; `produces = []`, `emits = []` |
-| `/display/{token}/*` projection routes | **Display** | `displayContract.ownedEndpoints = [getDisplaySummary, getDisplayState, getDisplayMatchStates, getDisplayBracket]` — the public capability-token read path (SP-CLOUD-2) |
+| `/display/{token}/*` projection routes | **Display** | `displayContract.ownedEndpoints = [getDisplaySummary, getDisplayState, getDisplayMatchStates, getDisplayBracket, …]` — the public capability-token read path (SP-CLOUD-2) |
+| `…/display-token` management | **Display** | `getDisplayToken` (status only, never the bearer), `rotateDisplayToken`, `revokeDisplayToken` in `displayContract.ownedEndpoints`; issue and revoke require fresh operator proof |
 
 Display declares `reactsTo: ['matchStateChanged']` and `emits: []` — the read-only output module.
 Since SP-CLOUD-2 it *owns* the public `/display/{token}/*` projection routes (every route `GET`,

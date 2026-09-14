@@ -237,6 +237,9 @@ class TelemetryLogFilter(logging.Filter):
         if record.name.startswith("opentelemetry"):
             return False
         template = record.msg if isinstance(record.msg, str) else type(record.msg).__name__
+        from core.log_redaction import redact_credentials
+
+        template = redact_credentials(template)
         safe = logging.LogRecord(
             name=record.name,
             level=record.levelno,

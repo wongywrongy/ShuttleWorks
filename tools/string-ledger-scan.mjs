@@ -405,7 +405,11 @@ function main() {
     entries,
   };
 
-  const outPath = path.join(REPO, 'docs/audits/v3-consolidated/ledger/scan.json');
+  const args = process.argv.slice(2);
+  if (args.length && (args.length !== 2 || args[0] !== '--output')) {
+    throw new Error('Usage: string-ledger-scan.mjs [--output path]');
+  }
+  const outPath = args.length ? path.resolve(args[1]) : path.join(REPO, 'docs/audits/v3-consolidated/ledger/scan.json');
   writeFileSync(outPath, JSON.stringify(output, null, 2) + '\n');
 
   console.log(`string-ledger-scan: wrote ${entries.length} deduped candidate strings to ${rel(outPath)}`);

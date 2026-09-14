@@ -22,11 +22,12 @@ import logging
 import uuid
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from pydantic import BaseModel
 
-from core.dependencies import AuthUser, get_current_user
-from core.error_codes import ErrorCode, http_error
+from core.dependencies import AuthUser, get_current_user, require_fresh_authentication
+from core.error_codes import resource_not_found
+from core.roles import ROLE_LEVELS as _ROLE_LEVELS
 from core.limits import Email, StrictModel
 from db.models import InviteLink, Tournament
 from repositories import LocalRepository, get_repository
@@ -46,8 +47,8 @@ class InviteCreateDTO(StrictModel):
     """Body for ``POST /tournaments/{id}/invites``.
 
     ``email`` (SP-CLOUD-2) turns this into an email invite: the link is
-    delivered via the email seam and the invite expires. Omitted =
-    local link-style invite (copy the URL yourself).
+    delivered via the email seam. Omitted = local link-style invite
+    (copy the URL yourself). Both expire seven days after issuance.
 
     The address is bounded here and validated for shape by
     ``normalize_email`` at the handler — that regex rejects all
@@ -59,7 +60,7 @@ class InviteCreateDTO(StrictModel):
 
 class InviteSummaryDTO(BaseModel):
     """Wire shape for active-invite listings on Settings → Share."""
-    token: str
+    id: str
     tournamentId: str
     role: InviteRole
     createdAt: str
@@ -77,6 +78,7 @@ class InviteCreatedDTO(BaseModel):
     Keeping the join client-side avoids hard-coding the deployment
     origin in backend config.
     """
+    id: str
     token: str
     url: str
     tournamentId: str
@@ -93,7 +95,6 @@ class InviteResolveDTO(BaseModel):
     carried the existence oracle. ``email`` stays withheld: this route
     is unauthenticated and the invitee's address must not be probeable.
     """
-    token: str
     tournamentId: str
     tournamentName: Optional[str] = None
     role: InviteRole
@@ -108,12 +109,11 @@ class InviteAcceptedDTO(BaseModel):
 # ---- Helpers -----------------------------------------------------------
 
 
-_ROLE_LEVELS = {"viewer": 0, "operator": 1, "owner": 2}
 
 
 def _to_summary(invite: InviteLink) -> InviteSummaryDTO:
     return InviteSummaryDTO(
-        token=str(invite.id),
+        id=str(invite.id),
         tournamentId=str(invite.tournament_id),
         role=invite.role,  # type: ignore[arg-type]
         createdAt=invite.created_at.isoformat() if invite.created_at else "",
@@ -137,11 +137,7 @@ def _invite_not_found() -> HTTPException:
     Nonexistent, revoked, expired, and "exists but its workspace is
     gone" are indistinguishable by status, body, and query count.
     """
-    return http_error(
-        status.HTTP_404_NOT_FOUND,
-        ErrorCode.INVITE_NOT_FOUND,
-        "Invite not found or no longer valid",
-    )
+    return resource_not_found()
 
 
 def _resolve_acceptable_invite(
@@ -171,30 +167,16 @@ def _require_invite_owner(
     user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> InviteLink:
-    """Resolve the invite + check that the caller owns its tournament.
-
-    Combines two checks the spec splits: invite must exist (404 / 410)
-    AND caller must be the tournament owner (403). Used by
-    ``DELETE /invites/{token}``.
-    """
-    invite = repo.invite_links.get(token)
-    if invite is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="invite not found",
-        )
+    """Resolve and authorize without revealing invite existence to outsiders."""
+    invite = repo.invite_links.get_for_management(token)
     user_uuid = user.as_uuid()
-    if user_uuid is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="user id is not a UUID",
-        )
+    if invite is None or user_uuid is None:
+        raise resource_not_found()
     role = repo.members.get_role(invite.tournament_id, user_uuid)
     if role != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="owner role required",
-        )
+        raise resource_not_found()
+    # After the owner check, so freshness never reveals another owner's invite.
+    require_fresh_authentication(user)
     return invite
 
 
@@ -224,7 +206,6 @@ def resolve_invite(
     """
     invite, tournament = _resolve_acceptable_invite(repo, token)
     return InviteResolveDTO(
-        token=str(invite.id),
         tournamentId=str(invite.tournament_id),
         tournamentName=tournament.name if tournament else None,
         role=invite.role,  # type: ignore[arg-type]
@@ -258,10 +239,7 @@ def accept_invite(
 
     user_uuid = user.as_uuid()
     if user_uuid is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="user id is not a UUID",
-        )
+        raise resource_not_found()
 
     target_role = invite.role
     existing_role = repo.members.get_role(invite.tournament_id, user_uuid)

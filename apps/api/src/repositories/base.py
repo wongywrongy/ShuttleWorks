@@ -280,7 +280,7 @@ class InviteLinkRepository(Protocol):
         tournament_id: uuid.UUID,
         role: str,
         created_by: uuid.UUID,
-    ) -> InviteLink:
+    ) -> tuple[str, InviteLink]:
         ...
 
     def list_for_tournament(
@@ -290,7 +290,11 @@ class InviteLinkRepository(Protocol):
         ...
 
     def get(self, token: uuid.UUID) -> Optional[InviteLink]:
-        """Lookup an invite by its id (which doubles as the URL token)."""
+        """Lookup a bearer credential by its digest."""
+        ...
+
+    def get_for_management(self, reference: uuid.UUID) -> Optional[InviteLink]:
+        """Owner-only lookup by independent id or a previously issued link."""
         ...
 
     def revoke(self, token: uuid.UUID) -> bool:

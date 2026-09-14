@@ -12,6 +12,14 @@ import pytest
 from sqlalchemy import create_engine
 
 
+@pytest.fixture(autouse=True)
+def private_mfa_keys(tmp_path, monkeypatch):
+    from core.secret_keys import create_secret_keyring
+    path = tmp_path / "mfa-keys.json"
+    create_secret_keyring(path)
+    monkeypatch.setenv("MFA_KEYRING_FILE", str(path))
+
+
 def _reload_with_env(monkeypatch, **env):
     """Build isolated settings + engine from a fresh env mapping."""
     for key, value in env.items():
@@ -28,6 +36,62 @@ def test_settings_defaults_sqlite(monkeypatch):
     settings, engine = _reload_with_env(monkeypatch)
     assert settings.database_url.startswith("sqlite")
     assert engine.dialect.name == "sqlite"
+
+
+def test_invalid_startup_settings_do_not_echo_secret_inputs():
+    from core.config import Settings
+
+    with pytest.raises(ValueError) as error:
+        Settings(smtp_port="startup-private-sentinel")
+    assert "smtp_port" in str(error.value)
+    assert "startup-private-sentinel" not in str(error.value)
+
+
+@pytest.mark.parametrize("configuration", [
+    {"auth_mode": "cloud"},
+    {"deployment_profile": "cloud", "authority_signing_key_file": "/private/authority.pem"},
+    {"deployment_profile": "event_node", "node_id": "00000000-0000-0000-0000-000000000001",
+     "authority_signing_public_key_file": "/private/trust.pem", "node_signing_key_file": "/private/node.pem"},
+])
+def test_operator_api_requires_private_mfa_key_material(configuration):
+    from core.config import Settings
+    with pytest.raises(ValueError, match="MFA_KEYRING_FILE"):
+        Settings(**configuration, mfa_keyring_file="")
+
+
+def test_operator_api_refuses_unreadable_or_predictable_keys(tmp_path):
+    import json
+    from core.config import Settings
+    with pytest.raises(ValueError, match="MFA_KEYRING_FILE"):
+        Settings(auth_mode="cloud", mfa_keyring_file=str(tmp_path / "absent"))
+    path = tmp_path / "predictable.json"
+    path.write_text(json.dumps({"version": 1, "active": "bad", "keys": {"bad": "00" * 32}}))
+    with pytest.raises(ValueError, match="MFA_KEYRING_FILE"):
+        Settings(auth_mode="cloud", mfa_keyring_file=str(path))
+
+
+def test_local_mode_starts_without_any_mfa_key_ring(monkeypatch):
+    """The solo, offline flow stays zero-configuration (the autouse key is removed)."""
+    for name in ("MFA_KEYRING_FILE", "AUTH_MODE", "ENVIRONMENT", "SHUTTLEWORKS_DEPLOYMENT_PROFILE", "DEPLOYMENT_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    from core.config import Settings
+    settings = Settings()
+    assert settings.auth_mode == "local"
+    assert settings.mfa_keyring_file == ""
+    assert settings.operator_mfa_required is False
+
+
+@pytest.mark.parametrize("role", ["worker", "sync", "admin"])
+def test_non_http_processes_do_not_need_operator_factor_keys(role):
+    from core.config import Settings
+    assert Settings(process_role=role, auth_mode="cloud", mfa_keyring_file="").process_role == role
+
+
+@pytest.mark.parametrize("days", [0, -1, 1, 30])
+def test_operator_absolute_ttl_cannot_exceed_the_approved_twelve_hours(days):
+    from core.config import Settings
+    with pytest.raises(ValueError, match="session_ttl_days"):
+        Settings(session_ttl_days=days)
 
 
 def test_settings_picks_postgres_driver(monkeypatch):
@@ -118,6 +182,7 @@ def test_event_node_profiles_accept_explicit_file_backed_authority_material():
 
     api = Settings(
         deployment_profile="event_node",
+        node_id="00000000-0000-0000-0000-000000000001",
         process_role="api",
         authority_signing_public_key_file="/run/secrets/authority-public.pem",
         node_signing_key_file="/run/secrets/node-private.pem",
@@ -132,8 +197,7 @@ def test_event_node_profiles_accept_explicit_file_backed_authority_material():
 
 
 def test_cloud_mode_refuses_console_email_backend(monkeypatch):
-    """SP-CLOUD-2: the console backend logs raw reset/invite tokens --
-    cloud startup must fail closed without SMTP delivery."""
+    """Cloud startup must fail closed without SMTP delivery."""
     from core.config import Settings
 
     with pytest.raises(Exception) as e:

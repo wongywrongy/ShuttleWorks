@@ -19,16 +19,22 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from typing import Any, Dict, List, Literal, Optional
+from datetime import datetime, timezone
+from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Path, Response
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
-from bracket.brackets import TournamentOut, _hydrate_session, _serialize_session
-from core.dependencies import require_tournament_access
+from bracket.brackets import _hydrate_session, _serialize_session
+from core.dependencies import AuthUser, get_current_user, require_tournament_access
 from core.error_codes import ErrorCode, http_error
 from core.limits import HexColor
 from core.schemas import MeetStandingRowDTO
+from display.capabilities import event_link_deadline
+from display.projection import (
+    DisplayConfigDTO, DisplayGroupDTO, DisplayPlayerDTO, DisplayMatchDTO,
+    DisplayScheduleDTO, DisplayBracketDTO,
+)
 from db.models import (
     MatchState,
     Tournament,
@@ -126,34 +132,73 @@ def put_board_settings(
 class DisplayTokenDTO(BaseModel):
     token: str
     url: str
+    expiresAt: datetime
+
+
+class DisplayTokenStatusDTO(BaseModel):
+    active: bool
+    expiresAt: Optional[datetime] = None
+    defaultExpiresAt: Optional[datetime] = None
+
+
+class DisplayTokenRequest(BaseModel):
+    expiresAt: Optional[AwareDatetime] = None
 
 
 def _mint_token() -> str:
     return secrets.token_urlsafe(24)
 
 
-def _token_dto(token: str) -> DisplayTokenDTO:
-    return DisplayTokenDTO(token=token, url=f"/display?token={token}")
-
-
-@manage_router.get("", response_model=DisplayTokenDTO, dependencies=[_OWNER])
-def get_or_create_display_token(
+@manage_router.get("", response_model=DisplayTokenStatusDTO, dependencies=[_OWNER])
+def get_display_token_status(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
-) -> DisplayTokenDTO:
-    """The workspace's display link, minted on first ask."""
-    token = repo.get_or_create_display_token(tournament_id, _mint_token())
-    return _token_dto(token)
+) -> DisplayTokenStatusDTO:
+    """A read never issues or retrieves a capability."""
+    workspace = repo.tournaments.get_by_id(tournament_id)
+    if workspace is None:
+        raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found")
+    row = repo.get_display_token(tournament_id)
+    expiry = (row.expires_at.replace(tzinfo=timezone.utc) if row.expires_at.tzinfo is None
+              else row.expires_at.astimezone(timezone.utc)) if row else None
+    return DisplayTokenStatusDTO(active=bool(expiry and expiry > datetime.now(timezone.utc)),
+        expiresAt=expiry, defaultExpiresAt=event_link_deadline(
+            workspace.tournament_end_date, workspace.tournament_date, workspace.time_zone))
 
 
-@manage_router.post("/rotate", response_model=DisplayTokenDTO, dependencies=[_OWNER])
+@manage_router.post("/rotate", response_model=DisplayTokenDTO, dependencies=[Depends(require_tournament_access("owner", fresh=True))])
 def rotate_display_token(
+    response: Response,
+    body: Optional[DisplayTokenRequest] = None,
     tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> DisplayTokenDTO:
-    """Revoke-by-rotation: the old link dies the moment this returns."""
-    token = repo.rotate_display_token(tournament_id, _mint_token())
-    return _token_dto(token)
+    """Explicit issuance; the old link dies and the new plaintext appears once."""
+    workspace = repo.tournaments.get_by_id(tournament_id)
+    if workspace is None:
+        raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found")
+    default = event_link_deadline(workspace.tournament_end_date, workspace.tournament_date, workspace.time_zone)
+    expiry = (body.expiresAt if body else None) or default
+    if expiry is None or expiry <= datetime.now(timezone.utc) or (default and expiry > default):
+        raise http_error(422, ErrorCode.INVALID_INPUT,
+                         "Choose a future expiry, no later than seven days after the event.")
+    token = _mint_token()
+    if repo.rotate_display_token(tournament_id, token, expiry, user.id) is None:
+        raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found")
+    response.headers["Cache-Control"] = "no-store"
+    return DisplayTokenDTO(token=token, url=f"/display?token={token}", expiresAt=expiry)
+
+
+@manage_router.delete("", status_code=204,
+                      dependencies=[Depends(require_tournament_access("owner", fresh=True))])
+def revoke_display_token(
+    tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
+    repo: LocalRepository = Depends(get_repository),
+) -> Response:
+    repo.revoke_display_token(tournament_id, user.id)
+    return Response(status_code=204)
 
 
 # ---- Public projection routes ----------------------------------------
@@ -233,35 +278,14 @@ def display_summary(
 
 
 class DisplayStateDTO(BaseModel):
-    """The meet board's projection of the workspace state blob (F-DM-30).
+    """Public fields only, including every nested member of the stored blob."""
 
-    Until SP-DM-3 P1 this route had NO ``response_model``: the one
-    unauthenticated data plane in the product was the one with no declared
-    shape, and its allow-list was a Python tuple with a prose comment naming
-    its TS consumer. This class IS that allow-list now, and
-    ``tests/backend/test_display_public.py`` pins its key set exactly.
-
-    Notably ABSENT vs the raw blob, and deliberately: ``scheduleHistory``
-    (the operator revert pool), ``scheduleVersion``, ``bracketPlayers``,
-    ``planFinalized``.
-
-    ponytail: the six pass-through fields are typed ``Any``, not with their
-    real DTOs. Ceiling named: this is the public plane reading a blob that
-    predates the strict DTOs, so validating it through ``TournamentConfig`` /
-    ``PlayerDTO`` / ... (all ``StrictModel``, ``extra="forbid"``) would turn a
-    legacy key into a 500 on a screen in a public hall, or — worse, with
-    ``extra="ignore"`` — silently DROP keys the board renders. Upgrade path:
-    tighten one field at a time behind P2's blob versioning, each with its own
-    key-set test. What P1 buys is the KEY SET being declared, which is what
-    F-DM-30 is about.
-    """
-
-    config: Any = None
-    groups: Any = None
-    players: Any = None
-    matches: Any = None
-    schedule: Any = None
-    scheduleIsStale: Any = None
+    config: Optional[DisplayConfigDTO] = None
+    groups: Optional[List[DisplayGroupDTO]] = None
+    players: Optional[List[DisplayPlayerDTO]] = None
+    matches: Optional[List[DisplayMatchDTO]] = None
+    schedule: Optional[DisplayScheduleDTO] = None
+    scheduleIsStale: Optional[bool] = None
     standings: List[MeetStandingRowDTO] = Field(default_factory=list)
 
 
@@ -351,7 +375,6 @@ class DisplayMatchStateDTO(BaseModel):
     actualStartTime: Optional[str] = None
     actualEndTime: Optional[str] = None
     score: Optional[DisplayMatchScoreDTO] = None
-    notes: Optional[str] = None
     updatedAt: Optional[str] = None
     originalSlotId: Optional[int] = None
     originalCourtId: Optional[int] = None
@@ -404,7 +427,6 @@ def _row_to_display_state(row: MatchState) -> DisplayMatchStateDTO:
         actualStartTime=row.actual_start_time,
         actualEndTime=row.actual_end_time,
         score=score,
-        notes=row.notes,
         updatedAt=row.updated_at.isoformat() if row.updated_at else None,
         originalSlotId=row.original_slot_id,
         originalCourtId=row.original_court_id,
@@ -423,20 +445,15 @@ def display_match_states(
     return {row.match_id: _row_to_display_state(row) for row in rows}
 
 
-@public_router.get("/{token}/bracket", response_model=TournamentOut)
+@public_router.get("/{token}/bracket", response_model=DisplayBracketDTO)
 def display_bracket(
     token: str,
     repo: LocalRepository = Depends(get_repository),
 ):
-    """Bracket board read — same serialized session the viewer-gated
-    ``GET /bracket`` returns (it is already a projection DTO with no
-    operator-only material), served through the short-TTL cache.
+    """Project the cached session through a recursive spectator allow-list.
 
-    ``response_model`` is ``TournamentOut`` — the exact type
-    ``_serialize_session`` already returns (F-DM-30: the route was untyped,
-    not un-shaped). Declaring it changes no key; it puts the shape in the
-    OpenAPI document, which is what the generated types and the parity
-    oracle read.
+    Private roster provenance, arbitrary format configuration, score metadata
+    and operator notes cannot leave through the public response model.
     """
     t = _resolve(repo, token)
     from bracket import response_cache

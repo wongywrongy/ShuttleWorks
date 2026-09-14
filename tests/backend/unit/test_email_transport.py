@@ -10,6 +10,8 @@ drop it back to the permissive stdlib default.
 from __future__ import annotations
 
 import ssl
+import logging
+import smtplib
 
 import pytest
 
@@ -80,3 +82,37 @@ def test_plaintext_transport_still_sends_without_starttls(monkeypatch, fake_smtp
     server = fake_smtp.instances[-1]
     assert server.starttls_calls == []
     assert server.sent
+
+
+def test_console_transport_never_logs_message_fields(monkeypatch, caplog):
+    from core import email as email_module
+
+    monkeypatch.setattr(email_module.settings, "email_backend", "console")
+    with caplog.at_level("INFO", logger="scheduler.email"):
+        email_module.send_email(
+            to="sentinel-recipient@example.test",
+            subject="sentinel-subject",
+            body="Reset link: /reset?token=sentinel-bearer",
+        )
+    for private in ("sentinel-recipient", "sentinel-subject", "sentinel-bearer"):
+        assert private not in caplog.text
+    assert "email delivery skipped" in caplog.text
+
+
+def test_smtp_failure_does_not_leak_provider_response_in_caller_logs(monkeypatch, caplog):
+    from core import email as email_module
+
+    def fail(**kwargs):
+        raise smtplib.SMTPDataError(550, b"private-provider-response-token")
+
+    monkeypatch.setattr(email_module.settings, "email_backend", "smtp")
+    monkeypatch.setattr(email_module, "_send_smtp", fail)
+    with caplog.at_level("ERROR"):
+        try:
+            email_module.send_email(to="person@example.test", subject="hello", body="body")
+        except RuntimeError:
+            logging.getLogger("test.mail_caller").exception("mail failed")
+        except smtplib.SMTPDataError:
+            logging.getLogger("test.mail_caller").exception("mail failed")
+    assert "mail failed" in caplog.text
+    assert "private-provider-response-token" not in caplog.text

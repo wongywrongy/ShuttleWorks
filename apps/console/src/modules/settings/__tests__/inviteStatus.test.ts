@@ -3,7 +3,7 @@ import { inviteStatus } from '../inviteStatus';
 import type { InviteSummaryDTO } from '../../../api/dto';
 
 const base: InviteSummaryDTO = {
-  token: 't',
+  id: 't',
   tournamentId: 'x',
   role: 'operator',
   createdAt: '',

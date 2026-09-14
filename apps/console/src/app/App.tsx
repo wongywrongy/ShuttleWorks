@@ -13,14 +13,27 @@ import { AuthProvider } from '../context/AuthContext';
 import { useAppliedTheme } from '../hooks/useAppliedTheme';
 import { useAppliedDensity } from '../hooks/useAppliedDensity';
 import { AuthedLayout } from './AuthedLayout';
+import { authWorkspaceScope } from '../lib/authWorkspaceScope';
+import { rememberedNodeWorkspace } from '../lib/nodeWorkspace';
+import { HomeRoute, NotFound } from './HomeRoute';
 
 const ICON_DEFAULTS = { weight: 'light' as const, size: '1em' as const, mirrored: false };
 
+const NodeEnrollmentPage = lazy(() => import('../platform/auth/NodeEnrollmentPage').then(m => ({ default: m.NodeEnrollmentPage })));
+
+function RoutedAuthProvider({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  // A bare `/` names no workspace; an event node still needs its scope to
+  // resolve the operator's cookie (a selector, not a credential).
+  const workspaceId = authWorkspaceScope(location.pathname, location.search, location.state)
+    ?? (location.pathname === '/' ? rememberedNodeWorkspace() : undefined);
+  return <AuthProvider workspaceId={workspaceId}>
+    {children}
+  </AuthProvider>;
+}
+
 const PublicDisplayPage = lazy(() =>
   import('../modules/display/PublicDisplayPage').then((m) => ({ default: m.PublicDisplayPage })),
-);
-const HubPage = lazy(() =>
-  import('../modules/hub/HubPage').then((m) => ({ default: m.HubPage })),
 );
 const NewWorkspacePage = lazy(() =>
   import('../modules/hub/NewWorkspacePage').then((m) => ({ default: m.NewWorkspacePage })),
@@ -66,8 +79,9 @@ function App() {
     <ErrorBoundary>
       <IconContext.Provider value={ICON_DEFAULTS}>
         <BrowserRouter>
-          <AuthProvider>
+          <RoutedAuthProvider>
             <Routes>
+              <Route path="/node-enrollment" element={<Suspense fallback={<Fallback />}><NodeEnrollmentPage /></Suspense>} />
               {/* Public: login. */}
               <Route
                 path="/login"
@@ -109,7 +123,7 @@ function App() {
                   content, so the rail is present on every authenticated surface
                   incl. inside a workspace. */}
               <Route element={<AuthedLayout />}>
-                <Route path="/" element={<HubPage />} />
+                <Route path="/" element={<HomeRoute />} />
                 <Route path="/new" element={<NewWorkspacePage />} />
                 {/* Global (app-wide) settings — distinct from per-workspace. */}
                 <Route path="/settings" element={<GlobalSettingsPage />} />
@@ -120,7 +134,7 @@ function App() {
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>
-          </AuthProvider>
+          </RoutedAuthProvider>
         </BrowserRouter>
       </IconContext.Provider>
     </ErrorBoundary>
@@ -128,13 +142,3 @@ function App() {
 }
 
 export default App;
-
-function NotFound() {
-  return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-2 p-6 text-center">
-      <h1 className="text-sm font-semibold text-foreground">Page not found</h1>
-      <p className="text-sm text-muted-foreground">This ShuttleWorks page is no longer available.</p>
-      <a href="/" className="text-sm text-accent underline underline-offset-2">Go to your workspaces</a>
-    </main>
-  );
-}

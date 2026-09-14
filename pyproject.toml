@@ -13,6 +13,7 @@ testpaths = ["tests"]
 # (see test_suggestions_worker.py, test_proposal_pipeline_integration.py).
 asyncio_mode = "strict"
 markers = [
+    "shared_postgres: uses the shared disposable Postgres schema; run serially",
     # Tests that spawn real interpreters (seconds, not milliseconds).
     # Registered so an unknown-mark warning never masks a real one.
     "slow: spawns subprocesses; deselect with -m 'not slow'",

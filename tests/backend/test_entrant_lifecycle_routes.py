@@ -600,4 +600,4 @@ def test_a_viewer_cannot_move_an_entry(client, workspace_with_an_entry, action):
     assert client.post(f"/invites/{token}/accept", headers=CSRF).status_code == 200
 
     r = client.post(f"/tournaments/{w['tid']}/entries/{w['entry_id']}/{action}", headers=CSRF)
-    assert r.status_code == 403
+    assert r.status_code == 404

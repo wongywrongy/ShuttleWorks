@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from bracket.application import BracketResultService
 from db.models import (
+    AuthorityTransition,
     CloudEventProjection,
     EventOperation,
     SyncCheckpoint,
@@ -80,10 +81,20 @@ def test_checkout_freezes_cloud_mutations_during_prepare_and_active() -> None:
     node_id = uuid.uuid4()
     _tournament(session, tournament_id)
 
+    actor_id = uuid.uuid4()
+    from core.state_machine import set_transition_actor
+    set_transition_actor(session, "operator", actor_id)
+
     authority, capability, _checkpoint = begin_checkout(
         session, tournament_id=tournament_id, node_id=node_id
     )
     assert authority.state == "preparing"
+    transition = session.scalar(select(AuthorityTransition))
+    assert transition is not None
+    assert transition.transition_type == "checkout"
+    assert transition.actor_id == actor_id
+    assert transition.to_epoch == authority.epoch
+    assert transition.evidence_hash == authority.checkpoint_hash
     assert tournament_is_checked_out(session, tournament_id)
 
     mark_ready(

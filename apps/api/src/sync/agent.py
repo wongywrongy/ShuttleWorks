@@ -196,6 +196,9 @@ def drain_once() -> int:
 
 def main() -> None:
     logging.basicConfig(level=settings.log_level.upper())
+    from core.log_redaction import install_log_redaction
+
+    install_log_redaction()
     telemetry = configure_telemetry(settings, role="sync")
     log.info("sync_agent_started")
     try:
