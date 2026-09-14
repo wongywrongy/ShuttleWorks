@@ -160,6 +160,10 @@ def test_recovery_code_cannot_be_reused_or_bypass_password(authenticated_app):
     ("POST", "/transfer-ownership", {}, 422),
     ("POST", "/invites", {"role": "operator"}, 201),
     ("POST", "/display-token/rotate", "display", 200),
+    ("DELETE", "/display-token", None, 204),
+    ("POST", "/state/backup", None, 200),
+    ("DELETE", "/members/me", None, 409),  # the sole owner cannot leave
+    ("POST", "/authority/ready", {}, 422),
     ("GET", "/match-states/export/download", None, 200),
     # Empty workspaces have no bracket or backup; authorization must still
     # precede the ordinary 404 for those absent derived resources.
@@ -203,6 +207,23 @@ def test_sensitive_routes_require_fresh_proof_after_tenant_denial(
     assert proved.status_code == 200, proved.text
     accepted = client.request(method, f"/tournaments/{workspace_id}{suffix}", json=payload)
     assert accepted.status_code == fresh_status, accepted.text
+
+
+def test_invite_revocation_requires_fresh_proof_after_owner_denial(authenticated_app):
+    client, clock = authenticated_app
+    register(client)
+    _, recovery = enroll(client, clock)
+    workspace_id = client.post("/tournaments", json={"name": "Invite freshness"}).json()["id"]
+    issued = client.post(f"/tournaments/{workspace_id}/invites", json={"role": "operator"})
+    assert issued.status_code == 201, issued.text
+    invite_id = issued.json()["id"]
+    clock["now"] += timedelta(minutes=5)
+    missing = client.delete(f"/invites/{uuid.uuid4()}")
+    assert missing.status_code == 404  # an unknown invite never reaches freshness
+    denied = client.delete(f"/invites/{invite_id}")
+    assert denied.status_code == 401 and denied.json()["detail"]["code"] == "AUTH_REAUTH_REQUIRED"
+    assert client.post("/auth/mfa/verify", json={"currentPassword": PASSWORD, "code": recovery[0]}).status_code == 200
+    assert client.delete(f"/invites/{invite_id}").status_code == 204
 
 
 def test_client_side_export_check_requires_fresh_proof(authenticated_app):

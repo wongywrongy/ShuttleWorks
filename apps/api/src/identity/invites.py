@@ -25,7 +25,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from pydantic import BaseModel
 
-from core.dependencies import AuthUser, get_current_user
+from core.dependencies import AuthUser, get_current_user, require_fresh_authentication
 from core.error_codes import resource_not_found
 from core.roles import ROLE_LEVELS as _ROLE_LEVELS
 from core.limits import Email, StrictModel
@@ -175,6 +175,8 @@ def _require_invite_owner(
     role = repo.members.get_role(invite.tournament_id, user_uuid)
     if role != "owner":
         raise resource_not_found()
+    # After the owner check, so freshness never reveals another owner's invite.
+    require_fresh_authentication(user)
     return invite
 
 

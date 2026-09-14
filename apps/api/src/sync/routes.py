@@ -249,7 +249,7 @@ def revoke_offline_session(
 @authority_router.post(
     "/ready",
     response_model=AuthorityStatus,
-    dependencies=[Depends(require_tournament_access("operator"))],
+    dependencies=[Depends(require_tournament_access("operator", fresh=True))],
 )
 def ready(
     body: ReadyRequest,

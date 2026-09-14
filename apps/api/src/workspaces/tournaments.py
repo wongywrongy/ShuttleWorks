@@ -1175,7 +1175,9 @@ def list_tournament_backups(
 @router.post(
     "/{tournament_id}/state/backup",
     response_model=BackupCreatedDTO,
-    dependencies=[Depends(require_tournament_access("operator"))],
+    # Fresh like its download/delete/restore siblings: snapshots rotate, so a
+    # stale session could otherwise evict an older restore point.
+    dependencies=[Depends(require_tournament_access("operator", fresh=True))],
 )
 def create_tournament_backup(
     tournament_id: uuid.UUID = Path(...),
@@ -1562,7 +1564,7 @@ def _member_error(exc: members_service.MemberError):
 @router.delete(
     "/{tournament_id}/members/me",
     status_code=204,
-    dependencies=[Depends(require_tournament_access("viewer"))],
+    dependencies=[Depends(require_tournament_access("viewer", fresh=True))],
 )
 def leave_tournament(
     tournament_id: uuid.UUID = Path(...),

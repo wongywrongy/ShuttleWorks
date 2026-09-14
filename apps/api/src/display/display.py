@@ -190,7 +190,8 @@ def rotate_display_token(
     return DisplayTokenDTO(token=token, url=f"/display?token={token}", expiresAt=expiry)
 
 
-@manage_router.delete("", status_code=204, dependencies=[_OWNER])
+@manage_router.delete("", status_code=204,
+                      dependencies=[Depends(require_tournament_access("owner", fresh=True))])
 def revoke_display_token(
     tournament_id: uuid.UUID = Path(...),
     user: AuthUser = Depends(get_current_user),
