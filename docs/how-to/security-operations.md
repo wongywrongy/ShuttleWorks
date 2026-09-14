@@ -59,27 +59,56 @@ Do not delete an old key based on elapsed time or one successful login.
 
 ### Rotating the key ring
 
-Every step prints key identifiers and counts only. Run the database steps with
-the API's `DATABASE_URL`; they use the `admin` process role.
+Every step prints key identifiers and counts only. On a Compose stack, run the
+tool **inside the API image as root**: the image does not ship `tools/`, the
+database is reachable only on the stack network, and running as root lets each
+rewrite keep the ring owned by the API user (UID 1001). Mount the tool and the
+directory that holds the ring. From the deployment root (`/opt/ShuttleWorks`):
 
-1. `python3 tools/operator-mfa-keyring.py add-key secrets/operator_mfa_keys.json`
-   adds an inactive key. Restart every API process so each one can read it.
-2. `python3 tools/operator-mfa-keyring.py promote secrets/operator_mfa_keys.json --key-id NEW_ID`
-   makes it the key new seeds are written with. Restart every API process again.
-3. `.venv/bin/python tools/operator-mfa-keyring.py rewrap --keyring secrets/operator_mfa_keys.json`
-   re-encrypts every active and pending seed still wrapped by an older key, in one
-   transaction. It changes no factor generation and signs nobody out.
-4. `.venv/bin/python tools/operator-mfa-keyring.py usage --keyring secrets/operator_mfa_keys.json`
-   must now list only the new key.
+```sh
+keyring() {
+  docker compose -f infra/compose/docker-compose.selfhost.yml run --rm --no-deps -T --user 0 \
+    -v "$PWD/secrets:/keys" \
+    -v "$PWD/tools/operator-mfa-keyring.py:/app/tools/operator-mfa-keyring.py:ro" \
+    api python /app/tools/operator-mfa-keyring.py "$@"
+}
+```
+
+For the cloud stack use `docker-compose.cloud.yml` and the service `backend`.
+Its environment supplies `DATABASE_URL`; the database steps run as the `admin`
+process role.
+
+1. `keyring add-key /keys/operator_mfa_keys.json` adds an inactive key. Restart
+   every API process (`docker compose -f infra/compose/docker-compose.selfhost.yml restart api`) so each one can read it.
+2. `keyring promote /keys/operator_mfa_keys.json --key-id NEW_ID` makes it the
+   key new seeds are written with. Restart every API process again.
+3. `keyring rewrap --keyring /keys/operator_mfa_keys.json` re-encrypts every
+   active and pending seed still wrapped by an older key, in one transaction. It
+   changes no factor generation and signs nobody out.
+4. `keyring usage --keyring /keys/operator_mfa_keys.json` must now list only the
+   new key.
 5. Archive a copy of the ring that still holds the old key with any database
    backup taken before step 3; those backups need it to restore factors.
-6. `.venv/bin/python tools/operator-mfa-keyring.py remove-key secrets/operator_mfa_keys.json --key-id OLD_ID`
-   refuses while any seed still uses the key. Restart every API process.
+6. `keyring remove-key /keys/operator_mfa_keys.json --key-id OLD_ID` refuses
+   while any seed still uses the key. Restart every API process.
 
-Each change rewrites the file atomically, keeps mode `0600` and preserves its
-owner. The procedure is implemented and tested against a live enrolled operator
-(`tests/backend/test_operator_mfa_keyring_cli.py`); a rotation on a deployed
-stack has not yet been rehearsed and recorded.
+Restarts are required, not advice: each change replaces the file, and a running
+container keeps reading the file it started with until it restarts.
+
+For a suspected key compromise, run the same steps back to back; the old key is
+gone once step 6 succeeds. Rotation does not re-issue anyone's authenticator: if
+the database and the ring were both exposed, also have every operator replace
+their authenticator from Settings.
+
+**Evidence.** `tools/mfa-key-rotation-drill.py` performs exactly this procedure
+on an isolated copy of the cloud Compose stack (API image and Postgres 16) with
+an enrolled operator who signs in again after every restart, and checks the
+ring stays `0600` and owned by UID 1001. The
+[recorded run](../reviews/mfa-key-rotation-drill-2026-09-14.json) passed on
+2026-09-14. It is a rehearsal on a local stack; a rotation on a production host
+and a restore of a backup taken under a retired key have not been recorded.
+`tests/backend/test_operator_mfa_keyring_cli.py` covers the same tool in the
+backend suite.
 
 ## Individual offline operators
 

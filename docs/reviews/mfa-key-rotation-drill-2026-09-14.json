@@ -1,0 +1,60 @@
+{
+  "runAt": "2026-09-14T21:52:01.994111+00:00",
+  "scope": "local Docker copy of docker-compose.cloud.yml (API image + Postgres 16); synthetic operator",
+  "result": "PASS",
+  "sourceRevision": "625bc8d3280ce9fbdcef6bfdd3c77d0cea0b0c4b",
+  "retiredKeyId": "0aa13c871bf3046d",
+  "activeKeyId": "b1cfacdab2caade3",
+  "steps": [
+    {
+      "step": "register",
+      "result": "PASS"
+    },
+    {
+      "step": "enroll",
+      "result": "PASS",
+      "keyId": "0aa13c871bf3046d"
+    },
+    {
+      "step": "add-key+restart",
+      "result": "PASS",
+      "newKeyId": "b1cfacdab2caade3",
+      "custody": "1001:1001 600"
+    },
+    {
+      "step": "promote+restart",
+      "result": "PASS"
+    },
+    {
+      "step": "rewrap",
+      "result": "PASS",
+      "usageBefore": [
+        {
+          "keyId": "0aa13c871bf3046d",
+          "use": "active",
+          "factors": 1
+        }
+      ],
+      "rewrapped": {
+        "active": 1,
+        "pending": 0
+      },
+      "usageAfter": [
+        {
+          "keyId": "b1cfacdab2caade3",
+          "use": "active",
+          "factors": 1
+        }
+      ]
+    },
+    {
+      "step": "remove-key+restart",
+      "result": "PASS",
+      "custody": "1001:1001 600"
+    }
+  ],
+  "elapsedSeconds": 50.8,
+  "drillImplementationSha256": "e1e687adc168a98c97657cb3b6d2df493d5bce89ceb1ab8a284f51bd869e4802",
+  "toolImplementationSha256": "5ecf34272d828127e4d9f9c1eb214dc40fb7cf538f9ea27a68a23fcdeeadc197",
+  "notRehearsed": "a production host, its backups, and an incident-driven emergency rotation"
+}
