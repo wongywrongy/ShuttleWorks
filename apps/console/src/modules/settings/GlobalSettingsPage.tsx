@@ -24,7 +24,7 @@ import { EYEBROW_CLASS, TEXT_MUTED_XS, TEXT_TITLE_SM } from '../../lib/utils';
 import { useViewportBelow } from '../../hooks/useViewportBelow';
 import { SHELL_RAIL_MIN_WIDTH } from '../../platform/product-shell/WorkspaceShell';
 import { ActiveChoice } from '../../components/ActiveChoice';
-import { MfaCeremony } from '../../platform/auth/MfaCeremony';
+import { AuthenticatorSection } from './AuthenticatorSection';
 
 // Profile/security editing is locked for the local-mode bootstrap identity
 // (no password, no real account); a signed-in account (cloud mode, or any
@@ -162,8 +162,7 @@ function ProfilePage() {
 }
 
 function SecurityPage() {
-  const { isBootstrap, user, refresh } = useAuth();
-  const [showAuthenticator, setShowAuthenticator] = useState(false);
+  const { isBootstrap, user } = useAuth();
   const locked = isBootstrap;
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -255,18 +254,7 @@ function SecurityPage() {
         />
       </Section>
 
-      {!locked && user?.mfaRequired && <Section title="Authenticator and recovery codes" defaultOpen>
-        {showAuthenticator ? <MfaCeremony user={user} mode={user.mfaEnrolled ? 'replace' : 'enroll'} cancelLabel="Cancel"
-          onCancel={async () => { setShowAuthenticator(false); }}
-          onComplete={async () => { await refresh(); setShowAuthenticator(false); }} /> : <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Replace your authenticator to issue a new set of recovery codes. Existing codes are never displayed again.</p>
-          <Button onClick={() => {
-            void apiClient.requireFreshAuthentication().then(() => setShowAuthenticator(true)).catch((failure) => {
-              setFeedback({ kind: 'error', message: failure instanceof Error ? failure.message : 'Verify your identity to continue.' });
-            });
-          }}>Replace authenticator and recovery codes</Button>
-        </div>}
-      </Section>}
+      {!locked && user?.passwordConfigured && <AuthenticatorSection user={user} />}
 
       {locked ? (
         <Note>Password management is available once you sign in with an account.</Note>
