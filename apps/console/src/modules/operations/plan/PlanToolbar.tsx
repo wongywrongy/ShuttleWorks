@@ -316,24 +316,26 @@ export function PlanToolbar({
               ) : null}
               {bracketEnabled
                 ? (
-                    // Optional-called: unit tests mock apiClient partially,
-                    // and a URL builder is not worth a render crash.
+                    // Fetched then saved (not linked), so a stale session
+                    // asks to verify and the download resumes afterwards.
                     [
-                      ['JSON', apiClient.bracketExportJsonUrl?.(tid) ?? '#'],
-                      ['CSV', apiClient.bracketExportCsvUrl?.(tid) ?? '#'],
-                      ['ICS', apiClient.bracketExportIcsUrl?.(tid) ?? '#'],
+                      ['JSON', 'json'],
+                      ['CSV', 'csv'],
+                      ['ICS', 'ics'],
                     ] as const
-                  ).map(([label, url]) => (
-                    <a
+                  ).map(([label, format]) => (
+                    <button
                       key={label}
-                      href={url}
-                      download
-                      className="rounded-sm px-2 py-1.5 text-sm text-foreground hover:bg-muted/40"
+                      type="button"
+                      className="rounded-sm px-2 py-1.5 text-left text-sm text-foreground hover:bg-muted/40"
                       data-testid={`ops-export-${label.toLowerCase()}`}
-                      onClick={() => setExportOpen(false)}
+                      onClick={() => {
+                        setExportOpen(false);
+                        void apiClient.downloadBracketExport(tid, format).catch(() => undefined);
+                      }}
                     >
                       Bracket · {label}
-                    </a>
+                    </button>
                   ))
                 : null}
             </div>

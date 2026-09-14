@@ -2,6 +2,7 @@ import type ExcelJS from 'exceljs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../client';
 import { downloadXlsx } from '../xlsxDownload';
+import { FRESH_PROOF_CANCELLED } from '../sessionRestore';
 
 vi.mock('../client', () => ({ apiClient: { requireFreshAuthentication: vi.fn() } }));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -35,5 +36,14 @@ describe('operator spreadsheet download', () => {
     expect(click).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:verified');
     expect(document.querySelector('a[download]')).toBeNull();
+  });
+
+  it('writes nothing and reports false when the operator cancels verification', async () => {
+    const writeBuffer = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.mocked(apiClient.requireFreshAuthentication).mockRejectedValue(Object.assign(new Error('cancelled'), { code: FRESH_PROOF_CANCELLED }));
+    await expect(downloadXlsx('roster.xlsx', { xlsx: { writeBuffer } } as unknown as ExcelJS.Workbook)).resolves.toBe(false);
+    expect(writeBuffer).not.toHaveBeenCalled();
+    expect(click).not.toHaveBeenCalled();
   });
 });

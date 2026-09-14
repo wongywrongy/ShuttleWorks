@@ -157,7 +157,11 @@ export function AuthProvider({ children, workspaceId }: { children: ReactNode; w
 
   const user = isAuthenticated(identity) ? identity : rememberedUser ?? identity;
   const cancelReauthentication = useCallback(() => {
-    if (lock.current === 'reauth' && isAuthenticated(current.current)) setLock(null);
+    if (lock.current === 'reauth' && isAuthenticated(current.current)) {
+      setLock(null);
+      // Requests waiting on this verification (withFreshProof) give up.
+      window.dispatchEvent(new CustomEvent('sw:reauth-cancelled'));
+    }
   }, [setLock]);
   const value = useMemo<AuthContextValue>(() => ({
     session: isAuthenticated(identity) ? { user: identity } : null,

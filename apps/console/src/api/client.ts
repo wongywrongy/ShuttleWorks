@@ -5,6 +5,8 @@
 import axios, { type AxiosInstance } from 'axios';
 import { displayStateForStore, type DisplayStateDTO } from './displayProjection';
 import { useUiStore } from '../store/uiStore';
+import { attachmentFilename, saveBlob } from './fileDownload';
+import { isFreshProofCancelled, withFreshProof } from './sessionRestore';
 import type {
   ConfirmationDTO,
   EnrollmentDTO,
@@ -306,6 +308,27 @@ export class MatchVersionMismatch extends Error {
   }
 }
 
+/** A ``responseType: 'blob'`` request carries its JSON error body as a Blob;
+ *  decode it so ``handleApiResponseError`` sees the structured ``detail``
+ *  (``AUTH_REAUTH_REQUIRED`` above all) exactly as for a JSON request. */
+export async function decodeBlobError(error: { response?: { data?: unknown } } | null | undefined): Promise<void> {
+  const data = error?.response?.data;
+  if (typeof Blob === 'undefined' || !(data instanceof Blob) || !/json/i.test(data.type)) return;
+  try {
+    const text = typeof data.text === 'function'
+      ? await data.text()
+      : await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(data);
+      });
+    error!.response!.data = JSON.parse(text);
+  } catch {
+    // Leave the Blob; the generic message path still applies.
+  }
+}
+
 /**
  * The axios response-error interceptor body, extracted to module scope so
  * it can be exercised directly in tests (mocking `apiClient`'s methods
@@ -409,10 +432,14 @@ export function handleApiResponseError(error: any): never {
   // pollers stop via isTerminalPollError. getMe itself never lands
   // here (it maps 401 → null via validateStatus), so this can't loop.
   const isAuthRequest = /(?:^|\/)auth\//.test(error.config?.url ?? '');
+  // The pre-export freshness probe is an auth path but not a sign-in form:
+  // if it fails for any reason other than "verify again", nothing else will
+  // tell the operator their export did not start.
+  const isFreshnessProbe = /(?:^|\/)auth\/reauth-check$/.test(error.config?.url ?? '');
   const needsFreshAuth = code === 'AUTH_REAUTH_REQUIRED';
   if (needsFreshAuth) {
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('sw:reauth-required'));
-  } else if (error.response?.status === 401 && (!isAuthRequest || code === 'AUTH_NOT_SIGNED_IN')) {
+  } else if (error.response?.status === 401 && (!isAuthRequest || code === 'AUTH_NOT_SIGNED_IN' || code === 'AUTH_MFA_REQUIRED')) {
     try {
       window.dispatchEvent(new CustomEvent('sw:session-expired'));
     } catch {
@@ -422,7 +449,7 @@ export function handleApiResponseError(error: any): never {
   }
 
   const dedupeKey = `${error.response?.status ?? 'NETWORK'}:${message}`;
-  const suppress = isAuthRequest || needsFreshAuth || isLockCode || isMemberCode || _shouldSuppressErrorToast(dedupeKey);
+  const suppress = (isAuthRequest && !isFreshnessProbe) || needsFreshAuth || isLockCode || isMemberCode || _shouldSuppressErrorToast(dedupeKey);
   if (!suppress) {
     try {
       useUiStore.getState().pushToast({
@@ -500,7 +527,10 @@ class ApiClient {
 
     this.client.interceptors.response.use(
       (response) => response,
-      handleApiResponseError,
+      async (error) => {
+        await decodeBlobError(error);
+        return handleApiResponseError(error);
+      },
     );
   }
 
@@ -578,15 +608,17 @@ class ApiClient {
     await this.client.post('/auth/activity', undefined, this.authOptions());
   }
 
+  /** Resolves once the server accepts this session as fresh, after the
+   *  operator re-verifies if needed; rejects if they cancel. */
   async requireFreshAuthentication(): Promise<void> {
-    await this.client.post('/auth/reauth-check', undefined, this.authOptions());
+    await withFreshProof(() => this.client.post('/auth/reauth-check', undefined, this.authOptions()));
   }
 
   async changePassword(body: {
     currentPassword: string;
     newPassword: string;
   }, offline = false): Promise<void> {
-    await this.client.post(offline ? '/auth/node/change-password' : '/auth/change-password', body, this.authOptions());
+    await withFreshProof(() => this.client.post(offline ? '/auth/node/change-password' : '/auth/change-password', body, this.authOptions()));
   }
 
   /** Always 202 (no account-existence oracle). */
@@ -610,15 +642,15 @@ class ApiClient {
 
   /** Revoke-by-rotation: the old link dies the moment this returns. */
   async rotateDisplayToken(tid: string, expiresAt?: string): Promise<DisplayTokenDTO> {
-    const r = await this.client.post<DisplayTokenDTO>(
+    const r = await withFreshProof(() => this.client.post<DisplayTokenDTO>(
       `/tournaments/${tid}/display-token/rotate`,
       expiresAt ? { expiresAt } : {},
-    );
+    ));
     return r.data;
   }
 
   async revokeDisplayToken(tid: string): Promise<void> {
-    await this.client.delete(`/tournaments/${tid}/display-token`);
+    await withFreshProof(() => this.client.delete(`/tournaments/${tid}/display-token`));
   }
 
   // ---- Venue-board settings (branding + board switches) ----------------
@@ -810,7 +842,7 @@ class ApiClient {
 
   /** Delete a tournament. CASCADE wipes match-states + backups. */
   async deleteTournament(tid: string): Promise<void> {
-    await this.client.delete(`/tournaments/${tid}`);
+    await withFreshProof(() => this.client.delete(`/tournaments/${tid}`));
   }
 
   // ---- Workspace modules (control-plane sub-project #1) ----------------
@@ -953,10 +985,10 @@ class ApiClient {
     tid: string,
     body: InviteCreateDTO,
   ): Promise<InviteCreatedDTO> {
-    const r = await this.client.post<InviteCreatedDTO>(
+    const r = await withFreshProof(() => this.client.post<InviteCreatedDTO>(
       `/tournaments/${tid}/invites`,
       body,
-    );
+    ));
     return r.data;
   }
 
@@ -995,7 +1027,7 @@ class ApiClient {
 
   /** Owner-only. Stamps ``revoked_at`` on the invite. */
   async revokeInvite(token: string): Promise<void> {
-    await this.client.delete(`/invites/${token}`);
+    await withFreshProof(() => this.client.delete(`/invites/${token}`));
   }
 
   // ---- Member management (SP-CLOUD-3 Phase 1) -------------------------
@@ -1012,31 +1044,31 @@ class ApiClient {
     userId: string,
     role: string,
   ): Promise<TournamentMemberDTO> {
-    const r = await this.client.patch<TournamentMemberDTO>(
+    const r = await withFreshProof(() => this.client.patch<TournamentMemberDTO>(
       `/tournaments/${tid}/members/${userId}`,
       { role },
-    );
+    ));
     return r.data;
   }
 
   /** Owner-only. Removal takes effect on the member's very next request
    *  — membership is read live per request and never cached. */
   async removeMember(tid: string, userId: string): Promise<void> {
-    await this.client.delete(`/tournaments/${tid}/members/${userId}`);
+    await withFreshProof(() => this.client.delete(`/tournaments/${tid}/members/${userId}`));
   }
 
   /** Any member. Remove yourself. A sole owner cannot — same guard as
    *  being removed, so this is not a back door. */
   async leaveTournament(tid: string): Promise<void> {
-    await this.client.delete(`/tournaments/${tid}/members/me`);
+    await withFreshProof(() => this.client.delete(`/tournaments/${tid}/members/me`));
   }
 
   /** Owner-only. Promotes the target and demotes the caller to operator,
    *  in one transaction that never passes through a zero-owner state. */
   async transferOwnership(tid: string, userId: string): Promise<void> {
-    await this.client.post(`/tournaments/${tid}/transfer-ownership`, {
+    await withFreshProof(() => this.client.post(`/tournaments/${tid}/transfer-ownership`, {
       userId,
-    });
+    }));
   }
 
   // ---- Two-phase commit (proposal pipeline) ----------------------------
@@ -1358,9 +1390,9 @@ class ApiClient {
 
   /** Snapshot the current state into the backup pool. */
   async createTournamentBackup(tid: string): Promise<BackupCreatedDTO> {
-    const res = await this.client.post<BackupCreatedDTO>(
+    const res = await withFreshProof(() => this.client.post<BackupCreatedDTO>(
       `/tournaments/${tid}/state/backup`,
-    );
+    ));
     return res.data;
   }
 
@@ -1369,32 +1401,44 @@ class ApiClient {
     tid: string,
     filename: string,
   ): Promise<TournamentStateDTO> {
-    const res = await this.client.post<TournamentStateDTO>(
+    const res = await withFreshProof(() => this.client.post<TournamentStateDTO>(
       `/tournaments/${tid}/state/restore/${encodeURIComponent(filename)}`,
-    );
+    ));
     return res.data;
   }
 
   /** Read one authenticated snapshot for operator inspection without restoring it. */
   async inspectTournamentBackup(tid: string, filename: string): Promise<BackupSnapshotDTO> {
-    const res = await this.client.get<BackupSnapshotDTO>(
+    const res = await withFreshProof(() => this.client.get<BackupSnapshotDTO>(
       `/tournaments/${tid}/state/backups/${encodeURIComponent(filename)}`,
-    );
+    ));
     return res.data;
   }
 
-  /** The download URL for one backup snapshot (served as a JSON attachment).
-   *  A URL, not a fetch: the browser's own download flow handles the
-   *  Content-Disposition, and cookies ride along same-origin. */
-  backupDownloadUrl(tid: string, filename: string): string {
-    return `${this.client.defaults.baseURL}/tournaments/${tid}/state/backups/${encodeURIComponent(filename)}`;
+  /** Save one backup snapshot. Fetched, not navigated to, so a stale session
+   *  raises the verification lock and the download resumes after it; a plain
+   *  link would open a raw 401 instead. Resolves false if verification is
+   *  cancelled. */
+  async downloadTournamentBackup(tid: string, filename: string): Promise<boolean> {
+    return this.downloadFile(`/tournaments/${tid}/state/backups/${encodeURIComponent(filename)}`, filename);
+  }
+
+  private async downloadFile(path: string, fallback: string): Promise<boolean> {
+    try {
+      const response = await withFreshProof(() => this.client.get<Blob>(path, { responseType: 'blob' }));
+      saveBlob(attachmentFilename(response.headers?.['content-disposition'], fallback), response.data);
+      return true;
+    } catch (error) {
+      if (isFreshProofCancelled(error)) return false;
+      throw error;
+    }
   }
 
   /** Delete one backup (owner; 404 for an unknown name). */
   async deleteTournamentBackup(tid: string, filename: string): Promise<void> {
-    await this.client.delete(
+    await withFreshProof(() => this.client.delete(
       `/tournaments/${tid}/state/backups/${encodeURIComponent(filename)}`,
-    );
+    ));
   }
 
   // ---- Match State Management ------------------------------------------
@@ -1579,10 +1623,10 @@ class ApiClient {
 
   /** Download match states as a JSON file. */
   async exportMatchStates(tid: string): Promise<Blob> {
-    const response = await this.client.get(
+    const response = await withFreshProof(() => this.client.get(
       `/tournaments/${tid}/match-states/export/download`,
       { responseType: 'blob' },
-    );
+    ));
     return response.data;
   }
 
@@ -1995,16 +2039,10 @@ class ApiClient {
     return data;
   }
 
-  bracketExportJsonUrl(tid: string): string {
-    return `${API_BASE_URL}/tournaments/${tid}/bracket/export.json`;
-  }
-
-  bracketExportCsvUrl(tid: string): string {
-    return `${API_BASE_URL}/tournaments/${tid}/bracket/export.csv`;
-  }
-
-  bracketExportIcsUrl(tid: string): string {
-    return `${API_BASE_URL}/tournaments/${tid}/bracket/export.ics`;
+  /** Save the draw as JSON, CSV or iCalendar. Fetched (fresh-proof aware),
+   *  not linked; resolves false if verification is cancelled. */
+  async downloadBracketExport(tid: string, format: 'json' | 'csv' | 'ics'): Promise<boolean> {
+    return this.downloadFile(`/tournaments/${tid}/bracket/export.${format}`, `bracket.${format}`);
   }
 
   async getAuthorityStatus(tid: string): Promise<AuthorityStatusDTO | null> {

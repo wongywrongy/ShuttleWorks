@@ -4,6 +4,7 @@ import { Select, TextField } from '@scheduler/design-system/components';
 import { SectionCard, PAGE_BODY_WIDTH } from '../../components/control-plane';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { apiClient } from '../../api/client';
+import { isFreshProofCancelled } from '../../api/sessionRestore';
 import type { InviteRole, InviteSummaryDTO, DisplayTokenStatusDTO } from '../../api/dto';
 import { useAuth } from '../../context/AuthContext';
 import { inviteStatus, type InviteStatus } from './inviteStatus';
@@ -205,10 +206,16 @@ export function SharingTab({ tid, scope = 'all', onDisplayLinkChange }: { tid: s
         setDisplayStatus({ ...displayStatus, active: true, expiresAt: issued.expiresAt });
         onDisplayLinkChange?.({ tid, url: `${origin}${issued.url}` });
       }
-    } catch {
+    } catch (failure) {
       if (generation === displayGeneration.current) {
-        setActionError('The board link change could not be confirmed. Reload its status before trying again.');
-        setDisplayLoadError(true);
+        if (isFreshProofCancelled(failure)) {
+          // The operator declined to verify; the request never reached the
+          // server's write, so the previous link state still stands.
+          setActionError('Board link unchanged: verification was cancelled.');
+        } else {
+          setActionError('The board link change could not be confirmed. Reload its status before trying again.');
+          setDisplayLoadError(true);
+        }
       }
     } finally {
       if (generation === displayGeneration.current) setRotating(false);

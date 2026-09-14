@@ -50,25 +50,28 @@ export function BracketDataSection() {
       <Row
         label="JSON snapshot"
         control={
-          <a className={LINK_CLASSES} href={apiClient.bracketExportJsonUrl(tid)} download>
+          <button type="button" className={LINK_CLASSES}
+            onClick={() => void apiClient.downloadBracketExport(tid, 'json').catch(() => undefined)}>
             Export JSON
-          </a>
+          </button>
         }
       />
       <Row
         label="CSV spreadsheet"
         control={
-          <a className={LINK_CLASSES} href={apiClient.bracketExportCsvUrl(tid)} download>
+          <button type="button" className={LINK_CLASSES}
+            onClick={() => void apiClient.downloadBracketExport(tid, 'csv').catch(() => undefined)}>
             Export CSV
-          </a>
+          </button>
         }
       />
       <Row
         label="iCalendar feed"
         control={
-          <a className={LINK_CLASSES} href={apiClient.bracketExportIcsUrl(tid)} download>
+          <button type="button" className={LINK_CLASSES}
+            onClick={() => void apiClient.downloadBracketExport(tid, 'ics').catch(() => undefined)}>
             Export ICS
-          </a>
+          </button>
         }
         last
       />

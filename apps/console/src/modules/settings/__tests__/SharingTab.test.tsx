@@ -179,6 +179,19 @@ describe('SharingTab', () => {
     expect(apiClient.rotateDisplayToken).toHaveBeenCalledWith('t1', undefined);
   });
 
+  it('a cancelled verification leaves the link untouched and says so', async () => {
+    vi.mocked(apiClient.rotateDisplayToken).mockRejectedValue(
+      Object.assign(new Error('cancelled'), { code: 'AUTH_REAUTH_CANCELLED' }),
+    );
+    render(<SharingTab tid="t1" />);
+    const link = await screen.findByTestId('display-link-label');
+    await waitFor(() => expect(link.textContent).toContain('Venue board'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacing the venue board link' }));
+    expect(await screen.findByText('Board link unchanged: verification was cancelled.')).toBeInTheDocument();
+    expect(screen.queryByText(/could not be confirmed/)).not.toBeInTheDocument();
+  });
+
   it('Escape disarms a Rotate armed by mistake', async () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>

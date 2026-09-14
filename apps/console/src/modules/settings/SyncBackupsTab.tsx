@@ -49,7 +49,7 @@ export function SyncBackupsTab({ timeZone: timeZoneProp }: { timeZone?: string }
     restoreBackup,
     inspectBackup,
     deleteBackup,
-    downloadUrl,
+    downloadBackup,
   } = useTournamentBackups();
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -356,9 +356,9 @@ export function SyncBackupsTab({ timeZone: timeZoneProp }: { timeZone?: string }
                             key: 'download',
                             label: 'Download',
                             testId: `backup-download-${b.filename}`,
-                            // Content-Disposition: attachment — the browser
-                            // downloads without leaving the page.
-                            onSelect: () => window.location.assign(downloadUrl(b.filename)),
+                            // Fetched then saved, so a stale session asks to
+                            // verify and the download resumes afterwards.
+                            onSelect: () => void downloadBackup(b.filename),
                           },
                           {
                             key: 'delete',
