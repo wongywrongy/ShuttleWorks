@@ -80,9 +80,13 @@ cannot make already issued offline authority disappear from a disconnected node.
 fields and masks capability path families, including browser `/invite/` and
 `/e/partner/` links. Runtime nginx error logs are disabled because that log channel
 cannot redact request URLs. Status, upstream status and timing remain in the safe
-access log; startup `nginx -t` failures remain visible. Console email records only
-skipped delivery, without recipient, subject or body. The nginx policy does not
-sanitize other application logging. Disposable journey fixtures use
+access log; startup `nginx -t` failures remain visible. API, worker and sync text
+handlers install `core/log_redaction.py` after logging setup. It redacts capability
+paths, query strings, credential headers/fields and URL credentials in messages
+and tracebacks while retaining status and safe context. This is a guard for known
+credential surfaces, not a classifier for arbitrary secrets in free text. Console
+email records only skipped delivery, without recipient, subject or body; SMTP
+provider errors become a fixed delivery error. Disposable journey fixtures use
 `simulator/tournament_sim/mailbox.py`: loopback SMTP, synthetic recipients only,
 bounded mail in memory, destroyed when the fixture exits. Never point it at live
 accounts or use it as a production mail relay.

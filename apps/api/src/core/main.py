@@ -51,6 +51,7 @@ from core.dependencies import (
 )
 from core.exceptions import ConflictError, PreconditionFailedError
 from core.form_csrf import form_csrf_proves
+from core.log_redaction import install_log_redaction
 from core.paths import ALEMBIC_SCRIPTS
 from core.telemetry.bootstrap import configure_telemetry
 from core.version import APP_VERSION
@@ -66,6 +67,7 @@ logging.basicConfig(
     level=settings.log_level.upper(),
     format="%(levelname)-8s %(name)s %(message)s",
 )
+install_log_redaction()
 
 log = logging.getLogger("scheduler.app")
 

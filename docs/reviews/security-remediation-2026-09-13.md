@@ -78,7 +78,7 @@ Nginx runtime error logging is disabled because that channel cannot redact URLs;
 safe upstream status/timing fields remain available, and startup syntax failures
 remain visible. Removing redaction in a temporary source copy caused the native
 runtime test to fail. This controls nginx only. Raw display bearer storage,
-repeated display disclosure and direct API access-log redaction remain open.
+repeated display disclosure remain open.
 
 Staff invitations now expire seven days after creation regardless of delivery
 mode. The repository caps supplied deadlines and the acceptance guard rejects
@@ -119,6 +119,14 @@ sanitization. A disposable fixture on ports 18760–18762 completed all ten real
 account journeys and review extras, then cleaned up. Its SMTP sink accepts only
 synthetic `example.test` recipients, retains at most 256 messages of 64 KiB each
 in memory, and exposes only loopback ports. Tools no longer scrape API logs.
+
+Direct API text logs now use a wrapper around the existing formatter; worker and
+sync entry points install the same wrapper. It handles uvicorn's positional
+access records and full exception output, and telemetry sanitizes preformatted
+templates too. Twenty-four redaction/telemetry tests passed, including a real
+isolated uvicorn process. Disabling formatter installation made that live test
+fail on capability and query sentinels; normal paths and status codes remain in
+the log. Arbitrary unlabelled secrets in free text still require call-site review.
 
 ## R5
 
