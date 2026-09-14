@@ -85,12 +85,21 @@ def test_login_mfa_requires_password_and_one_use_factor_and_rotates_cookie(authe
     code = totp_code(seed, clock["now"].timestamp())
     wrong = client.post("/auth/mfa/verify", json={"currentPassword": "incorrect", "code": code})
     assert wrong.status_code == 401
+    assert wrong.json()["detail"]["code"] == "AUTH_INVALID_CREDENTIALS"
     assert client.get("/tournaments").status_code == 401
     verified = client.post("/auth/mfa/verify", json={"currentPassword": PASSWORD, "code": code})
     assert verified.status_code == 200, verified.text
     assert client.cookies.get("sw_session") != pending
     assert client.get("/tournaments").status_code == 200
     assert client.post("/auth/mfa/verify", json={"currentPassword": PASSWORD, "code": code}).status_code == 401
+
+
+def test_enrollment_with_a_wrong_password_names_the_password(authenticated_app):
+    client, _ = authenticated_app
+    register(client)
+    wrong = client.post("/auth/mfa/enroll", json={"currentPassword": "not the operator password"})
+    assert wrong.status_code == 401
+    assert wrong.json()["detail"]["code"] == "AUTH_INVALID_CREDENTIALS"
 
 
 def test_pending_session_expires_after_ten_minutes(authenticated_app):

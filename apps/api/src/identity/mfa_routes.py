@@ -68,6 +68,9 @@ def _failure(repo: LocalRepository, exc, attempt_keys: tuple[str, str]):
         return http_error(401, ErrorCode.AUTH_NOT_SIGNED_IN, "Sign in again")
     if exc.code == "AUTH_REAUTH_REQUIRED":
         return http_error(401, ErrorCode.AUTH_REAUTH_REQUIRED, "Verify your password and authenticator to continue")
+    if exc.code == "MFA_INVALID_CREDENTIALS":
+        # The password, not the authenticator, was wrong; name the right factor.
+        return http_error(401, ErrorCode.AUTH_INVALID_CREDENTIALS, "Current password is incorrect")
     return http_error(401, ErrorCode.AUTH_MFA_INVALID, "Invalid or expired authenticator proof")
 
 
