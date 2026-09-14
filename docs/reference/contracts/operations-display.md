@@ -45,7 +45,8 @@ match-state write — `matchStateChanged`.
 | `TournamentStateDTO` (`/state`) | **Control plane** | shared; Display consumes |
 | `BracketTournamentDTO` (`/bracket`) | **Bracket** | Display consumes |
 | The public TV rendering | **Display** | `displayContract.consumedEndpoints = [getTournamentState, getMatchStates, getBracket]`; `produces = []`, `emits = []` |
-| `/display/{token}/*` projection routes | **Display** | `displayContract.ownedEndpoints = [getDisplaySummary, getDisplayState, getDisplayMatchStates, getDisplayBracket]` — the public capability-token read path (SP-CLOUD-2) |
+| `/display/{token}/*` projection routes | **Display** | `displayContract.ownedEndpoints = [getDisplaySummary, getDisplayState, getDisplayMatchStates, getDisplayBracket, …]` — the public capability-token read path (SP-CLOUD-2) |
+| `…/display-token` management | **Display** | `getDisplayToken` (status only, never the bearer), `rotateDisplayToken`, `revokeDisplayToken` in `displayContract.ownedEndpoints`; issue and revoke require fresh operator proof |
 
 Display declares `reactsTo: ['matchStateChanged']` and `emits: []` — the read-only output module.
 Since SP-CLOUD-2 it *owns* the public `/display/{token}/*` projection routes (every route `GET`,

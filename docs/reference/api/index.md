@@ -248,6 +248,22 @@ opaque 256-bit tokens in an `httpOnly; SameSite=Lax` cookie — only their SHA-2
 | `POST /auth/change-password` | verify current password; revokes every *other* session |
 | `POST /auth/request-password-reset` | always `202` (no account-existence oracle); token rides the email seam |
 | `POST /auth/reset-password` | consume a reset token |
+| `POST /auth/mfa/enroll` | password proof; returns a ten-minute setup key bound to this session (`201`, `no-store`). Replacing an active factor needs fresh proof |
+| `POST /auth/mfa/confirm` | first authenticator code; activates the factor, returns eight recovery codes once and rotates the session cookie |
+| `POST /auth/mfa/verify` | password plus authenticator or recovery code; completes a password-stage sign-in or refreshes proof, rotating the cookie |
+| `POST /auth/mfa/recovery-codes` | password plus a current authenticator code; replaces every recovery code (fresh proof required) |
+| `DELETE /auth/mfa` | password plus code; turns off a voluntary factor. `409 AUTH_MFA_ENFORCED` where the deployment requires MFA |
+| `POST /auth/activity` | records deliberate input against the idle deadline; polling never calls it |
+| `POST /auth/reauth-check` | `204` when this session's proof is under five minutes old, else `401 AUTH_REAUTH_REQUIRED` |
+| `POST /auth/node/activate` | event node only: one-use administrator activation file plus a new node password |
+| `POST /auth/node/change-password` | event node only: change the node password (fresh proof required) |
+
+Operator sessions last at most twelve hours from issue and one hour idle. Where MFA is
+required (cloud and event-node deployments), a password-stage session can only finish the
+ceremony: every other route answers `401 AUTH_MFA_REQUIRED`. Sensitive workspace routes add
+`fresh=True` and answer `401 AUTH_REAUTH_REQUIRED` after the tenant and role checks when the
+proof is older than five minutes. The shared node-session routes
+`POST /tournaments/{id}/authority/offline-session[/bootstrap]` answer `410 AUTH_ENDPOINT_GONE`.
 
 In `AUTH_MODE=local` (the default) none of this is required: a request with no session resolves
 to the zero-UUID bootstrap operator (`local@dev`), preserving the zero-friction offline flow.

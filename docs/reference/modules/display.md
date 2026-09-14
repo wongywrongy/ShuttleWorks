@@ -48,7 +48,7 @@ call no-ops and the page shows a "missing parameter" message rather than crashin
 | --- | --- |
 | **Nav surfaces** | Preview (`tv`) · Configuration (`display-config`) — both declared in `displayContract.ownedSegments` and rendered by the workspace shell |
 | **Backend routes** | the public projection: `GET /display/{token}/{summary,state,match-states,bracket}` (`apps/api/src/display/display.py`) — every route `GET`, resolved by capability token only, serving a strict field allowlist; owner `GET·DELETE /tournaments/{id}/display-token` and `POST …/display-token/rotate`; workspace-scoped `GET·PUT /tournaments/{id}/board-settings` |
-| **`apiClient` methods** | owned: `getDisplaySummary`, `getDisplayState`, `getDisplayMatchStates`, `getDisplayBracket` (`displayContract.ownedEndpoints`); it *consumes* `getTournamentState`, `getMatchStates`, `getBracket` (`displayContract.consumedEndpoints`) |
+| **`apiClient` methods** | owned: `getDisplaySummary`, `getDisplayState`, `getDisplayMatchStates`, `getDisplayBracket`, `getBoardSettings`, `updateBoardSettings`, `getDisplayToken`, `rotateDisplayToken`, `revokeDisplayToken` (`displayContract.ownedEndpoints`); it *consumes* `getTournamentState`, `getMatchStates`, `getBracket` (`displayContract.consumedEndpoints`) |
 | **Frontend code** | `modules/display/` — `DisplayProduct.tsx`, `PublicDisplayPage.tsx` (the kind-router), `MeetDisplayPage.tsx`, `bracketDisplay/`, the `publicDisplay/` view components + `useDisplaySync`, and the TV presets (`publicDisplay/displayPresets.ts`) |
 
 The single source of truth for these claims is `platform/contracts/moduleContract.ts` (`displayContract`),
