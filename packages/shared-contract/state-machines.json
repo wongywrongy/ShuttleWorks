@@ -285,9 +285,7 @@
       "initial": [
         "pending"
       ],
-      "terminal": [
-        "consumed"
-      ],
+      "terminal": [],
       "transitions": [
         {
           "event": "issue",

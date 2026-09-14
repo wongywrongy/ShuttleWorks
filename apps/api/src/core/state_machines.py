@@ -27,7 +27,9 @@ OPERATOR_MFA_FACTOR = machine("operator_mfa_factor", "unconfigured active", "unc
     edge("administrator_reset", "unconfigured active", "unconfigured", "system"),
 ])
 
-NODE_OPERATOR_ENROLLMENT = machine("node_operator_enrollment", "pending consumed", "pending", "consumed", [
+# No terminal state: explicit administrator recovery returns a consumed
+# enrollment row to pending, so `consumed` is an end of the happy path only.
+NODE_OPERATOR_ENROLLMENT = machine("node_operator_enrollment", "pending consumed", "pending", "", [
     edge("issue", "pending", "pending", "system"),
     edge("activate", "pending", "consumed", "operator"),
     edge("administrator_reset", "pending consumed", "pending", "system"),

@@ -26,7 +26,9 @@ unsent forms mounted behind its session lock and resumes only the same identity.
 The local administrator is attributed to the node UUID; activation is attributed
 to the operator UUID. Explicit administrator recovery records its reason on both
 enrollment and factor histories, revokes existing credentials, and returns the
-factor to `unconfigured`. It cannot be invoked through the LAN API. Migration
+factor to `unconfigured`. Because that recovery returns the same enrollment row
+from `consumed` to `pending`, the graph has no terminal state, like
+`display_capability`. It cannot be invoked through the LAN API. Migration
 `0007` binds enrollment to the member, workspace and authority epoch with composite
 foreign keys. See [the operating procedure](../how-to/security-operations.md).
 

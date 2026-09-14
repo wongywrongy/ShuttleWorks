@@ -42,7 +42,7 @@ Initial: scheduled. Terminal: retired.
 
 ## node_operator_enrollment (version 1)
 
-Initial: pending. Terminal: consumed.
+Initial: pending. Terminal: none.
 
 | Event | From | To | Actor | Guard | Consequential | Meaning |
 | --- | --- | --- | --- | --- | --- | --- |
