@@ -7,11 +7,111 @@ UUID acceptance), revocation-by-rotation, and no mutation surface.
 from __future__ import annotations
 
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from tests.backend._helpers import isolate_test_database, seed_tournament
 
 CSRF = {"X-ShuttleWorks-CSRF": "1"}
+
+
+def test_management_read_never_issues_or_returns_a_capability(client):
+    import uuid
+    from db.models import DisplayToken
+    from db.session import SessionLocal
+
+    tid = seed_tournament(client, name="Read-only link management")
+    response = client.get(f"/tournaments/{tid}/display-token")
+    assert response.status_code == 200
+    assert set(response.json()) == {"active", "expiresAt", "defaultExpiresAt"}
+    assert response.json()["active"] is False
+    with SessionLocal() as session:
+        assert session.get(DisplayToken, uuid.UUID(tid)) is None
+
+
+def test_display_hash_deadline_and_actor_are_enforced(client, monkeypatch):
+    import uuid
+    from hashlib import sha256
+    from sqlalchemy import select
+    from db.models import DisplayToken, StateTransition
+    from db.session import SessionLocal
+    import repositories.local as repository
+
+    tid = seed_tournament(client, name="Finite display")
+    expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    issued = client.post(f"/tournaments/{tid}/display-token/rotate", headers=CSRF,
+                         json={"expiresAt": expiry.isoformat()})
+    assert issued.status_code == 200, issued.text
+    assert issued.headers["cache-control"] == "no-store"
+    token = issued.json()["token"]
+    with SessionLocal() as session:
+        row = session.get(DisplayToken, uuid.UUID(tid))
+        assert not hasattr(row, "token")
+        assert row.token_hash == sha256(token.encode()).hexdigest()
+        assert row.expires_at.replace(tzinfo=timezone.utc) == expiry
+        audit = session.scalar(select(StateTransition).where(StateTransition.machine == "display_capability"))
+        assert audit.actor_type == "operator" and audit.actor_id == str(uuid.UUID(int=0))
+        assert token not in str(audit.detail)
+    assert token not in client.get(f"/tournaments/{tid}/display-token").text
+    class Clock(datetime):
+        current = expiry - timedelta(microseconds=1)
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+    monkeypatch.setattr(repository, "datetime", Clock)
+    assert client.get(f"/display/{token}/summary").status_code == 200
+    Clock.current = expiry
+    denied = client.get("/display/unknown/summary")
+    for surface in ("summary", "state", "match-states", "bracket"):
+        response = client.get(f"/display/{token}/{surface}")
+        assert response.status_code == 404 and response.content == denied.content
+
+
+def test_revoke_does_not_issue_a_replacement_and_records_actor(client, workspace):
+    from sqlalchemy import select
+    from db.models import StateTransition
+    from db.session import SessionLocal
+
+    tid, token = workspace
+    assert client.delete(f"/tournaments/{tid}/display-token", headers=CSRF).status_code == 204
+    assert client.get(f"/display/{token}/summary").status_code == 404
+    assert client.get(f"/tournaments/{tid}/display-token").json()["active"] is False
+    with SessionLocal() as session:
+        row = session.scalar(select(StateTransition).where(StateTransition.event == "revoke",
+                                                          StateTransition.machine == "display_capability"))
+        assert row.actor_id == "00000000-0000-0000-0000-000000000000"
+
+
+@pytest.mark.parametrize("expiry", [None, "2026-01-01T00:00:00Z", "2099-01-01T00:00:00"])
+def test_undated_display_requires_explicit_future_aware_expiry(client, expiry):
+    tid = seed_tournament(client)
+    response = client.post(f"/tournaments/{tid}/display-token/rotate", headers=CSRF,
+                           json={} if expiry is None else {"expiresAt": expiry})
+    assert response.status_code == 422
+    assert client.get(f"/tournaments/{tid}/display-token").json()["active"] is False
+
+
+def test_dated_display_uses_venue_end_date_and_cannot_extend_past_it(client):
+    import uuid
+    from db.models import Tournament
+    from db.session import SessionLocal
+
+    tid = seed_tournament(client)
+    with SessionLocal() as session:
+        workspace = session.get(Tournament, uuid.UUID(tid))
+        workspace.tournament_date = "2099-03-01"
+        workspace.tournament_end_date = "2099-03-10"
+        workspace.time_zone = "Asia/Taipei"
+        session.commit()
+    expected = "2099-03-17T16:00:00Z"
+    assert client.get(f"/tournaments/{tid}/display-token").json()["defaultExpiresAt"] == expected
+    issued = client.post(f"/tournaments/{tid}/display-token/rotate", headers=CSRF)
+    assert issued.status_code == 200 and issued.json()["expiresAt"] == expected
+    too_late = client.post(f"/tournaments/{tid}/display-token/rotate", headers=CSRF,
+                          json={"expiresAt": "2099-03-18T00:00:00Z"})
+    assert too_late.status_code == 422
+    assert client.get(f"/display/{issued.json()['token']}/summary").status_code == 200
 
 
 @pytest.fixture
@@ -23,21 +123,26 @@ def client(tmp_path, monkeypatch):
     return TestClient(app)
 
 
+def issue_display(client, tid):
+    response = client.post(f"/tournaments/{tid}/display-token/rotate", headers=CSRF,
+        json={"expiresAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()})
+    assert response.status_code == 200, response.text
+    return response.json()["token"]
+
+
 @pytest.fixture
 def workspace(client):
     tid = seed_tournament(client, name="TV Night")
-    token = client.get(f"/tournaments/{tid}/display-token").json()["token"]
+    token = issue_display(client, tid)
     return tid, token
 
 
 def test_token_minted_once_and_rotatable(client, workspace):
     tid, token = workspace
-    again = client.get(f"/tournaments/{tid}/display-token").json()["token"]
-    assert again == token  # stable until rotated
-
-    rotated = client.post(
-        f"/tournaments/{tid}/display-token/rotate", headers=CSRF
-    ).json()["token"]
+    status = client.get(f"/tournaments/{tid}/display-token").json()
+    assert status["active"] is True
+    assert "token" not in status and "url" not in status
+    rotated = issue_display(client, tid)
     assert rotated != token
     # Old capability is dead, new one lives — for an anonymous caller.
     client.cookies.clear()
@@ -277,6 +382,9 @@ def test_token_management_is_owner_gated(client, workspace):
         json={"email": "other@example.com", "password": "a fine passphrase!"},
     )
     assert client.get(f"/tournaments/{tid}/display-token").status_code == 404
+    assert client.post(f"/tournaments/{tid}/display-token/rotate", headers=CSRF,
+                       json={"expiresAt": "2099-01-01T00:00:00Z"}).status_code == 404
+    assert client.delete(f"/tournaments/{tid}/display-token", headers=CSRF).status_code == 404
 
 
 def test_email_invite_rides_the_seam_and_expires(client, workspace, monkeypatch):
@@ -542,7 +650,7 @@ def test_summary_carries_the_workspace_timezone_not_a_hardcoded_utc(client):
     assert client.patch(
         f"/tournaments/{tid}", json={"timeZone": "Asia/Taipei"}, headers=CSRF
     ).status_code == 200
-    token = client.get(f"/tournaments/{tid}/display-token").json()["token"]
+    token = issue_display(client, tid)
 
     client.cookies.clear()
     assert client.get(f"/display/{token}/summary").json()["timeZone"] == "Asia/Taipei"
@@ -668,29 +776,30 @@ def test_an_unrecorded_zero_zero_is_not_published_as_a_score(client, workspace):
     assert "notes" not in body["m-real"]
 
 
-def test_two_first_display_opens_converge_on_one_capability(client, monkeypatch):
+def test_concurrent_display_replacements_leave_only_the_last_capability(client):
     import uuid
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
-    from sqlalchemy.orm import Session
-    from db.models import DisplayToken
+    from sqlalchemy import select, func
+    from db.models import DisplayToken, StateTransition
     from db.session import SessionLocal
     from repositories import LocalRepository
 
-    tid = uuid.UUID(seed_tournament(client, name="Concurrent display opens"))
-    both_read = Barrier(2)
-    get = Session.get
-    def overlapping_get(session, model, key, *args, **kwargs):
-        result = get(session, model, key, *args, **kwargs)
-        if model is DisplayToken and not session.info.get("first_token_read"):
-            session.info["first_token_read"] = True
-            assert result is None
-            both_read.wait(timeout=10)
-        return result
-    monkeypatch.setattr(Session, "get", overlapping_get)
-    def open_display(candidate):
+    tid = uuid.UUID(seed_tournament(client, name="Concurrent display replacements"))
+    ready = Barrier(2)
+    candidates = ["isolated-candidate-a", "isolated-candidate-b"]
+    def issue(candidate):
         with SessionLocal() as session:
-            return LocalRepository(session).get_or_create_display_token(tid, candidate)
+            ready.wait(timeout=10)
+            row = LocalRepository(session).rotate_display_token(tid, candidate,
+                datetime.now(timezone.utc) + timedelta(days=1), str(uuid.UUID(int=0)))
+            assert row is not None
     with ThreadPoolExecutor(max_workers=2) as pool:
-        tokens = list(pool.map(open_display, ["isolated-candidate-a", "isolated-candidate-b"]))
-    assert tokens[0] == tokens[1]
+        list(pool.map(issue, candidates))
+    with SessionLocal() as session:
+        repo = LocalRepository(session)
+        assert sum(repo.get_tournament_by_display_token(token) is not None for token in candidates) == 1
+        assert session.scalar(select(func.count()).select_from(DisplayToken)) == 1
+        history = session.scalars(select(StateTransition).where(StateTransition.machine == "display_capability")).all()
+        assert len(history) == 2
+        assert {row.actor_id for row in history} == {str(uuid.UUID(int=0))}

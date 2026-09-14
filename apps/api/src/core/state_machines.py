@@ -11,6 +11,12 @@ def machine(name, states, initial, terminal, transitions, attribute="status"):
                             frozenset(terminal.split()), tuple(transitions), attribute))
 
 
+DISPLAY_CAPABILITY = machine("display_capability", "inactive active", "inactive", "", [
+    edge("issue", "inactive active", "active"),
+    edge("revoke", "inactive active", "inactive"),
+])
+
+
 MATCH = machine("match", "scheduled called playing finished retired", "scheduled", "retired", [
     edge("call", "scheduled", "called"),
     edge("start", "called", "playing"),

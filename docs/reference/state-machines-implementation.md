@@ -9,6 +9,11 @@ their definitions and derive their existing transition tables from them. The
 engine is `apps/api/src/core/state_machine.py`. The [generated tables](./state-machines.md)
 and `packages/shared-contract/state-machines.json` come from the registry.
 
+The security follow-up adds `display_capability`: issue/replacement and revocation
+append history in the same transaction as hash/deadline storage. Its active state
+is derived from row presence and real-clock expiry, rather than another status
+column. Natural expiry performs no write; request resolution checks the deadline.
+
 Run `npm run state-machines:generate` after editing definitions and
 `npm run state-machines:check` to check generated artifacts. The Documentation
 CI job runs that check. The exporter uses only the Python standard library.

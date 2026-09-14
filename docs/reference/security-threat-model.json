@@ -92,7 +92,7 @@
       "id": "R4",
       "statement": "Secrets are never stored or logged in clear. Passwords Argon2id; every bearer token stored as a hash; plaintext exists only in the one response that issues it.",
       "owner": "identity-module-owner",
-      "verdict": "FAIL",
+      "verdict": "PASS",
       "reviewedAt": "2026-09-14",
       "review": "docs/reviews/security-remediation-2026-09-13.md#r4",
       "enforcedBy": [
@@ -107,6 +107,9 @@
         "apps/api/src/alembic/versions/0003_finite_staff_invites.py",
         "apps/api/src/core/tokens.py",
         "apps/api/src/alembic/versions/0004_hash_staff_invites.py",
+        "apps/api/src/alembic/versions/0005_hash_and_expire_display_links.py",
+        "apps/api/src/display/capabilities.py",
+        "apps/api/src/display/display.py",
         "apps/api/src/identity/invites.py",
         "apps/console/src/modules/settings/SharingTab.tsx",
         "apps/api/src/core/email.py",
@@ -124,6 +127,8 @@
         "tools/check-nginx.sh",
         "tools/check-nginx-runtime.py",
         "tests/backend/unit/test_invite_expiry.py",
+        "tests/backend/unit/test_display_capability_expiry.py",
+        "tests/backend/unit/test_fixture_display.py",
         "tests/backend/unit/test_repositories.py",
         "tests/backend/unit/test_baseline_schema.py",
         "tests/backend/test_invites.py",
@@ -135,9 +140,7 @@
         "tests/backend/unit/test_config.py",
         "apps/console/src/api/__tests__/displayCapability.test.tsx"
       ],
-      "gaps": [
-        "SGR-20260913-04: staff invitation hashing, issue-once management, nginx/API log redaction and email logging controls are implemented; raw display storage, repeated display disclosure and display expiry remain open."
-      ]
+      "gaps": []
     },
     {
       "id": "R5",

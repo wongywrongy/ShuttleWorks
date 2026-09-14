@@ -47,6 +47,7 @@ import type {
   CommandConflictDTO,
   UserDTO,
   DisplayTokenDTO,
+  DisplayTokenStatusDTO,
   BoardSettingsDTO,
   DisplaySummaryDTO,
   EntryPageDTO,
@@ -540,20 +541,25 @@ class ApiClient {
 
   // ---- Display capability tokens (owner-gated mint/rotate) -------------
 
-  /** The workspace's public display link, minted on first ask. Owner-only. */
-  async getDisplayToken(tid: string): Promise<DisplayTokenDTO> {
-    const r = await this.client.get<DisplayTokenDTO>(
+  /** Owner-only metadata. Reading never issues or returns a bearer token. */
+  async getDisplayToken(tid: string): Promise<DisplayTokenStatusDTO> {
+    const r = await this.client.get<DisplayTokenStatusDTO>(
       `/tournaments/${tid}/display-token`,
     );
     return r.data;
   }
 
   /** Revoke-by-rotation: the old link dies the moment this returns. */
-  async rotateDisplayToken(tid: string): Promise<DisplayTokenDTO> {
+  async rotateDisplayToken(tid: string, expiresAt?: string): Promise<DisplayTokenDTO> {
     const r = await this.client.post<DisplayTokenDTO>(
       `/tournaments/${tid}/display-token/rotate`,
+      expiresAt ? { expiresAt } : {},
     );
     return r.data;
+  }
+
+  async revokeDisplayToken(tid: string): Promise<void> {
+    await this.client.delete(`/tournaments/${tid}/display-token`);
   }
 
   // ---- Venue-board settings (branding + board switches) ----------------

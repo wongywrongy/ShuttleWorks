@@ -15,7 +15,7 @@ source revisions.
 | R1 | PASS | `core/dependencies.py`, `core/main.py` | `tests/backend/test_auth_surface.py`, `test_cross_principal_sessions.py` | Existing session authority retained; MFA/session-strength debt is tracked separately. |
 | R2 | FAIL | `core/error_codes.py`, `core/dependencies.py`, `core/main.py`, `sync/routes.py` | `tests/backend/test_tenant_isolation.py`, `test_invite_oracle.py` | Role and HTTP/protocol 404 envelopes converge; unpublished collections still have 200/`published=false` contracts. |
 | R3 | FAIL | `core/roles.py`, `db/models.py`, `identity/invites.py` | `tests/backend/test_host_split.py`, `unit/test_baseline_schema.py` | One shared role ladder; sole-parent outbox FK exception still needs its dedicated invariant check. |
-| R4 | FAIL | `infra/nginx/log-redaction.conf`, `core/log_redaction.py`, `core/email.py`, `core/tokens.py`, `repositories/local.py` | `tools/check-nginx.sh`, `tests/backend/test_invites.py`, `unit/test_log_redaction.py`, `unit/test_email_transport.py` | Staff hashing, issue-once links, email and text-log controls are implemented; raw display storage, repeated display disclosure and display expiry remain. |
+| R4 | PASS | `infra/nginx/log-redaction.conf`, `core/log_redaction.py`, `core/email.py`, `core/tokens.py`, `repositories/local.py`, `display/display.py`, migration `0005` | `tools/check-nginx.sh`, `tests/backend/test_invites.py`, `test_display_public.py`, `unit/test_log_redaction.py`, `unit/test_email_transport.py`, `unit/test_baseline_schema.py` | Staff/display credentials are hashed, finite and issued once; API/nginx/email logging controls pass. Independent review remains pending. |
 | R5 | FAIL | `sync/service.py`, `alembic/versions/0002_authority_creation_audit.py` | `tests/backend/unit/test_sync_protocol.py`, `test_authority_lifecycle.py`, `test_checkpoint_import.py` | Epoch creation is audited; complete actor/lifecycle coverage and key rotation remain. |
 | R6 | PASS | `core/config.py`, `core/main.py`, `sync/compatibility.py` | Existing startup, migration and compatibility suites | Existing fail-closed controls retained. |
 | R7 | FAIL | `competition/routes.py`, `meet/schedule_director.py`, `meet/schedule_repair.py`, `bracket/brackets.py`, `entries/entries_routes.py` | `tests/backend/unit/test_golden_rule_input_bounds.py`, derived-output tests | Nested scalar/list/map references bounded; operator Turnstile and remaining input inventory still open. |
@@ -77,8 +77,7 @@ of the sentinel.
 Nginx runtime error logging is disabled because that channel cannot redact URLs;
 safe upstream status/timing fields remain available, and startup syntax failures
 remain visible. Removing redaction in a temporary source copy caused the native
-runtime test to fail. This controls nginx only. Raw display bearer storage,
-repeated display disclosure remain open.
+runtime test to fail. The separate application formatter below covers API logs.
 
 Staff invitations now expire seven days after creation regardless of delivery
 mode. The repository caps supplied deadlines and the acceptance guard rejects
@@ -99,8 +98,36 @@ IDs and hashes their original values so existing links retain their expiry and
 revocation state. This changes logical rows, not historical backups or storage
 pages. The HTTP regression failed on raw-ID storage before implementation.
 The Sharing UI keeps an issued link only in memory, including after a failed list
-refresh; remounting or changing workspaces discards it. Display expiry, hashed
-display storage and one-time display issuance remain open.
+refresh; remounting or changing workspaces discards it.
+
+Display links now have the same issue-once contract. Owner GET returns only
+status/deadlines, explicit POST issues or replaces, and DELETE revokes without
+replacement. Every lookup hashes the supplied token and rejects the exact expiry
+before reading cached projection data. The mutation transaction appends an
+actor-attributed `display_capability` transition without recording the bearer.
+Removing hashing, expiry enforcement or audit persistence independently fails the
+HTTP safety regression; the metadata-GET test failed before implementation.
+
+Migration 0005 replaces raw storage with a digest and non-null deadline. Dated
+links stop at midnight after the event's final day plus seven full venue-local
+calendar days (including DST); undated/malformed legacy links expire at migration
+time and require an explicit replacement deadline. It preserves creation times.
+The complete schema/migration suite passed all 28 cases across SQLite/PostgreSQL.
+The focused display/projection/expiry run passed 71 tests with 14 optional dialect
+skips, supplied by that separate database run. Later owner and fixture checks pass.
+
+The console never reloads an old bearer. Sharing keeps a newly issued URL only in
+the current view, and Board settings previews that same URL. The legacy preview
+entry redirects to Board settings. Replacement/revocation retain confirmation;
+workspace changes reset both the issued URL and confirmation. Expired event
+windows explain why a new link cannot be issued. Overview reads only active status.
+
+The frozen-date browser fixture uses a clearly labelled synthetic credential
+seed restricted to fixture-up's marked temporary SQLite database. It stores only
+hashes, records its actor and grants 24 hours on the real clock; ordinary API
+issuance continues to refuse ended events. Its owner-only temporary manifest is
+test delivery material. The complete disposable fixture, ten account journeys and
+review extras passed on ports 18770–18772 and cleaned up afterward.
 
 Executed follow-up: 127 backend invite/oracle/repository/schema tests passed
 (13 PostgreSQL cases skipped in that invocation); the disposable PostgreSQL
@@ -305,7 +332,7 @@ validation remains in the same suite. All 18 register checks pass.
 - Source-secret scanning: zero findings on committed source, with live synthetic
   detection and empty controls; no raw secret report retained.
 
-P03 and P07 repository implementation is present. P01/P02/P04/P05/P06/P09/P10/P13/
+P03, P05 and P07 repository implementation is present. P01/P02/P04/P06/P09/P10/P13/
 P14/P23 are partial; P08/P11/P12/P15–P22 remain incomplete. The pre-existing user fix in
 `apps/api/Dockerfile` is included intact and credited separately because the image
 must copy the competition package imported by the application. No deployment/reset,
@@ -344,3 +371,29 @@ call-history clearing; module mock implementations and all assertions are retain
 Test-only Node types and precise callback mock signatures restore TypeScript checks.
 ExcelJS data-bar UUID generation and XLSX round-trip validation pass. These are
 branch results, not a claim that default-branch hosted alerts have closed.
+
+The display follow-up passes all 2,405 console tests and its production build,
+lint and dependency boundaries (zero errors; 154/13 existing warnings). Documentation
+passes 62 checks with six skips and builds; all 15 backend import contracts pass.
+The register's 18 checks pass with R4's enforcement and executable evidence updated.
+Removing either the late-issuance guard or workspace confirmation reset makes its
+Sharing regression fail. The frozen fixture grant tests pass and reject unmarked
+databases without touching them.
+
+Hosted CI on `38cf18e1` passed the frontend, entrant, browser, docs, Compose,
+observability and security jobs, but backend collection failed because the live
+logging test imported undeclared `httpx`. Commit `bf2655d0` uses the declared
+`httpx2` transport; all 14 logging checks pass locally. Hosted success for that
+correction and the subsequent display commit must be verified separately.
+
+The final display backend partition passes **2,527 tests in 14m21s**. Its one
+pre-existing SQLAlchemy warning concerns a duplicate cascade DELETE expectation.
+The separately executed httpx2 logging test supplies the collection-fix evidence.
+The next R2 collection-denial regression was added after this run's collection;
+it deliberately fails on the still-unfixed 200 envelopes and belongs to the next
+delivery, not this display result.
+
+The instrumented browser rerun passes all **eight console contracts and 23
+accessibility checks**. The initial run's eight failures each reported the missing
+`VITE_ERROR_HARNESS` flag because a normal bundle had been reused; rebuilding with
+the wrapper's required instrumentation resolved them without relaxing assertions.

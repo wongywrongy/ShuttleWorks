@@ -1133,6 +1133,13 @@ export interface UserDTO {
 export interface DisplayTokenDTO {
   token: string;
   url: string;
+  expiresAt: string;
+}
+
+export interface DisplayTokenStatusDTO {
+  active: boolean;
+  expiresAt: string | null;
+  defaultExpiresAt: string | null;
 }
 
 /**

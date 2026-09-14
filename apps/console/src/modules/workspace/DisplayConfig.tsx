@@ -28,12 +28,11 @@
  * Built from the shared settings grammar (`Section` + `Row`), the same as
  * Meet and Bracket Configuration.
  */
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import type { WorkspaceModule } from '../../platform/product-shell/types';
 import { useWorkspaceModules } from '../../platform/domain/useWorkspaceModules';
 import { useAction } from '../../hooks/useAction';
-import { apiClient } from '../../api/client';
 import { Row, Seg, Section } from '../../platform/engine-config/SettingsControls';
 import { DisplayLayoutEditor } from './displayConfig/DisplayLayoutEditor';
 import { BoardAppearance } from './displayConfig/BoardAppearance';
@@ -47,6 +46,7 @@ export function DisplayConfig({
   tid,
   modules,
   linkSlot,
+  publicUrl = null,
 }: {
   tid: string;
   modules: WorkspaceModule[];
@@ -55,6 +55,8 @@ export function DisplayConfig({
    *  owns them. Rendered directly under the on/off switch, which is the
    *  order the page's questions come in. */
   linkSlot?: ReactNode;
+  /** Only the link issued in this mounted view can be previewed. */
+  publicUrl?: string | null;
 }) {
   const meetEnabled = modules.some((m) => m.id === 'meet' && m.status === 'enabled');
   const bracketEnabled = modules.some((m) => m.id === 'bracket' && m.status === 'enabled');
@@ -83,39 +85,6 @@ export function DisplayConfig({
       [enable, disable],
     ),
   );
-
-  // The public link is a CAPABILITY link, minted server-side and revocable by
-  // rotation (SP-CLOUD-2) — the same `/tournaments/{id}/display-token` seam
-  // `SharingTab` mints from, so the two surfaces can't drift on the URL shape.
-  // Owner-only: a non-owner's mint 403s, which reads as `mintDenied` below —
-  // distinguished from a genuine load failure so the reason line never tells
-  // a non-owner to "retry" an action they cannot take.
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const [publicUrl, setPublicUrl] = useState<string | null>(null);
-  const [mintDenied, setMintDenied] = useState(false);
-  const [mintErrored, setMintErrored] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setMintDenied(false);
-    setMintErrored(false);
-    apiClient
-      .getDisplayToken(tid)
-      .then((t) => {
-        if (cancelled) return;
-        setPublicUrl(`${origin}${t.url}`);
-      })
-      .catch((error: { status?: number; response?: { status?: number } }) => {
-        if (cancelled) return;
-        const status = error?.response?.status ?? error?.status;
-        if (status === 401 || status === 403 || status === 404) setMintDenied(true);
-        else setMintErrored(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tid, origin, attempt]);
 
   return (
     <div className="space-y-2">
@@ -204,23 +173,10 @@ export function DisplayConfig({
                 />
               </div>
             </>
-          ) : mintDenied ? (
-            <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
-              No venue board link yet. Only a workspace owner can create one.
-            </p>
-          ) : mintErrored ? (
-            <div className="flex items-center justify-between gap-3 py-3" data-testid="display-link-error">
-              <p className="text-sm text-muted-foreground">The venue board link could not be loaded.</p>
-              <button
-                type="button"
-                onClick={() => setAttempt((n) => n + 1)}
-                className="inline-flex h-7 items-center rounded border border-border-control bg-card px-3 text-sm text-foreground"
-              >
-                Retry
-              </button>
-            </div>
           ) : (
-            <p className="py-3 text-sm text-muted-foreground">Preparing the board link…</p>
+            <p className="py-3 text-sm text-muted-foreground" data-testid="display-link-unavailable">
+              Create or replace a board link above to preview it here. Existing links keep working until their expiry.
+            </p>
           )}
         </Section>
       </div>

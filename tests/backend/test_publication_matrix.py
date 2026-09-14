@@ -447,7 +447,8 @@ def test_no_restricted_person_fields_leak_anywhere(client, matrix_workspace):
 
 def test_no_restricted_fields_in_display_projection(client, matrix_workspace):
     tid = matrix_workspace["tid"]
-    token = client.get(f"/tournaments/{tid}/display-token").json()["token"]
+    from tests.backend.test_display_public import issue_display
+    token = issue_display(client, tid)
     for path in (f"/display/{token}/summary", f"/display/{token}/bracket"):
         r = client.get(path)
         assert r.status_code == 200, (path, r.text)

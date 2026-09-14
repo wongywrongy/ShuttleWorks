@@ -120,6 +120,7 @@ export function DisplayBoardSettings({
   tid: string;
   modules?: WorkspaceModule[];
 }) {
+  const [issuedLink, setIssuedLink] = useState<{ tid: string; url: string } | null>(null);
   return (
     <div className="flex h-full min-h-0 flex-col bg-background" data-testid="display-board-settings">
       <ActionsBar title="Venue board" titleAs="h2" status="Configure and share the board shown in the venue." />
@@ -131,7 +132,8 @@ export function DisplayBoardSettings({
           <DisplayConfig
             tid={tid}
             modules={modules}
-            linkSlot={<SharingTab tid={tid} scope="links" />}
+            publicUrl={issuedLink?.tid === tid ? issuedLink.url : null}
+            linkSlot={<SharingTab tid={tid} scope="links" onDisplayLinkChange={setIssuedLink} />}
           />
         </PageBody>
       </div>

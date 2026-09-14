@@ -197,6 +197,12 @@ PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" -m tournament_sim seed apply
   --seed-key "${SEED_KEY}" --run-dir "${RUN_DIR}" --base-url "${API_URL}" \
   >"${FIXTURE_ROOT}/seed-output.json"
 
+# Historical event dates are frozen for visual checks; credential validity is
+# real-clock security data. Seed finite synthetic credentials only in this
+# marked disposable DB, without relaxing the production issuance route.
+"${PYTHON_BIN}" "${REPO_ROOT}/tools/fixture-display.py" \
+  --database "${DATABASE_PATH}" --manifest "${MANIFEST_PATH}"
+
 PYTHONPATH="${REPO_ROOT}/simulator" "${PYTHON_BIN}" \
   "${REPO_ROOT}/tests/e2e/prepare-console-fixture.py" \
   --base-url "${API_URL}" --manifest "${MANIFEST_PATH}" --output "${FIXTURE_JSON}"

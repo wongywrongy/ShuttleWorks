@@ -19,16 +19,18 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from datetime import datetime, timezone
 from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Path, Response
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from bracket.brackets import _hydrate_session, _serialize_session
-from core.dependencies import require_tournament_access
+from core.dependencies import AuthUser, get_current_user, require_tournament_access
 from core.error_codes import ErrorCode, http_error
 from core.limits import HexColor
 from core.schemas import MeetStandingRowDTO
+from display.capabilities import event_link_deadline
 from display.projection import (
     DisplayConfigDTO, DisplayGroupDTO, DisplayPlayerDTO, DisplayMatchDTO,
     DisplayScheduleDTO, DisplayBracketDTO,
@@ -130,34 +132,72 @@ def put_board_settings(
 class DisplayTokenDTO(BaseModel):
     token: str
     url: str
+    expiresAt: datetime
+
+
+class DisplayTokenStatusDTO(BaseModel):
+    active: bool
+    expiresAt: Optional[datetime] = None
+    defaultExpiresAt: Optional[datetime] = None
+
+
+class DisplayTokenRequest(BaseModel):
+    expiresAt: Optional[AwareDatetime] = None
 
 
 def _mint_token() -> str:
     return secrets.token_urlsafe(24)
 
 
-def _token_dto(token: str) -> DisplayTokenDTO:
-    return DisplayTokenDTO(token=token, url=f"/display?token={token}")
-
-
-@manage_router.get("", response_model=DisplayTokenDTO, dependencies=[_OWNER])
-def get_or_create_display_token(
+@manage_router.get("", response_model=DisplayTokenStatusDTO, dependencies=[_OWNER])
+def get_display_token_status(
     tournament_id: uuid.UUID = Path(...),
     repo: LocalRepository = Depends(get_repository),
-) -> DisplayTokenDTO:
-    """The workspace's display link, minted on first ask."""
-    token = repo.get_or_create_display_token(tournament_id, _mint_token())
-    return _token_dto(token)
+) -> DisplayTokenStatusDTO:
+    """A read never issues or retrieves a capability."""
+    workspace = repo.tournaments.get_by_id(tournament_id)
+    if workspace is None:
+        raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found")
+    row = repo.get_display_token(tournament_id)
+    expiry = (row.expires_at.replace(tzinfo=timezone.utc) if row.expires_at.tzinfo is None
+              else row.expires_at.astimezone(timezone.utc)) if row else None
+    return DisplayTokenStatusDTO(active=bool(expiry and expiry > datetime.now(timezone.utc)),
+        expiresAt=expiry, defaultExpiresAt=event_link_deadline(
+            workspace.tournament_end_date, workspace.tournament_date, workspace.time_zone))
 
 
 @manage_router.post("/rotate", response_model=DisplayTokenDTO, dependencies=[_OWNER])
 def rotate_display_token(
+    response: Response,
+    body: Optional[DisplayTokenRequest] = None,
     tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> DisplayTokenDTO:
-    """Revoke-by-rotation: the old link dies the moment this returns."""
-    token = repo.rotate_display_token(tournament_id, _mint_token())
-    return _token_dto(token)
+    """Explicit issuance; the old link dies and the new plaintext appears once."""
+    workspace = repo.tournaments.get_by_id(tournament_id)
+    if workspace is None:
+        raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found")
+    default = event_link_deadline(workspace.tournament_end_date, workspace.tournament_date, workspace.time_zone)
+    expiry = (body.expiresAt if body else None) or default
+    if expiry is None or expiry <= datetime.now(timezone.utc) or (default and expiry > default):
+        raise http_error(422, ErrorCode.INVALID_INPUT,
+                         "Choose a future expiry, no later than seven days after the event.")
+    token = _mint_token()
+    if repo.rotate_display_token(tournament_id, token, expiry, user.id) is None:
+        raise http_error(404, ErrorCode.TOURNAMENT_NOT_FOUND, "Tournament not found")
+    response.headers["Cache-Control"] = "no-store"
+    return DisplayTokenDTO(token=token, url=f"/display?token={token}", expiresAt=expiry)
+
+
+@manage_router.delete("", status_code=204, dependencies=[_OWNER])
+def revoke_display_token(
+    tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
+    repo: LocalRepository = Depends(get_repository),
+) -> Response:
+    repo.revoke_display_token(tournament_id, user.id)
+    return Response(status_code=204)
 
 
 # ---- Public projection routes ----------------------------------------

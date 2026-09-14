@@ -1,5 +1,52 @@
 {
   "machines": {
+    "display_capability": {
+      "name": "display_capability",
+      "version": 1,
+      "states": [
+        "active",
+        "inactive"
+      ],
+      "initial": [
+        "inactive"
+      ],
+      "terminal": [],
+      "transitions": [
+        {
+          "event": "issue",
+          "from_states": [
+            "active",
+            "inactive"
+          ],
+          "to": "active",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        },
+        {
+          "event": "revoke",
+          "from_states": [
+            "active",
+            "inactive"
+          ],
+          "to": "inactive",
+          "actor": "operator",
+          "guard": null,
+          "consequential": true,
+          "description": ""
+        }
+      ],
+      "state_attribute": "status",
+      "state_keys": {
+        "active": "active",
+        "inactive": "inactive"
+      },
+      "event_keys": {
+        "issue": "issue",
+        "revoke": "revoke"
+      }
+    },
     "entry": {
       "name": "entry",
       "version": 1,

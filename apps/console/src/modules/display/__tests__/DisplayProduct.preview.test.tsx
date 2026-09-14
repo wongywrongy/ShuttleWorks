@@ -1,33 +1,11 @@
-/**
- * The in-shell `/tv` preview (`DisplayProduct`) embeds the public board
- * inside the normal AppShell module outlet — but AppShell mounts
- * `<ToastStack />` as a root-level sibling of the workspace shell (see
- * `app/AppShell.tsx`), covering EVERY segment including `tv`. Operator
- * API-error toasts and advisory-as-toast (`useAdvisories` → `pushToast`,
- * see `hooks/useAdvisories.ts`) would otherwise float over the preview —
- * the audit's problem-#1 source. The preview must faithfully mirror the
- * standalone `/display` board, which never has `ToastStack` mounted at
- * all (it lives outside AppShell — see `app/App.tsx`).
- *
- * `SolverHud` already suppresses itself on the `tv` tab the same way
- * (`if (activeTab === 'tv') return null;` in `components/SolverHud.tsx`)
- * — this test proves `ToastStack` gets the same treatment, and (as a
- * positive control) that a non-Display segment is untouched.
- */
-import { describe, it, expect, afterEach, vi } from 'vitest';
+/** Legacy TV chrome still suppresses operator toasts during route hand-off.
+ *  The standalone public board remains outside AppShell. These assertions
+ *  exercise ToastStack itself, with the ordinary operator view as control. */
+import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { DisplayProduct } from '../DisplayProduct';
 import { ToastStack } from '../../../components/Toast';
 import { useUiStore } from '../../../store/uiStore';
 import type { Advisory } from '../../../api/dto';
-
-// The embedded public display is heavy + starts its own polling; stub it
-// so this test focuses on the chrome around it (DisplayProduct's wrapper
-// + the AppShell-level ToastStack sibling), matching DisplayProduct.test.tsx.
-vi.mock('../PublicDisplayPage', () => ({
-  PublicDisplayPage: () => <div data-testid="public-display" />,
-}));
 
 const CRITICAL_ADVISORY: Advisory = {
   id: 'adv-1',
@@ -40,31 +18,11 @@ const CRITICAL_ADVISORY: Advisory = {
 
 const API_ERROR_MESSAGE = 'Failed to save schedule';
 
-function renderTvPreview() {
-  return render(
-    <MemoryRouter initialEntries={['/tournaments/abc123/tv']}>
-      <Routes>
-        <Route
-          path="/tournaments/:id/tv"
-          element={
-            // Mirrors AppShell's actual structure: ToastStack is a root
-            // sibling of the routed module content, not a child of it.
-            <>
-              <DisplayProduct />
-              <ToastStack />
-            </>
-          }
-        />
-      </Routes>
-    </MemoryRouter>,
-  );
-}
-
 afterEach(() => {
   useUiStore.getState().reset();
 });
 
-describe('DisplayProduct /tv preview — mirrors the public board', () => {
+describe('legacy TV chrome', () => {
   it('shows neither an operator API-error toast nor an advisory-as-toast', async () => {
     useUiStore.setState({ activeTab: 'tv' });
     useUiStore.getState().setAdvisories([CRITICAL_ADVISORY]);
@@ -73,8 +31,7 @@ describe('DisplayProduct /tv preview — mirrors the public board', () => {
     // (severity 'critical' -> toast level 'error'; see hooks/useAdvisories.ts).
     useUiStore.getState().pushToast({ level: 'error', message: CRITICAL_ADVISORY.summary });
 
-    renderTvPreview();
-    await screen.findByTestId('public-display');
+    render(<ToastStack />);
 
     expect(screen.queryByTestId('toast-stack')).toBeNull();
     expect(screen.queryByText(API_ERROR_MESSAGE)).toBeNull();

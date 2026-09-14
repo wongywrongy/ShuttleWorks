@@ -6,7 +6,7 @@ Approved 2026-09-13. Implementation is in progress. The [dated review](../review
 
 - Latest-version-only before launch; coordinated prototype resets are permitted. No reset or deployment of the shared demo is part of a source-code change.
 - Meet and Bracket retain separate engines and write paths. Operations owns the common desk; convergence follows the existing module contracts.
-- Staff invites last seven days. Display links end seven days after the event; undated events require an explicit expiry. Tokens are issued once, hashed at rest, renewable and revocable. Staff expiry is implemented with migration 0003; migration 0004 adds hashed storage and issue-once management. Display expiry and hashed one-time issuance remain in P05.
+- Staff invites last seven days. Display links end seven days after the event; undated events require an explicit expiry. Tokens are issued once, hashed at rest, renewable and revocable. Migrations 0003/0004 implement staff expiry and hashing; migration 0005 hashes display links, bounds dated links and expires legacy undated links. Owner management issues a replacement explicitly and offers revocation without replacement.
 - App-owned MFA for owner/operator privileges, including individually enrolled offline operators. Session absolute lifetime: 12 hours; idle lifetime: one hour; sensitive-action authentication age: five minutes. Polling is not human activity.
 - Retention is finite and purpose-based: organizer selection before entry collection, automatic audited sweeps, manual early erasure, and overdue alerts. Account, event, log and backup lifetimes remain separate.
 - CI uses focused blocking contracts; expensive browser, DAST and operational rehearsals run on schedule and before release. Release evidence must match the source revision.
@@ -22,7 +22,7 @@ Owners name repository responsibilities; the maintainer coordinates delivery. Pa
 | P02 | Shorten CI without losing coverage | release-owner | P01 | In progress |
 | P03 | Validate golden-rule evidence | release-owner | none | Implemented; review pending |
 | P04 | Uniform resource denial and role vocabulary | identity-module-owner | P03 | In progress |
-| P05 | Hash and expire capabilities; redact logs | identity-module-owner / platform-oncall | P03 | In progress |
+| P05 | Hash and expire capabilities; redact logs | identity-module-owner / platform-oncall | P03 | Implemented; review pending |
 | P06 | Explicit public projections and bounded inputs | identity-module-owner | P03 | In progress |
 | P07 | Edge headers and native nginx checks | platform-oncall | P02 | Implemented; review pending |
 | P08 | App-owned MFA, sessions and recovery | identity-module-owner | P04, P05 | Pending |
@@ -50,7 +50,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | --- | --- | --- | --- | --- |
 | DL-001 | Security golden-rules verification (2026-09-13) / SGR-20260913-02 / R2 | core/dependencies.py returns role-bearing 403; invite revocation and bracket/protocol routes have different denial/not-found bodies. Existing oracle tests co… | P04 | Partly addressed; see current security review |
 | DL-002 | Security golden-rules verification (2026-09-13) / SGR-20260913-03 / R3 | db/models.py::SyncOutbox.operation_id → event_operations.operation_id is the sole single-column intra-tournament-child FK. It inherits tenancy and has no ind… | P04 | Partly addressed; see current security review |
-| DL-003 | Security golden-rules verification (2026-09-13) / SGR-20260913-04 / R4 | Raw display_tokens.token and invite_links.id bearer credentials are retrievable repeatedly. Nginx has no redacted log format; local core/email.py logs token-… | P05 | Partly addressed; see current security review |
+| DL-003 | Security golden-rules verification (2026-09-13) / SGR-20260913-04 / R4 | Raw capabilities, repeated disclosure and log exposure | P05 | Implementation verified; see current security review; review pending |
 | DL-004 | Security golden-rules verification (2026-09-13) / SGR-20260913-05 / R5 | sync/service.py::begin_checkout, ensure_local_authority, and receiving checkpoint import create epochs without tournament_authority_transitions. Initial-chec… | P10 | Partly addressed; see current security review |
 | DL-005 | Security golden-rules verification (2026-09-13) / SGR-20260913-07 / R7 | Unbounded nested strings in competition EventRequest, director/repair actions, bracket members/labels/discipline, and entry-import partner references; operat… | P06 | Partly addressed; see current security review |
 | DL-006 | Security golden-rules verification (2026-09-13) / SGR-20260913-08 / R8 | infra/nginx/lan-tls.conf relies on upstream headers, leaving edge-generated errors uncovered; docs uses a subset. No CI nginx -t step/stub includes exist. | P07 | Repository check implemented; review pending |
@@ -141,7 +141,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-091 | Work package 29 — structured sides on the wire / V3-29-1 | Closed 2026-09-08. | P23 | Unreconciled |
 | DL-092 | Work package 29 — structured sides on the wire / V3-29-2 | apps/console/src/api/bracketDto.ts still carries the @deprecated side_a/side_b pre-joined fields. | P20 | Unreconciled |
 | DL-093 | Work package 30 — short entry reference / V3-30-1 | An organizer cannot look up a quoted entry reference. | P17 | Unreconciled |
-| DL-094 | Work package 30 — short entry reference / V3-30-2 | Migrations with row-level SQL are only exercised on SQLite by default. | P23 | Unreconciled |
+| DL-094 | Work package 30 — short entry reference / V3-30-2 | Migrations with row-level SQL are only exercised on SQLite by default. | P23 | Implementation verified; see reconciled source entry; review pending |
 | DL-095 | Work package 26a — console accessibility and responsive checks / V3-26-1 | tests/e2e/tests/console-a11y.spec.ts's Live-day dispute-block check (plan §6 item "keyboard, focus... errors") is best-effort, not verified against a real co… | P18 | Unreconciled |
 | DL-096 | Work package 26a — console accessibility and responsive checks / V3-26-2 | No @axe-core/playwright in the e2e package's installed dependencies (tests/e2e/package.json) | P23 | Unreconciled |
 | DL-097 | Work package 26a — console accessibility and responsive checks / V3-26-3 | The target-size and focus-visible contract tests (targetSizeContract.test.ts, focusVisibleContract.test.ts) are regex/heuristic source scans, not a layout en… | P22 | Unreconciled |
@@ -208,7 +208,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-158 | Open — small and unscheduled / unnumbered | SeasonRowDTO.status is a plain str. | P20 | Unreconciled |
 | DL-159 | Open — small and unscheduled / unnumbered | DisplayStateDTO declares its key set but not its member types. | P06 | Implementation verified; see reconciled source entry; review pending |
 | DL-160 | Open — small and unscheduled / unnumbered | ParticipantIn has no meta, so POST /bracket cannot carry sourceEntryId. | P23 | Unreconciled |
-| DL-161 | Open — small and unscheduled / unnumbered | The FK drift test cannot compare ondelete, and covers ENTRIES_TABLES only. | P11 | Unreconciled |
+| DL-161 | Open — small and unscheduled / unnumbered | The FK drift test cannot compare ondelete, and covers ENTRIES_TABLES only. | P11 | Implementation verified; see reconciled source entry; review pending |
 | DL-162 | Open — small and unscheduled / unnumbered | The commit seam recognises "this human is already in the draw" by participant id only. | P23 | Unreconciled |
 | DL-163 | Open — small and unscheduled / unnumbered | Every Entries adoption writes a keyed column under an unkeyed roster-blob row. | P11 | Unreconciled |
 | DL-164 | Open — small and unscheduled / unnumbered | A person-refusal still leaves an orphan roster-blob row, and committed_player_id points at it. | P11 | Unreconciled |
@@ -216,8 +216,8 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-166 | Open — small and unscheduled / unnumbered | /health/metrics is a full-table aggregate | P21 | Unreconciled |
 | DL-167 | Open — small and unscheduled / unnumbered | A bracket command id is a global key, not a tenant-scoped one. | P09 | Unreconciled |
 | DL-168 | Open — small and unscheduled / unnumbered | tournaments.status has no authority in code for its allowed set, so it could not be constrained with the other four. | P10 | Unreconciled |
-| DL-169 | Open — small and unscheduled / unnumbered | Alembic revision ids have reached z0f5a1b3c9d2 and the single-letter prefix scheme is exhausted. | P23 | Unreconciled |
-| DL-170 | Open — small and unscheduled / unnumbered | The migration schema snapshot covers the four rebuilt tables only, not the child tables whose FKs point into them. | P11 | Unreconciled |
+| DL-169 | Open — small and unscheduled / unnumbered | Alembic revision ids have reached z0f5a1b3c9d2 and the single-letter prefix scheme is exhausted. | P23 | Implementation verified; see reconciled source entry; review pending |
+| DL-170 | Open — small and unscheduled / unnumbered | The migration schema snapshot covers the four rebuilt tables only, not the child tables whose FKs point into them. | P11 | FK coverage verified; default/index drift evidence remains open |
 | DL-171 | Open — small and unscheduled / unnumbered | MatchRepository.set_status still admits a raw string for a column the schema now CHECKs. | P23 | Unreconciled |
 | DL-172 | Open — small and unscheduled / unnumbered | The code-field pin is repo-wide, and any unrelated future code will red it with a message that reads as a non-sequitur. | P06 | Unreconciled |
 | DL-173 | Open — small and unscheduled / unnumbered | tournaments.kind carries a server default in the migration-built schema and only a Python-side default in the models — a create_all-vs-migration divergence, … | P23 | Unreconciled |

@@ -16,7 +16,7 @@ address.** It is stated twice in the code, once per public tier —
 |---|---|---|---|---|
 | **Workspace UUID** | `tournaments.id` | `apps/api/src/db/models.py:88,91` (`Uuid` PK, `default=uuid.uuid4`) | the `tournament_id` path param + `require_tournament_access(role)`, which resolves it **by name** | operator only — storage + the whole `/tournaments/{tournament_id}/…` wire |
 | **Entry-page slug** | `entry_pages.slug` | `apps/api/src/db/models.py:1708,1730` (`String(100)`, one row per workspace) | `entries/entries_public.py:102` `_resolve(repo, slug)` → `(EntryPage, Tournament)`; uniform 404 when missing **or closed** | public entrant tier, `play.<domain>/e/{slug}` — meant to be shared |
-| **Display capability token** | `display_tokens.token` | `apps/api/src/db/models.py:1023,1039` (stored RAW; minted `secrets.token_urlsafe(24)`, `display/display.py:56`) | `display/display.py:97` `_resolve(repo, token)`; every route GET, no mutation | public spectator display, `/display/{token}/*` — capability, not discovery |
+| **Display capability token** | `display_tokens.token_hash` + `expires_at` | `apps/api/src/db/models.py::DisplayToken`; explicit issuance uses `secrets.token_urlsafe(24)` and returns the raw link once | `display/display.py::_resolve` hashes the supplied value and enforces expiry; every public route GET, no mutation | public spectator display, `/display/{token}/*` — capability, not discovery |
 | **No id at all** | — | `apps/console/src/api/dto.ts:27` (`TournamentConfig`), `apps/console/src/store/tournamentStore.ts:22` (`TournamentState`) | n/a | the console's own **data blob** carries no workspace id |
 
 ### The fourth row is narrower than it looks

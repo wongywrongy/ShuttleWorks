@@ -21,6 +21,7 @@ vi.mock('../../../api/client', () => ({
     revokeInvite: vi.fn(),
     getDisplayToken: vi.fn(),
     rotateDisplayToken: vi.fn(),
+    revokeDisplayToken: vi.fn(),
     getEntryPage: vi.fn(),
     patchEntryPagePublication: vi.fn(),
   },
@@ -45,16 +46,16 @@ describe('SharingTab', () => {
     vi.mocked(apiClient.revokeInvite).mockReset();
     vi.mocked(apiClient.getDisplayToken).mockReset();
     vi.mocked(apiClient.rotateDisplayToken).mockReset();
+    vi.mocked(apiClient.revokeDisplayToken).mockReset().mockResolvedValue(undefined);
     vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
     vi.mocked(apiClient.createInvite).mockResolvedValue({ id: 'new-id', token: 'new', url: '/invite/new' } as never);
     vi.mocked(apiClient.revokeInvite).mockResolvedValue(undefined as never);
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
-      token: 'tok-abc',
-      url: '/display?token=tok-abc',
+      active: true, expiresAt: '2099-01-01T00:00:00Z', defaultExpiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.rotateDisplayToken).mockResolvedValue({
       token: 'tok-new',
-      url: '/display?token=tok-new',
+      url: '/display?token=tok-new', expiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.getEntryPage).mockReset();
     vi.mocked(apiClient.patchEntryPagePublication).mockReset();
@@ -65,19 +66,83 @@ describe('SharingTab', () => {
     );
   });
 
-  it('shows the capability display link fetched from getDisplayToken', async () => {
+  it('loads status without issuing or retrieving a capability', async () => {
     render(<SharingTab tid="t1" />);
-    // The surface shows a READABLE label; the real capability URL is what
-    // Copy puts on the clipboard and what `title` carries for hover/AT.
-    const link = await screen.findByTestId('display-link-label');
-    await waitFor(() =>
-      expect(link.getAttribute('title')).toContain('/display?token=tok-abc'),
-    );
-    expect(link.textContent).toContain('Venue board');
-    // The opaque token is not printed on the page.
-    expect(link.textContent).not.toContain('tok-abc');
+    await screen.findByText(/The existing link still works/);
     expect(apiClient.getDisplayToken).toHaveBeenCalledWith('t1');
-    expect(link.getAttribute('title')).not.toContain('?id=');
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('New venue board link')).toBeNull();
+    expect(screen.getByTestId('display-link-label')).not.toHaveAttribute('title');
+  });
+
+  it('shows an issued link once and forgets it on remount', async () => {
+    const view = render(<SharingTab tid="t1" />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacing the venue board link' }));
+    expect(await screen.findByLabelText('New venue board link')).toHaveValue(`${window.location.origin}/display?token=tok-new`);
+    view.unmount();
+    render(<SharingTab tid="t1" />);
+    await screen.findByText(/The existing link still works/);
+    expect(screen.queryByLabelText('New venue board link')).toBeNull();
+    expect(apiClient.rotateDisplayToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires an explicit expiry for an undated event', async () => {
+    vi.mocked(apiClient.getDisplayToken).mockResolvedValue({ active: false, expiresAt: null, defaultExpiresAt: null });
+    render(<SharingTab tid="t1" />);
+    const create = await screen.findByRole('button', { name: 'Create venue board link' });
+    expect(create).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Link expiry (your local time)'), { target: { value: '2099-01-01T12:00' } });
+    fireEvent.click(create);
+    await screen.findByLabelText('New venue board link');
+    expect(apiClient.rotateDisplayToken).toHaveBeenCalledWith('t1', new Date('2099-01-01T12:00').toISOString());
+  });
+
+  it('requires confirmation before revoking and issues no replacement', async () => {
+    render(<SharingTab tid="t1" />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke the venue board link' }));
+    expect(apiClient.revokeDisplayToken).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm revoking the venue board link' }));
+    await screen.findByText('No active board link.');
+    expect(apiClient.revokeDisplayToken).toHaveBeenCalledWith('t1');
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
+  });
+
+  it('ignores a late issuance after changing workspaces', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof apiClient.rotateDisplayToken>>) => void;
+    vi.mocked(apiClient.rotateDisplayToken).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const changed = vi.fn();
+    const view = render(<SharingTab tid="t1" onDisplayLinkChange={changed} />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacing the venue board link' }));
+    view.rerender(<SharingTab tid="t2" onDisplayLinkChange={changed} />);
+    await screen.findByText(/The existing link still works/);
+    await act(async () => finish({ token: 'late-old-workspace', url: '/display?token=late-old-workspace', expiresAt: '2099-01-01T00:00:00Z' }));
+    expect(screen.queryByLabelText('New venue board link')).toBeNull();
+    expect(changed).not.toHaveBeenCalledWith(expect.objectContaining({ tid: 't1' }));
+  });
+
+  it('does not carry replacement confirmation into another workspace', async () => {
+    const view = render(<SharingTab tid="t1" />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    view.rerender(<SharingTab tid="t2" />);
+    await screen.findByText(/The existing link still works/);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Confirm replacing the venue board link' })).toBeInTheDocument();
+  });
+
+  it('retries a failed metadata read without issuing a link', async () => {
+    vi.mocked(apiClient.getDisplayToken).mockRejectedValueOnce(new Error('network'));
+    render(<SharingTab tid="t1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry board link' }));
+    await screen.findByText(/The existing link still works/);
+    expect(apiClient.getDisplayToken).toHaveBeenCalledTimes(2);
+    expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
   });
 
   /* Rotate revokes the LIVE venue display link on the spot: mid-event, the
@@ -88,12 +153,12 @@ describe('SharingTab', () => {
   it('Rotate link does NOT rotate on the first click: it arms', async () => {
     render(<SharingTab tid="t1" />);
     const link = await screen.findByTestId('display-link-label');
-    await waitFor(() => expect(link.getAttribute('title')).toContain('tok-abc'));
+    await waitFor(() => expect(link.textContent).toContain('Venue board'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
 
     expect(apiClient.rotateDisplayToken).not.toHaveBeenCalled();
-    expect(link.getAttribute('title')).toContain('tok-abc');
+    expect(link).not.toHaveAttribute('title');
     // Armed state names the consequence rather than repeating the label.
     expect(
       screen.getByRole('button', { name: 'Confirm replacing the venue board link' }),
@@ -103,7 +168,7 @@ describe('SharingTab', () => {
   it('Rotate link swaps in the new token on the confirming second click', async () => {
     render(<SharingTab tid="t1" />);
     const link = await screen.findByTestId('display-link-label');
-    await waitFor(() => expect(link.getAttribute('title')).toContain('tok-abc'));
+    await waitFor(() => expect(link.textContent).toContain('Venue board'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
     fireEvent.click(
@@ -111,15 +176,15 @@ describe('SharingTab', () => {
     );
 
     await waitFor(() => expect(link.getAttribute('title')).toContain('/display?token=tok-new'));
-    expect(apiClient.rotateDisplayToken).toHaveBeenCalledWith('t1');
+    expect(apiClient.rotateDisplayToken).toHaveBeenCalledWith('t1', undefined);
   });
 
   it('Escape disarms a Rotate armed by mistake', async () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        screen.getByTestId('display-link-label').getAttribute('title'),
-      ).toContain('tok-abc'),
+        screen.getByTestId('display-link-label').textContent,
+      ).toContain('Venue board'),
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
@@ -135,13 +200,16 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        screen.getByTestId('display-link-label').getAttribute('title'),
-      ).toContain('tok-abc'),
+        screen.getByTestId('display-link-label').textContent,
+      ).toContain('Venue board'),
     );
 
     // Copy and Open fullscreen share a parent with the link input. Rotate must
     // not: a destructive control 24px from two read-only ones, styled the same,
     // is the misclick this separation exists to prevent.
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the venue board link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm replacing the venue board link' }));
+    await screen.findByLabelText('New venue board link');
     const safeRow = screen.getByRole('button', { name: 'Copy' }).parentElement!;
     expect(within(safeRow).getByRole('button', { name: 'Open fullscreen' })).toBeInTheDocument();
     expect(
@@ -156,8 +224,8 @@ describe('SharingTab', () => {
     render(<SharingTab tid="t1" />);
     await waitFor(() =>
       expect(
-        screen.getByTestId('display-link-label').getAttribute('title'),
-      ).toContain('tok-abc'),
+        screen.getByTestId('display-link-label').textContent,
+      ).toContain('Venue board'),
     );
     const replaceButton = screen.getByRole('button', { name: 'Replace the venue board link' });
     expect(replaceButton.parentElement).toHaveTextContent(
@@ -325,8 +393,7 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
   beforeEach(() => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
-      token: 'tok-abc',
-      url: '/display?token=tok-abc',
+      active: true, expiresAt: '2099-01-01T00:00:00Z', defaultExpiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.getEntryPage).mockRejectedValue(
       Object.assign(new Error('404'), { response: { status: 404 } }),
@@ -393,8 +460,7 @@ describe('SharingTab — the public-site publication card (SP-P7 §4)', () => {
 describe('SharingTab — a failed read is not an empty invite list', () => {
   beforeEach(() => {
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
-      token: 'tok-abc',
-      url: '/display?token=tok-abc',
+      active: true, expiresAt: '2099-01-01T00:00:00Z', defaultExpiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.getEntryPage).mockRejectedValue(
       Object.assign(new Error('404'), { response: { status: 404 } }),
@@ -471,8 +537,7 @@ describe('V3-OC25.1: invitation mode matches what the server actually does', () 
   beforeEach(() => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
-      token: 'tok-abc',
-      url: '/display?token=tok-abc',
+      active: true, expiresAt: '2099-01-01T00:00:00Z', defaultExpiresAt: '2099-01-01T00:00:00Z',
     } as never);
     vi.mocked(apiClient.getEntryPage).mockRejectedValue(
       Object.assign(new Error('404'), { response: { status: 404 } }),

@@ -322,3 +322,35 @@ def test_invite_hash_migration_preserves_links_and_removes_raw_ids(migrated):
             assert row.created_at.replace(tzinfo=timezone.utc) == created
             assert (row.revoked_at.replace(tzinfo=timezone.utc) if row.revoked_at else None) == revoked
             assert repo.invite_links.get(row.id) is None
+
+
+@pytest.mark.parametrize("initial_revision", ["0004"], indirect=True)
+def test_display_migration_hashes_links_and_expires_undated_rows(migrated):
+    from datetime import datetime, timezone
+    from hashlib import sha256
+    from db.models import Tournament, DisplayToken
+
+    workspaces = [uuid.uuid4() for _ in range(3)]
+    tokens = [f"old-display-{index}" for index in range(3)]
+    legacy = sa.table("display_tokens", sa.column("tournament_id", sa.Uuid),
+                      sa.column("token", sa.String), sa.column("created_at", sa.DateTime(timezone=True)))
+    before = datetime.now(timezone.utc)
+    with migrated.begin() as conn:
+        for workspace_id, token, end in zip(workspaces, tokens, ["2099-03-10", None, "invalid"]):
+            conn.execute(Tournament.__table__.insert().values(id=workspace_id,
+                name="Legacy display", tournament_end_date=end, time_zone="Asia/Taipei"))
+            conn.execute(legacy.insert().values(tournament_id=workspace_id, token=token, created_at=before))
+        assert conn.scalar(sa.select(legacy.c.token).where(legacy.c.tournament_id == workspaces[0])) == tokens[0]
+    upgrade_test_database(migrated)
+    after = datetime.now(timezone.utc)
+    with migrated.connect() as conn:
+        assert "token" not in {column["name"] for column in sa.inspect(conn).get_columns("display_tokens")}
+        for index, (workspace_id, token) in enumerate(zip(workspaces, tokens)):
+            row = conn.execute(sa.select(DisplayToken).where(DisplayToken.tournament_id == workspace_id)).mappings().one()
+            assert row["token_hash"] == sha256(token.encode()).hexdigest()
+            expiry = row["expires_at"].replace(tzinfo=timezone.utc)
+            assert row["created_at"].replace(tzinfo=timezone.utc) == before
+            if index == 0:
+                assert expiry == datetime(2099, 3, 17, 16, tzinfo=timezone.utc)
+            else:
+                assert before <= expiry <= after

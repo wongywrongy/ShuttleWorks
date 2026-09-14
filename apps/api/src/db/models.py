@@ -1495,10 +1495,8 @@ class User(Base):
 class DisplayToken(Base):
     """Capability token behind the public spectator display (Rule 8).
 
-    One row per workspace; the token is a random urlsafe string stored
-    RAW (unlike sessions) because the Sharing tab must re-display the
-    link and the capability it grants is read-only projection data —
-    revocation is rotation (new token) or row deletion. The public
+    One row per workspace; only the hash and a finite deadline survive
+    issuance. Revocation is rotation (new token) or row deletion. The public
     ``/display/{token}/*`` routes resolve through this table only;
     the raw tournament UUID never becomes a public capability.
     """
@@ -1508,12 +1506,13 @@ class DisplayToken(Base):
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True
     )
-    token: Mapped[str] = mapped_column(String(64), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
 
-    __table_args__ = (Index("uq_display_tokens_token", "token", unique=True),)
+    __table_args__ = (Index("uq_display_tokens_token_hash", "token_hash", unique=True),)
 
 
 class Org(Base):

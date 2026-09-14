@@ -3451,7 +3451,7 @@ export interface paths {
         /**
          * Request Password Reset
          * @description Always 202 (no account-existence oracle). The token rides the
-         *     email seam in Phase 3; until then it's logged server-side only.
+         *     email seam; it is never returned in this response or logged.
          */
         post: operations["request_password_reset_auth_request_password_reset_post"];
         delete?: never;
@@ -3559,13 +3559,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Or Create Display Token
-         * @description The workspace's display link, minted on first ask.
+         * Get Display Token Status
+         * @description A read never issues or retrieves a capability.
          */
-        get: operations["get_or_create_display_token_tournaments__tournament_id__display_token_get"];
+        get: operations["get_display_token_status_tournaments__tournament_id__display_token_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Revoke Display Token */
+        delete: operations["revoke_display_token_tournaments__tournament_id__display_token_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3582,7 +3583,7 @@ export interface paths {
         put?: never;
         /**
          * Rotate Display Token
-         * @description Revoke-by-rotation: the old link dies the moment this returns.
+         * @description Explicit issuance; the old link dies and the new plaintext appears once.
          */
         post: operations["rotate_display_token_tournaments__tournament_id__display_token_rotate_post"];
         delete?: never;
@@ -5087,6 +5088,25 @@ export interface components {
             token: string;
             /** Url */
             url: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+        };
+        /** DisplayTokenRequest */
+        DisplayTokenRequest: {
+            /** Expiresat */
+            expiresAt?: string | null;
+        };
+        /** DisplayTokenStatusDTO */
+        DisplayTokenStatusDTO: {
+            /** Active */
+            active: boolean;
+            /** Expiresat */
+            expiresAt?: string | null;
+            /** Defaultexpiresat */
+            defaultExpiresAt?: string | null;
         };
         /**
          * Disruption
@@ -14486,7 +14506,7 @@ export interface operations {
             };
         };
     };
-    get_or_create_display_token_tournaments__tournament_id__display_token_get: {
+    get_display_token_status_tournaments__tournament_id__display_token_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14503,8 +14523,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DisplayTokenDTO"];
+                    "application/json": components["schemas"]["DisplayTokenStatusDTO"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_display_token_tournaments__tournament_id__display_token_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -14526,7 +14575,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DisplayTokenRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

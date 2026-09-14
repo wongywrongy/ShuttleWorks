@@ -2237,47 +2237,67 @@ class LocalRepository:
         """Return an entrant account by id for identity application flows."""
         return self.session.get(EntrantAccount, account_id)
 
-    def get_or_create_display_token(
-        self,
-        tournament_id: uuid.UUID,
-        token: str,
-    ) -> str:
-        """Return the display capability, creating it atomically if absent."""
-        row = self.session.get(DisplayToken, tournament_id)
-        if row is not None:
-            return row.token
-        self.session.execute(update(Tournament).where(Tournament.id == tournament_id)
-                             .values(name=Tournament.name))
-        row = self.session.get(DisplayToken, tournament_id, populate_existing=True)
-        if row is None:
-            row = DisplayToken(tournament_id=tournament_id, token=token)
-            self.session.add(row)
-        _commit_transaction(self.session)
-        return row.token
+    def get_display_token(self, tournament_id: uuid.UUID) -> Optional[DisplayToken]:
+        """Read capability metadata without ever minting or disclosing a token."""
+        return self.session.get(DisplayToken, tournament_id)
+
+    def _audit_display_capability(self, tournament_id, previous, event, actor_id, expires_at=None):
+        from types import SimpleNamespace
+        from core.state_machine import apply
+        from core.state_machines import DISPLAY_CAPABILITY
+
+        subject = SimpleNamespace(id=tournament_id, tournament_id=tournament_id,
+                                  status=previous, __tablename__="display_tokens")
+        record = apply(DISPLAY_CAPABILITY, subject, event, "operator", guards={},
+                       session=self.session, actor_id=actor_id,
+                       detail={"expires_at": expires_at.isoformat()} if expires_at else {})
+        record.persist(self.session)
 
     def rotate_display_token(
         self,
         tournament_id: uuid.UUID,
         token: str,
-    ) -> str:
-        """Replace a display capability, serializing with first creation."""
+        expires_at: datetime,
+        actor_id: str,
+    ) -> Optional[DisplayToken]:
+        """Issue once, storing only the hash; serialize replacement and revocation."""
+        if expires_at.tzinfo is None or expires_at <= datetime.now(timezone.utc):
+            raise ValueError("Display expiry must be a future timezone-aware instant")
+        expires_at = expires_at.astimezone(timezone.utc)
+        locked = self.session.execute(update(Tournament).where(Tournament.id == tournament_id)
+                                      .values(name=Tournament.name))
+        if locked.rowcount != 1:
+            return None
+        row = self.session.get(DisplayToken, tournament_id, populate_existing=True)
+        previous = "active" if row and _ensure_utc_aware(row.expires_at) > datetime.now(timezone.utc) else "inactive"
+        if row is None:
+            row = DisplayToken(tournament_id=tournament_id, token_hash=_hash_token(token), expires_at=expires_at)
+            self.session.add(row)
+        else:
+            row.token_hash = _hash_token(token)
+            row.expires_at = expires_at
+            row.created_at = datetime.now(timezone.utc)
+        self._audit_display_capability(tournament_id, previous, "issue", actor_id, expires_at)
+        _commit_transaction(self.session)
+        return row
+
+    def revoke_display_token(self, tournament_id: uuid.UUID, actor_id: str) -> None:
         self.session.execute(update(Tournament).where(Tournament.id == tournament_id)
                              .values(name=Tournament.name))
         row = self.session.get(DisplayToken, tournament_id, populate_existing=True)
-        if row is None:
-            row = DisplayToken(tournament_id=tournament_id, token=token)
-            self.session.add(row)
-        else:
-            row.token = token
+        if row is not None:
+            previous = "active" if _ensure_utc_aware(row.expires_at) > datetime.now(timezone.utc) else "inactive"
+            self._audit_display_capability(tournament_id, previous, "revoke", actor_id)
+            self.session.delete(row)
         _commit_transaction(self.session)
-        return row.token
 
     def get_tournament_by_display_token(self, token: str) -> Optional[Tournament]:
         """Resolve a public display capability to its workspace."""
-        if not token:
+        if not token or len(token) > 64:
             return None
         row = self.session.scalar(
-            select(DisplayToken).where(DisplayToken.token == token)
+            select(DisplayToken).where(DisplayToken.token_hash == _hash_token(token),
+                                       DisplayToken.expires_at > datetime.now(timezone.utc))
         )
         return self.tournaments.get_by_id(row.tournament_id) if row else None
 

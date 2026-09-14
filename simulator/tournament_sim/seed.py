@@ -2830,6 +2830,7 @@ def apply(
             entry["entryPage"] = True
             token = client.display_token(tid)
             entry["displayToken"] = token.get("token")
+            entry["displayExpiresAt"] = token.get("expiresAt")
             entry["urls"] = {
                 "console": f"/tournaments/{tid}/overview",
                 "entrant": f"/e/{entry['slug']}",
