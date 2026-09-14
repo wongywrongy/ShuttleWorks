@@ -169,8 +169,8 @@ requiring their own hosted validation.
 
 `tools/check-source-secrets.py` scans the checked-out commit with a digest-pinned
 Trivy image, without container network access. Its live synthetic-token and empty
-controls pass, and the source scan reports zero findings. Only file/line/rule
-metadata is printed; raw reports are temporary and never uploaded. Four focused
+controls pass, and the source scan reports zero findings. Only the finding count
+is printed; raw reports are temporary and never uploaded. Four focused
 tests cover report projection, scanner failure, unknown schema and disabled
 detection. The source scan is included in the required security aggregate. This
 covers the committed tree with Trivy's built-in rules and exclusions, not Git
@@ -262,3 +262,13 @@ P14/P23 are partial; P08/P11/P12/P15–P22 remain incomplete. The pre-existing u
 `apps/api/Dockerfile` is included intact and credited separately because the image
 must copy the competition package imported by the application. No deployment/reset,
 merge or external incident communication was performed.
+
+## Follow-up verification — 2026-09-14
+
+The final 2026-09-13 hosted run found a flaky privacy assertion and a CodeQL
+logging alert in `tools/check-source-secrets.py`. A controlled digest containing
+`2012` reproduces the privacy-test failure; the corrected assertion validates the
+64-character SHA-256 fingerprint separately while retaining the URL field/value
+checks. CI now prints only the scanner finding count, because filenames can also
+carry secrets. A synthetic sensitive filename fails the old output path and is
+absent from the corrected gate output. No scanner suppression was added.

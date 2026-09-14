@@ -2,8 +2,9 @@
 """Scan the checked-out commit for secrets without emitting matched material.
 
 Runs the pinned Trivy image without network access. A generated, unissued
-GitHub-shaped token proves detection on each invocation. Only file, line and
-rule identifiers leave the temporary report directory; no raw report is uploaded.
+GitHub-shaped token proves detection on each invocation. Only the finding count
+leaves the temporary report directory; no raw report is uploaded. Even filenames
+may contain credential material, so metadata is never printed by the CI gate.
 """
 from __future__ import annotations
 
@@ -72,8 +73,6 @@ def main() -> int:
         with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as snapshot:
             snapshot.extractall(source, filter="data")
         findings = scan(source, output)
-        for finding in findings:
-            print(json.dumps(finding))
         print(f"Source secret scan: {len(findings)} findings; detection controls passed")
         return 1 if findings else 0
 

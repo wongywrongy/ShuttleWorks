@@ -51,3 +51,22 @@ def test_missing_detection_blocks_the_gate(scanner, monkeypatch):
     monkeypatch.setattr(scanner, "scan", lambda *a: [])
     with pytest.raises(RuntimeError, match="did not detect"):
         scanner.main()
+
+
+def test_gate_never_prints_sensitive_filenames(scanner, monkeypatch, capsys):
+    import io
+    import tarfile
+
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w"):
+        pass
+    outputs = iter([
+        [{"rule": "github-pat"}], [],
+        [{"file": "private-token-in-filename.txt", "line": 1, "rule": "github-pat"}],
+    ])
+    monkeypatch.setattr(scanner, "scan", lambda *args: next(outputs))
+    monkeypatch.setattr(scanner.subprocess, "run", lambda *args, **kw: SimpleNamespace(stdout=archive.getvalue()))
+    assert scanner.main() == 1
+    output = capsys.readouterr().out
+    assert "1 findings" in output
+    assert "private-token-in-filename" not in output

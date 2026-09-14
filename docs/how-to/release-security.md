@@ -11,8 +11,11 @@ Docker available to reproduce the source-secret gate. It uses a digest-pinned
 image and the [Trivy secret scanner](https://trivy.dev/docs/latest/scanner/secret/)
 built-in rules and exclusions. An unissued synthetic token must be detected and
 an empty control must pass before the committed tree is scanned. Matched values
-are never printed or uploaded; only file, line and rule identifiers leave the
-temporary report. This scan does not inspect uncommitted files or Git history.
+and filenames are never printed or uploaded; only the finding count leaves the
+temporary report. To investigate a failure, reproduce the pinned Trivy command
+from the script locally with its JSON output in a private directory; inspect that
+file locally and remove it when finished. Never attach the raw report to a PR or
+CI artifact. This scan does not inspect uncommitted files or Git history.
 
 Release publication remains gated on the latest completed successful CI and
 security runs for the exact source commit. A missing, queued, stale, cancelled,
