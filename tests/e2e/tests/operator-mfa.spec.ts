@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 
@@ -115,4 +116,66 @@ test('real MFA enrollment and expired-session recovery preserve a private unsent
   await expect(dialog).toHaveCount(0);
   await expect(draft).toBeVisible();
   await expect(draft).toHaveValue('an unsent password draft');
+});
+
+test('an event-node operator activates, enrolls, signs out and returns with a recovery code', async ({ page }) => {
+  const nodeBase = process.env.E2E_NODE_BASE_URL;
+  const activationFile = process.env.E2E_NODE_ACTIVATION_FILE;
+  test.skip(!nodeBase || !activationFile, 'Run through tests/e2e/run-operator-mfa.sh with its event-node phase.');
+  test.setTimeout(120_000);
+  const usedSteps = new Set<number>();
+  const activation = JSON.parse(readFileSync(activationFile!, 'utf8')) as { workspaceId: string; email: string; activationToken: string };
+  const workspace = activation.workspaceId;
+  const nodePassword = 'a private password only for this event node';
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  // The node API has no anonymous bootstrap: nothing is readable before activation.
+  expect((await page.request.get(`${nodeBase}/api/tournaments/${workspace}`)).status()).toBe(401);
+  await page.goto(`${nodeBase}/node-enrollment?workspaceId=${workspace}`);
+  await page.getByLabel('Email', { exact: true }).fill(activation.email);
+  await page.getByLabel('Activation token', { exact: true }).fill(activation.activationToken);
+  await page.getByLabel('Node password', { exact: true }).fill(nodePassword);
+  await page.getByLabel('Confirm node password', { exact: true }).fill(nodePassword);
+  await page.getByRole('button', { name: 'Continue to authenticator setup' }).click();
+
+  // Activation alone grants nothing; the operator must enroll on this node.
+  await expect(page.getByRole('heading', { name: 'Set up an authenticator' })).toBeVisible();
+  expect((await page.request.get(`${nodeBase}/api/tournaments/${workspace}`)).status()).toBe(401);
+  await page.getByRole('button', { name: 'Create setup key' }).click();
+  const secret = await page.getByLabel('Authenticator setup key').innerText();
+  await nextStep(page, usedSteps);
+  await page.getByLabel('Authenticator code', { exact: true }).fill(otp(secret));
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  const codes = page.getByRole('list', { name: 'Recovery codes' }).getByRole('listitem');
+  await expect(codes).toHaveCount(8);
+  const recovery = await codes.allTextContents();
+  await page.getByRole('button', { name: 'I have saved my codes' }).click();
+  await expect(page).toHaveURL(new RegExp(`/tournaments/${workspace}`));
+  expect((await page.request.get(`${nodeBase}/api/tournaments/${workspace}`)).status()).toBe(200);
+  // The credential names one workspace; nothing else is reachable with it.
+  expect((await page.request.get(`${nodeBase}/api/tournaments`)).status()).toBe(401);
+
+  // Home is the node's workspace, not the Hub the credential cannot list.
+  await page.goto(`${nodeBase}/`);
+  await expect(page).toHaveURL(new RegExp(`/tournaments/${workspace}`));
+
+  // The spent activation cannot be replayed.
+  const replay = await page.request.post(`${nodeBase}/api/auth/node/activate`, {
+    headers: { 'X-ShuttleWorks-CSRF': '1' },
+    data: { workspaceId: workspace, email: activation.email, activationToken: activation.activationToken, newPassword: nodePassword },
+  });
+  expect(replay.status()).toBe(401);
+
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(new RegExp(`/login\\?workspaceId=${workspace}&node=1`));
+  expect((await page.request.get(`${nodeBase}/api/tournaments/${workspace}`)).status()).toBe(401);
+  await page.getByLabel('Email', { exact: true }).fill(activation.email);
+  await page.getByLabel('Password', { exact: true }).fill(nodePassword);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByLabel('Authenticator or recovery code').fill(recovery[0]);
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/tournaments/${workspace}`));
+  expect((await page.request.get(`${nodeBase}/api/tournaments/${workspace}`)).status()).toBe(200);
+  expect(errors).toEqual([]);
 });

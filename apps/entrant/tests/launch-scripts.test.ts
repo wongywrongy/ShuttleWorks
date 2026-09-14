@@ -261,6 +261,11 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   expect(mfaRunner).toMatch(/SW_PYTHON/);
   expect(mfaJourney).toMatch(/Issue new recovery codes/);
   expect(mfaJourney).toMatch(/sw_session=\$\{passwordStage\}/);
+  // The event-node phase enrolls through the real administrator tool.
+  expect(mfaRunner).toMatch(/SHUTTLEWORKS_DEPLOYMENT_PROFILE=event_node/);
+  expect(mfaRunner).toMatch(/tools\/node-operator-enrollment\.py/);
+  expect(mfaJourney).toMatch(/E2E_NODE_BASE_URL/);
+  expect(mfaJourney).toMatch(/node-enrollment\?workspaceId=/);
   expect(setup).toMatch(/E2E_REQUIRE_PLAY/);
   expect(setup).toMatch(/npm_lifecycle_event/);
   // The readiness path must hit entrant SSR. `/e/api/config` is owned by
