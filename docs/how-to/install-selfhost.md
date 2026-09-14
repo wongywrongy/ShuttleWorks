@@ -30,9 +30,8 @@ instead — this guide is strictly more complexity.
 
 - Ubuntu 24.04 with Docker Engine and the Compose plugin
 - A domain on Cloudflare (any plan, including free)
-- An SMTP account — cloud mode refuses to start without one, because the
-  console email backend would write live invite and password-reset tokens into
-  the log stream
+- An SMTP account — cloud mode refuses to start without mail delivery;
+  the local console backend only records that delivery was skipped
 - Tailscale (or equivalent) if a second machine will run workers
 
 ## 1. Directory layout
@@ -121,7 +120,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `ENVIRONMENT` | `local` | `local` | `cloud` | `cloud` | `cloud` turns on the fail-closed validator. Leaving it `local` in production silently accepts insecure cookies. |
 | `AUTH_MODE` | `local` | `local` | **`cloud`** | not read | `local` on a public deployment means every anonymous request acts as the bootstrap operator. |
 | `SESSION_COOKIE_SECURE` | `false` | `false` | **`true`** | not read | `false` lets the session cookie travel over plain HTTP. |
-| `EMAIL_BACKEND` | `console` | `console` | **`smtp`** | not read | `console` prints live invite/reset tokens into the logs. |
+| `EMAIL_BACKEND` | `console` | `console` | **`smtp`** | not read | `console` records skipped delivery without message content. |
 | `SMTP_HOST` | `''` | – | **required** | not read | Startup fails. Invites and resets silently never arrive. |
 | `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | `587` / `''` / `''` / `ShuttleWorks by Yunavero <no-reply@localhost>` | – | as your provider requires | not read | Mail silently fails. |
 | `PUBLIC_APP_ORIGIN` | `''` | – | **required** | not read | The **operator** origin (`https://${APP_HOSTNAME}`). Workspace invites and operator password resets come out relative and unclickable. |

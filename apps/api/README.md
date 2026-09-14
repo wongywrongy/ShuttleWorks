@@ -152,7 +152,7 @@ SP-CLOUD-3 (ADR 0012).
 |---|---|---|
 | Identity | requests without a session resolve to the **bootstrap operator** (zero UUID, `local@dev`, ensured at startup) — no signup, no email, offline | real accounts only; no session → 401 |
 | Sign-in | optional (accounts work locally too) | `POST /auth/register` / `/auth/login` |
-| Email | console backend logs invite/reset mail | `EMAIL_BACKEND=smtp` delivers it |
+| Email | console backend records skipped delivery without message content | `EMAIL_BACKEND=smtp` delivers it |
 | Cookies | `Secure` off is tolerated (plain-HTTP dev) | startup **refuses** without `SESSION_COOKIE_SECURE=true` when `ENVIRONMENT=cloud` |
 
 Mechanics (see `apps/api/src/identity/auth.py`, `apps/api/src/identity/auth_routes.py`):

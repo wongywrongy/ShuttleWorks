@@ -108,7 +108,8 @@
         "apps/api/src/core/tokens.py",
         "apps/api/src/alembic/versions/0004_hash_staff_invites.py",
         "apps/api/src/identity/invites.py",
-        "apps/console/src/modules/settings/SharingTab.tsx"
+        "apps/console/src/modules/settings/SharingTab.tsx",
+        "apps/api/src/core/email.py"
       ],
       "evidence": [
         "tests/backend/unit/test_auth_service.py",
@@ -122,10 +123,13 @@
         "tests/backend/unit/test_repositories.py",
         "tests/backend/unit/test_baseline_schema.py",
         "tests/backend/test_invites.py",
-        "apps/console/src/modules/settings/__tests__/SharingTab.test.tsx"
+        "apps/console/src/modules/settings/__tests__/SharingTab.test.tsx",
+        "tests/backend/unit/test_email_transport.py",
+        "tests/backend/unit/test_fixture_mailbox.py",
+        "tests/e2e/check-account-journeys.py"
       ],
       "gaps": [
-        "SGR-20260913-04: staff invitation hashing and issue-once management are implemented; raw display storage, repeated display disclosure, display expiry and console email logging remain open."
+        "SGR-20260913-04: staff invitation hashing, issue-once management, nginx redaction and email logging controls are implemented; raw display storage, repeated display disclosure, display expiry and direct API log redaction remain open."
       ]
     },
     {
@@ -339,22 +343,45 @@
     {
       "id": "TM-001",
       "surface": "cloud-control-plane",
-      "stride": ["spoofing", "elevation-of-privilege", "information-disclosure"],
+      "stride": [
+        "spoofing",
+        "elevation-of-privilege",
+        "information-disclosure"
+      ],
       "scenario": "A principal crosses an organization or workspace boundary by guessing an identifier.",
       "severity": "critical",
-      "controls": ["membership-scoped repositories", "cross-tenant 404 policy", "CSRF-protected session cookies"],
-      "verification": ["tests/backend/test_tenant_isolation.py", "tests/backend/test_auth_surface.py"],
+      "controls": [
+        "membership-scoped repositories",
+        "cross-tenant 404 policy",
+        "CSRF-protected session cookies"
+      ],
+      "verification": [
+        "tests/backend/test_tenant_isolation.py",
+        "tests/backend/test_auth_surface.py"
+      ],
       "owner": "identity-module-owner",
       "status": "mitigated"
     },
     {
       "id": "TM-002",
       "surface": "event-node",
-      "stride": ["spoofing", "tampering", "denial-of-service"],
+      "stride": [
+        "spoofing",
+        "tampering",
+        "denial-of-service"
+      ],
       "scenario": "A LAN client becomes an operator, changes live state, or exhausts the node during a WAN outage.",
       "severity": "critical",
-      "controls": ["event-scoped offline sessions", "anonymous bootstrap disabled", "authority epoch fencing", "SQLite WAL and bounded busy timeout"],
-      "verification": ["tests/backend/unit/test_offline_operator_sessions.py", "tests/backend/unit/test_event_node_acceptance.py"],
+      "controls": [
+        "event-scoped offline sessions",
+        "anonymous bootstrap disabled",
+        "authority epoch fencing",
+        "SQLite WAL and bounded busy timeout"
+      ],
+      "verification": [
+        "tests/backend/unit/test_offline_operator_sessions.py",
+        "tests/backend/unit/test_event_node_acceptance.py"
+      ],
       "owner": "event-operations",
       "status": "partially-mitigated",
       "residualRisk": "OS credential custody, venue load, and abrupt-power-loss behavior require reference-hardware rehearsal."
@@ -362,22 +389,48 @@
     {
       "id": "TM-003",
       "surface": "sync-protocol",
-      "stride": ["spoofing", "tampering", "repudiation"],
+      "stride": [
+        "spoofing",
+        "tampering",
+        "repudiation"
+      ],
       "scenario": "A stale or competing node uploads forged, reordered, duplicated, or incompatible operations.",
       "severity": "critical",
-      "controls": ["signed device identity", "capability digest", "epoch and sequence checks", "idempotent operation IDs", "quarantine"],
-      "verification": ["tests/backend/unit/test_sync_protocol.py", "tests/backend/unit/test_authority_lifecycle.py", "tests/backend/unit/test_event_node_identity.py"],
+      "controls": [
+        "signed device identity",
+        "capability digest",
+        "epoch and sequence checks",
+        "idempotent operation IDs",
+        "quarantine"
+      ],
+      "verification": [
+        "tests/backend/unit/test_sync_protocol.py",
+        "tests/backend/unit/test_authority_lifecycle.py",
+        "tests/backend/unit/test_event_node_identity.py"
+      ],
       "owner": "sync-module-owner",
       "status": "mitigated"
     },
     {
       "id": "TM-004",
       "surface": "venue-lan",
-      "stride": ["spoofing", "information-disclosure", "denial-of-service"],
+      "stride": [
+        "spoofing",
+        "information-disclosure",
+        "denial-of-service"
+      ],
       "scenario": "An untrusted venue client intercepts credentials or reaches a clear-text/operator service directly.",
       "severity": "high",
-      "controls": ["stable TLS origins", "Secure HttpOnly cookies", "loopback-only clear-text ports", "explicit LAN bind"],
-      "verification": ["tests/backend/unit/test_lan_tls_config.py", "tools/lan-tls-preflight.sh"],
+      "controls": [
+        "stable TLS origins",
+        "Secure HttpOnly cookies",
+        "loopback-only clear-text ports",
+        "explicit LAN bind"
+      ],
+      "verification": [
+        "tests/backend/unit/test_lan_tls_config.py",
+        "tools/lan-tls-preflight.sh"
+      ],
       "owner": "platform-oncall",
       "status": "partially-mitigated",
       "residualRisk": "Client CA distribution, firewall rules, certificate renewal, and hostile-LAN rehearsal are deployment responsibilities."
@@ -385,11 +438,24 @@
     {
       "id": "TM-005",
       "surface": "backups",
-      "stride": ["tampering", "information-disclosure", "denial-of-service"],
+      "stride": [
+        "tampering",
+        "information-disclosure",
+        "denial-of-service"
+      ],
       "scenario": "A stolen, corrupt, stale, or path-confused backup exposes data or prevents recovery.",
       "severity": "high",
-      "controls": ["authenticated encryption", "checksums", "safe destinations", "isolated restore preflight", "two-generation retention"],
-      "verification": ["tests/backend/unit/test_recovery_bundle.py", "tests/backend/unit/test_backup_scheduler.py"],
+      "controls": [
+        "authenticated encryption",
+        "checksums",
+        "safe destinations",
+        "isolated restore preflight",
+        "two-generation retention"
+      ],
+      "verification": [
+        "tests/backend/unit/test_recovery_bundle.py",
+        "tests/backend/unit/test_backup_scheduler.py"
+      ],
       "owner": "platform-oncall",
       "status": "partially-mitigated",
       "residualRisk": "Production key custody, offsite provisioning, and timed clean-machine restores remain operational gates."
@@ -397,11 +463,27 @@
     {
       "id": "TM-006",
       "surface": "installer-update-channel",
-      "stride": ["tampering", "elevation-of-privilege", "denial-of-service"],
+      "stride": [
+        "tampering",
+        "elevation-of-privilege",
+        "denial-of-service"
+      ],
       "scenario": "A malicious or incompatible release is installed, or rollback loses live-event state.",
       "severity": "critical",
-      "controls": ["SBOM and provenance", "keyless image signing", "pinned CI actions", "signed update/rollback metadata", "schema compatibility checks", "pre-upgrade verified backup"],
-      "verification": [".github/workflows/security.yml", ".github/workflows/publish-release.yml", "tools/tests/release-workflow.test.mjs", "tests/backend/unit/test_event_node_update.py"],
+      "controls": [
+        "SBOM and provenance",
+        "keyless image signing",
+        "pinned CI actions",
+        "signed update/rollback metadata",
+        "schema compatibility checks",
+        "pre-upgrade verified backup"
+      ],
+      "verification": [
+        ".github/workflows/security.yml",
+        ".github/workflows/publish-release.yml",
+        "tools/tests/release-workflow.test.mjs",
+        "tests/backend/unit/test_event_node_update.py"
+      ],
       "owner": "release-owner",
       "status": "partially-mitigated",
       "residualRisk": "Desktop signing, notarization, staged updater, and offline rollback rehearsal are not implemented."
@@ -409,11 +491,23 @@
     {
       "id": "TM-007",
       "surface": "operator-device",
-      "stride": ["spoofing", "repudiation", "information-disclosure"],
+      "stride": [
+        "spoofing",
+        "repudiation",
+        "information-disclosure"
+      ],
       "scenario": "A lost browser or laptop retains authority credentials or leaks participant data through logs and telemetry.",
       "severity": "high",
-      "controls": ["revocable enrolled devices", "bounded offline sessions", "authority closure invalidation", "telemetry allowlist and cardinality policy"],
-      "verification": ["tests/backend/unit/test_event_node_identity.py", "tests/backend/unit/test_operational_telemetry.py"],
+      "controls": [
+        "revocable enrolled devices",
+        "bounded offline sessions",
+        "authority closure invalidation",
+        "telemetry allowlist and cardinality policy"
+      ],
+      "verification": [
+        "tests/backend/unit/test_event_node_identity.py",
+        "tests/backend/unit/test_operational_telemetry.py"
+      ],
       "owner": "event-operations",
       "status": "partially-mitigated",
       "residualRisk": "Device encryption, screen lock, browser hardening, and lost-device response require operator policy and training."
@@ -421,22 +515,46 @@
     {
       "id": "TM-008",
       "surface": "cloud-control-plane",
-      "stride": ["information-disclosure", "denial-of-service"],
+      "stride": [
+        "information-disclosure",
+        "denial-of-service"
+      ],
       "scenario": "Public display or entrant endpoints are enumerated, flooded, or used to disclose a different tenant's event data.",
       "severity": "high",
-      "controls": ["separate public principals", "workspace-scoped lookup", "payload bounds", "credential and request throttles"],
-      "verification": ["tests/backend/test_auth_surface.py", "tests/backend/test_abuse_limits.py", "tests/backend/test_entries_submit_api.py"],
+      "controls": [
+        "separate public principals",
+        "workspace-scoped lookup",
+        "payload bounds",
+        "credential and request throttles"
+      ],
+      "verification": [
+        "tests/backend/test_auth_surface.py",
+        "tests/backend/test_abuse_limits.py",
+        "tests/backend/test_entries_submit_api.py"
+      ],
       "owner": "identity-module-owner",
       "status": "mitigated"
     },
     {
       "id": "TM-009",
       "surface": "event-node",
-      "stride": ["information-disclosure", "repudiation"],
+      "stride": [
+        "information-disclosure",
+        "repudiation"
+      ],
       "scenario": "PII or credentials leak through logs, traces, metrics, exports, recovery artifacts, or future support bundles.",
       "severity": "high",
-      "controls": ["telemetry attribute allowlist", "bounded resource attributes", "encrypted backups", "no operation payloads in alerts"],
-      "verification": ["tests/backend/unit/test_operational_telemetry.py", "tests/backend/unit/test_telemetry_event_node.py", "tests/backend/unit/test_recovery_bundle.py"],
+      "controls": [
+        "telemetry attribute allowlist",
+        "bounded resource attributes",
+        "encrypted backups",
+        "no operation payloads in alerts"
+      ],
+      "verification": [
+        "tests/backend/unit/test_operational_telemetry.py",
+        "tests/backend/unit/test_telemetry_event_node.py",
+        "tests/backend/unit/test_recovery_bundle.py"
+      ],
       "owner": "platform-oncall",
       "status": "partially-mitigated",
       "residualRisk": "A redacted support-bundle format and production access/retention policy are not yet implemented."
@@ -444,11 +562,23 @@
     {
       "id": "TM-010",
       "surface": "event-node",
-      "stride": ["denial-of-service"],
+      "stride": [
+        "denial-of-service"
+      ],
       "scenario": "Large payloads, adversarial solver inputs, telemetry growth, or disk exhaustion prevent tournament commands.",
       "severity": "critical",
-      "controls": ["request size limits", "solver job limits and leases", "persistent telemetry queue limits", "disk/WAL health signals", "fail-open telemetry"],
-      "verification": ["tests/backend/test_abuse_limits.py", "tests/backend/unit/test_reliability_failure_paths.py", "tests/backend/unit/test_telemetry_event_node.py"],
+      "controls": [
+        "request size limits",
+        "solver job limits and leases",
+        "persistent telemetry queue limits",
+        "disk/WAL health signals",
+        "fail-open telemetry"
+      ],
+      "verification": [
+        "tests/backend/test_abuse_limits.py",
+        "tests/backend/unit/test_reliability_failure_paths.py",
+        "tests/backend/unit/test_telemetry_event_node.py"
+      ],
       "owner": "event-operations",
       "status": "partially-mitigated",
       "residualRisk": "Two-times-scale hostile load and disk-full behavior require supported-hardware tests."
@@ -456,11 +586,21 @@
     {
       "id": "TM-011",
       "surface": "installer-update-channel",
-      "stride": ["tampering", "denial-of-service"],
+      "stride": [
+        "tampering",
+        "denial-of-service"
+      ],
       "scenario": "The shipped backend image contains a high or critical operating-system vulnerability for which the base-image vendor has not yet published a fixed package.",
       "severity": "critical",
-      "controls": ["fail-closed Trivy release gate", "exact-version and digest release deployment", "SBOM and provenance"],
-      "verification": [".github/workflows/security.yml", "tools/tests/release-workflow.test.mjs"],
+      "controls": [
+        "fail-closed Trivy release gate",
+        "exact-version and digest release deployment",
+        "SBOM and provenance"
+      ],
+      "verification": [
+        ".github/workflows/security.yml",
+        "tools/tests/release-workflow.test.mjs"
+      ],
       "owner": "release-owner",
       "status": "mitigated",
       "residualRisk": "The final backend stage uses an immutable Ubuntu 24.04 digest with vendor-patched Python 3.12. The production image imports the pinned solver, PostgreSQL and SQLite runtimes and passes the fail-closed high/critical scan; future digest updates remain gated by the same scan."

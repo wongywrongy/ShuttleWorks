@@ -6,7 +6,6 @@ UUID acceptance), revocation-by-rotation, and no mutation surface.
 """
 from __future__ import annotations
 
-import logging
 
 import pytest
 
@@ -280,19 +279,21 @@ def test_token_management_is_owner_gated(client, workspace):
     assert client.get(f"/tournaments/{tid}/display-token").status_code == 404
 
 
-def test_email_invite_rides_the_seam_and_expires(client, workspace, caplog):
+def test_email_invite_rides_the_seam_and_expires(client, workspace, monkeypatch):
     from datetime import datetime, timedelta
+    from core import email as email_module
 
+    messages = []
+    monkeypatch.setattr(email_module, "send_email", lambda **message: messages.append(message))
     tid, _ = workspace
-    with caplog.at_level(logging.INFO, logger="scheduler.email"):
-        r = client.post(
-            f"/tournaments/{tid}/invites",
-            json={"role": "viewer", "email": "friend@example.com"},
-        )
+    r = client.post(
+        f"/tournaments/{tid}/invites",
+        json={"role": "viewer", "email": "friend@example.com"},
+    )
     assert r.status_code == 201, r.text
     token = r.json()["token"]
-    mail = [m for m in caplog.messages if "friend@example.com" in m]
-    assert mail and f"/invite/{token}" in mail[0]
+    assert len(messages) == 1 and messages[0]["to"] == "friend@example.com"
+    assert f"/invite/{token}" in messages[0]["body"]
 
     listed = client.get(f"/tournaments/{tid}/invites").json()
     row = next(i for i in listed if i["id"] == r.json()["id"])

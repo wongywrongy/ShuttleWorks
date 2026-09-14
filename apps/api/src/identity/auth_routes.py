@@ -8,7 +8,7 @@ credential changes revoking other sessions.
 Registration/login work identically in both modes — local mode simply
 never *requires* them (requests without a session resolve to the
 bootstrap operator). Password-reset issues the token here; delivery
-rides the Phase 3 email seam (in local mode the token is logged).
+rides the email seam without placing the token in application logs.
 """
 from __future__ import annotations
 
@@ -369,7 +369,7 @@ def request_password_reset(
     repo: LocalRepository = Depends(get_repository),
 ) -> dict:
     """Always 202 (no account-existence oracle). The token rides the
-    email seam in Phase 3; until then it's logged server-side only."""
+    email seam; it is never returned in this response or logged."""
     ip_key = f"ip:{_client_ip(request)}"
     _throttle_guard(repo, ip_key)
     try:
@@ -379,8 +379,8 @@ def request_password_reset(
     user = repo.execute_query(auth_service.get_user_by_email, email)
     if user is not None:
         token = repo.execute_transaction(auth_service.issue_reset_token, user)
-        # Delivery rides the email seam: console backend logs the full
-        # message locally; SMTP delivers in cloud. The raw token never
+        # Delivery rides the email seam: console mode skips delivery;
+        # SMTP delivers the message. The raw token never
         # appears in the HTTP response or the cloud application log.
         from core.email import send_email
 

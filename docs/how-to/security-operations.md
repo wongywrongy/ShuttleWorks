@@ -80,8 +80,12 @@ cannot make already issued offline authority disappear from a disconnected node.
 fields and masks capability path families, including browser `/invite/` and
 `/e/partner/` links. Runtime nginx error logs are disabled because that log channel
 cannot redact request URLs. Status, upstream status and timing remain in the safe
-access log; startup `nginx -t` failures remain visible. Application/email logging
-needs separate remediation; this policy does not sanitize those channels.
+access log; startup `nginx -t` failures remain visible. Console email records only
+skipped delivery, without recipient, subject or body. The nginx policy does not
+sanitize other application logging. Disposable journey fixtures use
+`simulator/tournament_sim/mailbox.py`: loopback SMTP, synthetic recipients only,
+bounded mail in memory, destroyed when the fixture exits. Never point it at live
+accounts or use it as a production mail relay.
 
 ## Verify a release before installing
 

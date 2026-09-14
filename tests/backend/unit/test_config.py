@@ -132,8 +132,7 @@ def test_event_node_profiles_accept_explicit_file_backed_authority_material():
 
 
 def test_cloud_mode_refuses_console_email_backend(monkeypatch):
-    """SP-CLOUD-2: the console backend logs raw reset/invite tokens --
-    cloud startup must fail closed without SMTP delivery."""
+    """Cloud startup must fail closed without SMTP delivery."""
     from core.config import Settings
 
     with pytest.raises(Exception) as e:

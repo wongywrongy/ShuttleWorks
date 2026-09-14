@@ -172,22 +172,22 @@ def test_change_password_requires_current(client):
     assert r.status_code == 401
 
 
-def test_password_reset_flow(client, caplog):
-    import logging
+def test_password_reset_flow(client, monkeypatch):
+    from core import email as email_module
+
+    messages = []
+    monkeypatch.setattr(email_module, "send_email", lambda **message: messages.append(message))
 
     _register(client)
     client.cookies.clear()
-    with caplog.at_level(logging.INFO, logger="scheduler.email"):
-        r = client.post(
-            "/auth/request-password-reset", json={"email": "dana@example.com"}
-        )
+    r = client.post(
+        "/auth/request-password-reset", json={"email": "dana@example.com"}
+    )
     assert r.status_code == 202
-    # The token travels via the email seam (console backend logs the
-    # full message locally), never in the HTTP response.
+    # The token travels via the email seam, never in the HTTP response or logs.
     assert "token" not in r.text.lower()
-    mail_lines = [m for m in caplog.messages if "Reset link:" in m]
-    assert mail_lines, "console email backend should log the reset mail"
-    token = mail_lines[0].split("?reset=")[1].split()[0]
+    assert len(messages) == 1 and messages[0]["to"] == "dana@example.com"
+    token = messages[0]["body"].split("?reset=")[1].split()[0]
 
     r = client.post(
         "/auth/reset-password",

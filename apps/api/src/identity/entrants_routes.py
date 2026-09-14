@@ -568,7 +568,7 @@ def _mail(to: str, subject: str, body: str) -> bool:
         send_email(to=to, subject=subject, body=body)
         return True
     except Exception:
-        log.exception("entrant mail delivery failed (%s)", subject)
+        log.exception("entrant mail delivery failed")
         return False
 
 

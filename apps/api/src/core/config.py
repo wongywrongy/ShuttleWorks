@@ -318,7 +318,7 @@ class Settings(BaseSettings):
     # Password-reset token lifetime (delivery rides the email seam).
     reset_token_ttl_minutes: float = 60.0
     # ---- Email seam (SP-CLOUD-2 Phase 3) ------------------------------
-    # console = log the message (local default, tests); smtp = generic
+    # console = record skipped delivery without message fields; smtp = generic
     # SMTP (cloud). No provider SDKs — Rule 3 keeps local offline.
     email_backend: str = "console"  # console | smtp
     smtp_host: str = ""
@@ -587,12 +587,9 @@ class Settings(BaseSettings):
             missing.append("AUTH_MODE=cloud (real accounts required)")
         if not self.session_cookie_secure:
             missing.append("SESSION_COOKIE_SECURE=true (HTTPS-only cookies)")
-        # The console email backend writes full messages — including
-        # raw reset/invite tokens — into the log stream. Fine locally;
-        # in a real cloud deployment that is credential leakage plus
-        # silent non-delivery, so refuse to start without SMTP.
+        # Console mode never delivers mail, so cloud startup requires SMTP.
         if self.email_backend != "smtp":
-            missing.append("EMAIL_BACKEND=smtp (console would log live tokens)")
+            missing.append("EMAIL_BACKEND=smtp (console does not deliver mail)")
         elif not self.smtp_host:
             missing.append("SMTP_HOST")
         # A cloud API is behind an ingress, and an ingress publishes a

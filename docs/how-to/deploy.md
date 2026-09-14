@@ -55,9 +55,8 @@ get it wrong, so treat step 10 as mandatory.
 
 - Ubuntu 24.04 with Docker Engine and the Compose plugin
 - A domain on Cloudflare (any plan, including free)
-- An SMTP account — cloud mode refuses to start without one, because the
-  console email backend would write live invite and password-reset tokens into
-  the log stream
+- An SMTP account — cloud mode refuses to start without mail delivery;
+  the local console backend only records that delivery was skipped
 - Tailscale (or equivalent) if a second machine will run workers
 - A local filesystem path for the Postgres data directory. **Not** a synced or
   network path: `initdb` fails on those with `could not create directory

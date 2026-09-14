@@ -58,8 +58,8 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
   const origin = window.location.origin;
 
   // V3-OC25.1 / package 18: offer "send by email" only where the server can
-  // actually deliver one. Local mode's console backend only logs the
-  // message (no operator ever receives it); cloud mode without SMTP
+  // actually deliver one. Local mode's console backend skips delivery
+  // (no operator ever receives it); cloud mode without SMTP
   // configured is the same situation. Link mode always works — it is the
   // fallback in both branches below.
   const { authMode, user } = useAuth();

@@ -78,7 +78,7 @@ Nginx runtime error logging is disabled because that channel cannot redact URLs;
 safe upstream status/timing fields remain available, and startup syntax failures
 remain visible. Removing redaction in a temporary source copy caused the native
 runtime test to fail. This controls nginx only. Raw display bearer storage,
-repeated display disclosure and `core/email.py` console bodies remain open.
+repeated display disclosure and direct API access-log redaction remain open.
 
 Staff invitations now expire seven days after creation regardless of delivery
 mode. The repository caps supplied deadlines and the acceptance guard rejects
@@ -109,6 +109,16 @@ consumers passed 92 tests (10 optional dialect skips). The console passed 33
 Sharing/status tests and its production build. Removing the late-response guard
 made the UI regression fail; the restored implementation passes. All 15 backend
 import contracts and the 62 documentation checks pass (six pre-existing skips).
+
+Console email now records only skipped delivery, without message fields. SMTP
+failures expose a fixed `EmailDeliveryError`, suppressing provider replies from
+caller exception logs. Both log-sentinel tests failed before implementation and
+pass afterward. The email/configuration/output-encoding suite passed 81 tests;
+the final transport/capture checks passed seven tests after provider-error
+sanitization. A disposable fixture on ports 18760–18762 completed all ten real
+account journeys and review extras, then cleaned up. Its SMTP sink accepts only
+synthetic `example.test` recipients, retains at most 256 messages of 64 KiB each
+in memory, and exposes only loopback ports. Tools no longer scrape API logs.
 
 ## R5
 
