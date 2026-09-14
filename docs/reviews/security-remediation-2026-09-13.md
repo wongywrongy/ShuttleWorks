@@ -12,7 +12,7 @@ source revisions.
 
 | Rule | Verdict | Enforcement files | Executable evidence | Remaining finding / outcome |
 | --- | --- | --- | --- | --- |
-| R1 | PASS | `core/dependencies.py`, `core/main.py` | `tests/backend/test_auth_surface.py`, `test_cross_principal_sessions.py` | Existing session authority retained; MFA/session-strength debt is tracked separately. |
+| R1 | PASS | `core/dependencies.py`, `core/main.py`, `core/operator_sessions.py`, `core/secret_keys.py`, `identity/mfa.py`, `identity/mfa_routes.py`, `identity/node_identity.py`, `repositories/mfa.py` | `tests/backend/test_auth_surface.py`, `test_cross_principal_sessions.py`, `test_operator_mfa_http.py`, `test_node_operator_mfa_http.py`, `test_node_enrollment_cli.py`, `test_operator_mfa_keyring_cli.py`, `unit/test_operator_mfa.py`; `tests/e2e/tests/operator-mfa.spec.ts` (in CI) | P08 implemented: app-owned MFA, bounded sessions, resumable fresh proof, voluntary factors and key rotation. Residuals are SGR-20260914-K6. Hosted CI and independent review pending. |
 | R2 | PASS | `core/error_codes.py`, `core/dependencies.py`, `core/main.py`, `sync/routes.py` | `tests/backend/test_tenant_isolation.py`, `test_invite_oracle.py` | Role, missing and unpublished denials converge; collection gates run before cache validators and entrant SSR maps publication races to the same 404. |
 | R3 | FAIL | `core/roles.py`, `db/models.py`, `identity/invites.py` | `tests/backend/test_host_split.py`, `unit/test_baseline_schema.py` | One shared role ladder; sole-parent outbox exception has executable ownership evidence and remains distinct from literal composite-FK compliance. |
 | R4 | PASS | `infra/nginx/log-redaction.conf`, `core/log_redaction.py`, `core/email.py`, `core/tokens.py`, `repositories/local.py`, `display/display.py`, migration `0005` | `tools/check-nginx.sh`, `tests/backend/test_invites.py`, `test_display_public.py`, `unit/test_log_redaction.py`, `unit/test_email_transport.py`, `unit/test_baseline_schema.py` | Staff/display credentials are hashed, finite and issued once; API/nginx/email logging controls pass. Independent review remains pending. |
@@ -119,6 +119,72 @@ Executed September 14 evidence (final broad backend gates still pending):
 Key-use inventory, safe encryption-key retirement, production handoff and
 lost-factor/disconnected/reconnection rehearsals remain open. Foundation hosted CI
 certifies `08b1c2fc` only; the later runtime changes still need their own hosted CI.
+
+### Completion follow-up — 2026-09-14
+
+Hosted CI on `5507b11c` failed one backend test: the node enrollment graph declared
+`consumed` terminal while administrator recovery returns that row to `pending`. The
+definition now has no terminal state, like `display_capability`; the runtime was
+already correct. Two audits of the three P08 commits then found the gaps below, all
+now closed in code with tests:
+
+- **Unusable credentials.** The shared `authority/offline-session` routes minted a
+  node cookie with no individual proof, which could never authenticate on an
+  MFA-enforcing node. Both answer `410 AUTH_ENDPOINT_GONE` behind membership
+  (anonymous 401, non-member 404); the bootstrap helper, unreachable `resolve()`,
+  schemas and router are deleted.
+- **Missed freshness.** Display-link revocation, backup creation, leaving a
+  workspace, marking authority ready and staff-invite revocation now require fresh
+  proof like their siblings. Invite revocation checks it after the owner lookup.
+- **Dropped actions.** A stale session raised the lock but lost the export or link
+  change that triggered it. Fresh-gated console calls now retry once after
+  verification (`withFreshProof`); cancelling gives up without a toast. Backup and
+  bracket downloads were plain links that opened a raw 401; they are fetched, and
+  blob error bodies are decoded so the lock appears.
+- **Key rotation.** The ring accepted four keys but nothing could add, promote,
+  rewrap or remove one. `tools/operator-mfa-keyring.py` now does all four with
+  atomic, owner-preserving writes and refuses to remove a key any seed uses. The
+  end-to-end test rotates under a live enrolled operator who then signs in again.
+- **Factor management.** Settings offered MFA only where it was forced. Any account
+  with a password can now enroll, replace, reissue recovery codes (authenticator
+  code only) and, where policy allows, turn a voluntary factor off (`409
+  AUTH_MFA_ENFORCED` otherwise). `UserDTO` separates policy from obligation and
+  reports key-ring availability and remaining codes.
+- **Ceremony hazards.** A re-authentication prompt for a user without a factor
+  silently became enrollment, and an expired setup key had no way back. The
+  ceremony takes an explicit mode and offers Start over. A wrong password now
+  answers `AUTH_INVALID_CREDENTIALS`. The lock screen uses the design-system Modal.
+- **Node operators.** A bare `/` sent them to a Hub their credential cannot read.
+  The console remembers the node workspace as a route selector and redirects home
+  and not-found there. The host-run enrollment tool no longer demands the API's key
+  ring, and its audited reset path has CLI coverage.
+- **Operations.** `SESSION_TTL_DAYS` above `0.5` now stops startup, and older
+  templates shipped `30`; the upgrade guide, deployment guides and env templates now
+  say so and document `MFA_KEYRING_FILE`. A test pins the zero-configuration local boot.
+- **Browser evidence.** The MFA journey self-skipped and nothing ran it. CI now runs
+  it; it also proves the password-stage cookie dies on confirmation and that
+  reissued codes replace the old set.
+
+The global lock mount proposed in review was not adopted: it would cover the public
+venue board when a signed-in operator's session expires, and no fresh-gated call is
+made outside the authenticated layout.
+
+Executed evidence at this follow-up:
+
+| Gate | Result |
+| --- | --- |
+| Backend, non-shared partition | 2,652 passed |
+| Backend, PostgreSQL partition (disposable Postgres 16) | 293 passed, 1 expected skip |
+| Console | 2,473 passed; build, type gate, lint (0 errors) and boundaries (0 errors) pass |
+| Entrant | 1,254 passed plus the updated launch-script inventory |
+| Operator MFA browser journey | passes with both the repository venv and a bare interpreter |
+| Ruff, 15 import contracts, state-machine contract, threat register, docs build | pass |
+
+Residual scope is recorded as SGR-20260914-K6: fresh proof does not gate the JSON
+reads the console polls, no deployed key rotation has been rehearsed, the event-node
+enrollment journey has no browser test, and factors are unique per account rather
+than per scope. Hosted CI on the pushed head and an independent review remain
+required.
 
 ## R2
 
