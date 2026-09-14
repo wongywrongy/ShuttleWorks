@@ -1,3 +1,4 @@
+/// <reference types="node" />
 /**
  * Vitest setup file — registers `fake-indexeddb` so the global
  * ``indexedDB`` API is available in the jsdom environment that

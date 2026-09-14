@@ -58,7 +58,7 @@ Source paths without a repository prefix in this section are under `apps/api/src
 
 - **SMV2-3 — The broad CHECK coverage criterion includes two unplanned lifecycle domains.** `sync_quarantine.status` and `tournament_authority_epochs.state` have named CHECK constraints but no corresponding registered machine. State-machines v2 S-3 names neither domain, so passing a literal all-CHECK-state audit would require additional design outside the four existing ports and six listed new definitions. Size: M; owner: sync / authority.
 
-- **SMV2-4 — High dependency advisory resolved for the prototype baseline (2026-09-13).** Updated the transitive `smol-toml` lockfile entry from 1.7.0 to 1.8.0. `npm audit --audit-level=high` passes. Six lower-severity findings remain (five moderate, one low); dependency-major upgrades remain follow-up work. Size: S; owner: dependencies.
+- **SMV2-4 — Dependency advisories resolved in the working branch (2026-09-14); review pending.** The lockfile now resolves Vitest/mocker/coverage 4.1.11, Vite 7's esbuild 0.28.1, VitePress/Vite 6's supported esbuild 0.25.12, and UUID 11.1.1. A clean `npm ci`, dependency-tree check and full `npm audit` pass with zero findings. Both frontend suites pass; spreadsheet export safety and an ExcelJS data-bar XLSX round trip exercise the patched UUID consumer. Root `exceljs` is an intentional tooling dependency: it makes the scoped override reachable despite [npm's workspace override bug](https://github.com/npm/cli/issues/9514). Remove that workaround only after clean-install and update checks retain the patched dependency. Hosted alerts remain open until the change reaches the default branch and is reanalysed. Owner: dependencies.
 
 ## Public refinement (2026-09-12)
 

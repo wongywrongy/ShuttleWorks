@@ -66,7 +66,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-016 | State-machine v2 review (2026-09-13) / unnumbered | SMV2-1 — Competition is absent from the API import-linter package inventory. | P20 | Unreconciled |
 | DL-017 | State-machine v2 review (2026-09-13) / unnumbered | SMV2-2 — Operations still uses done for aggregate booleans, counters, labels, and design tokens. | P16 | Unreconciled |
 | DL-018 | State-machine v2 review (2026-09-13) / unnumbered | SMV2-3 — The broad CHECK coverage criterion includes two unplanned lifecycle domains. | P10 | Unreconciled |
-| DL-019 | State-machine v2 review (2026-09-13) / unnumbered | SMV2-4 — High dependency advisory resolved for the prototype baseline (2026-09-13). | P13 | Unreconciled |
+| DL-019 | State-machine v2 review (2026-09-13) / unnumbered | SMV2-4 — Dependency advisories | P13 | Implementation verified; see reconciled source entry; review pending |
 | DL-020 | Public refinement (2026-09-12) / PR-0912-1 | Entry page-weight budget re-derived 8 → 10 KB | P21 | Unreconciled |
 | DL-021 | Public refinement (2026-09-12) / PR-0912-2 | Live running scores need desk data. | P11 | Unreconciled |
 | DL-022 | Public refinement (2026-09-12) / PR-0912-3 | Currency on older submissions. | P17 | Unreconciled |

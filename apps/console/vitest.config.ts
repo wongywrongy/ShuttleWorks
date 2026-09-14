@@ -7,6 +7,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // Vitest 4 reuses an existing spy. Keep each test's call assertions local
+    // while retaining the default implementations supplied by module mocks.
+    clearMocks: true,
     setupFiles: ['./src/setupTests.ts'],
     include: ['src/**/__tests__/**/*.{test,spec}.{ts,tsx}'],
     env: {

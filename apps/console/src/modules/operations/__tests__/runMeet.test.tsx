@@ -14,7 +14,7 @@ import { identityFixture } from './identityFixture';
  *     the `meetOps` seam, and the inspector's static player list yields to
  *     the interactive one.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MeetMatchControls } from '../run/MeetMatchControls';
 import { RunFinished } from '../run/RunFinished';
@@ -67,11 +67,11 @@ function mkOps(overrides?: {
   matchStates?: Record<string, MatchStateDTO>;
   analyzeImpact?: MeetRunOps['analyzeImpact'];
 }): MeetRunOps & {
-  updateMatchStatus: ReturnType<typeof vi.fn>;
-  confirmPlayer: ReturnType<typeof vi.fn>;
-  substitutePlayer: ReturnType<typeof vi.fn>;
-  removePlayer: ReturnType<typeof vi.fn>;
-  undoStart: ReturnType<typeof vi.fn>;
+  updateMatchStatus: Mock<MeetRunOps['updateMatchStatus']>;
+  confirmPlayer: Mock<MeetRunOps['confirmPlayer']>;
+  substitutePlayer: Mock<MeetRunOps['substitutePlayer']>;
+  removePlayer: Mock<MeetRunOps['removePlayer']>;
+  undoStart: Mock<MeetRunOps['undoStart']>;
 } {
   return {
     matches: [
@@ -150,7 +150,7 @@ describe('MeetMatchPanel — undo start', () => {
     // Presence of `actualStartTime: undefined` is what clears the stamp.
     const [, , data] = ops.updateMatchStatus.mock.calls[0];
     expect(Object.prototype.hasOwnProperty.call(data, 'actualStartTime')).toBe(true);
-    expect(data.actualStartTime).toBeUndefined();
+    expect(data!.actualStartTime).toBeUndefined();
   });
 
   it('renders no undo-start for a match that has not started', () => {
@@ -299,9 +299,9 @@ describe('RunFinished — undo-finish', () => {
     // the recorded result on the state route; an absent key would retain it.
     // (Deep equality ignores undefined-valued keys, so assert ownership.)
     const [, , data] = ops.updateMatchStatus.mock.calls[0];
-    for (const k of ['actualEndTime', 'score', 'sets']) {
+    for (const k of ['actualEndTime', 'score', 'sets'] as const) {
       expect(Object.prototype.hasOwnProperty.call(data, k), `clears ${k}`).toBe(true);
-      expect(data[k]).toBeUndefined();
+      expect(data![k]).toBeUndefined();
     }
   });
 

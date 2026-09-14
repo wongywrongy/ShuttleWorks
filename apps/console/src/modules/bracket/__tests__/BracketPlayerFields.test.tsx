@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { BracketEventsField } from '../BracketPlayerFields';
+import { BracketEventsField, type CommitEventFn } from '../BracketPlayerFields';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import type { BracketPlayerDTO } from '../../../api/dto';
 
@@ -48,7 +48,7 @@ const cleo: BracketPlayerDTO = {
 };
 
 /** Renders the field with the given category already expanded by click. */
-const open = (category: string, onCommitEvent: ReturnType<typeof vi.fn>) => {
+const open = (category: string, onCommitEvent: CommitEventFn) => {
   render(
     <BracketEventsField
       player={ana}

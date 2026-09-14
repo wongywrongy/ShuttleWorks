@@ -320,3 +320,27 @@ logging alert in `tools/check-source-secrets.py`. A controlled digest containing
 checks. CI now prints only the scanner finding count, because filenames can also
 carry secrets. A synthetic sensitive filename fails the old output path and is
 absent from the corrected gate output. No scanner suppression was added.
+
+The September 14 follow-up passes 2,511 backend tests in the parallel partition
+(13m58s) and 201 tests in the isolated PostgreSQL partition (one expected skip).
+The earlier full run's three logging failures exposed a standard `LogRecord.message`
+compatibility requirement. The formatter now preserves that derived field with
+redacted text; the added regression fails without it and the full rerun passes.
+The disposable mail fixture also completed all ten account journeys and review
+fixture preparation using loopback SMTP, with no mail content written to logs.
+
+P13 dependency remediation updates Vitest, its mocker and coverage provider to
+4.1.11 ([advisory](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9)),
+Vite 7's esbuild to 0.28.1 ([advisory](https://github.com/evanw/esbuild/security/advisories/GHSA-g7r4-m6w7-qqqr)),
+and ExcelJS's UUID dependency to 11.1.1 ([advisory](https://github.com/uuidjs/uuid/security/advisories/GHSA-w5hq-g745-h8pq)).
+VitePress retains its supported Vite 6 / esbuild 0.25.12 combination, outside the
+affected range. A root ExcelJS tooling dependency makes its scoped UUID override
+effective despite the reproduced npm workspace override bug (SMV2-4).
+
+Clean `npm ci`, the resolved dependency graph and `npm audit` pass with zero
+findings, including development dependencies. Vitest 4 passes all 2,400 console
+and 1,249 entrant tests. Its new spy reuse behavior requires explicit per-test
+call-history clearing; module mock implementations and all assertions are retained.
+Test-only Node types and precise callback mock signatures restore TypeScript checks.
+ExcelJS data-bar UUID generation and XLSX round-trip validation pass. These are
+branch results, not a claim that default-branch hosted alerts have closed.
