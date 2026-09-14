@@ -171,7 +171,7 @@ def _throttle_guard(repo: LocalRepository, *keys: str) -> None:
 
 
 def _user_dto(user_row, *, email: str, repo: LocalRepository, principal: AuthUser | None = None) -> UserDTO:
-    factor = repo.mfa.get(user_row.id)
+    factor = repo.mfa.get(user_row.id, settings.operator_mfa_scope)
     enrolled = factor is not None and factor.status == "active"
     return UserDTO(
         id=str(user_row.id),

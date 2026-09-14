@@ -56,7 +56,7 @@ def test_enrollment_encrypts_seed_hashes_codes_audits_actor_and_revokes_old_sess
     session.add(old)
     session.commit()
     seed, generation, recovery = enroll(account)
-    factor = repo.mfa.get(user_id)
+    factor = repo.mfa.get(user_id, "cloud")
     assert factor.status == "active" and generation == 1
     assert factor.pending_ciphertext is None and factor.pending_key_id is None and factor.pending_expires_at is None
     assert decrypt_factor(factor.secret_ciphertext, options["keys"].active_key, user_id=user_id, scope="cloud") == seed
@@ -77,24 +77,24 @@ def test_enrollment_requires_the_current_password(account, password):
     repo, user_id, options = account
     with pytest.raises(mfa.MfaError, match="MFA_INVALID_CREDENTIALS"), repo.transaction():
         mfa.begin_enrollment(repo, user_id, password, fresh=False, session_id=SESSION_ID, **options)
-    assert repo.mfa.get(user_id) is None
+    assert repo.mfa.get(user_id, "cloud") is None
 
 
 def test_replacement_requires_fresh_auth_and_preserves_old_factor_until_confirmed(account):
     repo, user_id, options = account
     seed, _, recovery = enroll(account)
-    old_cipher = repo.mfa.get(user_id).secret_ciphertext
+    old_cipher = repo.mfa.get(user_id, "cloud").secret_ciphertext
     with pytest.raises(mfa.MfaError, match="AUTH_REAUTH_REQUIRED"), repo.transaction():
         mfa.begin_enrollment(repo, user_id, PASSWORD, fresh=False, session_id=SESSION_ID, **options)
     with repo.transaction():
         next_secret = mfa.begin_enrollment(repo, user_id, PASSWORD, fresh=True, session_id=SESSION_ID, **options)
-    assert repo.mfa.get(user_id).secret_ciphertext == old_cipher
+    assert repo.mfa.get(user_id, "cloud").secret_ciphertext == old_cipher
     with repo.transaction():
         next_generation, next_codes = mfa.confirm_enrollment(
             repo, user_id, totp_code(base64.b32decode(next_secret), NOW.timestamp()), session_id=SESSION_ID, **options,
         )
     assert next_generation == 2 and not set(recovery) & set(next_codes)
-    assert repo.mfa.get(user_id).secret_ciphertext != old_cipher
+    assert repo.mfa.get(user_id, "cloud").secret_ciphertext != old_cipher
     with pytest.raises(mfa.MfaError, match="MFA_INVALID_CODE"), repo.transaction():
         mfa.verify_factor(repo, user_id, recovery[0], **options)
 
@@ -115,7 +115,7 @@ def test_confirmation_refuses_invalid_or_expired_enrollment(account, invalid):
         code = str((int(code) + 1) % 1_000_000).zfill(6)
     with pytest.raises(mfa.MfaError), repo.transaction():
         mfa.confirm_enrollment(repo, user_id, code, session_id=SESSION_ID, **options)
-    factor = repo.mfa.get(user_id)
+    factor = repo.mfa.get(user_id, "cloud")
     assert factor is None or factor.status == "unconfigured"
     assert repo.session.scalar(select(OperatorRecoveryCode.id)) is None
 
@@ -140,7 +140,7 @@ def test_another_session_cannot_confirm_the_accounts_pending_enrollment(account)
     code = totp_code(base64.b32decode(secret), NOW.timestamp())
     with pytest.raises(mfa.MfaError, match="MFA_ENROLLMENT_EXPIRED"), repo.transaction():
         mfa.confirm_enrollment(repo, user_id, code, session_id=uuid.uuid4(), **options)
-    assert repo.mfa.get(user_id).status == "unconfigured"
+    assert repo.mfa.get(user_id, "cloud").status == "unconfigured"
     with repo.transaction():
         assert mfa.confirm_enrollment(repo, user_id, code, session_id=SESSION_ID, **options)[0] == 1
 
@@ -184,14 +184,31 @@ def test_concurrent_requests_consume_the_code_only_once(account, migrated, kind)
     )).all()) == 1
 
 
-def test_node_scope_cannot_decrypt_or_replace_a_cloud_factor(account):
+def test_one_account_holds_separate_cloud_and_node_factors(account):
+    """Migration 0008: factors are unique per (account, scope), never shared."""
     repo, user_id, options = account
-    _, _, recovery = enroll(account)
-    options = dict(options, scope=f"node:{uuid.uuid4()}")
-    with pytest.raises(mfa.MfaError, match="MFA_SCOPE_MISMATCH"), repo.transaction():
-        mfa.begin_enrollment(repo, user_id, PASSWORD, fresh=True, session_id=SESSION_ID, **options)
+    cloud_seed, cloud_generation, cloud_recovery = enroll(account)
+    cloud_cipher = repo.mfa.get(user_id, "cloud").secret_ciphertext
+    node = dict(options, scope=f"node:{uuid.uuid4()}")
+    # A cloud recovery code proves nothing on the node: that scope has no factor yet.
     with pytest.raises(mfa.MfaError, match="MFA_NOT_ENROLLED"), repo.transaction():
-        mfa.verify_factor(repo, user_id, recovery[0], **options)
+        mfa.verify_factor(repo, user_id, cloud_recovery[0], **node)
+    node_session = uuid.uuid4()
+    with repo.transaction():
+        secret = mfa.begin_enrollment(repo, user_id, PASSWORD, fresh=False, session_id=node_session, **node)
+    node_seed = base64.b32decode(secret)
+    with repo.transaction():
+        mfa.confirm_enrollment(repo, user_id, totp_code(node_seed, NOW.timestamp()), session_id=node_session, **node)
+    cloud, node_factor = repo.mfa.get(user_id, "cloud"), repo.mfa.get(user_id, node["scope"])
+    assert cloud.id != node_factor.id and node_seed != cloud_seed
+    assert cloud.secret_ciphertext == cloud_cipher and cloud.generation == cloud_generation
+    # Each seed is bound to its scope; neither decrypts under the other.
+    from identity.mfa_crypto import FactorSecretError
+    with pytest.raises(FactorSecretError):
+        decrypt_factor(node_factor.secret_ciphertext, options["keys"].active_key, user_id=user_id, scope="cloud")
+    later = NOW + timedelta(seconds=30)
+    with repo.transaction():
+        assert mfa.verify_factor(repo, user_id, totp_code(cloud_seed, later.timestamp()), **dict(options, now=later)) == cloud_generation
 
 
 def test_composed_calls_do_not_restore_a_consumed_counter_from_the_database(account):
@@ -210,7 +227,7 @@ def test_composed_calls_do_not_restore_a_consumed_counter_from_the_database(acco
 def test_successful_totp_rewraps_old_key_without_invalidating_other_sessions(account):
     repo, user_id, options = account
     seed, generation, _ = enroll(account)
-    old_cipher = repo.mfa.get(user_id).secret_ciphertext
+    old_cipher = repo.mfa.get(user_id, "cloud").secret_ciphertext
     new_key = secrets.token_bytes(32)
     keys = options["keys"]
     rotated = SecretKeyring(secret_key_id(new_key), {keys.active_id: keys.active_key, secret_key_id(new_key): new_key})
@@ -218,7 +235,7 @@ def test_successful_totp_rewraps_old_key_without_invalidating_other_sessions(acc
     with repo.transaction():
         assert mfa.verify_factor(repo, user_id, totp_code(seed, later.timestamp()),
                                  **dict(options, keys=rotated, now=later)) == generation
-    factor = repo.mfa.get(user_id)
+    factor = repo.mfa.get(user_id, "cloud")
     assert factor.key_id == rotated.active_id and factor.secret_ciphertext != old_cipher
     assert decrypt_factor(factor.secret_ciphertext, new_key, user_id=user_id, scope="cloud") == seed
 
@@ -243,7 +260,7 @@ def test_rewrap_moves_active_and_pending_seeds_to_the_active_key(account):
     with repo.transaction():
         counts = mfa.rewrap_factors(repo, keys=rotated, now=NOW)
     assert counts == {"active": 1, "pending": 1}
-    factor = repo.mfa.get(user_id)
+    factor = repo.mfa.get(user_id, "cloud")
     assert factor.key_id == factor.pending_key_id == rotated.active_id
     assert factor.generation == generation  # custody change, not a lifecycle event
     assert repo.mfa.key_usage() == [
@@ -263,13 +280,13 @@ def test_rewrap_moves_active_and_pending_seeds_to_the_active_key(account):
 def test_rewrap_without_the_old_key_refuses_and_writes_nothing(account):
     repo, user_id, options = account
     enroll(account)
-    before = repo.mfa.get(user_id).secret_ciphertext
+    before = repo.mfa.get(user_id, "cloud").secret_ciphertext
     new_key = secrets.token_bytes(32)
     missing_old = SecretKeyring(secret_key_id(new_key), {secret_key_id(new_key): new_key})
     with pytest.raises(SecretKeyringError), repo.transaction():
         mfa.rewrap_factors(repo, keys=missing_old, now=NOW)
     repo.session.expire_all()
-    factor = repo.mfa.get(user_id)
+    factor = repo.mfa.get(user_id, "cloud")
     assert factor.secret_ciphertext == before and factor.key_id == options["keys"].active_id
 
 
@@ -281,7 +298,7 @@ def test_reissue_needs_a_current_code_and_replaces_every_recovery_code(account):
         mfa.reissue_recovery_codes(repo, user_id, recovery[0], **dict(options, now=later))
     with repo.transaction():
         codes = mfa.reissue_recovery_codes(repo, user_id, totp_code(seed, later.timestamp()), **dict(options, now=later))
-    factor = repo.mfa.get(user_id)
+    factor = repo.mfa.get(user_id, "cloud")
     stored = set(repo.session.scalars(select(OperatorRecoveryCode.token_hash).where(OperatorRecoveryCode.factor_id == factor.id)))
     assert stored == {_hash_token(normalize_recovery_code(code)) for code in codes}
     assert not stored & {_hash_token(normalize_recovery_code(code)) for code in recovery}
@@ -297,7 +314,7 @@ def test_disable_clears_the_seed_and_codes_and_revokes_other_sessions(account):
     repo.session.commit()
     with repo.transaction():
         mfa.disable_factor(repo, user_id, recovery[0], session_id=SESSION_ID, **options)
-    factor = repo.mfa.get(user_id)
+    factor = repo.mfa.get(user_id, "cloud")
     assert factor.status == "unconfigured" and factor.generation == generation + 1
     assert factor.secret_ciphertext is None and factor.key_id is None and factor.last_counter == -1
     assert repo.mfa.count_recovery_codes(factor.id) == 0

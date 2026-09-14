@@ -80,7 +80,7 @@ _LOCAL_DEV_USER = AuthUser(id=str(LOCAL_DEV_USER_UUID), email="local@dev")
 
 
 def _session_principal(repo: LocalRepository, user_row, row) -> AuthUser | None:
-    factor = repo.mfa.get(user_row.id)
+    factor = repo.mfa.get(user_row.id, settings.operator_mfa_scope)
     enrolled = factor is not None and factor.status == "active"
     required = settings.operator_mfa_required or enrolled
     authenticated = bool(

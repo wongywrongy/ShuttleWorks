@@ -103,7 +103,7 @@ def test_explicit_administrator_recovery_revokes_credentials_and_audits_the_rese
     with repo.transaction():
         replacement, _ = node_identity.provision(repo, user_id=user.id, reset_reason="Identity checked by local administrator", **scope)
     repo.session.refresh(user)
-    factor = repo.mfa.get(user.id)
+    factor = repo.mfa.get(user.id, options["scope"])
     assert user.password_hash is None
     assert factor.status == "unconfigured" and factor.secret_ciphertext is None
     assert factor.pending_ciphertext is None and factor.generation == 2

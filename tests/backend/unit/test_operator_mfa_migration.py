@@ -63,3 +63,32 @@ def test_migration_caps_both_session_types_without_asserting_mfa(migrated):
             assert all(_aware(r.created_at) == issued and _aware(r.last_seen_at) == issued for r in rows)
             assert all(r.authenticated_at is None and r.mfa_generation is None for r in rows)
         assert conn.scalar(sa.select(sa.func.count()).select_from(latest.tables["operator_mfa_factors"])) == 0
+
+
+@pytest.mark.parametrize("initial_revision", ["0007"], indirect=True)
+def test_factor_uniqueness_widens_to_account_and_scope_keeping_existing_rows(migrated):
+    """0008: one factor per (account, scope); an existing factor survives untouched."""
+    now = datetime(2026, 9, 14, 12, tzinfo=timezone.utc)
+    def key(value):
+        return value.hex if migrated.dialect.name == "sqlite" else value
+    user_id, factor_id = uuid.uuid4(), uuid.uuid4()
+    factors = sa.MetaData()
+    factors.reflect(migrated)
+    table = factors.tables["operator_mfa_factors"]
+    row = dict(status="unconfigured", generation=0, revision=0, last_counter=-1, created_at=now, updated_at=now)
+    with migrated.begin() as conn:
+        conn.execute(User.__table__.insert().values(id=user_id, email="scoped@example.test",
+                                                    email_verified=False, created_at=now, updated_at=now))
+        conn.execute(table.insert().values(id=key(factor_id), user_id=key(user_id), scope="cloud", **row))
+    with pytest.raises(sa.exc.IntegrityError), migrated.begin() as conn:  # the old key: one per account
+        conn.execute(table.insert().values(id=key(uuid.uuid4()), user_id=key(user_id), scope="node:a", **row))
+    cfg = Config()
+    cfg.set_main_option("script_location", str(fixtures.SCRIPTS))
+    with migrated.connect() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "head")
+    with migrated.begin() as conn:
+        assert conn.execute(sa.select(table.c.scope)).scalars().all() == ["cloud"]
+        conn.execute(table.insert().values(id=key(uuid.uuid4()), user_id=key(user_id), scope="node:a", **row))
+    with pytest.raises(sa.exc.IntegrityError), migrated.begin() as conn:  # still one per scope
+        conn.execute(table.insert().values(id=key(uuid.uuid4()), user_id=key(user_id), scope="cloud", **row))

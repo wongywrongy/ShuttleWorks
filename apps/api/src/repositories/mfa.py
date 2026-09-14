@@ -26,8 +26,10 @@ class MfaRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def get(self, user_id: uuid.UUID) -> OperatorMfaFactor | None:
-        return self.session.scalar(select(OperatorMfaFactor).where(OperatorMfaFactor.user_id == user_id))
+    def get(self, user_id: uuid.UUID, scope: str) -> OperatorMfaFactor | None:
+        """This deployment's factor for the account; other scopes are other credentials."""
+        return self.session.scalar(select(OperatorMfaFactor).where(
+            OperatorMfaFactor.user_id == user_id, OperatorMfaFactor.scope == scope))
 
     def reserve_account(self, user_id: uuid.UUID) -> User | None:
         """Serialize credential changes and grants, including users without MFA.
@@ -50,7 +52,7 @@ class MfaRepository:
             self.session.execute(insert(OperatorMfaFactor).values(
                 id=uuid.uuid4(), user_id=user_id, scope=scope, status="unconfigured",
                 generation=0, revision=0, last_counter=-1, created_at=now, updated_at=now,
-            ).on_conflict_do_nothing(index_elements=["user_id"]))
+            ).on_conflict_do_nothing(index_elements=["user_id", "scope"]))
         self.session.execute(update(OperatorMfaFactor).where(
             OperatorMfaFactor.user_id == user_id, OperatorMfaFactor.scope == scope,
         ).values(revision=OperatorMfaFactor.revision + 1).execution_options(synchronize_session=False))

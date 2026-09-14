@@ -1670,7 +1670,8 @@ class OperatorMfaFactor(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     __table_args__ = (
-        UniqueConstraint("user_id", name="uq_operator_mfa_factors_user"),
+        # One factor per account and scope (cloud, or one event node): migration 0008.
+        UniqueConstraint("user_id", "scope", name="uq_operator_mfa_factors_user_scope"),
         CheckConstraint("status IN ('unconfigured', 'active')", name="ck_operator_mfa_factor_status"),
         CheckConstraint("generation >= 0 AND revision >= 0 AND last_counter >= -1", name="ck_operator_mfa_factor_versions"),
         CheckConstraint("status != 'active' OR (secret_ciphertext IS NOT NULL AND key_id IS NOT NULL AND generation > 0)", name="ck_operator_mfa_factor_active_secret"),
