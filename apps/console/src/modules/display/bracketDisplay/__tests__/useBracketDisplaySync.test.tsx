@@ -101,13 +101,13 @@ describe('useBracketDisplaySync', () => {
   });
 
   it('stops polling on a terminal error instead of storming forever', async () => {
-    // A revoked token / deleted workspace answers 403. Retrying can never
+    // A revoked token / deleted workspace answers 404. Retrying can never
     // succeed, so the loop must stop — the same `lib/pollPolicy` contract
     // every other polling hook in the app already honours.
     vi.useFakeTimers();
     try {
       vi.mocked(apiClient.getDisplayBracket).mockRejectedValue(
-        Object.assign(new Error('Forbidden'), { status: 403 }),
+        Object.assign(new Error('Not found'), { status: 404 }),
       );
       const wrapToken = ({ children }: { children: React.ReactNode }) => (
         <MemoryRouter initialEntries={['/display?token=revoked']}>{children}</MemoryRouter>

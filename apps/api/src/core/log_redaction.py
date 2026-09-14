@@ -34,6 +34,9 @@ class RedactingFormatter(logging.Formatter):
         self.delegate = delegate or logging.Formatter()
 
     def format(self, record: logging.LogRecord) -> str:
+        # Preserve logging.Formatter's derived-field contract for handlers and
+        # observers that inspect the record after emission, without credentials.
+        record.message = redact_credentials(record.getMessage())
         # Formatters cache exception text on the record. Do not hand another
         # handler a cached exception or mutate uvicorn's positional arguments.
         return redact_credentials(self.delegate.format(copy.copy(record)))

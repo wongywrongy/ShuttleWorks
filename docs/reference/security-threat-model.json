@@ -93,7 +93,7 @@
       "statement": "Secrets are never stored or logged in clear. Passwords Argon2id; every bearer token stored as a hash; plaintext exists only in the one response that issues it.",
       "owner": "identity-module-owner",
       "verdict": "FAIL",
-      "reviewedAt": "2026-09-13",
+      "reviewedAt": "2026-09-14",
       "review": "docs/reviews/security-remediation-2026-09-13.md#r4",
       "enforcedBy": [
         "apps/api/src/identity/auth.py",
@@ -110,7 +110,10 @@
         "apps/api/src/identity/invites.py",
         "apps/console/src/modules/settings/SharingTab.tsx",
         "apps/api/src/core/email.py",
-        "apps/api/src/core/log_redaction.py"
+        "apps/api/src/core/log_redaction.py",
+        "apps/api/src/core/config.py",
+        "apps/console/src/api/client.ts",
+        "apps/console/src/modules/display/bracketDisplay/useBracketDisplaySync.ts"
       ],
       "evidence": [
         "tests/backend/unit/test_auth_service.py",
@@ -128,7 +131,9 @@
         "tests/backend/unit/test_email_transport.py",
         "tests/backend/unit/test_fixture_mailbox.py",
         "tests/e2e/check-account-journeys.py",
-        "tests/backend/unit/test_log_redaction.py"
+        "tests/backend/unit/test_log_redaction.py",
+        "tests/backend/unit/test_config.py",
+        "apps/console/src/api/__tests__/displayCapability.test.tsx"
       ],
       "gaps": [
         "SGR-20260913-04: staff invitation hashing, issue-once management, nginx/API log redaction and email logging controls are implemented; raw display storage, repeated display disclosure and display expiry remain open."

@@ -648,14 +648,11 @@ class ApiClient {
     return r.data;
   }
 
-  /** Bracket board read. `null` when no bracket is configured yet (404),
-   *  mirroring ``getBracket``. */
-  async getDisplayBracket(token: string): Promise<BracketTournamentDTO | null> {
+  /** Public absence and denial both remain terminal 404s. */
+  async getDisplayBracket(token: string): Promise<BracketTournamentDTO> {
     const r = await this.client.get(
       `/display/${encodeURIComponent(token)}/bracket`,
-      { validateStatus: (s) => s === 200 || s === 404 },
     );
-    if (r.status === 404) return null;
     return r.data;
   }
 

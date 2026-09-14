@@ -32,7 +32,14 @@ def test_known_credential_surfaces_are_redacted(text):
     assert "[redacted]" in safe
 
 
-def test_traceback_is_redacted_without_mutating_the_record():
+def test_formatter_preserves_the_standard_derived_message_field_safely():
+    record = logging.LogRecord("scheduler.test", logging.WARNING, __file__, 1, "path=%s", ("/display/sentinel-secret/state",), None)
+    RedactingFormatter(logging.Formatter()).format(record)
+    assert record.message == "path=/display/[redacted]"
+    assert record.args == ("/display/sentinel-secret/state",)
+
+
+def test_traceback_is_redacted_without_mutating_exception_state():
     url = "/display/sentinel-secret/summary"
     try:
         raise ValueError(url)

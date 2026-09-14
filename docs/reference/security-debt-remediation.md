@@ -237,7 +237,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-187 | Open — small and unscheduled / unnumbered | Overview "Players entered" sums Entries-flow entryCount, which is 0 for imported tournaments whose Players tab lists hundreds. | P23 | Unreconciled |
 | DL-188 | Open — small and unscheduled / unnumbered | Entry page renders "Sign out" unconditionally. | P17 | Unreconciled |
 | DL-189 | Open — small and unscheduled / unnumbered | Operations' complete lifecycle matrix still has consumers outside the two SP-OPCON-1 gates. | P16 | Unreconciled |
-| DL-190 | Open — small and unscheduled / unnumbered | useBracketDisplaySync still cannot see a revoked token. | P05 | Unreconciled |
+| DL-190 | Open — small and unscheduled / unnumbered | useBracketDisplaySync still cannot see a revoked token. | P05 | Implementation verified; see reconciled source entry; review pending |
 | DL-191 | Open — small and unscheduled / unnumbered | The bracket person key is double-stored; the two copies are now asserted to agree, and a backfill still owes the blob. | P11 | Unreconciled |
 | DL-192 | Open — small and unscheduled / unnumbered | The doubles participant picker has no remove/unpair affordance, and P5 took away the escape hatch. | P23 | Unreconciled |
 | DL-193 | Open — small and unscheduled / unnumbered | commitPicks emits members: undefined rather than omitting the key. | P23 | Unreconciled |

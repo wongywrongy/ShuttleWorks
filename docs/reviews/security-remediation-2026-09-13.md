@@ -134,6 +134,13 @@ behavior and passes with `hide_input_in_errors=True`. The Sharing view discards
 late revocation responses after a workspace switch; its regression also failed
 before the guard was added and passes with the fix.
 
+Debt DL-190 is also addressed: the public bracket client no longer converts 404
+to a successful empty result. Terminal denial clears the projection and stops
+polling, while network failures retain it and recover. The test drives the real
+client's status policy and failed before the fix. Forty-two display/client tests
+and the console build pass. An absent draw and a revoked link both remain 404;
+an unconfigured public board therefore needs a reload after configuration.
+
 ## R5
 
 Checkout, checkpoint import and local initialization now append creation rows to
@@ -211,7 +218,7 @@ requiring their own hosted validation.
 `tools/check-source-secrets.py` scans the checked-out commit with a digest-pinned
 Trivy image, without container network access. Its live synthetic-token and empty
 controls pass, and the source scan reports zero findings. Only the finding count
-is printed; raw reports are temporary and never uploaded. Four focused
+is printed; raw reports are temporary and never uploaded. Five focused
 tests cover report projection, scanner failure, unknown schema and disabled
 detection. The source scan is included in the required security aggregate. This
 covers the committed tree with Trivy's built-in rules and exclusions, not Git
@@ -268,7 +275,7 @@ Fifteen mutations demonstrate rejection of missing/malformed principles, missing
 owners/paths, unregistered debt and unsupported PASS evidence. Threat ownership
 validation remains in the same suite. All 18 register checks pass.
 
-## Validation and remaining program
+## September 13 validation and remaining program
 
 - Complete backend rerun: 2,590 passed, 84 skipped in 13m01s. The separate
   PostgreSQL gate supplies the skipped dialect evidence; the additional CI partition
