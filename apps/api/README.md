@@ -160,9 +160,14 @@ Mechanics (see `apps/api/src/identity/auth.py`, `apps/api/src/identity/auth_rout
   rehash-on-login). Policy is NIST 800-63B: length bounds only + a tiny
   worst-password blocklist. No composition rules, no rotation.
 - Sessions: opaque 256-bit tokens in an `httpOnly; SameSite=Lax`
-  cookie; only the SHA-256 lands in `auth_sessions` (revocable,
-  rolling `last_seen`, absolute expiry). Password change/reset revokes
-  every other session.
+  cookie; only the SHA-256 lands in `auth_sessions` (revocable).
+  Operator sessions last at most twelve hours from issue and one hour
+  idle; only deliberate input (`POST /auth/activity`) counts as activity,
+  never polling. Password change/reset revokes every other session.
+- MFA: app-owned TOTP with hashed, single-use recovery codes, required in
+  cloud and event-node deployments and optional (Settings) elsewhere. Seeds
+  are AES-GCM encrypted with the `MFA_KEYRING_FILE` ring; see
+  `docs/how-to/security-operations.md` for provisioning and rotation.
 - CSRF: state-changing requests that carry the session cookie must
   send `X-ShuttleWorks-CSRF: 1` (enforced in middleware; the frontend
   sends it on every request). Cookie-less local bootstrap traffic is
@@ -185,10 +190,29 @@ Every route that acts on a workspace resource MUST:
 The seam answers a **uniform 404** (`TOURNAMENT_NOT_FOUND`) for
 non-members and nonexistent ids — existence is information; never
 hand-roll a 403 for "not yours". Insufficient *role* for a real member
-is 403. The cross-tenant isolation suite
+is the same 404, so a role probe learns nothing either. The cross-tenant isolation suite
 (`tests/backend/test_tenant_isolation.py`) discovers every ``{tournament_id}``
 operation from the OpenAPI schema and fails if any of them leaks — a
 new endpoint that forgets the dependency fails CI automatically.
+
+Sensitive routes add `fresh=True` (`require_tournament_access("owner",
+fresh=True)`): after the tenant and role checks, an operator whose MFA
+proof is older than five minutes gets `401 AUTH_REAUTH_REQUIRED`. Fresh proof
+guards actions and file artefacts that leave the browser (exports, backups,
+link issue/revoke, membership, authority), not the JSON reads the console
+polls.
+
+**Exception: auth-only ceremonies.** `/auth/mfa/*`, `/auth/activity`,
+`/auth/reauth-check`, `/auth/node/*` and `POST /auth/login?workspaceId=` run
+before any workspace route can, so on an event node they select the workspace
+with a `workspaceId` query parameter (or, for `/auth/node/activate`, a body
+field) instead of a `tournament_id` path parameter. The selector proves
+nothing by itself: `core/dependencies.py` still checks the node cookie's
+workspace, the member's operator/owner role, the node id and the active
+authority epoch, and `repositories/mfa.py` (`node_scope`) does the same for
+activation. They are outside the OpenAPI-derived isolation sweep on purpose;
+their denials are pinned in `tests/backend/test_node_operator_mfa_http.py`.
+Do not copy this shape for a route that acts on workspace data.
 
 The ONLY unauthenticated data plane is the spectator display: public
 ``/display/{token}/*`` projection routes resolved by a per-workspace

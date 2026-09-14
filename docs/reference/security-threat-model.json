@@ -29,7 +29,9 @@
         "apps/api/src/core/operator_sessions.py",
         "apps/api/src/identity/node_identity.py",
         "apps/api/src/identity/node_routes.py",
-        "apps/api/src/repositories/mfa.py"
+        "apps/api/src/repositories/mfa.py",
+        "apps/api/src/identity/mfa.py",
+        "apps/api/src/core/secret_keys.py"
       ],
       "evidence": [
         "tests/backend/test_auth_surface.py",
@@ -41,9 +43,16 @@
         "tests/backend/test_node_operator_mfa_http.py",
         "tests/backend/unit/test_node_operator_enrollment.py",
         "tests/backend/unit/test_operator_password_transactions.py",
-        "tests/e2e/tests/operator-mfa.spec.ts"
+        "tests/e2e/tests/operator-mfa.spec.ts",
+        "tests/backend/unit/test_operator_mfa.py",
+        "tests/backend/test_operator_mfa_keyring_cli.py",
+        "tests/backend/test_node_enrollment_cli.py",
+        "apps/console/src/api/__tests__/sessionRestore.test.ts",
+        "apps/console/src/modules/settings/__tests__/AuthenticatorSection.test.tsx"
       ],
-      "gaps": []
+      "gaps": [
+        "SGR-20260914-K6: fresh MFA proof guards sensitive actions and downloaded artefacts, not the JSON reads the console polls; a deployed key-ring rotation, the event-node browser enrollment journey and per-scope factor uniqueness remain open."
+      ]
     },
     {
       "id": "R2",

@@ -25,7 +25,7 @@ Owners name repository responsibilities; the maintainer coordinates delivery. Pa
 | P05 | Hash and expire capabilities; redact logs | identity-module-owner / platform-oncall | P03 | Implemented; review pending |
 | P06 | Explicit public projections and bounded inputs | identity-module-owner | P03 | In progress |
 | P07 | Edge headers and native nginx checks | platform-oncall | P02 | Implemented; review pending |
-| P08 | App-owned MFA, sessions and recovery | identity-module-owner | P04, P05 | In progress: cloud/node MFA, session locking and administrator recovery implemented; final regression and review follow-up pending |
+| P08 | App-owned MFA, sessions and recovery | identity-module-owner | P04, P05 | Implemented 2026-09-14 (voluntary enrollment, code reissue, key rotation, resumable fresh proof, CI browser journey); hosted CI and independent review pending; residuals in SGR-20260914-K6 |
 | P09 | Atomic writes and concurrency | architecture | P03 | In progress |
 | P10 | Authority history and key rotation | sync-module-owner | P09 | In progress |
 | P11 | Canonical membership and persisted match outcomes | architecture | P09 | Pending |
@@ -58,7 +58,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-008 | Security golden-rules verification (2026-09-13) / SGR-20260913-10 / R10 | Six DisplayStateDTO Any fields, untyped bracket config/score and entry disciplineCaps, two reset endpoints without explicit DTOs, public player availability,… | P12 | Partly addressed; see current security review |
 | DL-009 | Security golden-rules verification (2026-09-13) / SGR-20260913-11 / R11 NO-TEST | Encryption/unit restore and both recovery alerts pass, but no dated operational restore-drill record was found. infra/postgres/restore-drill.sh only prefligh… | P14 | Partly addressed; see current security review |
 | DL-010 | Security golden-rules verification (2026-09-13) / SGR-20260913-12 / R12 NO-TEST | tests/backend/unit/test_security_threat_model.py ignores principles; deleting or corrupting them leaves both tests green. Threat ownership validation already… | P03 | Repository check implemented; review pending |
-| DL-011 | Security golden-rules verification (2026-09-13) / SGR-20260913-K1 / R1, R3, R12 | No operator MFA; 30-day absolute session, no idle expiry or reauthentication for export, delete, role change, authority transfer, or display-token issue. SEC… | P08 | Partly addressed; see current security review |
+| DL-011 | Security golden-rules verification (2026-09-13) / SGR-20260913-K1 / R1, R3, R12 | No operator MFA; 30-day absolute session, no idle expiry or reauthentication for export, delete, role change, authority transfer, or display-token issue. SEC… | P08 | Implementation verified; residuals in SGR-20260914-K6; review pending |
 | DL-012 | Security golden-rules verification (2026-09-13) / SGR-20260913-K2 / R4, R12 | Authority-rejection/certificate alerts now exist, but no credential-stuffing/login-failure or privilege-change detection rules were found. Telemetry filterin… | P14 | Unreconciled |
 | DL-013 | Security golden-rules verification (2026-09-13) / SGR-20260913-K3 / R4, R5, R12 | No comprehensive secrets inventory or authority signing-key rotation across open epochs. Certificate rotation has a runbook; grant verification still loads o… | P10 | Partly addressed; see current security review |
 | DL-014 | Security golden-rules verification (2026-09-13) / SGR-20260913-K4 / R9, R12 | No Dependabot config, explicit CI secret scanning, Semgrep or DAST; CodeQL/dependency/vulnerability/SBOM controls exist. Hosted scanning settings were not in… | P13 | Partly addressed; see current security review |
@@ -161,7 +161,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-111 | Open — needs an owner decision / D6 | Two conflict dialects for one concept. | P09 | Unreconciled |
 | DL-112 | Open — needs an owner decision / D10 | comingSoon keeps retired vocabulary alive in the contract. | P23 | Unreconciled |
 | DL-113 | Open — needs an owner decision / D11 | Bracket POST /events/{id}/generate ignores the session solver config | P15 | Unreconciled |
-| DL-114 | Open — needs an owner decision / D12 | Self-hosted first-run provisioning is throttled at four operator accounts per hour per IP. | P08 | Unreconciled |
+| DL-114 | Open — needs an owner decision / D12 | Self-hosted first-run provisioning is throttled at four operator accounts per hour per IP. | P08 | Reconciled: default kept as abuse protection; `REGISTRATION_MAX_PER_IP` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` documented in the self-host reference; invitations are the intended path for staff |
 | DL-115 | Open — needs an owner decision / D19 | Meet set-by-set scores do not persist server-side. | P11 | Unreconciled |
 | DL-116 | Open — needs an owner decision / D14 | Should a scheduled — not per-PR — entrant e2e job exist? | P23 | Unreconciled |
 | DL-117 | Open — needs an owner decision / D15 | --status-started (sky) reads as interactive next to the azure accent, and --module-meet is the accent hex. | P23 | Unreconciled |
