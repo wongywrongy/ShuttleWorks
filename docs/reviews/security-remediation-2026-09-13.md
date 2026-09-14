@@ -1,12 +1,12 @@
 # Security remediation evidence — 2026-09-13
 
-This is the first implementation delivery from the [23-package program](../reference/security-debt-remediation.md).
+This records the September 13–14 implementation deliveries from the [23-package program](../reference/security-debt-remediation.md).
 It does **not** close that program or reconcile all 268 historical debt entries.
 The [original golden-rule review](security-golden-rules-2026-09-13.md) remains the
 immutable baseline. Verdicts below describe residual rule compliance, not whether
-the new code compiles. Independent review is pending. Hosted CI passed on the
-first implementation commit; the later invitation/scanner additions need their
-own hosted run (see R9 for the exact recorded revision).
+the new code compiles. Independent review is pending. Current hosted CI must pass
+before this draft is ready for review; recorded runs apply only to their exact
+source revisions.
 
 ## Findings table
 
@@ -15,7 +15,7 @@ own hosted run (see R9 for the exact recorded revision).
 | R1 | PASS | `core/dependencies.py`, `core/main.py` | `tests/backend/test_auth_surface.py`, `test_cross_principal_sessions.py` | Existing session authority retained; MFA/session-strength debt is tracked separately. |
 | R2 | FAIL | `core/error_codes.py`, `core/dependencies.py`, `core/main.py`, `sync/routes.py` | `tests/backend/test_tenant_isolation.py`, `test_invite_oracle.py` | Role and HTTP/protocol 404 envelopes converge; unpublished collections still have 200/`published=false` contracts. |
 | R3 | FAIL | `core/roles.py`, `db/models.py`, `identity/invites.py` | `tests/backend/test_host_split.py`, `unit/test_baseline_schema.py` | One shared role ladder; sole-parent outbox FK exception still needs its dedicated invariant check. |
-| R4 | FAIL | `infra/nginx/log-redaction.conf`, `core/capability_policy.py`, `repositories/local.py` | `tools/check-nginx.sh`, `tools/check-nginx-runtime.py`, `tests/backend/unit/test_invite_expiry.py` | Edge URL leakage and finite staff expiry addressed; raw display/invite storage, display expiry and console email bodies remain. |
+| R4 | FAIL | `infra/nginx/log-redaction.conf`, `core/log_redaction.py`, `core/email.py`, `core/tokens.py`, `repositories/local.py` | `tools/check-nginx.sh`, `tests/backend/test_invites.py`, `unit/test_log_redaction.py`, `unit/test_email_transport.py` | Staff hashing, issue-once links, email and text-log controls are implemented; raw display storage, repeated display disclosure and display expiry remain. |
 | R5 | FAIL | `sync/service.py`, `alembic/versions/0002_authority_creation_audit.py` | `tests/backend/unit/test_sync_protocol.py`, `test_authority_lifecycle.py`, `test_checkpoint_import.py` | Epoch creation is audited; complete actor/lifecycle coverage and key rotation remain. |
 | R6 | PASS | `core/config.py`, `core/main.py`, `sync/compatibility.py` | Existing startup, migration and compatibility suites | Existing fail-closed controls retained. |
 | R7 | FAIL | `competition/routes.py`, `meet/schedule_director.py`, `meet/schedule_repair.py`, `bracket/brackets.py`, `entries/entries_routes.py` | `tests/backend/unit/test_golden_rule_input_bounds.py`, derived-output tests | Nested scalar/list/map references bounded; operator Turnstile and remaining input inventory still open. |
@@ -127,6 +127,12 @@ templates too. Twenty-four redaction/telemetry tests passed, including a real
 isolated uvicorn process. Disabling formatter installation made that live test
 fail on capability and query sentinels; normal paths and status codes remain in
 the log. Arbitrary unlabelled secrets in free text still require call-site review.
+
+Startup settings also hide input values in validation errors, which can occur
+before log redaction is installed. A misplaced-secret input failed the previous
+behavior and passes with `hide_input_in_errors=True`. The Sharing view discards
+late revocation responses after a workspace switch; its regression also failed
+before the guard was added and passes with the fix.
 
 ## R5
 

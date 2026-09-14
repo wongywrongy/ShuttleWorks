@@ -30,6 +30,15 @@ def test_settings_defaults_sqlite(monkeypatch):
     assert engine.dialect.name == "sqlite"
 
 
+def test_invalid_startup_settings_do_not_echo_secret_inputs():
+    from core.config import Settings
+
+    with pytest.raises(ValueError) as error:
+        Settings(smtp_port="startup-private-sentinel")
+    assert "smtp_port" in str(error.value)
+    assert "startup-private-sentinel" not in str(error.value)
+
+
 def test_settings_picks_postgres_driver(monkeypatch):
     settings, engine = _reload_with_env(
         monkeypatch,

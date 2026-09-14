@@ -217,12 +217,16 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
 
   async function revoke(id: string) {
     if (!online) return;
+    const generation = inviteGeneration.current;
     try {
       await apiClient.revokeInvite(id);
+      if (generation !== inviteGeneration.current) return;
       setIssuedInvite((issued) => issued?.id === id ? null : issued);
       refresh();
     }
-    catch { setActionError('The invite could not be revoked. Retry when connected.'); }
+    catch {
+      if (generation === inviteGeneration.current) setActionError('The invite could not be revoked. Retry when connected.');
+    }
   }
 
   const now = Date.now();

@@ -300,6 +300,20 @@ describe('SharingTab', () => {
       within(screen.getByTestId('invite-b')).queryByRole('button', { name: 'Revoke' }),
     ).toBeNull();
   });
+
+  it('does not reload an old workspace after a late revocation response', async () => {
+    let finish!: () => void;
+    vi.mocked(apiClient.revokeInvite).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    vi.mocked(apiClient.listInvites).mockResolvedValueOnce([
+      { id: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true },
+    ]).mockResolvedValue([]);
+    const view = render(<SharingTab tid="t1" scope="team" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
+    view.rerender(<SharingTab tid="t2" scope="team" />);
+    await act(async () => { finish(); });
+    expect(apiClient.listInvites).toHaveBeenCalledTimes(2);
+    expect(apiClient.listInvites).toHaveBeenLastCalledWith('t2');
+  });
 });
 
 /**
