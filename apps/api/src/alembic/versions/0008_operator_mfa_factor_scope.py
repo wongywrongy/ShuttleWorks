@@ -15,7 +15,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("operator_mfa_factors") as batch:
+    # resolve_fks=False: SQLite batch mode would otherwise also reflect `users`,
+    # whose expression index it cannot reflect (a warning on every migration).
+    with op.batch_alter_table("operator_mfa_factors", reflect_kwargs={"resolve_fks": False}) as batch:
         batch.drop_constraint("uq_operator_mfa_factors_user", type_="unique")
         batch.create_unique_constraint("uq_operator_mfa_factors_user_scope", ["user_id", "scope"])
 
