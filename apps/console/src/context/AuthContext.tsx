@@ -6,6 +6,7 @@ import {
 import { apiClient } from '../api/client';
 import type { UserDTO } from '../api/dto';
 import { leaveAuthenticatedView } from '../lib/sessionNavigation';
+import { rememberNodeWorkspace } from '../lib/nodeWorkspace';
 
 export interface AuthSession { user: UserDTO }
 export type AuthLockReason = 'expired' | 'reauth' | null;
@@ -61,6 +62,7 @@ export function AuthProvider({ children, workspaceId }: { children: ReactNode; w
           leaveAuthenticatedView(me.offlineWorkspaceId ?? undefined);
           return;
         }
+        if (me.offlineWorkspaceId) rememberNodeWorkspace(me.offlineWorkspaceId);
         const same = previous && JSON.stringify(previous) === JSON.stringify(me) ? previous : me;
         const mayResume = lock.current !== 'reauth'
           || (!!me.authenticatedAt && me.authenticatedAt !== previous?.authenticatedAt);

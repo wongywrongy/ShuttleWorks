@@ -11,6 +11,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { GearSix, SignOut } from '@phosphor-icons/react';
 import { useAuth } from '../context/AuthContext';
+import { homePath } from '../lib/nodeWorkspace';
 import { SwMonogram } from '../components/ShuttleWorksMark';
 import { ActiveChoice } from '../components/ActiveChoice';
 import { presentIdentity, LOCAL_OWNER_LABEL } from '../modules/settings/memberIdentity';
@@ -39,7 +40,7 @@ export function AppSidebar() {
       {/* The brand monogram remains the go-home affordance; the target wrapper,
           not the mark itself, owns the shared selected treatment. */}
       <ActiveChoice
-        to={nodeWorkspace ? `/tournaments/${nodeWorkspace}` : '/'}
+        to={homePath(nodeWorkspace)}
         active={onHub}
         geometry="row"
         semantics="page"

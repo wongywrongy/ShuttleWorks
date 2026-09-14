@@ -58,6 +58,23 @@ describe('AuthProvider', () => {
     vi.mocked(apiClient.recordAuthActivity).mockResolvedValue(undefined);
   });
 
+  it('remembers an event-node operator workspace so a bare / can resolve the node cookie', async () => {
+    window.localStorage.clear();
+    const workspace = '11111111-1111-4111-8111-111111111111';
+    vi.mocked(apiClient.getMe).mockResolvedValue({ ...accountUser, offlineWorkspaceId: workspace });
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.session).not.toBeNull());
+    expect(window.localStorage.getItem('sw:node-workspace')).toBe(workspace);
+  });
+
+  it('never records a node workspace for a cloud account', async () => {
+    window.localStorage.clear();
+    vi.mocked(apiClient.getMe).mockResolvedValue(accountUser);
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.session).not.toBeNull());
+    expect(window.localStorage.getItem('sw:node-workspace')).toBeNull();
+  });
+
   it('background probes and synthetic input never count as human activity', async () => {
     vi.useFakeTimers();
     try {
