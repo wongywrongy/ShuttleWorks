@@ -449,6 +449,14 @@ jobs:
       - name: Build an isolated canonical fixture and run browser contracts
         run: bash tests/e2e/run-console-contracts.sh
 
+      # Real operator MFA against a disposable SQLite API: enrollment, cookie
+      # rotation on confirm, recovery-code reissue, idle expiry and recovery
+      # sign-in with an unsent draft preserved. Loopback ports only.
+      - name: Operator MFA browser journey
+        env:
+          SW_PYTHON: python
+        run: bash tests/e2e/run-operator-mfa.sh
+
       - name: Upload the failure trace
         if: failure()
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3

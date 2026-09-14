@@ -3,6 +3,13 @@ set -euo pipefail
 
 sw_mfa_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$sw_mfa_root"
+# CI installs the API into the runner's interpreter; locally it is the repo venv.
+sw_python="${SW_PYTHON:-.venv/bin/python}"
+case "$sw_python" in
+  */*) E2E_PYTHON="$(cd "$(dirname "$sw_python")" && pwd)/$(basename "$sw_python")" ;;
+  *) E2E_PYTHON="$(command -v "$sw_python")" ;;
+esac
+export E2E_PYTHON  # absolute: Playwright runs from tests/e2e
 sw_mfa_fixture="$(mktemp -d /tmp/sw-operator-mfa.XXXXXX)"
 sw_mfa_api_pid=''
 sw_mfa_console_pid=''
@@ -13,7 +20,7 @@ cleanup() {
   rm -rf "$sw_mfa_fixture"
 }
 trap cleanup EXIT
-read -r sw_mfa_api_port sw_mfa_console_port < <(.venv/bin/python - <<'PY'
+read -r sw_mfa_api_port sw_mfa_console_port < <("$sw_python" - <<'PY'
 import socket
 with socket.socket() as api, socket.socket() as console:
     api.bind(('127.0.0.1', 0))
@@ -29,9 +36,9 @@ export AUTH_MODE=cloud ENVIRONMENT=local SHUTTLEWORKS_DEPLOYMENT_PROFILE=local
 export EMAIL_BACKEND=console EMBEDDED_WORKER=false PROCESS_ROLE=api
 export E2E_MANAGE_STACK=0 E2E_BASE_URL="http://127.0.0.1:$sw_mfa_console_port"
 export VITE_API_PROXY_TARGET="http://127.0.0.1:$sw_mfa_api_port"
-.venv/bin/python tools/operator-mfa-keyring.py create "$MFA_KEYRING_FILE" > "$sw_mfa_fixture/key.log"
+"$sw_python" tools/operator-mfa-keyring.py create "$MFA_KEYRING_FILE" > "$sw_mfa_fixture/key.log"
 npm --prefix apps/console run build
-.venv/bin/python -m uvicorn core.main:app --app-dir apps/api/src --host 127.0.0.1 --port "$sw_mfa_api_port" > "$sw_mfa_fixture/api.log" 2>&1 &
+"$sw_python" -m uvicorn core.main:app --app-dir apps/api/src --host 127.0.0.1 --port "$sw_mfa_api_port" > "$sw_mfa_fixture/api.log" 2>&1 &
 sw_mfa_api_pid=$!
 node node_modules/vite/bin/vite.js preview apps/console --host 127.0.0.1 --port "$sw_mfa_console_port" --strictPort > "$sw_mfa_fixture/console.log" 2>&1 &
 sw_mfa_console_pid=$!
