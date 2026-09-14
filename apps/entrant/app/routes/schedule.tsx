@@ -773,92 +773,83 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
           sentence described the controls sitting immediately below it. The
           landmark keeps the name for assistive technology. */}
       <main className="mx-auto w-full max-w-6xl px-4 py-4 md:py-8" aria-label="Schedule">
-        {!matches.published ? (
-          <div className="mt-6">
+        <div className="grid gap-4 md:gap-6">
+          <ScheduleControls
+            slug={slug}
+            filters={filters}
+            matches={matches}
+            page={page}
+          />
+          {showNow ? (
+            <LiveBand slug={slug} matches={live} showDate={showDate} />
+          ) : null}
+          {matches.items.length === 0 ? (
             <EmptyState
-              heading="Schedule is not published yet"
-              body="The organizer will publish match times and courts when draws are ready. Check the tournament overview for updates."
+              heading="No matches found"
+              body="Try another day, or clear a filter."
+              action={
+                hasScheduleFilters(filters)
+                  ? {
+                      label: "View all matches",
+                      href: `/e/${encodeURIComponent(slug)}/schedule`,
+                    }
+                  : undefined
+              }
             />
-          </div>
-        ) : (
-          <div className="grid gap-4 md:gap-6">
-            <ScheduleControls
-              slug={slug}
-              filters={filters}
-              matches={matches}
-              page={page}
-            />
-            {showNow ? (
-              <LiveBand slug={slug} matches={live} showDate={showDate} />
-            ) : null}
-            {matches.items.length === 0 ? (
-              <EmptyState
-                heading="No matches found"
-                body="Try another day, or clear a filter."
-                action={
-                  hasScheduleFilters(filters)
-                    ? {
-                        label: "View all matches",
-                        href: `/e/${encodeURIComponent(slug)}/schedule`,
-                      }
-                    : undefined
-                }
-              />
-            ) : (
-              <>
-                <p className="text-sm text-muted-foreground" aria-live="polite">
-                  {`${matches.total} ${matches.total === 1 ? "match" : "matches"}`}
-                  {filters.page > 1
-                    ? ` · page ${filters.page} of ${pages}`
-                    : ""}
-                </p>
-                {filters.organization === "court" ? (
-                  <ByCourt slug={slug} matches={matches.items} showDate={showDate} />
-                ) : (
-                  <ByTime
-                    slug={slug}
-                    matches={showNow ? matches.items.filter((match) => match.status !== "live") : matches.items}
-                    showDate={showDate}
-                  />
-                )}
-                {previous || next ? (
-                  <nav
-                    aria-label="Schedule pages"
-                    className="flex items-center justify-between"
-                  >
-                    <span>
-                      {previous ? (
-                        <a href={matchesPath(slug, previous)} className={ACTION_LINK}>
-                          Previous
-                        </a>
-                      ) : (
-                        <span />
-                      )}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      Page {filters.page} of {pages}
-                    </span>
-                    {next ? (
-                      <a href={matchesPath(slug, next)} className={ACTION_LINK}>
-                        Next
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground" aria-live="polite">
+                {`${matches.total} ${matches.total === 1 ? "match" : "matches"}`}
+                {filters.page > 1
+                  ? ` · page ${filters.page} of ${pages}`
+                  : ""}
+              </p>
+              {filters.organization === "court" ? (
+                <ByCourt slug={slug} matches={matches.items} showDate={showDate} />
+              ) : (
+                <ByTime
+                  slug={slug}
+                  matches={showNow ? matches.items.filter((match) => match.status !== "live") : matches.items}
+                  showDate={showDate}
+                />
+              )}
+              {previous || next ? (
+                <nav
+                  aria-label="Schedule pages"
+                  className="flex items-center justify-between"
+                >
+                  <span>
+                    {previous ? (
+                      <a href={matchesPath(slug, previous)} className={ACTION_LINK}>
+                        Previous
                       </a>
-                    ) : null}
-                  </nav>
-                ) : null}
-                {/* Contract §11.1/§7.1: the ONE freshness line, below the
-                    thing it describes, in venue-local time and with no zone
-                    identifier or offset in the prose. It used to sit in this
-                    route's own hero, in two variants, with the IANA name
-                    appended. */}
-                {matches.updatedAt ? (
-                  <p className="text-xs text-muted-foreground">
-                    {`Updated ${formatScheduleUpdated(matches.updatedAt, matches.timeZone)}`}
-                  </p>
-                ) : null}
-              </>
-            )}
-          </div>
-        )}
+                    ) : (
+                      <span />
+                    )}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    Page {filters.page} of {pages}
+                  </span>
+                  {next ? (
+                    <a href={matchesPath(slug, next)} className={ACTION_LINK}>
+                      Next
+                    </a>
+                  ) : null}
+                </nav>
+              ) : null}
+              {/* Contract §11.1/§7.1: the ONE freshness line, below the
+                  thing it describes, in venue-local time and with no zone
+                  identifier or offset in the prose. It used to sit in this
+                  route's own hero, in two variants, with the IANA name
+                  appended. */}
+              {matches.updatedAt ? (
+                <p className="text-xs text-muted-foreground">
+                  {`Updated ${formatScheduleUpdated(matches.updatedAt, matches.timeZone)}`}
+                </p>
+              ) : null}
+            </>
+          )}
+        </div>
       </main>
     </PlayShell>
   );

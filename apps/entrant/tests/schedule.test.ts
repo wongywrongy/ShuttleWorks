@@ -389,14 +389,28 @@ describe("Schedule / Live", () => {
     expect(html).not.toContain("← Previous");
   });
 
-  it("explains an unpublished and an empty schedule", async () => {
-    const unpublished = await render("/e/spring-open/schedule", {
-      ...MATCHES,
-      published: false,
-      items: [],
-      total: 0,
-    });
-    expect(unpublished).toContain("Schedule is not published yet");
+  it("answers unpublished and missing schedules byte-identically", async () => {
+    const build = (await vite.ssrLoadModule(
+      "virtual:react-router/server-build",
+    )) as unknown as ServerBuild;
+    const handle = createRequestHandler(build, "development");
+    async function deniedDocument(missingPage: boolean) {
+      vi.stubGlobal("fetch", vi.fn(async (request: Request | string) => {
+        const url = typeof request === "string" ? request : request.url;
+        const denied = missingPage || url.includes("/matches");
+        return new Response(JSON.stringify(denied ? { detail: { code: "TOURNAMENT_NOT_FOUND" } } : PAGE), {
+          status: denied ? 404 : 200,
+          headers: { "content-type": "application/json" },
+        });
+      }));
+      const response = await handle(new Request("http://entrant.test/e/spring-open/schedule"));
+      expect(response.status).toBe(404);
+      return response.text();
+    }
+    expect(await deniedDocument(false)).toBe(await deniedDocument(true));
+  });
+
+  it("explains an empty published schedule", async () => {
     const empty = await render("/e/spring-open/schedule?state=cancelled", {
       ...MATCHES,
       items: [],

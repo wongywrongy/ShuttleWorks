@@ -449,6 +449,43 @@ describe('the panels', () => {
 });
 
 describe('the poster-page posture', () => {
+  it.each([
+    ['players', '/players'],
+    ['draws', '/draws'],
+    ['overview', '/draws'],
+    ['overview', '/matches'],
+  ])('answers a publication change during %s → %s with the uniform 404', async (tab, surface) => {
+    const path = `/e/spring-open?tab=${tab}`;
+    const missing = await respond(null, 404, path);
+    const missingHtml = await missing.text();
+    const page = {
+      ...PAGE,
+      tournament: { ...PAGE.tournament, phase: 'live' },
+      publication: { entrants: true, draws: true, results: true },
+    };
+    const fetchMock = vi.fn(async (request: Request | string) => {
+      const url = new URL(typeof request === 'string' ? request : request.url);
+      const denied = url.pathname.endsWith(surface);
+      const body = url.pathname.endsWith('/draws')
+        ? { published: true, resultsPublished: true, draws: [], divisions: [] }
+        : page;
+      return new Response(JSON.stringify(denied ? { detail: { code: 'TOURNAMENT_NOT_FOUND' } } : body), {
+        status: denied ? 404 : 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const build = (await vite.ssrLoadModule('virtual:react-router/server-build')) as unknown as ServerBuild;
+    const response = await createRequestHandler(build, 'development')(
+      new Request(`http://entrant.test${path}`),
+    );
+    expect(fetchMock.mock.calls.some(([request]) =>
+      new URL(typeof request === 'string' ? request : request.url).pathname.endsWith(surface),
+    )).toBe(true);
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe(missingHtml);
+  });
+
   it('ships zero script tags and mints nothing', async () => {
     const res = await respond(PAGE, 200, '/e/spring-open');
     const html = await res.text();

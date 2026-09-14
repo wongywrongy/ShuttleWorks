@@ -13,8 +13,8 @@ source revisions.
 | Rule | Verdict | Enforcement files | Executable evidence | Remaining finding / outcome |
 | --- | --- | --- | --- | --- |
 | R1 | PASS | `core/dependencies.py`, `core/main.py` | `tests/backend/test_auth_surface.py`, `test_cross_principal_sessions.py` | Existing session authority retained; MFA/session-strength debt is tracked separately. |
-| R2 | FAIL | `core/error_codes.py`, `core/dependencies.py`, `core/main.py`, `sync/routes.py` | `tests/backend/test_tenant_isolation.py`, `test_invite_oracle.py` | Role and HTTP/protocol 404 envelopes converge; unpublished collections still have 200/`published=false` contracts. |
-| R3 | FAIL | `core/roles.py`, `db/models.py`, `identity/invites.py` | `tests/backend/test_host_split.py`, `unit/test_baseline_schema.py` | One shared role ladder; sole-parent outbox FK exception still needs its dedicated invariant check. |
+| R2 | PASS | `core/error_codes.py`, `core/dependencies.py`, `core/main.py`, `sync/routes.py` | `tests/backend/test_tenant_isolation.py`, `test_invite_oracle.py` | Role, missing and unpublished denials converge; collection gates run before cache validators and entrant SSR maps publication races to the same 404. |
+| R3 | FAIL | `core/roles.py`, `db/models.py`, `identity/invites.py` | `tests/backend/test_host_split.py`, `unit/test_baseline_schema.py` | One shared role ladder; sole-parent outbox exception has executable ownership evidence and remains distinct from literal composite-FK compliance. |
 | R4 | PASS | `infra/nginx/log-redaction.conf`, `core/log_redaction.py`, `core/email.py`, `core/tokens.py`, `repositories/local.py`, `display/display.py`, migration `0005` | `tools/check-nginx.sh`, `tests/backend/test_invites.py`, `test_display_public.py`, `unit/test_log_redaction.py`, `unit/test_email_transport.py`, `unit/test_baseline_schema.py` | Staff/display credentials are hashed, finite and issued once; API/nginx/email logging controls pass. Independent review remains pending. |
 | R5 | FAIL | `sync/service.py`, `alembic/versions/0002_authority_creation_audit.py` | `tests/backend/unit/test_sync_protocol.py`, `test_authority_lifecycle.py`, `test_checkpoint_import.py` | Epoch creation is audited; complete actor/lifecycle coverage and key rotation remain. |
 | R6 | PASS | `core/config.py`, `core/main.py`, `sync/compatibility.py` | Existing startup, migration and compatibility suites | Existing fail-closed controls retained. |
@@ -49,9 +49,19 @@ viewer read to prove the guard has not simply denied every request. Legacy role
 and not-found assertions were updated after the behavior changed; CSRF refusal
 assertions were retained. The affected 276-test rerun passed.
 
-Residual: `entries/entries_site.py` still returns `published=false` with 200 for
-unpublished draw/player/schedule collections. Migrating those contracts and their
-consumers is required for literal R2 compliance (SGR-20260913-02).
+The September 14 collection delivery denies unpublished draws, players and
+schedules with the same 404 as a missing slug. The schedule gate runs before
+revision/ETag handling, so a previously published validator cannot yield 304.
+`test_public_collection_denial.py` failed on all three old 200 contracts before
+the fix. Published empty collections retain 200; result suppression within a
+published draw retains the existing allow-listed projection.
+
+The entrant loader also catches a publication withdrawal between its metadata
+and projection reads. All four new real-SSR race cases failed with 500 before
+the change and now produce byte-identical missing-page HTML. Schedule denial has
+the same rendered control. The affected backend run passes 98 tests; the complete
+entrant suite passes 1,254 tests, plus lint and the production/type build.
+SGR-20260913-02 is implementation-verified; independent review remains pending.
 
 ## R3
 
@@ -61,9 +71,14 @@ tests remain in place. The PostgreSQL partition passed 199 tests with one skip.
 
 `SyncOutbox.operation_id` remains the sole single-column reference to a
 tournament-owned child without an independent tenant column on the outbox.
-No new escape was demonstrated. The approved structural exception needs an
-explicit parent-ownership invariant test; it is not represented as literal
-composite-FK PASS.
+`test_tournament_child_foreign_keys_preserve_scope` inventories every migrated
+child reference, pins the sole-parent exception and refuses independent outbox
+scope. `test_outbox_inherits_one_parent_and_cascades_only_that_tenant` proves
+orphan rejection and two-tenant ownership/cascade isolation. Disabling SQLite FK
+enforcement makes the orphan assertion fail; adding an unscoped child reference
+makes the inventory check fail. This verifies the approved
+structural exception; it is not represented as literal composite-FK PASS. The
+complete schema/migration run passes all 32 cases across SQLite and PostgreSQL.
 
 ## R4
 
@@ -389,11 +404,19 @@ correction and the subsequent display commit must be verified separately.
 The final display backend partition passes **2,527 tests in 14m21s**. Its one
 pre-existing SQLAlchemy warning concerns a duplicate cascade DELETE expectation.
 The separately executed httpx2 logging test supplies the collection-fix evidence.
-The next R2 collection-denial regression was added after this run's collection;
-it deliberately fails on the still-unfixed 200 envelopes and belongs to the next
-delivery, not this display result.
+The R2 collection follow-up was tested separately after this run's collection;
+its 98-test backend and 1,254-test entrant results are recorded under R2.
 
 The instrumented browser rerun passes all **eight console contracts and 23
 accessibility checks**. The initial run's eight failures each reported the missing
 `VITE_ERROR_HARNESS` flag because a normal bundle had been reused; rebuilding with
 the wrapper's required instrumentation resolved them without relaxing assertions.
+
+The final display PostgreSQL partition passes **203 tests with one expected skip**
+in 4m05s. Hosted security, frontend, entrant, browser, docs, Compose and
+observability checks pass on `a33538cd`; its backend job was still running when
+the collection follow-up began. These results do not certify later source changes.
+
+Collection/outbox documentation passes 62 checks (six optional skips), the
+production docs build and all 18 threat-register checks. Ruff passes across the
+repository. The documentation subprocess check requires the host environment.

@@ -21,7 +21,7 @@ Owners name repository responsibilities; the maintainer coordinates delivery. Pa
 | P01 | Reconcile every debt entry | architecture | none | In progress |
 | P02 | Shorten CI without losing coverage | release-owner | P01 | In progress |
 | P03 | Validate golden-rule evidence | release-owner | none | Implemented; review pending |
-| P04 | Uniform resource denial and role vocabulary | identity-module-owner | P03 | In progress |
+| P04 | Uniform resource denial and role vocabulary | identity-module-owner | P03 | Implemented with documented R3 exception; review pending |
 | P05 | Hash and expire capabilities; redact logs | identity-module-owner / platform-oncall | P03 | Implemented; review pending |
 | P06 | Explicit public projections and bounded inputs | identity-module-owner | P03 | In progress |
 | P07 | Edge headers and native nginx checks | platform-oncall | P02 | Implemented; review pending |
@@ -48,8 +48,8 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 
 | Inventory ID | Source section / original ID | Entry | Package | Disposition |
 | --- | --- | --- | --- | --- |
-| DL-001 | Security golden-rules verification (2026-09-13) / SGR-20260913-02 / R2 | core/dependencies.py returns role-bearing 403; invite revocation and bracket/protocol routes have different denial/not-found bodies. Existing oracle tests co… | P04 | Partly addressed; see current security review |
-| DL-002 | Security golden-rules verification (2026-09-13) / SGR-20260913-03 / R3 | db/models.py::SyncOutbox.operation_id → event_operations.operation_id is the sole single-column intra-tournament-child FK. It inherits tenancy and has no ind… | P04 | Partly addressed; see current security review |
+| DL-001 | Security golden-rules verification (2026-09-13) / SGR-20260913-02 / R2 | core/dependencies.py returns role-bearing 403; invite revocation and bracket/protocol routes have different denial/not-found bodies. Existing oracle tests co… | P04 | Implementation verified; see current security review; review pending |
+| DL-002 | Security golden-rules verification (2026-09-13) / SGR-20260913-03 / R3 | db/models.py::SyncOutbox.operation_id → event_operations.operation_id is the sole single-column intra-tournament-child FK. It inherits tenancy and has no ind… | P04 | Implementation verified; see current security review; review pending |
 | DL-003 | Security golden-rules verification (2026-09-13) / SGR-20260913-04 / R4 | Raw capabilities, repeated disclosure and log exposure | P05 | Implementation verified; see current security review; review pending |
 | DL-004 | Security golden-rules verification (2026-09-13) / SGR-20260913-05 / R5 | sync/service.py::begin_checkout, ensure_local_authority, and receiving checkpoint import create epochs without tournament_authority_transitions. Initial-chec… | P10 | Partly addressed; see current security review |
 | DL-005 | Security golden-rules verification (2026-09-13) / SGR-20260913-07 / R7 | Unbounded nested strings in competition EventRequest, director/repair actions, bracket members/labels/discipline, and entry-import partner references; operat… | P06 | Partly addressed; see current security review |
@@ -233,7 +233,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-183 | Open — small and unscheduled / unnumbered | The receipt page is unverified. | P17 | Unreconciled |
 | DL-184 | Open — small and unscheduled / unnumbered | find_for_account has zero production callers. | P23 | Unreconciled |
 | DL-185 | Open — small and unscheduled / unnumbered | No CI guard for sport nouns in product copy (I1 domain-as-configuration). | P23 | Unreconciled |
-| DL-186 | Open — small and unscheduled / unnumbered | Public player detail answers 422, not the uniform 404, for non-UUID keys. | P04 | Unreconciled |
+| DL-186 | Open — small and unscheduled / unnumbered | Public player detail answers 422, not the uniform 404, for non-UUID keys. | P04 | Implementation verified; see reconciled source entry; review pending |
 | DL-187 | Open — small and unscheduled / unnumbered | Overview "Players entered" sums Entries-flow entryCount, which is 0 for imported tournaments whose Players tab lists hundreds. | P23 | Unreconciled |
 | DL-188 | Open — small and unscheduled / unnumbered | Entry page renders "Sign out" unconditionally. | P17 | Unreconciled |
 | DL-189 | Open — small and unscheduled / unnumbered | Operations' complete lifecycle matrix still has consumers outside the two SP-OPCON-1 gates. | P16 | Unreconciled |

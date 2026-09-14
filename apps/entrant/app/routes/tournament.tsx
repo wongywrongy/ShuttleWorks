@@ -121,31 +121,37 @@ export async function loader({
     nowMs: demoNowMs(),
   };
   const base = `/e/api/page/${encodeURIComponent(slug)}`;
-  if (active === 'players') {
-    // One server-side projection merges confirmed entrants and published draw
-    // roster rows. This keeps the public directory complete before and after
-    // draws are released without maintaining a second client-side roster.
-    payload.players = await apiGet<PlayersDTO>(`${base}/players`);
-    payload.playerQuery = (new URL(request.url).searchParams.get('q') ?? '').trim();
-    payload.playerEvent = (new URL(request.url).searchParams.get('event') ?? '').trim();
-  } else if (active === 'draws' && page.publication?.draws) {
-    // The Draws panel is the event list from day one; the draw index joins
-    // it only once the organizer has published draws (ADR 0028). Seeds ride
-    // the draw page itself and champions ride the index, so the old `/seeds`
-    // and `/winners` reads are gone.
-    payload.draws = await apiGet<DrawsIndexDTO>(`${base}/draws`);
-  } else if (active === 'overview' && page.publication?.draws) {
-    // The Overview leads with the events, and once draws are published the
-    // event rows carry the draw's progress and champions, so it takes the
-    // same draw index the Draws tab reads. While the tournament is LIVE it
-    // also previews what is on court: a bounded read of the live matches.
-    payload.draws = await apiGet<DrawsIndexDTO>(`${base}/draws`);
-    if (page.tournament.phase === 'live') {
-      const live = await apiGet<ScheduleMatchesDTO>(
-        `${base}/matches?state=live&page_size=${LIVE_PREVIEW_LIMIT}`,
-      );
-      payload.liveMatches = Array.isArray(live?.items) ? live.items : [];
+  try {
+    if (active === 'players') {
+      // One server-side projection merges confirmed entrants and published draw
+      // roster rows. This keeps the public directory complete before and after
+      // draws are released without maintaining a second client-side roster.
+      payload.players = await apiGet<PlayersDTO>(`${base}/players`);
+      payload.playerQuery = (new URL(request.url).searchParams.get('q') ?? '').trim();
+      payload.playerEvent = (new URL(request.url).searchParams.get('event') ?? '').trim();
+    } else if (active === 'draws' && page.publication?.draws) {
+      // The Draws panel is the event list from day one; the draw index joins
+      // it only once the organizer has published draws (ADR 0028). Seeds ride
+      // the draw page itself and champions ride the index, so the old `/seeds`
+      // and `/winners` reads are gone.
+      payload.draws = await apiGet<DrawsIndexDTO>(`${base}/draws`);
+    } else if (active === 'overview' && page.publication?.draws) {
+      // The Overview leads with the events, and once draws are published the
+      // event rows carry the draw's progress and champions, so it takes the
+      // same draw index the Draws tab reads. While the tournament is LIVE it
+      // also previews what is on court: a bounded read of the live matches.
+      payload.draws = await apiGet<DrawsIndexDTO>(`${base}/draws`);
+      if (page.tournament.phase === 'live') {
+        const live = await apiGet<ScheduleMatchesDTO>(
+          `${base}/matches?state=live&page_size=${LIVE_PREVIEW_LIMIT}`,
+        );
+        payload.liveMatches = Array.isArray(live?.items) ? live.items : [];
+      }
     }
+  } catch (err) {
+    // Publication can change after the page metadata read.
+    if (err instanceof ApiError && err.status === 404) throw notFound();
+    throw err;
   }
   return payload;
 }

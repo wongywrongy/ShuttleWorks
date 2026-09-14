@@ -1646,9 +1646,9 @@ def draws_index(
     repo: LocalRepository = Depends(get_repository),
 ) -> DrawsIndexDTO:
     page, tournament = _page(repo, slug)
-    response.headers["Cache-Control"] = _CACHE
     if not page.draws_published:
-        return DrawsIndexDTO(published=False, resultsPublished=False)
+        raise _not_found()
+    response.headers["Cache-Control"] = _CACHE
 
     payload = _bracket(repo, tournament.id)
     draws = []
@@ -1887,9 +1887,9 @@ def players_index(
     imported/demo tournaments do not need a second, competing player list.
     """
     page, tournament = _page(repo, slug)
-    response.headers["Cache-Control"] = _CACHE
     if not page.draws_published and not page.entrants_published:
-        return PlayersDTO(published=False)
+        raise _not_found()
+    response.headers["Cache-Control"] = _CACHE
 
     entrant_rows = list(_entrants(repo, tournament.id)) if page.entrants_published else []
     identities = _directory(repo, tournament, page)
@@ -4092,6 +4092,10 @@ def schedule_matches(
 ) -> ScheduleMatchesDTO:
     """Unified, publication-gated Schedule / Live projection."""
     entry_page, tournament = _page(repo, slug)
+    # Deny before computing a revision or considering conditional requests.
+    # A caller's old ETag must never turn unpublished data into a 304.
+    if not entry_page.draws_published:
+        raise _not_found()
     updated_at = tournament.updated_at.isoformat() if tournament.updated_at else None
     payload = _bracket(repo, tournament.id) if entry_page.draws_published else None
     runtime = _schedule_runtime_snapshot(
@@ -4105,16 +4109,6 @@ def schedule_matches(
     response.headers["ETag"] = f'"{revision}"'
     if request.headers.get("If-None-Match") in {revision, f'"{revision}"'}:
         return Response(status_code=304, headers={"ETag": f'"{revision}"'})  # type: ignore[return-value]
-    if not entry_page.draws_published:
-        return ScheduleMatchesDTO(
-            published=False,
-            timeZone=getattr(tournament, "time_zone", None) or "UTC",
-            updatedAt=updated_at,
-            revision=revision,
-            page=page,
-            pageSize=page_size,
-        )
-
     matches: List[ScheduleMatchDTO] = []
     identities = runtime.directory
     if payload is not None:

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import Response
+from fastapi import HTTPException, Response
+import pytest
 from sqlalchemy import event as sqlalchemy_event
 from starlette.requests import Request
 from starlette.responses import Response as StarletteResponse
@@ -180,15 +181,9 @@ def test_unpublished_schedule_reads_no_operational_rows(tmp_path, monkeypatch):
 
         monkeypatch.setattr(repo.match_states, "list_for_tournament", forbidden)
         monkeypatch.setattr(repo.session, "scalars", forbidden)
-        result, response = _call(repo)
-        body = result.model_dump(mode="json")
-
-        assert set(body) == ENVELOPE_KEYS
-        assert body["published"] is False
-        assert body["items"] == []
-        assert body["total"] == 0
-        assert body["timeZone"] == "America/Toronto"
-        assert response.headers["ETag"]
+        with pytest.raises(HTTPException) as denied:
+            _call(repo)
+        assert denied.value.status_code == 404
     finally:
         session.close()
 
@@ -420,10 +415,9 @@ def test_schedule_etag_tracks_state_score_name_and_visibility(tmp_path, monkeypa
         page = session.query(EntryPage).filter(EntryPage.slug == "schedule-open").one()
         page.draws_published = False
         session.commit()
-        visibility_result, visibility_response = _call(repo, etag=previous)
-        assert not isinstance(visibility_result, StarletteResponse)
-        assert visibility_response.headers["ETag"] != previous
-        assert visibility_result.published is False
+        with pytest.raises(HTTPException) as denied:
+            _call(repo, etag=previous)
+        assert denied.value.status_code == 404
     finally:
         session.close()
 
