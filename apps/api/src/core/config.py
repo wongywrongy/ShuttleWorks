@@ -137,7 +137,12 @@ class Settings(BaseSettings):
     # `worker.py` sets this itself before importing config, so the
     # compose file does not have to; setting it explicitly is supported
     # and preferred for clarity.
-    process_role: str = "api"  # api | worker
+    #
+    # `admin` is for host-run administrator tools (for example
+    # tools/node-operator-enrollment.py). They open the database and
+    # nothing else, so every custody validator below skips them: they
+    # must not demand an MFA key ring they never read.
+    process_role: str = "api"  # api | worker | sync | admin
 
     # ---- Network ------------------------------------------------------
     # ``host``/``port`` are used by the ``python -m core.main`` entry

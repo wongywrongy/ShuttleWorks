@@ -29,6 +29,10 @@ def main() -> int:
         parser.error("--reset-existing and --reason must be supplied together")
     created = False
     engine = None
+    # Before core.config is imported: this tool only reads the database, so
+    # it must not demand the API's MFA key ring (a container path on the
+    # host). Forced, not defaulted, because an API env file sets `api`.
+    os.environ["PROCESS_ROLE"] = "admin"
     try:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session

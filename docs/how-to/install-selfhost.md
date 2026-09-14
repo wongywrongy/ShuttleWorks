@@ -128,7 +128,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `CORS_ORIGINS` | localhost list | default | **the operator hostname, alone** | not read | The browser blocks API calls. Never `*` — the API refuses to start, because Starlette answers a wildcard under `allow_credentials` by echoing whatever Origin asked. The **play** origin is deliberately absent: the entrant tier's route modules use same-origin calls, so there is nothing to allow. |
 | `TRUSTED_PROXY_IPS` | `[]` (trust nothing) | leave empty | **compose subnet** (defaulted) | not read | See §6 — this is the one that locks out every user at once. Must match the API's peer (`frontend` nginx), not cloudflared. |
 | `OPS_TOKEN` | `''` (guard off) | leave empty | **required** (`OPS_TOKEN_FILE`) | not read | Without it `/health/ready\|deep\|metrics` publish worker ids, live job ids and the schema revision to anyone who can reach the hostname. |
-| `PROCESS_ROLE` | `api` | – | `api` | `worker` (set automatically) | Set by `worker.py` itself; only override to be explicit. |
+| `PROCESS_ROLE` | `api` | – | `api` | `worker` (set automatically) | Set by `worker.py` itself; only override to be explicit. Host-run administrator tools set `admin`, which skips every key-custody check because they only open the database. |
 | `EMBEDDED_WORKER` | `true` | `true` | `true` or `false` | n/a | `false` with no remote worker means jobs queue and never run. |
 | `WORKER_CONCURRENCY` | `1` | `1` | `1` | tune | Concurrent solves compete for RAM; RAM is the ceiling, not cores. |
 | `WORKER_ID` | `''` (derived) | – | – | optional | Only affects legibility of `/health/metrics`. |
