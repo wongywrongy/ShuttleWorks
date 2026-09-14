@@ -314,7 +314,9 @@ def test_the_scan_reaches_every_directory_that_sets_a_cookie():
 
     assert "identity/auth_routes.py" in seen
     assert "identity/entrants_routes.py" in seen
-    assert "sync/routes.py" in seen
+    # sync/routes.py set the node cookie until P08 retired its shared-session
+    # routes; the node cookie is now set only by identity/auth_routes.py.
+    assert "sync/routes.py" not in seen
 
 
 def test_the_registry_names_all_principals():

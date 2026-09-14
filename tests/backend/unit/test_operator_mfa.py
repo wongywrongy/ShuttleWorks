@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from core.secret_keys import SecretKeyring, secret_key_id
+from core.secret_keys import SecretKeyring, SecretKeyringError, secret_key_id
 from core.time_utils import _aware
 from core.tokens import _hash_token
 from db.models import AuthSession, OperatorMfaFactor, OperatorRecoveryCode, StateTransition, User
@@ -261,7 +261,6 @@ def test_rewrap_moves_active_and_pending_seeds_to_the_active_key(account):
 
 
 def test_rewrap_without_the_old_key_refuses_and_writes_nothing(account):
-    from core.secret_keys import SecretKeyringError
     repo, user_id, options = account
     enroll(account)
     before = repo.mfa.get(user_id).secret_ciphertext

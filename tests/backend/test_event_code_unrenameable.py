@@ -60,7 +60,10 @@ _CODE_WRITERS = {("POST", "/tournaments/{tournament_id}/entry-events")}
 # These exact endpoints consume authenticator/recovery proofs; their `code`
 # field has no relationship to an entry event or its public sporting key.
 # Keep the exception exact so a new event-update route still fails the pin.
-_AUTH_PROOF_READERS = {("POST", "/auth/mfa/confirm"), ("POST", "/auth/mfa/verify")}
+_AUTH_PROOF_READERS = {
+    ("POST", "/auth/mfa/confirm"), ("POST", "/auth/mfa/verify"),
+    ("POST", "/auth/mfa/recovery-codes"), ("DELETE", "/auth/mfa"),
+}
 
 _VIOLATION = (
     "R-DM-11(b): a PUBLISHED entry event's ``code`` is the entrant tier's "

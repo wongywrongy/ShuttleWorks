@@ -4,7 +4,8 @@ import secrets
 import pytest
 
 from core.secret_keys import (
-    SecretKeyringError, create_secret_keyring, read_secret_keyring, secret_key_id,
+    MAX_KEYRING_KEYS, SecretKeyringError, add_secret_key, create_secret_keyring,
+    promote_secret_key, read_secret_keyring, remove_secret_key, secret_key_id,
 )
 
 
@@ -74,7 +75,6 @@ def test_overlap_preserves_old_decryption_keys_while_new_writes_use_active_key(t
 def test_rotation_adds_promotes_and_removes_keys_privately(tmp_path):
     import os
     import stat
-    from core.secret_keys import add_secret_key, promote_secret_key, remove_secret_key
     path = tmp_path / "keys.json"
     first = create_secret_keyring(path)
     second = add_secret_key(path)
@@ -89,7 +89,6 @@ def test_rotation_adds_promotes_and_removes_keys_privately(tmp_path):
 
 
 def test_rotation_refuses_unsafe_changes(tmp_path):
-    from core.secret_keys import MAX_KEYRING_KEYS, add_secret_key, promote_secret_key, remove_secret_key
     path = tmp_path / "keys.json"
     active = create_secret_keyring(path)
     with pytest.raises(SecretKeyringError, match="active"):
@@ -108,7 +107,6 @@ def test_rotation_refuses_unsafe_changes(tmp_path):
 
 def test_interrupted_rotation_leaves_the_original_ring_intact(tmp_path, monkeypatch):
     import os
-    from core import secret_keys
     path = tmp_path / "keys.json"
     create_secret_keyring(path)
     before = path.read_bytes()
@@ -117,6 +115,6 @@ def test_interrupted_rotation_leaves_the_original_ring_intact(tmp_path, monkeypa
         raise OSError("simulated power loss")
     monkeypatch.setattr(os, "replace", crash)
     with pytest.raises(OSError):
-        secret_keys.add_secret_key(path)
+        add_secret_key(path)
     assert path.read_bytes() == before
     assert [p.name for p in tmp_path.iterdir()] == ["keys.json"]
