@@ -95,6 +95,20 @@ git pull
 docker compose -f infra/compose/docker-compose.selfhost.yml up -d --build
 ```
 
+::: warning Upgrading past operator MFA (September 2026)
+Two settings changed meaning, and both stop the API at startup if left alone:
+
+- **`SESSION_TTL_DAYS` is capped at `0.5`** (twelve hours). Older templates
+  shipped `30`; delete the line or set `0.5` before pulling.
+- **`MFA_KEYRING_FILE` is required** for `AUTH_MODE=cloud`, `ENVIRONMENT=cloud`,
+  and the cloud and event-node profiles. Create the ring before the upgrade, as
+  described in [security operations](/how-to/security-operations#operator-authenticator-key-provisioning).
+
+Existing sessions are capped at twelve hours from issue by migration `0006` and
+none is marked as authenticator-verified, so in cloud and event-node deployments
+every operator enrolls an authenticator at their next sign-in.
+:::
+
 ::: danger `--build` is not optional
 `docker compose up -d api` **reuses the existing image**. Without `--build` your
 code change does not ship, the container comes up healthy, and you conclude the

@@ -70,7 +70,18 @@ def test_operator_api_refuses_unreadable_or_predictable_keys(tmp_path):
         Settings(auth_mode="cloud", mfa_keyring_file=str(path))
 
 
-@pytest.mark.parametrize("role", ["worker", "sync"])
+def test_local_mode_starts_without_any_mfa_key_ring(monkeypatch):
+    """The solo, offline flow stays zero-configuration (the autouse key is removed)."""
+    for name in ("MFA_KEYRING_FILE", "AUTH_MODE", "ENVIRONMENT", "SHUTTLEWORKS_DEPLOYMENT_PROFILE", "DEPLOYMENT_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    from core.config import Settings
+    settings = Settings()
+    assert settings.auth_mode == "local"
+    assert settings.mfa_keyring_file == ""
+    assert settings.operator_mfa_required is False
+
+
+@pytest.mark.parametrize("role", ["worker", "sync", "admin"])
 def test_non_http_processes_do_not_need_operator_factor_keys(role):
     from core.config import Settings
     assert Settings(process_role=role, auth_mode="cloud", mfa_keyring_file="").process_role == role

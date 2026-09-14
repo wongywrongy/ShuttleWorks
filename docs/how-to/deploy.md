@@ -77,7 +77,7 @@ aimed at the homelab, must not be able to reach the product's database.
 
 ## 3. Secrets
 
-Three files, never committed (`secrets/` is gitignored):
+Four files, never committed (`secrets/` is gitignored):
 
 ```bash
 cd /opt/ShuttleWorks
@@ -89,7 +89,17 @@ openssl rand -hex 32 | tr -d '\n' > secrets/ops_token
 
 chmod 700 secrets          # only you (and root) can traverse in
 chmod 644 secrets/*        # readable by the container users
+
+# Fourth: the operator authenticator key ring. Create it AFTER the chmod above,
+# which would otherwise widen it. It is written 0600; give it to the API user.
+python3 tools/operator-mfa-keyring.py secrets/operator_mfa_keys.json
+sudo chown 1001:1001 secrets/operator_mfa_keys.json
 ```
+
+The key ring encrypts every operator's authenticator seed. Back it up with your
+recovery material: a database backup cannot decrypt factors without it, and the
+API refuses to start without it. See
+[security operations](/how-to/security-operations#operator-authenticator-key-provisioning).
 
 ::: danger Lock the directory, not the files
 Compose (non-swarm) bind-mounts each secret preserving its host ownership and

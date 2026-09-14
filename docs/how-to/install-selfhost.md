@@ -49,7 +49,7 @@ aimed at the homelab, should not be able to reach the product's database.
 
 ## 2. Secrets
 
-Three files, never committed (`secrets/` is gitignored):
+Four files, never committed (`secrets/` is gitignored):
 
 ```bash
 cd /opt/ShuttleWorks
@@ -66,7 +66,17 @@ openssl rand -hex 32 | tr -d '\n' > secrets/ops_token
 # hits the same wall as UID 999.
 chmod 700 secrets          # only you (and root) can traverse in
 chmod 644 secrets/*        # readable by the container users
+
+# Fourth: the operator authenticator key ring. Create it AFTER the chmod above,
+# which would otherwise widen it. It is written 0600; give it to the API user.
+python3 tools/operator-mfa-keyring.py secrets/operator_mfa_keys.json
+sudo chown 1001:1001 secrets/operator_mfa_keys.json
 ```
+
+The key ring encrypts every operator's authenticator seed. Back it up with your
+recovery material: a database backup cannot decrypt factors without it, and the
+API refuses to start without it. See
+[security operations](/how-to/security-operations#operator-authenticator-key-provisioning).
 
 ::: danger The failure this prevents is silent and misleading
 With `chmod 600` on the files, `_read_file_backed_secrets()` raises
@@ -139,7 +149,9 @@ to start without it, or misbehaves in a way you will not notice.
 | `SOLVE_RANDOM_SEED` / `SOLVE_NUM_WORKERS` / `SOLVE_MAX_DETERMINISTIC_TIME` | `42` / `1` / `60.0` | – | ✓ | ✓ | **Do not change `SOLVE_NUM_WORKERS`.** Determinism depends on single-threaded search. |
 | `SOLVE_WALL_CLOCK_CEILING_SECONDS` | `300.0` | – | ✓ | ✓ | Outer safety kill only; must stay well above the deterministic budget. |
 | `AUTH_THROTTLE_MAX_FAILURES` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` | `5` / `900` / `60` | ✓ | ✓ | not read | Credential-stuffing backoff. |
-| `SESSION_TTL_DAYS` / `SESSION_COOKIE_NAME` / `SESSION_COOKIE_DOMAIN` | `0.5` (maximum) / `sw_session` / `''` | ✓ | ✓ | not read | **`SESSION_COOKIE_DOMAIN` must stay blank and the API refuses to start otherwise.** Host-only cookies are the entire mechanism keeping the two hostnames apart; a `Domain=` cookie is sent to every subdomain, handing the operator session to the public entrant tier. `Path=` is not a substitute — it is not enforced against same-origin script. |
+| `MFA_KEYRING_FILE` | `''` | leave empty | **required** (`secrets/operator_mfa_keys.json`) | not read | Operators must enroll an authenticator in cloud mode, and the seeds are encrypted with this ring. The API refuses to start without a readable, valid ring. Losing it strands every enrolled operator; replacing it does the same. Keep it with your recovery material. |
+| `REGISTRATION_MAX_PER_IP` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` | `5` / `3600` / `300` | ✓ | ✓ | not read | Operator self-registration budget per client IP. First-run provisioning of more than a handful of staff accounts from one office IP hits it; invite staff instead, or raise it for the provisioning hour. |
+| `SESSION_TTL_DAYS` / `SESSION_COOKIE_NAME` / `SESSION_COOKIE_DOMAIN` | `0.5` (maximum) / `sw_session` / `''` | ✓ | ✓ | not read | `SESSION_TTL_DAYS` above `0.5` (twelve hours) is a startup error; older `.env` files carried `30` and must be edited. **`SESSION_COOKIE_DOMAIN` must stay blank and the API refuses to start otherwise.** Host-only cookies are the entire mechanism keeping the two hostnames apart; a `Domain=` cookie is sent to every subdomain, handing the operator session to the public entrant tier. `Path=` is not a substitute — it is not enforced against same-origin script. |
 | `PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH` / `RESET_TOKEN_TTL_MINUTES` | `8` / `128` / `60` | ✓ | ✓ | not read | NIST 800-63B: length only. |
 | `INVITE_TTL_DAYS` | `14.0` | ✓ | ✓ | not read | Email-invite expiry. |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | none — **required, no fallback** | leave | **real keys, both required** | not read | **The always-pass dummy defaults were removed 2026-09-07.** `${PLAY_HOSTNAME}` publishes a live public entry form, so an inert challenge is bot protection that is present, green, and does nothing. The API refuses to start under `ENVIRONMENT=cloud` on a blank key or a Cloudflare test key, and `docker-compose.selfhost.yml` now fails at `docker compose config` time before an image is pulled. Get a pair from Cloudflare → Turnstile; the secret belongs in a secret file (`TURNSTILE_SECRET_KEY_FILE`), not in `.env`. |

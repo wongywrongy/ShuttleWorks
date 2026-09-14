@@ -67,8 +67,10 @@ or `owner`. Cloud passwords, authenticator seeds and recovery codes are never
 copied to the node. Each person chooses a separate node password and enrolls an
 authenticator on that node.
 
-From the repository root, with the event-node API's database, node ID and private
-key environment, a trusted local OS administrator runs:
+From the repository root, with the event-node API's database URL, deployment
+profile and node ID in the environment, a trusted local OS administrator runs the
+command below. It runs as the `admin` process role, so it does not need the API's
+MFA key ring (a container path) on the host:
 
 ```sh
 .venv/bin/python tools/node-operator-enrollment.py \
