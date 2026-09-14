@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { SharingTab } from '../SharingTab';
 import { apiClient } from '../../../api/client';
 vi.mock('../../../hooks/useCanEdit', () => ({ useCanEdit: () => true }));
@@ -46,7 +46,7 @@ describe('SharingTab', () => {
     vi.mocked(apiClient.getDisplayToken).mockReset();
     vi.mocked(apiClient.rotateDisplayToken).mockReset();
     vi.mocked(apiClient.listInvites).mockResolvedValue([] as never);
-    vi.mocked(apiClient.createInvite).mockResolvedValue({ token: 'new' } as never);
+    vi.mocked(apiClient.createInvite).mockResolvedValue({ id: 'new-id', token: 'new', url: '/invite/new' } as never);
     vi.mocked(apiClient.revokeInvite).mockResolvedValue(undefined as never);
     vi.mocked(apiClient.getDisplayToken).mockResolvedValue({
       token: 'tok-abc',
@@ -226,8 +226,8 @@ describe('SharingTab', () => {
 
   it('renders the recipient email on invite rows that carry one', async () => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([
-      { token: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true, email: 'coach@club.org' },
-      { token: 'b', tournamentId: 't1', role: 'viewer', createdAt: '', expiresAt: null, revokedAt: null, valid: true, email: null },
+      { id: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true, email: 'coach@club.org' },
+      { id: 'b', tournamentId: 't1', role: 'viewer', createdAt: '', expiresAt: null, revokedAt: null, valid: true, email: null },
     ] as never);
     render(<SharingTab tid="t1" />);
     const row = await screen.findByTestId('invite-a');
@@ -235,10 +235,62 @@ describe('SharingTab', () => {
     expect(screen.getByTestId('invite-b')).not.toHaveTextContent('@');
   });
 
+  it('shows and copies a newly issued link even when the list refresh fails, then forgets it on remount', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const view = render(<SharingTab tid="t1" scope="team" />);
+    await screen.findByText('No invitations sent yet.');
+    vi.mocked(apiClient.listInvites).mockRejectedValue(new Error('refresh failed'));
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+    const link = await screen.findByLabelText('New invitation link');
+    expect(link).toHaveValue(`${window.location.origin}/invite/new`);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy invitation link' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/invite/new`));
+    await screen.findByTestId('invites-load-error');
+    expect(link).toBeInTheDocument();
+    view.unmount();
+    vi.mocked(apiClient.listInvites).mockResolvedValue([
+      { id: 'new-id', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true },
+    ]);
+    render(<SharingTab tid="t1" scope="team" />);
+    const row = await screen.findByTestId('invite-new-id');
+    expect(screen.queryByLabelText('New invitation link')).toBeNull();
+    expect(within(row).queryByRole('button', { name: /copy/i })).toBeNull();
+    expect(within(row).getByRole('button', { name: 'Revoke' })).toBeEnabled();
+  });
+
+  it('forgets the issued link when changing workspaces', async () => {
+    const view = render(<SharingTab tid="t1" scope="team" />);
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+    await screen.findByLabelText('New invitation link');
+    view.rerender(<SharingTab tid="t2" scope="team" />);
+    expect(screen.queryByLabelText('New invitation link')).toBeNull();
+    view.rerender(<SharingTab tid="t1" scope="team" />);
+    expect(screen.queryByLabelText('New invitation link')).toBeNull();
+  });
+
+  it('discards a late issuance response after leaving its workspace', async () => {
+    let issue!: (value: Awaited<ReturnType<typeof apiClient.createInvite>>) => void;
+    vi.mocked(apiClient.createInvite).mockReturnValue(new Promise((resolve) => { issue = resolve; }));
+    const view = render(<SharingTab tid="t1" scope="team" />);
+    fireEvent.click(screen.getByLabelText('Create a link to share'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+    view.rerender(<SharingTab tid="t2" scope="team" />);
+    await act(async () => {
+      issue({ id: 'late-id', token: 'late-secret', url: '/invite/late-secret', tournamentId: 't1', role: 'viewer', createdAt: '' });
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create share link' })).toBeEnabled());
+    view.rerender(<SharingTab tid="t1" scope="team" />);
+    expect(screen.queryByLabelText('New invitation link')).toBeNull();
+    expect(apiClient.listInvites).toHaveBeenCalledTimes(3);
+  });
+
   it('active invite shows Revoke (calls revokeInvite); revoked invite shows none', async () => {
     vi.mocked(apiClient.listInvites).mockResolvedValue([
-      { token: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true },
-      { token: 'b', tournamentId: 't1', role: 'viewer', createdAt: '', expiresAt: null, revokedAt: '2020-01-01T00:00:00Z', valid: false },
+      { id: 'a', tournamentId: 't1', role: 'operator', createdAt: '', expiresAt: null, revokedAt: null, valid: true },
+      { id: 'b', tournamentId: 't1', role: 'viewer', createdAt: '', expiresAt: null, revokedAt: '2020-01-01T00:00:00Z', valid: false },
     ] as never);
     render(<SharingTab tid="t1" />);
     await waitFor(() => expect(screen.getByTestId('invite-a')).toBeInTheDocument());

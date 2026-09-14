@@ -24,7 +24,6 @@ callers own the transaction boundary.
 from __future__ import annotations
 
 import gzip
-import hashlib
 import logging
 import re
 import secrets
@@ -45,6 +44,7 @@ from core.config import settings
 # their disjointness is a property of the set and is only reviewable here.
 from core.throttle import throttle_record_attempt
 from core.time_utils import _aware, _utcnow
+from core.tokens import _hash_token
 from db.models import AuthSession, AuthThrottle, Org, OrgMember, User
 
 log = logging.getLogger("scheduler.auth_service")
@@ -300,10 +300,6 @@ def ensure_bootstrap_user(session: Session) -> User:
 
 
 # ---- Sessions --------------------------------------------------------
-
-
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def create_session(session: Session, user_id: uuid.UUID) -> tuple[str, AuthSession]:

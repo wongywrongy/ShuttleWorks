@@ -6,7 +6,7 @@ Approved 2026-09-13. Implementation is in progress. The [dated review](../review
 
 - Latest-version-only before launch; coordinated prototype resets are permitted. No reset or deployment of the shared demo is part of a source-code change.
 - Meet and Bracket retain separate engines and write paths. Operations owns the common desk; convergence follows the existing module contracts.
-- Staff invites last seven days. Display links end seven days after the event; undated events require an explicit expiry. Tokens are issued once, hashed at rest, renewable and revocable. Staff expiry is implemented with migration 0003 and both-dialect evidence; display expiry and hashed one-time issuance remain in P05.
+- Staff invites last seven days. Display links end seven days after the event; undated events require an explicit expiry. Tokens are issued once, hashed at rest, renewable and revocable. Staff expiry is implemented with migration 0003; migration 0004 adds hashed storage and issue-once management. Display expiry and hashed one-time issuance remain in P05.
 - App-owned MFA for owner/operator privileges, including individually enrolled offline operators. Session absolute lifetime: 12 hours; idle lifetime: one hour; sensitive-action authentication age: five minutes. Polling is not human activity.
 - Retention is finite and purpose-based: organizer selection before entry collection, automatic audited sweeps, manual early erasure, and overdue alerts. Account, event, log and backup lifetimes remain separate.
 - CI uses focused blocking contracts; expensive browser, DAST and operational rehearsals run on schedule and before release. Release evidence must match the source revision.

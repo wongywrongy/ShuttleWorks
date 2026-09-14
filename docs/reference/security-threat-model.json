@@ -104,7 +104,11 @@
         "infra/nginx/log-redaction.conf",
         "apps/api/src/core/capability_policy.py",
         "apps/api/src/repositories/local.py",
-        "apps/api/src/alembic/versions/0003_finite_staff_invites.py"
+        "apps/api/src/alembic/versions/0003_finite_staff_invites.py",
+        "apps/api/src/core/tokens.py",
+        "apps/api/src/alembic/versions/0004_hash_staff_invites.py",
+        "apps/api/src/identity/invites.py",
+        "apps/console/src/modules/settings/SharingTab.tsx"
       ],
       "evidence": [
         "tests/backend/unit/test_auth_service.py",
@@ -116,10 +120,12 @@
         "tools/check-nginx-runtime.py",
         "tests/backend/unit/test_invite_expiry.py",
         "tests/backend/unit/test_repositories.py",
-        "tests/backend/unit/test_baseline_schema.py"
+        "tests/backend/unit/test_baseline_schema.py",
+        "tests/backend/test_invites.py",
+        "apps/console/src/modules/settings/__tests__/SharingTab.test.tsx"
       ],
       "gaps": [
-        "SGR-20260913-04: nginx capability/query/referer leakage is covered; raw display/staff invitation storage, repeated disclosure and console email logging remain open."
+        "SGR-20260913-04: staff invitation hashing and issue-once management are implemented; raw display storage, repeated display disclosure, display expiry and console email logging remain open."
       ]
     },
     {

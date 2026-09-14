@@ -77,8 +77,8 @@ of the sentinel.
 Nginx runtime error logging is disabled because that channel cannot redact URLs;
 safe upstream status/timing fields remain available, and startup syntax failures
 remain visible. Removing redaction in a temporary source copy caused the native
-runtime test to fail. This controls nginx only. Raw display/staff invite bearer
-storage, repeated token disclosure and `core/email.py` console bodies remain open.
+runtime test to fail. This controls nginx only. Raw display bearer storage,
+repeated display disclosure and `core/email.py` console bodies remain open.
 
 Staff invitations now expire seven days after creation regardless of delivery
 mode. The repository caps supplied deadlines and the acceptance guard rejects
@@ -90,8 +90,25 @@ previous-schema negative control that accepts null expiry before upgrade and
 rejects it afterwards. Evidence under `tests/backend/`:
 `unit/test_invite_expiry.py`,
 `test_display_public.py::test_link_invite_expires_after_seven_days`,
-`unit/test_repositories.py` and `unit/test_baseline_schema.py`. Display capability
-expiry, hashed invitation/display storage and one-time issuance remain open.
+`unit/test_repositories.py` and `unit/test_baseline_schema.py`.
+
+The 2026-09-14 follow-up stores staff invitation digests through `core/tokens.py`,
+with independent IDs for owner management. Creation returns the link once;
+listings and public resolution never return it. Migration 0004 replaces old raw
+IDs and hashes their original values so existing links retain their expiry and
+revocation state. This changes logical rows, not historical backups or storage
+pages. The HTTP regression failed on raw-ID storage before implementation.
+The Sharing UI keeps an issued link only in memory, including after a failed list
+refresh; remounting or changing workspaces discards it. Display expiry, hashed
+display storage and one-time display issuance remain open.
+
+Executed follow-up: 127 backend invite/oracle/repository/schema tests passed
+(13 PostgreSQL cases skipped in that invocation); the disposable PostgreSQL
+invocation then passed all 26 schema tests across both dialects. Shared hashing
+consumers passed 92 tests (10 optional dialect skips). The console passed 33
+Sharing/status tests and its production build. Removing the late-response guard
+made the UI regression fail; the restored implementation passes. All 15 backend
+import contracts and the 62 documentation checks pass (six pre-existing skips).
 
 ## R5
 

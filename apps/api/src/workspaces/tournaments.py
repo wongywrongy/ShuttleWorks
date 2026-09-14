@@ -1423,7 +1423,7 @@ def create_invite_link(
             email = normalize_email(body.email)
         except AuthError as exc:
             raise http_error(400, ErrorCode.INVALID_INPUT, exc.message)
-    invite = repo.invite_links.create(
+    token, invite = repo.invite_links.create(
         tournament_id=tournament_id,
         role=body.role,
         created_by=user_uuid,
@@ -1443,14 +1443,15 @@ def create_invite_link(
             subject=f"You're invited to {tournament.name or f'a {PRODUCT_NAME} workspace'}",
             body=(
                 f"You've been invited as {invite.role}.\n\n"
-                f"Accept here: {origin}/invite/{invite.id}\n\n"
+                f"Accept here: {origin}/invite/{token}\n\n"
                 f"This invite expires {invite.expires_at:%Y-%m-%d}."
                 f"\n\n{BRAND_SIGNATURE}"
             ),
         )
     return InviteCreatedDTO(
-        token=str(invite.id),
-        url=f"/invite/{invite.id}",
+        id=str(invite.id),
+        token=token,
+        url=f"/invite/{token}",
         tournamentId=str(tournament_id),
         role=invite.role,  # type: ignore[arg-type]
         createdAt=invite.created_at.isoformat(),

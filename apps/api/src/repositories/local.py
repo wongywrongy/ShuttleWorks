@@ -58,6 +58,7 @@ from sqlalchemy.orm import Session, attributes
 from core.config import cloud_modules_enabled
 from core.capability_policy import STAFF_INVITE_LIFETIME
 from core.time_utils import now_iso
+from core.tokens import _hash_token
 from db.models import (
     CLOUD_ONLY_MODULES,
     BracketEvent,
@@ -1678,12 +1679,15 @@ class _LocalInviteLinkRepo:
         created_by: uuid.UUID,
         email: Optional[str] = None,
         expires_at: Optional[datetime] = None,
-    ) -> InviteLink:
+    ) -> tuple[str, InviteLink]:
+        """Return the bearer once alongside its independently identified row."""
+        token = str(uuid.uuid4())
         created_at = datetime.now(timezone.utc)
         deadline = created_at + STAFF_INVITE_LIFETIME
         if expires_at is not None:
             deadline = min(deadline, _ensure_utc_aware(expires_at))
         row = InviteLink(
+            token_hash=_hash_token(token),
             tournament_id=tournament_id,
             role=role,
             created_by=created_by,
@@ -1694,7 +1698,7 @@ class _LocalInviteLinkRepo:
         self.session.add(row)
         self.session.commit()
         self.session.refresh(row)
-        return row
+        return token, row
 
     def list_for_tournament(
         self,
@@ -1709,7 +1713,15 @@ class _LocalInviteLinkRepo:
         )
 
     def get(self, token: uuid.UUID) -> Optional[InviteLink]:
-        return self.session.get(InviteLink, token)
+        return self.session.scalar(
+            select(InviteLink).where(InviteLink.token_hash == _hash_token(str(token)))
+        )
+
+    def get_for_management(self, reference: uuid.UUID) -> Optional[InviteLink]:
+        """Owner-only lookup by non-secret id or a previously issued link."""
+        return self.session.scalar(select(InviteLink).where(
+            (InviteLink.id == reference) | (InviteLink.token_hash == _hash_token(str(reference)))
+        ))
 
     def revoke(self, token: uuid.UUID) -> bool:
         row = self.session.get(InviteLink, token)

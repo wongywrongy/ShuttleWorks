@@ -6348,8 +6348,8 @@ export interface components {
          * @description Body for ``POST /tournaments/{id}/invites``.
          *
          *     ``email`` (SP-CLOUD-2) turns this into an email invite: the link is
-         *     delivered via the email seam and the invite expires. Omitted =
-         *     local link-style invite (copy the URL yourself).
+         *     delivered via the email seam. Omitted = local link-style invite
+         *     (copy the URL yourself). Both expire seven days after issuance.
          *
          *     The address is bounded here and validated for shape by
          *     ``normalize_email`` at the handler — that regex rejects all
@@ -6374,6 +6374,8 @@ export interface components {
          *     origin in backend config.
          */
         InviteCreatedDTO: {
+            /** Id */
+            id: string;
             /** Token */
             token: string;
             /** Url */
@@ -6399,8 +6401,6 @@ export interface components {
          *     is unauthenticated and the invitee's address must not be probeable.
          */
         InviteResolveDTO: {
-            /** Token */
-            token: string;
             /** Tournamentid */
             tournamentId: string;
             /** Tournamentname */
@@ -6416,8 +6416,8 @@ export interface components {
          * @description Wire shape for active-invite listings on Settings → Share.
          */
         InviteSummaryDTO: {
-            /** Token */
-            token: string;
+            /** Id */
+            id: string;
             /** Tournamentid */
             tournamentId: string;
             /**

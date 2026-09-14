@@ -484,8 +484,10 @@ class InviteLink(Base):
     """
 
     __tablename__ = "invite_links"
+    __table_args__ = (Index("uq_invite_links_token_hash", "token_hash", unique=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
     )

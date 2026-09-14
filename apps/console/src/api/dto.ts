@@ -1232,6 +1232,7 @@ export interface InviteCreateDTO {
 }
 
 export interface InviteCreatedDTO {
+  id: string;
   token: string;
   /** Relative path — frontend prepends ``window.location.origin``. */
   url: string;
@@ -1243,7 +1244,7 @@ export interface InviteCreatedDTO {
 }
 
 export interface InviteSummaryDTO {
-  token: string;
+  id: string;
   tournamentId: string;
   role: InviteRole;
   createdAt: string;
@@ -1260,7 +1261,6 @@ export interface InviteSummaryDTO {
  *  read here. `InviteSummaryDTO` keeps them for the owner-facing
  *  listing, which is authenticated and may legitimately see them. */
 export interface InviteResolveDTO {
-  token: string;
   tournamentId: string;
   tournamentName: string | null;
   role: InviteRole;

@@ -295,7 +295,7 @@ def test_email_invite_rides_the_seam_and_expires(client, workspace, caplog):
     assert mail and f"/invite/{token}" in mail[0]
 
     listed = client.get(f"/tournaments/{tid}/invites").json()
-    row = next(i for i in listed if i["token"] == token)
+    row = next(i for i in listed if i["id"] == r.json()["id"])
     assert row["email"] == "friend@example.com"
     assert datetime.fromisoformat(row["expiresAt"]) - datetime.fromisoformat(
         row["createdAt"]
@@ -314,7 +314,7 @@ def test_link_invite_expires_after_seven_days(client, workspace):
     assert r.status_code == 201
     assert r.json()["token"]
     listed = client.get(f"/tournaments/{tid}/invites").json()
-    row = next(i for i in listed if i["token"] == r.json()["token"])
+    row = next(i for i in listed if i["id"] == r.json()["id"])
     assert row["email"] is None
     assert row["expiresAt"] is not None
     assert datetime.fromisoformat(row["expiresAt"]) - datetime.fromisoformat(

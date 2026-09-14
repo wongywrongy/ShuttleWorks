@@ -76,6 +76,9 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
   const displayLink = displayToken ? `${origin}/display?token=${displayToken}` : null;
 
   const [invites, setInvites] = useState<InviteSummaryDTO[] | null>(null);
+  // Issued links live only in this mounted view, never browser storage.
+  const [issuedInvite, setIssuedInvite] = useState<{ tid: string; id: string; url: string } | null>(null);
+  const inviteGeneration = useRef(0);
   // Same class as the Entries desk (2026-08-10 browser pass): a rejected read
   // became `[]` and rendered as an empty list. An owner reading that mints a
   // second invite for someone who already has one.
@@ -123,17 +126,22 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
 
   // A no-cancel reload used after a create/revoke mutation (user-initiated).
   const refresh = useCallback(() => {
+    const generation = inviteGeneration.current;
     apiClient
       .listInvites(tid)
       .then((r) => {
+        if (generation !== inviteGeneration.current) return;
         setInvites(r);
         setInvitesFailed(false);
       })
-      .catch(() => setInvitesFailed(true));
+      .catch(() => { if (generation === inviteGeneration.current) setInvitesFailed(true); });
   }, [tid]);
 
   // Initial / tid-change load, guarded so a late response can't overwrite newer state.
   useEffect(() => {
+    inviteGeneration.current += 1;
+    setIssuedInvite(null);
+    setBusy(false);
     if (!showInvites) {
       setInvites([]);
       setInvitesFailed(false);
@@ -148,6 +156,7 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
       .catch(() => !cancelled && setInvitesFailed(true));
     return () => {
       cancelled = true;
+      inviteGeneration.current += 1;
     };
   }, [showInvites, tid]);
 
@@ -189,23 +198,30 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
 
   async function create() {
     if (!online || (inviteMode === 'email' && !email.trim())) return;
+    const generation = inviteGeneration.current;
     setActionError(null);
     setBusy(true);
     try {
       const trimmed = inviteMode === 'email' ? email.trim() : '';
-      await apiClient.createInvite(tid, trimmed ? { role, email: trimmed } : { role });
+      const issued = await apiClient.createInvite(tid, trimmed ? { role, email: trimmed } : { role });
+      if (generation !== inviteGeneration.current) return;
+      setIssuedInvite({ tid, id: issued.id, url: `${origin}${issued.url}` });
       setEmail('');
       refresh();
     } catch {
-      setActionError('The invite could not be created. Check the email and connection, then retry.');
+      if (generation === inviteGeneration.current) setActionError('The invite could not be created. Check the email and connection, then retry.');
     } finally {
-      setBusy(false);
+      if (generation === inviteGeneration.current) setBusy(false);
     }
   }
 
-  async function revoke(token: string) {
+  async function revoke(id: string) {
     if (!online) return;
-    try { await apiClient.revokeInvite(token); refresh(); }
+    try {
+      await apiClient.revokeInvite(id);
+      setIssuedInvite((issued) => issued?.id === id ? null : issued);
+      refresh();
+    }
     catch { setActionError('The invite could not be revoked. Retry when connected.'); }
   }
 
@@ -230,6 +246,15 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
 
   const inviteControls = (
     <>
+        {issuedInvite?.tid === tid && (
+          <div role="status" className="mb-4 space-y-2 rounded border border-border p-3">
+            <p className="text-sm">Copy this invitation now. It cannot be retrieved after leaving this page or creating another link.</p>
+            <TextField label="New invitation link" value={issuedInvite.url} readOnly />
+            <Button size="xs" variant="outline" onClick={() => copy(issuedInvite.url, issuedInvite.id)}>
+              {copied === issuedInvite.id ? 'Copied' : 'Copy invitation link'}
+            </Button>
+          </div>
+        )}
         {canEmailInvite ? (
           <fieldset className="mb-4 space-y-2 text-sm">
             <legend className="mb-2 font-medium">Invitation delivery</legend>
@@ -304,11 +329,10 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
           ) : (
             invites.map((inv) => {
               const status = inviteStatus(inv, now);
-              const link = `${origin}/invite/${inv.token}`;
               return (
                 <li
-                  key={inv.token}
-                  data-testid={`invite-${inv.token}`}
+                  key={inv.id}
+                  data-testid={`invite-${inv.id}`}
                   className="flex items-center justify-between gap-3 p-3"
                 >
                   <div className="min-w-0">
@@ -331,15 +355,12 @@ export function SharingTab({ tid, scope = 'all' }: { tid: string; scope?: Sharin
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <Button size="xs" variant="ghost" onClick={() => copy(link, inv.token)}>
-                      {copied === inv.token ? 'Copied' : 'Copy'}
-                    </Button>
                     {status === 'active' && (
                       <Button
                         size="xs"
                         variant="ghost"
                         disabled={!online}
-                        onClick={() => void revoke(inv.token)}
+                        onClick={() => void revoke(inv.id)}
                         className="text-destructive hover:bg-destructive/10"
                       >
                         Revoke

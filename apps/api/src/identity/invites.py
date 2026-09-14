@@ -60,7 +60,7 @@ class InviteCreateDTO(StrictModel):
 
 class InviteSummaryDTO(BaseModel):
     """Wire shape for active-invite listings on Settings → Share."""
-    token: str
+    id: str
     tournamentId: str
     role: InviteRole
     createdAt: str
@@ -78,6 +78,7 @@ class InviteCreatedDTO(BaseModel):
     Keeping the join client-side avoids hard-coding the deployment
     origin in backend config.
     """
+    id: str
     token: str
     url: str
     tournamentId: str
@@ -94,7 +95,6 @@ class InviteResolveDTO(BaseModel):
     carried the existence oracle. ``email`` stays withheld: this route
     is unauthenticated and the invitee's address must not be probeable.
     """
-    token: str
     tournamentId: str
     tournamentName: Optional[str] = None
     role: InviteRole
@@ -113,7 +113,7 @@ class InviteAcceptedDTO(BaseModel):
 
 def _to_summary(invite: InviteLink) -> InviteSummaryDTO:
     return InviteSummaryDTO(
-        token=str(invite.id),
+        id=str(invite.id),
         tournamentId=str(invite.tournament_id),
         role=invite.role,  # type: ignore[arg-type]
         createdAt=invite.created_at.isoformat() if invite.created_at else "",
@@ -168,7 +168,7 @@ def _require_invite_owner(
     repo: LocalRepository = Depends(get_repository),
 ) -> InviteLink:
     """Resolve and authorize without revealing invite existence to outsiders."""
-    invite = repo.invite_links.get(token)
+    invite = repo.invite_links.get_for_management(token)
     user_uuid = user.as_uuid()
     if invite is None or user_uuid is None:
         raise resource_not_found()
@@ -204,7 +204,6 @@ def resolve_invite(
     """
     invite, tournament = _resolve_acceptable_invite(repo, token)
     return InviteResolveDTO(
-        token=str(invite.id),
         tournamentId=str(invite.tournament_id),
         tournamentName=tournament.name if tournament else None,
         role=invite.role,  # type: ignore[arg-type]

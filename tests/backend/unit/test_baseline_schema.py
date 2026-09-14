@@ -271,7 +271,7 @@ def test_invitation_migration_caps_existing_links_without_extending_them(migrate
     cfg.set_main_option("script_location", str(SCRIPTS))
     with migrated.connect() as conn:
         cfg.attributes["connection"] = conn
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "0003")
         for row_id, days in zip(ids, [7, 7, 1]):
             expiry = conn.scalar(sa.select(InviteLink.expires_at).where(InviteLink.id == row_id))
             assert expiry.replace(tzinfo=timezone.utc) == created + timedelta(days=days)
@@ -280,3 +280,45 @@ def test_invitation_migration_caps_existing_links_without_extending_them(migrate
         conn.execute(InviteLink.__table__.update().where(InviteLink.id == ids[0]).values(
             expires_at=None,
         ))
+
+
+@pytest.mark.parametrize("initial_revision", ["0003"], indirect=True)
+def test_invite_hash_migration_preserves_links_and_removes_raw_ids(migrated):
+    from datetime import datetime, timedelta, timezone
+    from hashlib import sha256
+
+    from db.models import InviteLink, Tournament
+    from repositories.local import LocalRepository
+    from sqlalchemy.orm import Session
+
+    created = datetime(2026, 9, 14, tzinfo=timezone.utc)
+    workspace_id, creator = uuid.uuid4(), uuid.uuid4()
+    tokens = [uuid.uuid4(), uuid.uuid4()]
+    expiry = created + timedelta(days=7)
+    with migrated.begin() as conn:
+        conn.execute(Tournament.__table__.insert().values(id=workspace_id, name="Old links"))
+        for token, revoked in zip(tokens, [None, created]):
+            conn.execute(InviteLink.__table__.insert().values(
+                id=token, tournament_id=workspace_id, role="viewer", email="invite@example.test",
+                created_by=creator, created_at=created, expires_at=expiry, revoked_at=revoked,
+            ))
+        assert conn.scalar(sa.select(InviteLink.id).where(InviteLink.id == tokens[0])) == tokens[0]
+    cfg = Config()
+    cfg.set_main_option("script_location", str(SCRIPTS))
+    with migrated.connect() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "head")
+    with Session(migrated) as session:
+        repo = LocalRepository(session)
+        assert session.scalar(sa.select(sa.func.count()).select_from(InviteLink)) == 2
+        for token, revoked in zip(tokens, [None, created]):
+            row = repo.invite_links.get(token)
+            assert row is not None
+            assert row.id not in tokens
+            assert row.token_hash == sha256(str(token).encode()).hexdigest()
+            assert row.created_by == creator and row.tournament_id == workspace_id
+            assert row.email == "invite@example.test" and row.role == "viewer"
+            assert row.expires_at.replace(tzinfo=timezone.utc) == expiry
+            assert row.created_at.replace(tzinfo=timezone.utc) == created
+            assert (row.revoked_at.replace(tzinfo=timezone.utc) if row.revoked_at else None) == revoked
+            assert repo.invite_links.get(row.id) is None
