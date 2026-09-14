@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter, Depends, Header, Path, Request, Response
 from fastapi.responses import JSONResponse
 from core.dependencies import AuthUser, get_current_user, require_tournament_access
+from core.error_codes import ErrorCode, http_error
 from repositories import LocalRepository, get_repository
 from sync.schemas import (
     AuthorityLifecycleResponse,
@@ -18,7 +19,6 @@ from sync.schemas import (
     DeviceEnrollmentRequest,
     DeviceResponse,
     DeviceRevocationRequest,
-    OfflineSessionRequest, OfflineSessionBootstrapRequest, OfflineSessionResponse,
     LostNodeRecoveryRequest,
     PlannedTransferRequest,
     ReadyRequest,
@@ -36,12 +36,6 @@ from sync.service import (
     SyncApplication,
 )
 authority_router = APIRouter(
-    prefix="/tournaments/{tournament_id}/authority", tags=["authority"]
-)
-# The first-run ceremony cannot inherit the authority router's operator-cookie
-# dependency: no event-scoped cookie exists yet.  This router exposes only the
-# capability-authenticated bootstrap endpoint and is mounted separately.
-authority_bootstrap_router = APIRouter(
     prefix="/tournaments/{tournament_id}/authority", tags=["authority"]
 )
 sync_router = APIRouter(prefix="/sync/v1/tournaments/{tournament_id}", tags=["sync"])
@@ -177,109 +171,36 @@ def revoke_event_node(
     )
 
 
+# Retired by P08. Both routes minted an event-node cookie without an
+# individual password or authenticator proof, so on an MFA-enforcing node the
+# credential could never authenticate. Node credentials now come only from
+# POST /auth/node/activate and POST /auth/login?workspaceId=... Kept as 410
+# tombstones behind membership so an anonymous probe still answers 401 and a
+# non-member 404; a member learns where the ceremony moved.
+_OFFLINE_SESSION_GONE = (
+    "node credentials are issued only by individual activation "
+    "(POST /auth/node/activate) and sign-in (POST /auth/login?workspaceId=...)"
+)
+
+
 @authority_router.post(
     "/offline-session",
-    response_model=OfflineSessionResponse,
+    deprecated=True,
     dependencies=[Depends(require_tournament_access("operator"))],
 )
-def create_offline_session(
-    body: OfflineSessionRequest,
-    response: Response,
-    tournament_id: uuid.UUID = Path(...),
-    user: AuthUser = Depends(get_current_user),
-    repo: LocalRepository = Depends(get_repository),
-) -> OfflineSessionResponse:
-    """Mint an event-node-only session for the already authenticated operator.
-
-    This endpoint is intentionally unavailable outside the event-node profile;
-    it cannot create a cloud login or broaden tournament membership.
-    """
-    from core.config import settings
-    if settings.deployment_profile != "event_node":
-        _raise_protocol(ProtocolError(409, "offline_session_node_only", "Offline sessions are node-only"))
-    actor_id = user.as_uuid()
-    if actor_id is None:
-        _raise_protocol(ProtocolError(422, "invalid_actor", "Current user id is not a UUID"))
-    try:
-        token, row = SyncApplication(repo).issue_offline_session(
-            user_id=actor_id, tournament_id=tournament_id,
-            authority_epoch=body.authority_epoch, device_id=body.node_id,
-            ttl_hours=body.ttl_hours,
-        )
-    except ValueError as exc:
-        _raise_protocol(ProtocolError(403, "offline_session_scope_invalid", str(exc)))
-    # The cookie value is minted here, never echoed: ``offline_sessions.issue``
-    # returns ``secrets.token_urlsafe`` and stores only its SHA-256 digest, and
-    # the name is a settings constant. Nothing from the request body reaches
-    # ``Set-Cookie`` — ``ttl_hours`` is an ``int`` bounded 1..12 by the schema
-    # and again by ``issue``. CodeQL ``py/cookie-injection`` here is a false
-    # positive (2026-09-07).
-    response.set_cookie(
-        key=settings.offline_session_cookie_name, value=token,
-        max_age=body.ttl_hours * 3600, httponly=True,
-        secure=settings.session_cookie_secure, samesite="lax", path="/",
-    )
-    return OfflineSessionResponse(
-        tournament_id=tournament_id, node_id=body.node_id,
-        authority_epoch=body.authority_epoch, expires_at=row.expires_at,
-    )
+def create_offline_session_gone() -> None:
+    """410 — shared node sessions retired with operator MFA."""
+    raise http_error(410, ErrorCode.AUTH_ENDPOINT_GONE, _OFFLINE_SESSION_GONE)
 
 
-@authority_bootstrap_router.post(
+@authority_router.post(
     "/offline-session/bootstrap",
-    response_model=OfflineSessionResponse,
+    deprecated=True,
+    dependencies=[Depends(require_tournament_access("operator"))],
 )
-def bootstrap_offline_session(
-    body: OfflineSessionBootstrapRequest,
-    response: Response,
-    tournament_id: uuid.UUID = Path(...),
-    capability: str = Depends(_bearer_capability),
-    repo: LocalRepository = Depends(get_repository),
-) -> OfflineSessionResponse:
-    """Complete first-run node authentication without a cloud-origin cookie.
-
-    The signed checkout capability is the ceremony proof.  It is scoped to
-    this node/epoch by the authority row and is never persisted; only the
-    digest of the newly-issued event credential is stored.
-    """
-    from core.config import settings
-
-    if settings.deployment_profile != "event_node":
-        _raise_protocol(
-            ProtocolError(409, "offline_session_node_only", "Offline sessions are node-only")
-        )
-    try:
-        token, row = SyncApplication(repo).bootstrap_offline_session(
-            user_id=body.operator_id,
-            tournament_id=tournament_id,
-            authority_epoch=body.authority_epoch,
-            device_id=body.node_id,
-            capability=capability,
-            ttl_hours=body.ttl_hours,
-        )
-    except ValueError as exc:
-        _raise_protocol(ProtocolError(403, "offline_session_scope_invalid", str(exc)))
-    # The cookie value is minted here, never echoed: ``offline_sessions.issue``
-    # returns ``secrets.token_urlsafe`` and stores only its SHA-256 digest, and
-    # the name is a settings constant. Nothing from the request body reaches
-    # ``Set-Cookie`` — ``ttl_hours`` is an ``int`` bounded 1..12 by the schema
-    # and again by ``issue``. CodeQL ``py/cookie-injection`` here is a false
-    # positive (2026-09-07).
-    response.set_cookie(
-        key=settings.offline_session_cookie_name,
-        value=token,
-        max_age=body.ttl_hours * 3600,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite="lax",
-        path="/",
-    )
-    return OfflineSessionResponse(
-        tournament_id=tournament_id,
-        node_id=body.node_id,
-        authority_epoch=body.authority_epoch,
-        expires_at=row.expires_at,
-    )
+def bootstrap_offline_session_gone() -> None:
+    """410 — a shared authority capability cannot establish an individual."""
+    raise http_error(410, ErrorCode.AUTH_ENDPOINT_GONE, _OFFLINE_SESSION_GONE)
 
 
 @authority_router.delete(

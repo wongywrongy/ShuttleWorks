@@ -74,25 +74,6 @@ class DeviceResponse(BaseModel):
     revocation_reason: str | None = None
 
 
-class OfflineSessionRequest(BaseModel):
-    node_id: uuid.UUID
-    authority_epoch: int = Field(ge=1)
-    ttl_hours: int = Field(default=12, ge=1, le=12)
-
-
-class OfflineSessionBootstrapRequest(OfflineSessionRequest):
-    """Node-local bootstrap proof used before any offline cookie exists."""
-
-    operator_id: uuid.UUID
-
-
-class OfflineSessionResponse(BaseModel):
-    tournament_id: uuid.UUID
-    node_id: uuid.UUID
-    authority_epoch: int
-    expires_at: datetime
-
-
 class ReadyRequest(BaseModel):
     node_id: uuid.UUID
     authority_epoch: int = Field(ge=1)

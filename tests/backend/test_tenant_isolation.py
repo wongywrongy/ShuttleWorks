@@ -47,7 +47,6 @@ _PARAM_FILLERS = {
 # projection and quarantine routes deliberately remain in the derived 404
 # sweep below.
 NODE_CAPABILITY_OPERATIONS = {
-    ("POST", "/tournaments/{tournament_id}/authority/offline-session/bootstrap"),
     ("POST", "/tournaments/{tournament_id}/authority/checkpoint/import"),
     ("POST", "/sync/v1/tournaments/{tournament_id}/operations"),
     ("GET", "/sync/v1/tournaments/{tournament_id}/status"),

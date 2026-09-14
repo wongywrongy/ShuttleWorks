@@ -47,24 +47,3 @@ def test_event_node_compose_boots_named_api_and_worker_roots() -> None:
 
     assert "shuttleworks.event_node.main:app" in compose
     assert '"shuttleworks.worker.main"' in compose
-
-
-def test_first_run_offline_bootstrap_does_not_require_a_preexisting_cookie() -> None:
-    from core.dependencies import get_current_user
-    from core.main import app
-    from sync import routes as sync_routes
-
-    bootstrap_mount = next(
-        route for route in app.routes
-        if getattr(route, "original_router", None)
-        is sync_routes.authority_bootstrap_router
-    )
-    authority_mount = next(
-        route for route in app.routes
-        if getattr(route, "original_router", None) is sync_routes.authority_router
-    )
-
-    bootstrap_dependencies = bootstrap_mount.include_context.dependencies
-    authority_dependencies = authority_mount.include_context.dependencies
-    assert all(dependency.dependency is not get_current_user for dependency in bootstrap_dependencies)
-    assert any(dependency.dependency is get_current_user for dependency in authority_dependencies)

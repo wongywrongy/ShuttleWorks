@@ -3,11 +3,10 @@ from __future__ import annotations
 
 from fastapi.routing import APIRoute
 
-from sync.routes import authority_bootstrap_router, authority_router, sync_router
+from sync.routes import authority_router, sync_router
 
 
 CAPABILITY_AUTHENTICATED_ROUTES = {
-    ("POST", "/tournaments/{tournament_id}/authority/offline-session/bootstrap"),
     ("POST", "/tournaments/{tournament_id}/authority/checkpoint/import"),
     ("POST", "/sync/v1/tournaments/{tournament_id}/operations"),
     ("GET", "/sync/v1/tournaments/{tournament_id}/status"),
@@ -17,7 +16,7 @@ CAPABILITY_AUTHENTICATED_ROUTES = {
 def test_every_human_sync_route_enforces_tournament_membership() -> None:
     routes = [
         route
-        for router in (authority_router, authority_bootstrap_router, sync_router)
+        for router in (authority_router, sync_router)
         for route in router.routes
         if isinstance(route, APIRoute)
     ]

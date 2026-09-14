@@ -108,16 +108,22 @@ def test_activation_is_scoped_and_fail_closed(node, failure):
     assert client.cookies.get("sw_offline_operator") is None
 
 
-def test_shared_authority_capability_cannot_enroll_an_individual(node):
+def test_shared_authority_capability_cannot_mint_a_node_credential(node):
+    """Both shared-session routes are 410 tombstones behind membership."""
     client, body, node_id, user_id = node
     tid = body["workspaceId"]
-    boot = client.post(f"/tournaments/{tid}/authority/offline-session/bootstrap",
-        headers={"Authorization": "Bearer shared-authority-fixture"},
-        json={"operator_id": str(user_id), "node_id": str(node_id), "authority_epoch": 2})
-    assert boot.status_code == 200, boot.text
-    assert client.get(f"/tournaments/{tid}").status_code == 401
-    attempted = client.post("/auth/mfa/enroll", params={"workspaceId": tid}, json={"currentPassword": PASSWORD})
-    assert attempted.status_code == 401
+    bootstrap = f"/tournaments/{tid}/authority/offline-session/bootstrap"
+    minted = f"/tournaments/{tid}/authority/offline-session"
+    request = {"operator_id": str(user_id), "node_id": str(node_id), "authority_epoch": 2}
+    anonymous = client.post(bootstrap, headers={"Authorization": "Bearer shared-authority-fixture"}, json=request)
+    assert anonymous.status_code == 401
+    assert client.cookies.get("sw_offline_operator") is None
+    activate_and_enroll(client, body)
+    for path in (bootstrap, minted):
+        gone = client.post(path, json=request)
+        assert gone.status_code == 410, gone.text
+        assert gone.json()["detail"]["code"] == "AUTH_ENDPOINT_GONE"
+    assert client.post(f"/tournaments/{uuid.uuid4()}/authority/offline-session", json=request).status_code == 404
     assert client.post("/auth/register", json={"email": body["email"], "password": PASSWORD}).status_code == 404
 
 

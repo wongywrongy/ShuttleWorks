@@ -1,12 +1,13 @@
 """Event-scoped operator sessions for WAN outages.
 
-The service is intentionally node-only and transaction-neutral.  A session
-is usable only for its tournament and authority epoch, and only while the
-operator remains a tournament member; cloud auth remains in ``auth.py``.
+The service is intentionally node-only and transaction-neutral. A session is
+usable only for its tournament and authority epoch. ``issue`` is reached only
+through individual activation and sign-in (``identity/node_identity.py``);
+workspace role is then enforced by ``require_tournament_access``, the uniform
+404 seam, not here. Cloud auth remains in ``auth.py``.
 """
 from __future__ import annotations
 
-import hmac
 import secrets
 import uuid
 from datetime import timedelta
@@ -61,64 +62,6 @@ def issue(
     session.add(row)
     session.flush()
     return token, row
-
-
-def bootstrap(
-    session: Session,
-    *,
-    user_id: uuid.UUID,
-    tournament_id: uuid.UUID,
-    authority_epoch: int,
-    device_id: uuid.UUID,
-    capability: str,
-    ttl_hours: int = DEFAULT_TTL_HOURS,
-) -> tuple[str, OfflineOperatorSession]:
-    """Issue the first node-local credential without a cloud cookie.
-
-    The authority capability is the node bootstrap ceremony's proof.  It is
-    already scoped to this tournament, node, and epoch and is never stored
-    here in raw form; only the resulting offline-session digest is persisted.
-    This path is intentionally separate from ``issue`` so an event-node
-    install cannot accidentally reintroduce the cloud-origin session
-    requirement.
-    """
-    authority = session.get(TournamentAuthority, (tournament_id, authority_epoch))
-    if (
-        authority is None
-        or authority.state != "active"
-        or authority.node_id != device_id
-        or not capability
-        or not hmac.compare_digest(
-            authority.capability_digest, _digest(capability)
-        )
-    ):
-        raise ValueError("node capability does not match active authority")
-    return issue(
-        session,
-        user_id=user_id,
-        tournament_id=tournament_id,
-        authority_epoch=authority_epoch,
-        device_id=device_id,
-        ttl_hours=ttl_hours,
-    )
-
-
-def resolve(
-    session: Session,
-    token: str,
-    *,
-    tournament_id: uuid.UUID,
-) -> tuple[User, OfflineOperatorSession] | None:
-    resolved = resolve_identity(session, token)
-    if resolved is None:
-        return None
-    user, row = resolved
-    if row.tournament_id != tournament_id:
-        return None
-    membership = session.get(TournamentMember, (row.tournament_id, row.user_id))
-    if membership is None or membership.role not in {"operator", "owner"}:
-        return None
-    return user, row
 
 
 def resolve_identity(session: Session, token: str) -> tuple[User, OfflineOperatorSession] | None:

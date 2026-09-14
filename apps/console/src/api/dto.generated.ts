@@ -1829,30 +1829,6 @@ export interface paths {
         patch: operations["patch_module_tournaments__tournament_id__modules__module_id__patch"];
         trace?: never;
     };
-    "/tournaments/{tournament_id}/authority/offline-session/bootstrap": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Bootstrap Offline Session
-         * @description Complete first-run node authentication without a cloud-origin cookie.
-         *
-         *     The signed checkout capability is the ceremony proof.  It is scoped to
-         *     this node/epoch by the authority row and is never persisted; only the
-         *     digest of the newly-issued event credential is stored.
-         */
-        post: operations["bootstrap_offline_session_tournaments__tournament_id__authority_offline_session_bootstrap_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/tournaments/{tournament_id}/authority/checkout": {
         parameters: {
             query?: never;
@@ -1914,13 +1890,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Offline Session
-         * @description Mint an event-node-only session for the already authenticated operator.
-         *
-         *     This endpoint is intentionally unavailable outside the event-node profile;
-         *     it cannot create a cloud login or broaden tournament membership.
+         * Create Offline Session Gone
+         * @deprecated
+         * @description 410 — shared node sessions retired with operator MFA.
          */
-        post: operations["create_offline_session_tournaments__tournament_id__authority_offline_session_post"];
+        post: operations["create_offline_session_gone_tournaments__tournament_id__authority_offline_session_post"];
         /**
          * Revoke Offline Session
          * @description Revoke the presented node-local credential and clear its cookie.
@@ -1931,6 +1905,27 @@ export interface paths {
          *     the offline cookie is part of the central credential-cookie registry.
          */
         delete: operations["revoke_offline_session_tournaments__tournament_id__authority_offline_session_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{tournament_id}/authority/offline-session/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bootstrap Offline Session Gone
+         * @deprecated
+         * @description 410 — a shared authority capability cannot establish an individual.
+         */
+        post: operations["bootstrap_offline_session_gone_tournaments__tournament_id__authority_offline_session_bootstrap_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -7166,64 +7161,6 @@ export interface components {
             slug: string;
             /** Morecount */
             moreCount: number;
-        };
-        /**
-         * OfflineSessionBootstrapRequest
-         * @description Node-local bootstrap proof used before any offline cookie exists.
-         */
-        OfflineSessionBootstrapRequest: {
-            /**
-             * Node Id
-             * Format: uuid
-             */
-            node_id: string;
-            /** Authority Epoch */
-            authority_epoch: number;
-            /**
-             * Ttl Hours
-             * @default 12
-             */
-            ttl_hours: number;
-            /**
-             * Operator Id
-             * Format: uuid
-             */
-            operator_id: string;
-        };
-        /** OfflineSessionRequest */
-        OfflineSessionRequest: {
-            /**
-             * Node Id
-             * Format: uuid
-             */
-            node_id: string;
-            /** Authority Epoch */
-            authority_epoch: number;
-            /**
-             * Ttl Hours
-             * @default 12
-             */
-            ttl_hours: number;
-        };
-        /** OfflineSessionResponse */
-        OfflineSessionResponse: {
-            /**
-             * Tournament Id
-             * Format: uuid
-             */
-            tournament_id: string;
-            /**
-             * Node Id
-             * Format: uuid
-             */
-            node_id: string;
-            /** Authority Epoch */
-            authority_epoch: number;
-            /**
-             * Expires At
-             * Format: date-time
-             */
-            expires_at: string;
         };
         /** OperationEnvelope */
         OperationEnvelope: {
@@ -12544,43 +12481,6 @@ export interface operations {
             };
         };
     };
-    bootstrap_offline_session_tournaments__tournament_id__authority_offline_session_bootstrap_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                Authorization?: string | null;
-            };
-            path: {
-                tournament_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OfflineSessionBootstrapRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OfflineSessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     checkout_tournaments__tournament_id__authority_checkout_post: {
         parameters: {
             query?: never;
@@ -12687,7 +12587,7 @@ export interface operations {
             };
         };
     };
-    create_offline_session_tournaments__tournament_id__authority_offline_session_post: {
+    create_offline_session_gone_tournaments__tournament_id__authority_offline_session_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -12696,11 +12596,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OfflineSessionRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -12708,7 +12604,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OfflineSessionResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -12742,6 +12638,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bootstrap_offline_session_gone_tournaments__tournament_id__authority_offline_session_bootstrap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

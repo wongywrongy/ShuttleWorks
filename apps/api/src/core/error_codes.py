@@ -180,6 +180,9 @@ class ErrorCode(str, Enum):
     AUTH_MFA_INVALID = "AUTH_MFA_INVALID"
     AUTH_REAUTH_REQUIRED = "AUTH_REAUTH_REQUIRED"
     AUTH_MFA_UNAVAILABLE = "AUTH_MFA_UNAVAILABLE"
+    # A retired credential-issuing route. Node credentials are minted only by
+    # individual activation and sign-in (identity/node_routes.py, P08).
+    AUTH_ENDPOINT_GONE = "AUTH_ENDPOINT_GONE"
     # The bot challenge said no, or could not be reached (SP-E1-2 —
     # Turnstile moved from submit to entrant signup, spec Q4 R3 restack).
     # Distinct from AUTH_INVALID_CREDENTIALS because it is not about who

@@ -585,7 +585,6 @@ app.include_router(setup_api.router, dependencies=_EVENT_DATA_DEP)
 app.include_router(workspace_modules.router, dependencies=_EVENT_DATA_DEP)
 # Capability-authenticated first-run ceremony. It must be mounted before and
 # separately from the operator-cookie-protected authority surface.
-app.include_router(sync_api.authority_bootstrap_router)
 app.include_router(sync_api.authority_router, dependencies=_AUTH_DEP)
 # Device-authenticated: deliberately not wrapped in the operator auth dependency.
 app.include_router(sync_api.sync_router)

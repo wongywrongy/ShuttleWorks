@@ -42,12 +42,6 @@ class SyncApplication:
     def revoke_device(self, **kwargs):  # noqa: ANN003, ANN201
         return self._repo.stage(self._service().revoke_device, **kwargs)
 
-    def issue_offline_session(self, **kwargs):  # noqa: ANN003, ANN201
-        return self._repo.execute_transaction(offline_sessions.issue, **kwargs)
-
-    def bootstrap_offline_session(self, **kwargs):  # noqa: ANN003, ANN201
-        return self._repo.execute_transaction(offline_sessions.bootstrap, **kwargs)
-
     def revoke_offline_session(self, **kwargs):  # noqa: ANN003, ANN201
         return self._repo.execute_transaction(offline_sessions.revoke, **kwargs)
 
