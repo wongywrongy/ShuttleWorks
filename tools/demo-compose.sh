@@ -648,12 +648,16 @@ show_image_provenance() {
 quarantine_demo_state() {
     stamp=$(date -u +%Y%m%dT%H%M%SZ)
     quarantine="$demo_state_dir/quarantine-$stamp"
-    mkdir -m 0700 "$quarantine"
-    [[ ! -e "$postgres_dir" ]] || mv -- "$postgres_dir" "$quarantine/postgres"
-    [[ ! -e "$data_dir" ]] || mv -- "$data_dir" "$quarantine/data"
+    # Rename within the state directory, never into a subdirectory: the
+    # Postgres data directory belongs to the container's postgres user (mode
+    # 0700), and moving a directory to a new parent needs write permission on
+    # the directory itself. A same-parent rename needs it only on the parent,
+    # which this user owns.
+    [[ ! -e "$postgres_dir" ]] || mv -- "$postgres_dir" "$quarantine-postgres"
+    [[ ! -e "$data_dir" ]] || mv -- "$data_dir" "$quarantine-data"
     rm -f -- "$postgres_marker" "$legacy_backup_marker"
     mkdir -m 0770 "$postgres_dir" "$data_dir"
-    echo "Demo state quarantined at $quarantine. The verified backup remains at $backup_root/latest."
+    echo "Demo state quarantined at $quarantine-{postgres,data}. The verified backup remains at $backup_root/latest."
 }
 
 case "$command_name" in
