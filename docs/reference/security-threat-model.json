@@ -48,11 +48,11 @@
         "tests/backend/test_operator_mfa_keyring_cli.py",
         "tests/backend/test_node_enrollment_cli.py",
         "apps/console/src/api/__tests__/sessionRestore.test.ts",
-        "apps/console/src/modules/settings/__tests__/AuthenticatorSection.test.tsx"
+        "apps/console/src/modules/settings/__tests__/AuthenticatorSection.test.tsx",
+        "tests/backend/unit/test_operator_mfa_migration.py",
+        "docs/reviews/mfa-key-rotation-drill-2026-09-14.json"
       ],
-      "gaps": [
-        "SGR-20260914-K6: fresh MFA proof guards sensitive actions and downloaded artefacts, not the JSON reads the console polls; a deployed key-ring rotation, the event-node browser enrollment journey and per-scope factor uniqueness remain open."
-      ]
+      "gaps": []
     },
     {
       "id": "R2",

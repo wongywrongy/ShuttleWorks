@@ -52,7 +52,8 @@ dependency. After the tenant and role checks, a session whose MFA proof is older
 than five minutes gets `401 AUTH_REAUTH_REQUIRED`; the console raises its
 verification lock and retries the call once through `withFreshProof`
 (`apps/console/src/api/sessionRestore.ts`). Do not gate the JSON reads the
-console polls: the lock would reappear every five minutes.
+console polls: the lock would reappear every five minutes
+([ADR 0033](/explanation/decisions/0033-fresh-proof-scope)).
 
 **Exception: auth-only ceremonies.** `/auth/mfa/*`, `/auth/activity`,
 `/auth/reauth-check`, `/auth/node/*` and `POST /auth/login?workspaceId=` run

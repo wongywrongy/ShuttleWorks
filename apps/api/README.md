@@ -200,7 +200,7 @@ fresh=True)`): after the tenant and role checks, an operator whose MFA
 proof is older than five minutes gets `401 AUTH_REAUTH_REQUIRED`. Fresh proof
 guards actions and file artefacts that leave the browser (exports, backups,
 link issue/revoke, membership, authority), not the JSON reads the console
-polls.
+polls ([ADR 0033](../../docs/explanation/decisions/0033-fresh-proof-scope.md)).
 
 **Exception: auth-only ceremonies.** `/auth/mfa/*`, `/auth/activity`,
 `/auth/reauth-check`, `/auth/node/*` and `POST /auth/login?workspaceId=` run

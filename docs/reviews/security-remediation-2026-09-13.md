@@ -12,7 +12,7 @@ source revisions.
 
 | Rule | Verdict | Enforcement files | Executable evidence | Remaining finding / outcome |
 | --- | --- | --- | --- | --- |
-| R1 | PASS | `core/dependencies.py`, `core/main.py`, `core/operator_sessions.py`, `core/secret_keys.py`, `identity/mfa.py`, `identity/mfa_routes.py`, `identity/node_identity.py`, `repositories/mfa.py` | `tests/backend/test_auth_surface.py`, `test_cross_principal_sessions.py`, `test_operator_mfa_http.py`, `test_node_operator_mfa_http.py`, `test_node_enrollment_cli.py`, `test_operator_mfa_keyring_cli.py`, `unit/test_operator_mfa.py`; `tests/e2e/tests/operator-mfa.spec.ts` (in CI) | P08 implemented: app-owned MFA, bounded sessions, resumable fresh proof, voluntary factors and key rotation. Residuals are SGR-20260914-K6. Hosted CI and independent review pending. |
+| R1 | PASS | `core/dependencies.py`, `core/main.py`, `core/operator_sessions.py`, `core/secret_keys.py`, `identity/mfa.py`, `identity/mfa_routes.py`, `identity/node_identity.py`, `repositories/mfa.py` | `tests/backend/test_auth_surface.py`, `test_cross_principal_sessions.py`, `test_operator_mfa_http.py`, `test_node_operator_mfa_http.py`, `test_node_enrollment_cli.py`, `test_operator_mfa_keyring_cli.py`, `unit/test_operator_mfa.py`; `tests/e2e/tests/operator-mfa.spec.ts` (in CI) | P08 implemented: app-owned MFA, bounded sessions, resumable fresh proof, voluntary factors and key rotation; review residuals closed (ADR 0033, migration 0008, node browser journey, container rotation drill). Independent review pending. |
 | R2 | PASS | `core/error_codes.py`, `core/dependencies.py`, `core/main.py`, `sync/routes.py` | `tests/backend/test_tenant_isolation.py`, `test_invite_oracle.py` | Role, missing and unpublished denials converge; collection gates run before cache validators and entrant SSR maps publication races to the same 404. |
 | R3 | FAIL | `core/roles.py`, `db/models.py`, `identity/invites.py` | `tests/backend/test_host_split.py`, `unit/test_baseline_schema.py` | One shared role ladder; sole-parent outbox exception has executable ownership evidence and remains distinct from literal composite-FK compliance. |
 | R4 | PASS | `infra/nginx/log-redaction.conf`, `core/log_redaction.py`, `core/email.py`, `core/tokens.py`, `repositories/local.py`, `display/display.py`, migration `0005` | `tools/check-nginx.sh`, `tests/backend/test_invites.py`, `test_display_public.py`, `unit/test_log_redaction.py`, `unit/test_email_transport.py`, `unit/test_baseline_schema.py` | Staff/display credentials are hashed, finite and issued once; API/nginx/email logging controls pass. Independent review remains pending. |
@@ -180,11 +180,27 @@ Executed evidence at this follow-up:
 | Operator MFA browser journey | passes with both the repository venv and a bare interpreter |
 | Ruff, 15 import contracts, state-machine contract, threat register, docs build | pass |
 
-Residual scope is recorded as SGR-20260914-K6: fresh proof does not gate the JSON
-reads the console polls, no deployed key rotation has been rehearsed, the event-node
-enrollment journey has no browser test, and factors are unique per account rather
-than per scope. Hosted CI on the pushed head and an independent review remain
-required.
+Residual scope was first recorded as SGR-20260914-K6 and closed the same day:
+
+- **Fresh-proof scope** is a recorded decision,
+  [ADR 0033](../explanation/decisions/0033-fresh-proof-scope.md): fresh proof
+  guards actions and artefacts that leave the browser, not the reads the console
+  polls, which stay bounded by the MFA session's one-hour idle limit.
+- **Per-scope factors.** Migration `0008` keys `operator_mfa_factors` on
+  `(user_id, scope)`; one person can hold a cloud and an event-node factor, each
+  bound to its own scope. The migration test keeps existing rows and refuses a
+  duplicate scope.
+- **Event-node browser journey.** The CI browser run now starts an event-node API,
+  issues an activation with the real administrator tool, and drives activation,
+  enrollment, workspace-only reach, home redirect, replay refusal, sign-out and
+  recovery-code sign-in.
+- **Key rotation on a deployed stack.** `tools/mfa-key-rotation-drill.py` ran the
+  documented procedure inside the API image against an isolated cloud Compose
+  stack with Postgres 16 and an enrolled operator; the
+  [dated record](mfa-key-rotation-drill-2026-09-14.json) passed. The drill showed
+  the image has no `tools/` and the stack publishes no database, so the runbook
+  now gives the in-container form. A production-host rotation joins the
+  operational rehearsals under SGR-20260913-11.
 
 ## R2
 
