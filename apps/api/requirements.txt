@@ -1,7 +1,7 @@
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 pydantic>=2.5.0
-pydantic-settings>=2.1.0
+pydantic-settings>=2.15.0
 python-dotenv>=1.0.0
 # Exact pin: CP-SAT results are only reproducible within a single solver
 # version, and determinism is a product guarantee (SP-CLOUD-1 Rule 5e).
