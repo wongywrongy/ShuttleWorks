@@ -10,7 +10,7 @@ from datetime import datetime
 import uuid
 import secrets
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -58,6 +58,22 @@ class MfaRepository:
         return self.session.scalar(select(OperatorMfaFactor).where(
             OperatorMfaFactor.user_id == user_id, OperatorMfaFactor.scope == scope,
         ).execution_options(populate_existing=True))
+
+    def key_usage(self) -> list[dict]:
+        """Counts only: which encryption keys still wrap an active or pending seed."""
+        usage = []
+        for column, use in ((OperatorMfaFactor.key_id, "active"), (OperatorMfaFactor.pending_key_id, "pending")):
+            rows = self.session.execute(select(column, func.count()).where(column.is_not(None)).group_by(column))
+            usage.extend({"keyId": key_id, "use": use, "factors": count} for key_id, count in rows)
+        return sorted(usage, key=lambda row: (row["keyId"], row["use"]))
+
+    def factors_wrapped_outside(self, active_id: str) -> list[tuple[uuid.UUID, str]]:
+        """(user, scope) pairs whose active or pending seed uses a non-active key."""
+        rows = self.session.execute(select(OperatorMfaFactor.user_id, OperatorMfaFactor.scope).where(
+            ((OperatorMfaFactor.key_id.is_not(None)) & (OperatorMfaFactor.key_id != active_id))
+            | ((OperatorMfaFactor.pending_key_id.is_not(None)) & (OperatorMfaFactor.pending_key_id != active_id)),
+        ).order_by(OperatorMfaFactor.user_id))
+        return [(user_id, scope) for user_id, scope in rows]
 
     def replace_recovery_codes(self, factor_id: uuid.UUID, hashes: list[str], now: datetime) -> None:
         self.session.execute(delete(OperatorRecoveryCode).where(OperatorRecoveryCode.factor_id == factor_id))

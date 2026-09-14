@@ -29,7 +29,7 @@ export AUTH_MODE=cloud ENVIRONMENT=local SHUTTLEWORKS_DEPLOYMENT_PROFILE=local
 export EMAIL_BACKEND=console EMBEDDED_WORKER=false PROCESS_ROLE=api
 export E2E_MANAGE_STACK=0 E2E_BASE_URL="http://127.0.0.1:$sw_mfa_console_port"
 export VITE_API_PROXY_TARGET="http://127.0.0.1:$sw_mfa_api_port"
-.venv/bin/python tools/operator-mfa-keyring.py "$MFA_KEYRING_FILE" > "$sw_mfa_fixture/key.log"
+.venv/bin/python tools/operator-mfa-keyring.py create "$MFA_KEYRING_FILE" > "$sw_mfa_fixture/key.log"
 npm --prefix apps/console run build
 .venv/bin/python -m uvicorn core.main:app --app-dir apps/api/src --host 127.0.0.1 --port "$sw_mfa_api_port" > "$sw_mfa_fixture/api.log" 2>&1 &
 sw_mfa_api_pid=$!

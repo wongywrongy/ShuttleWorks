@@ -109,3 +109,30 @@ def verify_factor(repo: LocalRepository, user_id: uuid.UUID, code: str, *,
         event = "authenticate"
     _audit(repo, factor, event, now)
     return factor.generation
+
+
+def rewrap_factors(repo: LocalRepository, *, keys: SecretKeyring, now: datetime) -> dict[str, int]:
+    """Re-encrypt every seed still wrapped by a non-active key under the active key.
+
+    Custody, not lifecycle: no generation change, no audit edge, and no session
+    is touched. Each factor is reserved first, so a concurrent proof serializes
+    with the rewrap. A missing old key raises before anything is written.
+    """
+    counts = {"active": 0, "pending": 0}
+    for user_id, scope in repo.mfa.factors_wrapped_outside(keys.active_id):
+        factor = repo.mfa.reserve(user_id, scope, now)
+        if factor is None:
+            continue
+        if factor.secret_ciphertext is not None and factor.key_id != keys.active_id:
+            seed = decrypt_factor(factor.secret_ciphertext, keys.key(factor.key_id), user_id=user_id, scope=scope)
+            factor.secret_ciphertext = encrypt_factor(seed, keys.active_key, user_id=user_id, scope=scope)
+            factor.key_id = keys.active_id
+            counts["active"] += 1
+        if factor.pending_ciphertext is not None and factor.pending_key_id != keys.active_id:
+            pending_scope = f"{scope}:session:{factor.pending_session_id}"
+            seed = decrypt_factor(factor.pending_ciphertext, keys.key(factor.pending_key_id),
+                                  user_id=user_id, scope=pending_scope)
+            factor.pending_ciphertext = encrypt_factor(seed, keys.active_key, user_id=user_id, scope=pending_scope)
+            factor.pending_key_id = keys.active_id
+            counts["pending"] += 1
+    return counts

@@ -37,7 +37,7 @@ Before starting a cloud or event-node API, create its private encryption file
 from the repository root using the deployment's Python environment:
 
 ```sh
-.venv/bin/python tools/operator-mfa-keyring.py secrets/operator_mfa_keys.json
+python3 tools/operator-mfa-keyring.py create secrets/operator_mfa_keys.json
 ```
 
 The parent directory must already exist and be private. The command creates a
@@ -55,9 +55,31 @@ material. Database backups contain encrypted factors but cannot decrypt them
 without these keys. The key-ring reader accepts up to four keys and writes with
 the selected active key. A successful authenticator verification re-encrypts
 an old factor with the active key; a recovery-code login alone does not do so.
-Do not delete an old key based on elapsed time or one successful login. Key-use
-inventory, bulk rewrapping and a rehearsed retirement procedure remain open;
-the file format alone does not establish safe rotation.
+Do not delete an old key based on elapsed time or one successful login.
+
+### Rotating the key ring
+
+Every step prints key identifiers and counts only. Run the database steps with
+the API's `DATABASE_URL`; they use the `admin` process role.
+
+1. `python3 tools/operator-mfa-keyring.py add-key secrets/operator_mfa_keys.json`
+   adds an inactive key. Restart every API process so each one can read it.
+2. `python3 tools/operator-mfa-keyring.py promote secrets/operator_mfa_keys.json --key-id NEW_ID`
+   makes it the key new seeds are written with. Restart every API process again.
+3. `.venv/bin/python tools/operator-mfa-keyring.py rewrap --keyring secrets/operator_mfa_keys.json`
+   re-encrypts every active and pending seed still wrapped by an older key, in one
+   transaction. It changes no factor generation and signs nobody out.
+4. `.venv/bin/python tools/operator-mfa-keyring.py usage --keyring secrets/operator_mfa_keys.json`
+   must now list only the new key.
+5. Archive a copy of the ring that still holds the old key with any database
+   backup taken before step 3; those backups need it to restore factors.
+6. `.venv/bin/python tools/operator-mfa-keyring.py remove-key secrets/operator_mfa_keys.json --key-id OLD_ID`
+   refuses while any seed still uses the key. Restart every API process.
+
+Each change rewrites the file atomically, keeps mode `0600` and preserves its
+owner. The procedure is implemented and tested against a live enrolled operator
+(`tests/backend/test_operator_mfa_keyring_cli.py`); a rotation on a deployed
+stack has not yet been rehearsed and recorded.
 
 ## Individual offline operators
 

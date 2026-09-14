@@ -69,3 +69,54 @@ def test_overlap_preserves_old_decryption_keys_while_new_writes_use_active_key(t
     assert ring.key(secret_key_id(old)) == old
     with pytest.raises(SecretKeyringError, match="unavailable"):
         ring.key("unknown")
+
+
+def test_rotation_adds_promotes_and_removes_keys_privately(tmp_path):
+    import os
+    import stat
+    from core.secret_keys import add_secret_key, promote_secret_key, remove_secret_key
+    path = tmp_path / "keys.json"
+    first = create_secret_keyring(path)
+    second = add_secret_key(path)
+    ring = read_secret_keyring(path)
+    assert ring.active_id == first and set(ring.key_ids) == {first, second}
+    promote_secret_key(path, second)
+    assert read_secret_keyring(path).active_id == second
+    remove_secret_key(path, first)
+    assert read_secret_keyring(path).key_ids == (second,)
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    assert [p.name for p in tmp_path.iterdir()] == ["keys.json"]  # no stray candidates
+
+
+def test_rotation_refuses_unsafe_changes(tmp_path):
+    from core.secret_keys import MAX_KEYRING_KEYS, add_secret_key, promote_secret_key, remove_secret_key
+    path = tmp_path / "keys.json"
+    active = create_secret_keyring(path)
+    with pytest.raises(SecretKeyringError, match="active"):
+        remove_secret_key(path, active)
+    with pytest.raises(SecretKeyringError, match="not in this ring"):
+        promote_secret_key(path, "0" * 16)
+    with pytest.raises(SecretKeyringError, match="not in this ring"):
+        remove_secret_key(path, "0" * 16)
+    for _ in range(MAX_KEYRING_KEYS - 1):
+        add_secret_key(path)
+    before = path.read_bytes()
+    with pytest.raises(SecretKeyringError, match="full"):
+        add_secret_key(path)
+    assert path.read_bytes() == before
+
+
+def test_interrupted_rotation_leaves_the_original_ring_intact(tmp_path, monkeypatch):
+    import os
+    from core import secret_keys
+    path = tmp_path / "keys.json"
+    create_secret_keyring(path)
+    before = path.read_bytes()
+
+    def crash(*_args):
+        raise OSError("simulated power loss")
+    monkeypatch.setattr(os, "replace", crash)
+    with pytest.raises(OSError):
+        secret_keys.add_secret_key(path)
+    assert path.read_bytes() == before
+    assert [p.name for p in tmp_path.iterdir()] == ["keys.json"]

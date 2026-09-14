@@ -228,3 +228,47 @@ def test_schema_refuses_active_factors_without_encrypted_material(account):
     repo, user_id, _ = account
     with pytest.raises(IntegrityError), repo.transaction():
         repo.session.add(OperatorMfaFactor(user_id=user_id, scope="cloud", status="active"))
+
+
+def test_rewrap_moves_active_and_pending_seeds_to_the_active_key(account):
+    repo, user_id, options = account
+    seed, generation, _ = enroll(account)
+    old = options["keys"]
+    # A replacement enrollment is pending under the old key, too.
+    with repo.transaction():
+        mfa.begin_enrollment(repo, user_id, PASSWORD, fresh=True, session_id=SESSION_ID, **options)
+    new_key = secrets.token_bytes(32)
+    rotated = SecretKeyring(secret_key_id(new_key), {old.active_id: old.active_key, secret_key_id(new_key): new_key})
+    assert {row["keyId"] for row in repo.mfa.key_usage()} == {old.active_id}
+    with repo.transaction():
+        counts = mfa.rewrap_factors(repo, keys=rotated, now=NOW)
+    assert counts == {"active": 1, "pending": 1}
+    factor = repo.mfa.get(user_id)
+    assert factor.key_id == factor.pending_key_id == rotated.active_id
+    assert factor.generation == generation  # custody change, not a lifecycle event
+    assert repo.mfa.key_usage() == [
+        {"keyId": rotated.active_id, "use": "active", "factors": 1},
+        {"keyId": rotated.active_id, "use": "pending", "factors": 1},
+    ]
+    # The old key can now be dropped: a ring without it still verifies the seed.
+    only_new = SecretKeyring(rotated.active_id, {rotated.active_id: new_key})
+    later = NOW + timedelta(seconds=30)
+    with repo.transaction():
+        assert mfa.verify_factor(repo, user_id, totp_code(seed, later.timestamp()),
+                                 **dict(options, keys=only_new, now=later)) == generation
+    with repo.transaction():
+        assert mfa.rewrap_factors(repo, keys=only_new, now=later) == {"active": 0, "pending": 0}
+
+
+def test_rewrap_without_the_old_key_refuses_and_writes_nothing(account):
+    from core.secret_keys import SecretKeyringError
+    repo, user_id, options = account
+    enroll(account)
+    before = repo.mfa.get(user_id).secret_ciphertext
+    new_key = secrets.token_bytes(32)
+    missing_old = SecretKeyring(secret_key_id(new_key), {secret_key_id(new_key): new_key})
+    with pytest.raises(SecretKeyringError), repo.transaction():
+        mfa.rewrap_factors(repo, keys=missing_old, now=NOW)
+    repo.session.expire_all()
+    factor = repo.mfa.get(user_id)
+    assert factor.secret_ciphertext == before and factor.key_id == options["keys"].active_id

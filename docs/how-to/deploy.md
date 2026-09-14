@@ -92,7 +92,7 @@ chmod 644 secrets/*        # readable by the container users
 
 # Fourth: the operator authenticator key ring. Create it AFTER the chmod above,
 # which would otherwise widen it. It is written 0600; give it to the API user.
-python3 tools/operator-mfa-keyring.py secrets/operator_mfa_keys.json
+python3 tools/operator-mfa-keyring.py create secrets/operator_mfa_keys.json
 sudo chown 1001:1001 secrets/operator_mfa_keys.json
 ```
 

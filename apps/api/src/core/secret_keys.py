@@ -94,3 +94,69 @@ def create_secret_keyring(path: str | Path) -> str:
         json.dump(payload, target)
         target.write("\n")
     return key_id
+
+
+def _load_for_update(path: str | Path) -> tuple[str, dict[str, bytes]]:
+    ring = read_secret_keyring(path)
+    return ring.active_id, {key_id: ring.key(key_id) for key_id in ring.key_ids}
+
+
+def _replace_secret_keyring(path: str | Path, active_id: str, keys: Mapping[str, bytes]) -> None:
+    """Atomically replace a ring, preserving its owner, and never widening its mode.
+
+    The candidate is written exclusively beside the original, re-read through
+    the same validator the API uses, then renamed over it. A crash leaves the
+    original intact plus at most one stray private temporary file.
+    """
+    target = Path(path)
+    original = target.stat()
+    payload = {"version": 1, "active": active_id, "keys": {k: v.hex() for k, v in keys.items()}}
+    candidate = target.with_name(f".{target.name}.{secrets.token_hex(4)}.tmp")
+    fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w") as output:
+            json.dump(payload, output)
+            output.write("\n")
+            output.flush()
+            os.fsync(output.fileno())
+        read_secret_keyring(candidate)
+        try:
+            # Run as root for a ring owned by the API user (UID 1001): keep it readable there.
+            os.chown(candidate, original.st_uid, original.st_gid)
+        except PermissionError:
+            pass
+        os.replace(candidate, target)
+    except BaseException:
+        candidate.unlink(missing_ok=True)
+        raise
+
+
+def add_secret_key(path: str | Path) -> str:
+    """Add a new, not-yet-active key. Promote it only after every API process restarts."""
+    active_id, keys = _load_for_update(path)
+    if len(keys) >= MAX_KEYRING_KEYS:
+        raise SecretKeyringError("Encryption key ring is full; remove a retired key first")
+    key = secrets.token_bytes(32)
+    key_id = secret_key_id(key)
+    keys[key_id] = key
+    _replace_secret_keyring(path, active_id, keys)
+    return key_id
+
+
+def promote_secret_key(path: str | Path, key_id: str) -> None:
+    active_id, keys = _load_for_update(path)
+    if key_id not in keys:
+        raise SecretKeyringError("Encryption key is not in this ring")
+    if key_id != active_id:
+        _replace_secret_keyring(path, key_id, keys)
+
+
+def remove_secret_key(path: str | Path, key_id: str) -> None:
+    """Drop a retired key. Callers must first prove no factor still references it."""
+    active_id, keys = _load_for_update(path)
+    if key_id not in keys:
+        raise SecretKeyringError("Encryption key is not in this ring")
+    if key_id == active_id:
+        raise SecretKeyringError("The active encryption key cannot be removed")
+    del keys[key_id]
+    _replace_secret_keyring(path, active_id, keys)
