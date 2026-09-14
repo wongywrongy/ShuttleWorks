@@ -206,7 +206,7 @@ export function LoginPage({ locked = false }: { locked?: boolean } = {}) {
   // skip the form entirely.
   if (challengeUser) {
     return <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
-      <MfaCeremony user={challengeUser} initialPassword={password}
+      <MfaCeremony user={challengeUser} mode={challengeUser.mfaEnrolled ? 'verify' : 'enroll'} initialPassword={password}
         onComplete={async () => {
           await refresh();
           setPassword('');

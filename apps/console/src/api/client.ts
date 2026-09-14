@@ -6,6 +6,10 @@ import axios, { type AxiosInstance } from 'axios';
 import { displayStateForStore, type DisplayStateDTO } from './displayProjection';
 import { useUiStore } from '../store/uiStore';
 import type {
+  ConfirmationDTO,
+  EnrollmentDTO,
+  NodeActivationRequest,
+  RecoveryCodesDTO,
   TournamentConfig,
   PlayerDTO,
   MatchDTO,
@@ -538,18 +542,30 @@ class ApiClient {
     return r.data;
   }
 
-  async beginMfa(currentPassword: string): Promise<{ secret: string; expiresAt: string; issuer: string }> {
-    const response = await this.client.post('/auth/mfa/enroll', { currentPassword }, this.authOptions());
+  async beginMfa(currentPassword: string): Promise<EnrollmentDTO> {
+    const response = await this.client.post<EnrollmentDTO>('/auth/mfa/enroll', { currentPassword }, this.authOptions());
     return response.data;
   }
 
-  async activateNodeOperator(body: { workspaceId: string; email: string; activationToken: string; newPassword: string }): Promise<UserDTO> {
+  async activateNodeOperator(body: NodeActivationRequest): Promise<UserDTO> {
     const response = await this.client.post<UserDTO>('/auth/node/activate', body);
     return response.data;
   }
 
-  async confirmMfa(code: string): Promise<{ user: UserDTO; recoveryCodes: string[] }> {
-    const response = await this.client.post('/auth/mfa/confirm', { code }, this.authOptions());
+  async confirmMfa(code: string): Promise<ConfirmationDTO> {
+    const response = await this.client.post<ConfirmationDTO>('/auth/mfa/confirm', { code }, this.authOptions());
+    return response.data;
+  }
+
+  /** Replaces every recovery code; the proof must be a current authenticator code. */
+  async reissueRecoveryCodes(currentPassword: string, code: string): Promise<RecoveryCodesDTO> {
+    const response = await this.client.post<RecoveryCodesDTO>('/auth/mfa/recovery-codes', { currentPassword, code }, this.authOptions());
+    return response.data;
+  }
+
+  /** Turns off a voluntary authenticator. The API refuses where policy requires one. */
+  async disableMfa(currentPassword: string, code: string): Promise<UserDTO> {
+    const response = await this.client.delete<UserDTO>('/auth/mfa', { ...this.authOptions(), data: { currentPassword, code } });
     return response.data;
   }
 

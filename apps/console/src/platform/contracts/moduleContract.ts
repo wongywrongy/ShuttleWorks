@@ -271,6 +271,11 @@ export const displayContract: ModuleContract = {
     // configuration surface.
     apiClient.getBoardSettings,
     apiClient.updateBoardSettings,
+    // The capability link the public board is served under: status (never the
+    // bearer), explicit issue/replacement, and revocation without replacement.
+    apiClient.getDisplayToken,
+    apiClient.rotateDisplayToken,
+    apiClient.revokeDisplayToken,
   ],
   consumedEndpoints: [
     apiClient.getTournamentState,

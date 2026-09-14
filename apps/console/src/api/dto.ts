@@ -1143,6 +1143,13 @@ export interface UserDTO {
   authenticatedAt?: string | null;
 }
 
+/** Authenticator ceremony shapes, aliased from the generated schema rather
+ *  than hand-copied (prior art: ``displayProjection.ts``). */
+export type EnrollmentDTO = components['schemas']['EnrollmentDTO'];
+export type ConfirmationDTO = components['schemas']['ConfirmationDTO'];
+export type RecoveryCodesDTO = components['schemas']['RecoveryCodesDTO'];
+export type NodeActivationRequest = components['schemas']['NodeActivationRequest'];
+
 /** The workspace's public display capability link (owner-gated mint/rotate).
  *  ``url`` is a relative path — frontend prepends ``window.location.origin``. */
 export interface DisplayTokenDTO {

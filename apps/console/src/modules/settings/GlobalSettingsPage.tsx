@@ -256,7 +256,7 @@ function SecurityPage() {
       </Section>
 
       {!locked && user?.mfaRequired && <Section title="Authenticator and recovery codes" defaultOpen>
-        {showAuthenticator ? <MfaCeremony user={user} replace={user.mfaEnrolled} cancelLabel="Cancel"
+        {showAuthenticator ? <MfaCeremony user={user} mode={user.mfaEnrolled ? 'replace' : 'enroll'} cancelLabel="Cancel"
           onCancel={async () => { setShowAuthenticator(false); }}
           onComplete={async () => { await refresh(); setShowAuthenticator(false); }} /> : <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Replace your authenticator to issue a new set of recovery codes. Existing codes are never displayed again.</p>
