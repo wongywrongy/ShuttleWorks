@@ -196,6 +196,9 @@ def _command_body(play_unit_id: str, **overrides) -> dict:
         "play_unit_id": play_unit_id,
         "winner_side": "A",
         "finished_at_slot": 0,
+        # Mandatory since ruling D5. These bodies all write a unit's FIRST
+        # result, and an untouched bracket match is at version 1.
+        "seen_version": 1,
     }
     base.update(overrides)
     return base
@@ -274,14 +277,25 @@ def test_cold_multi_event_get_has_constant_queries_and_full_response_parity(
 
     assert cold.status_code == 200, cold.text
     expected = created.json()
-    # Existing persistence semantics: hydration prefers config.courtCount and
-    # materializes the database default for seeded_count. Task 4 preserves
-    # those cold-GET values; normalize only this already-characterized POST/GET
-    # mismatch so every other serialized field remains under full parity.
-    expected["courts"] = 4
-    for event in expected["events"]:
-        event["seeded_count"] = 0
+    # Ruling D25 (2026-09-15): the COLD READ is canonical, and the create
+    # response is exactly what the next GET returns — no normalization.
+    #
+    # This assertion used to carry two exemptions, because `POST /bracket`
+    # was read as echoing the request's `courts` and leaving an omitted
+    # `seeded_count` null while hydration preferred `config.courtCount` and
+    # materialized the SQL default 0. `create_bracket` re-hydrates inside its
+    # own transaction and serializes THAT, so the two answers already agree;
+    # the exemptions were the last thing hiding it. They are removed, and the
+    # two fields are then asserted by name so a future divergence names
+    # itself instead of arriving as a generic dict inequality.
     assert cold.json() == expected
+
+    # The persisted values, not the request's: the body asked for 2 courts
+    # and declared no seeded_count.
+    assert body["courts"] == 2
+    assert "seeded_count" not in body["events"][0]
+    assert created.json()["courts"] == 4          # config.courtCount wins
+    assert all(event["seeded_count"] == 0 for event in created.json()["events"])
     assert [event["id"] for event in cold.json()["events"]] == [
         "E0",
         "E1",
