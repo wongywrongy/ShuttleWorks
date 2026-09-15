@@ -81,7 +81,12 @@ def append_local_operation(
     )
     session.add(operation)
     session.flush()
-    session.add(SyncOutbox(operation_id=operation.operation_id))
+    session.add(
+        SyncOutbox(
+            tournament_id=operation.tournament_id,
+            operation_id=operation.operation_id,
+        )
+    )
     session.flush()
     return operation
 

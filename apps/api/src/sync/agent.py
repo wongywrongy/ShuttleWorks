@@ -51,7 +51,11 @@ def pending_batch(tournament_id: uuid.UUID, node_id: uuid.UUID) -> list[EventOpe
         return list(
             session.scalars(
                 select(EventOperation)
-                .join(SyncOutbox, SyncOutbox.operation_id == EventOperation.operation_id)
+                .join(
+                    SyncOutbox,
+                    (SyncOutbox.tournament_id == EventOperation.tournament_id)
+                    & (SyncOutbox.operation_id == EventOperation.operation_id),
+                )
                 .where(
                     EventOperation.tournament_id == tournament_id,
                     EventOperation.node_id == node_id,
@@ -93,16 +97,33 @@ def _post_batch(
         return SyncBatchResponse.model_validate_json(response.read())
 
 
+def _outbox_rows(session, operations: list[EventOperation]):
+    """The outbox rows for exactly these operations.
+
+    An operation id is unique only inside its workspace, so the pair is the
+    key: filtering on ``operation_id`` alone would let one workspace's
+    acknowledgement settle another workspace's identically-numbered row.
+    """
+    keys = {(operation.tournament_id, operation.operation_id) for operation in operations}
+    if not keys:
+        return []
+    rows = session.scalars(
+        select(SyncOutbox).where(
+            SyncOutbox.tournament_id.in_({tenant for tenant, _ in keys}),
+            SyncOutbox.operation_id.in_({operation for _, operation in keys}),
+        )
+    )
+    return [row for row in rows if (row.tournament_id, row.operation_id) in keys]
+
+
 def _mark_acknowledged(operations: list[EventOperation], highest: int) -> None:
-    ids = [
-        operation.operation_id
-        for operation in operations
-        if operation.sequence <= highest
+    settled = [
+        operation for operation in operations if operation.sequence <= highest
     ]
-    if not ids:
+    if not settled:
         return
     with SessionLocal() as session:
-        rows = session.scalars(select(SyncOutbox).where(SyncOutbox.operation_id.in_(ids)))
+        rows = _outbox_rows(session, settled)
         acknowledged_at = _utcnow()
         for row in rows:
             row.acknowledged_at = acknowledged_at
@@ -113,11 +134,8 @@ def _mark_acknowledged(operations: list[EventOperation], highest: int) -> None:
 def _mark_failure(
     operations: list[EventOperation], code: str, *, permanent: bool
 ) -> None:
-    ids = [operation.operation_id for operation in operations]
     with SessionLocal() as session:
-        rows = list(
-            session.scalars(select(SyncOutbox).where(SyncOutbox.operation_id.in_(ids)))
-        )
+        rows = _outbox_rows(session, operations)
         for row in rows:
             row.attempt_count += 1
             if permanent:

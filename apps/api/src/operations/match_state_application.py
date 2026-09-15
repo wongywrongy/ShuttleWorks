@@ -164,7 +164,7 @@ class MatchStateApplication:
         """Reset the exact current match set in one retry-safe transaction."""
         try:
             existing = self.repo.execute_query(
-                lambda session: session.get(EventOperation, operation_id)
+                lambda session: session.get(EventOperation, (tournament_id, operation_id))
             )
             if existing is not None:
                 if (
@@ -235,7 +235,7 @@ class MatchStateApplication:
         )
         try:
             existing = self.repo.execute_query(
-                lambda session: session.get(EventOperation, operation_id)
+                lambda session: session.get(EventOperation, (tournament_id, operation_id))
             )
             if existing is not None:
                 if existing.payload.get("requestHash") != fingerprint:
@@ -314,7 +314,7 @@ class MatchStateApplication:
                 f"shuttleworks:match-state-replace:{tournament_id}:{idempotency_key}",
             )
             existing = self.repo.execute_query(
-                lambda session: session.get(EventOperation, operation_id)
+                lambda session: session.get(EventOperation, (tournament_id, operation_id))
             )
             if existing is not None:
                 if existing.command_type != "match_state.replace.v1":

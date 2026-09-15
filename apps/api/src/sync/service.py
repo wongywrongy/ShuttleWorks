@@ -1939,7 +1939,7 @@ def ingest_batch(
             session.commit()
             raise ProtocolError(409, "operation_id_collision", "Operation ID has conflicting sequence")
         if operation.sequence < expected:
-            archived = session.get(EventOperation, operation.operation_id)
+            archived = session.get(EventOperation, (tournament_id, operation.operation_id))
             if archived is not None:
                 duplicates += 1
                 continue

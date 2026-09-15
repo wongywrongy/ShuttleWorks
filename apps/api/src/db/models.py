@@ -51,6 +51,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     MetaData,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -882,7 +883,13 @@ class EventOperation(Base):
 
     __tablename__ = "event_operations"
 
-    operation_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    # The key is COMPOSITE, and deliberately so. ``operation_id`` is minted by
+    # the client and replayed by the client, so it must stay the id the client
+    # sent; but an id is only ever meaningful inside the tenant that burned it.
+    # With a global key, a second tenant reusing an id another tenant already
+    # used was silently answered as a replay and its command never ran. The
+    # tenant is therefore part of the identity, not a column beside it.
+    operation_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
     )
@@ -905,6 +912,9 @@ class EventOperation(Base):
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
     __table_args__ = (
+        # Tenant first, so ``session.get(EventOperation, (tournament_id,
+        # operation_id))`` reads in the order the identity is spoken.
+        PrimaryKeyConstraint("tournament_id", "operation_id"),
         UniqueConstraint(
             "tournament_id",
             "authority_epoch",
@@ -957,11 +967,11 @@ class SyncOutbox(Base):
 
     __tablename__ = "sync_outbox"
 
-    operation_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("event_operations.operation_id", ondelete="CASCADE"),
-        primary_key=True,
-    )
+    # Inherits its parent's composite identity rather than restating a global
+    # one: the outbox row belongs to exactly one operation, and an operation is
+    # identified by ``(tournament_id, operation_id)``.
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    operation_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     next_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -974,6 +984,12 @@ class SyncOutbox(Base):
     )
 
     __table_args__ = (
+        PrimaryKeyConstraint("tournament_id", "operation_id"),
+        ForeignKeyConstraint(
+            ["tournament_id", "operation_id"],
+            ["event_operations.tournament_id", "event_operations.operation_id"],
+            ondelete="CASCADE",
+        ),
         Index(
             "ix_sync_outbox_pending",
             "acknowledged_at",

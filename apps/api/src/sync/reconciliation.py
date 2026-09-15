@@ -90,7 +90,7 @@ def resolve_quarantine(
         return quarantine
     if not reason.strip():
         raise ProtocolError(422, "correction_required", "A reconciliation reason is required")
-    operation = session.get(EventOperation, correction_operation_id)
+    operation = session.get(EventOperation, (tournament_id, correction_operation_id))
     receipt = session.get(SyncInbox, correction_operation_id)
     if (
         operation is None
@@ -140,7 +140,11 @@ def latest_authority_status(session: Session, tournament_id: uuid.UUID):
     pending, oldest = session.execute(
         select(func.count(), func.min(SyncOutbox.created_at))
         .select_from(SyncOutbox)
-        .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
+        .join(
+            EventOperation,
+            (EventOperation.tournament_id == SyncOutbox.tournament_id)
+            & (EventOperation.operation_id == SyncOutbox.operation_id),
+        )
         .where(
             EventOperation.tournament_id == tournament_id,
             EventOperation.authority_epoch == authority.epoch,
@@ -151,7 +155,11 @@ def latest_authority_status(session: Session, tournament_id: uuid.UUID):
     blocked = session.scalar(
         select(func.count())
         .select_from(SyncOutbox)
-        .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
+        .join(
+            EventOperation,
+            (EventOperation.tournament_id == SyncOutbox.tournament_id)
+            & (EventOperation.operation_id == SyncOutbox.operation_id),
+        )
         .where(
             EventOperation.tournament_id == tournament_id,
             EventOperation.authority_epoch == authority.epoch,
@@ -161,7 +169,11 @@ def latest_authority_status(session: Session, tournament_id: uuid.UUID):
     )
     blocked_error = session.scalar(
         select(SyncOutbox.last_error_code)
-        .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
+        .join(
+            EventOperation,
+            (EventOperation.tournament_id == SyncOutbox.tournament_id)
+            & (EventOperation.operation_id == SyncOutbox.operation_id),
+        )
         .where(
             EventOperation.tournament_id == tournament_id,
             EventOperation.authority_epoch == authority.epoch,
@@ -178,7 +190,11 @@ def latest_authority_status(session: Session, tournament_id: uuid.UUID):
     acknowledged = session.scalar(
         select(func.count())
         .select_from(SyncOutbox)
-        .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
+        .join(
+            EventOperation,
+            (EventOperation.tournament_id == SyncOutbox.tournament_id)
+            & (EventOperation.operation_id == SyncOutbox.operation_id),
+        )
         .where(
             EventOperation.tournament_id == tournament_id,
             SyncOutbox.acknowledged_at.is_not(None),

@@ -138,7 +138,7 @@ def test_event_node_update_commits_normalized_rows_and_outbox_together(monkeypat
     assert operation is not None
     assert operation.command_type == "match_state.update.v1"
     assert operation.expected_version == 0
-    assert session.get(SyncOutbox, operation.operation_id) is not None
+    assert session.get(SyncOutbox, (tournament_id, operation.operation_id)) is not None
 
 
 def test_match_state_rollback_removes_both_rows_and_operation(monkeypatch, tmp_path) -> None:
@@ -384,7 +384,7 @@ def test_reset_all_is_atomic_retry_safe_and_records_exact_affected_set(
         ("m1", "scheduled", 2),
         ("m2", "scheduled", 3),
     ]
-    operation = session.get(EventOperation, command_id)
+    operation = session.get(EventOperation, (tournament_id, command_id))
     assert operation.payload == {
         "clearedStateCount": 2,
         "affectedMatches": [
@@ -393,7 +393,7 @@ def test_reset_all_is_atomic_retry_safe_and_records_exact_affected_set(
         ],
     }
     assert session.query(EventOperation).count() == 1
-    assert session.get(SyncOutbox, command_id) is not None
+    assert session.get(SyncOutbox, (tournament_id, command_id)) is not None
 
 
 def test_reset_all_rolls_back_states_and_canonical_matches_when_append_fails(

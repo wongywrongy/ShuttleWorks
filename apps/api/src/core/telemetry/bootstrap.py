@@ -352,7 +352,11 @@ class TelemetryRuntime:
                                 ),
                             )
                             .select_from(SyncOutbox)
-                            .join(EventOperation, EventOperation.operation_id == SyncOutbox.operation_id)
+                            .join(
+                                EventOperation,
+                                (EventOperation.tournament_id == SyncOutbox.tournament_id)
+                                & (EventOperation.operation_id == SyncOutbox.operation_id),
+                            )
                             .where(SyncOutbox.acknowledged_at.is_(None))
                         ).one()
                     value = (

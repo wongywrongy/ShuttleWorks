@@ -203,12 +203,13 @@ def test_tournament_child_foreign_keys_preserve_scope(migrated):
             pairs = set(zip(fk["constrained_columns"], fk["referred_columns"]))
             if ("tournament_id", "tournament_id") not in pairs:
                 exceptions.add((table, tuple(fk["constrained_columns"]), parent))
-    assert exceptions == {("sync_outbox", ("operation_id",), "event_operations")}
-    # Adding independently scoped data requires replacing this exception with
-    # an explicit composite reference, even if that addition is nullable.
+    # 0011 retired the last exception: the outbox now references its parent by
+    # the parent's whole (tenant, operation) key, so every child reference in
+    # the schema carries tenancy.
+    assert exceptions == set()
     assert columns["sync_outbox"] == {
-        "operation_id", "attempt_count", "next_attempt_at", "acknowledged_at",
-        "permanently_blocked_at", "last_error_code", "created_at",
+        "tournament_id", "operation_id", "attempt_count", "next_attempt_at",
+        "acknowledged_at", "permanently_blocked_at", "last_error_code", "created_at",
     }
     assert len(inspector.get_foreign_keys("sync_outbox")) == 1
 
@@ -219,7 +220,11 @@ def test_outbox_inherits_one_parent_and_cascades_only_that_tenant(migrated):
     from db.models import EventOperation, SyncOutbox, Tournament, TournamentAuthority
 
     tenants = [uuid.uuid4(), uuid.uuid4()]
-    operations = [uuid.uuid4(), uuid.uuid4()]
+    # ONE id, both tenants: since 0011 the operation key is
+    # ``(tournament_id, operation_id)``, so an id is only ever spent inside the
+    # workspace that spent it.
+    shared_operation = uuid.uuid4()
+    operations = [shared_operation, shared_operation]
     with migrated.begin() as conn:
         for tenant, operation in zip(tenants, operations):
             conn.execute(Tournament.__table__.insert().values(id=tenant, name="Outbox ownership"))
@@ -235,18 +240,26 @@ def test_outbox_inherits_one_parent_and_cascades_only_that_tenant(migrated):
                 aggregate_id="match-1", payload={}, schema_version=1,
                 occurred_at_local=datetime.now(timezone.utc),
             ))
-            conn.execute(SyncOutbox.__table__.insert().values(operation_id=operation))
+            conn.execute(SyncOutbox.__table__.insert().values(
+                tournament_id=tenant, operation_id=operation,
+            ))
         for tenant, operation in zip(tenants, operations):
             query = sa.select(SyncOutbox.operation_id).join(
-                EventOperation, SyncOutbox.operation_id == EventOperation.operation_id,
+                EventOperation,
+                (SyncOutbox.tournament_id == EventOperation.tournament_id)
+                & (SyncOutbox.operation_id == EventOperation.operation_id),
             ).where(EventOperation.tournament_id == tenant)
             assert conn.execute(query).scalars().all() == [operation]
 
     with pytest.raises(sa.exc.IntegrityError, match="(?i)foreign key"), migrated.begin() as conn:
-        conn.execute(SyncOutbox.__table__.insert().values(operation_id=uuid.uuid4()))
+        conn.execute(SyncOutbox.__table__.insert().values(
+            tournament_id=tenants[0], operation_id=uuid.uuid4(),
+        ))
     with migrated.begin() as conn:
         conn.execute(sa.delete(Tournament).where(Tournament.id == tenants[0]))
-        assert conn.execute(sa.select(SyncOutbox.operation_id)).scalars().all() == [operations[1]]
+        assert conn.execute(
+            sa.select(SyncOutbox.tournament_id)
+        ).scalars().all() == [tenants[1]]
 
 
 @pytest.mark.parametrize(

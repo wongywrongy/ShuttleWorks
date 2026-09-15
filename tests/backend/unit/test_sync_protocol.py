@@ -152,8 +152,8 @@ def test_local_operation_and_outbox_share_the_callers_transaction() -> None:
     operation_id = operation.operation_id
     session.rollback()
 
-    assert session.get(EventOperation, operation_id) is None
-    assert session.get(SyncOutbox, operation_id) is None
+    assert session.get(EventOperation, (tournament_id, operation_id)) is None
+    assert session.get(SyncOutbox, (tournament_id, operation_id)) is None
 
 
 def test_sequences_are_epoch_local_and_strictly_increasing() -> None:

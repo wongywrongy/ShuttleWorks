@@ -108,7 +108,7 @@ def test_assignment_commits_both_projections_operation_and_outbox(monkeypatch) -
     )
 
     match = session.get(Match, (tournament_id, "m1"))
-    operation = session.get(EventOperation, command_id)
+    operation = session.get(EventOperation, (tournament_id, command_id))
     assert session.get(Tournament, tournament_id).data["assignment"] == {
         "courtId": 3,
         "slotId": 9,
@@ -116,7 +116,7 @@ def test_assignment_commits_both_projections_operation_and_outbox(monkeypatch) -
     assert (match.court_id, match.time_slot) == (3, 9)
     assert operation.command_type == "bracket.assignment.v1"
     assert operation.payload == {"action": "assign", "courtId": 3, "slotId": 9}
-    assert session.get(SyncOutbox, command_id) is not None
+    assert session.get(SyncOutbox, (tournament_id, command_id)) is not None
 
 
 def test_assignment_rolls_every_database_surface_back_on_append_failure(

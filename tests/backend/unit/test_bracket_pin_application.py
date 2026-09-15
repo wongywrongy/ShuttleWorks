@@ -122,12 +122,12 @@ def test_pin_persists_snapshot_operation_and_outbox_atomically(monkeypatch):
         command_id=command_id,
     )
 
-    operation = db.get(EventOperation, command_id)
+    operation = db.get(EventOperation, (tournament_id, command_id))
     assert outcome.replay is False
     assert operation is not None
     assert operation.command_type == "bracket.pin.v1"
     assert operation.payload["bracketSnapshot"]["assignments"]
-    assert db.get(SyncOutbox, command_id) is not None
+    assert db.get(SyncOutbox, (tournament_id, command_id)) is not None
     assert db.get(Tournament, tournament_id).data["pinned"][0]["slot_id"] == 9
     assert str(command_id) in state.applied_command_ids
 
