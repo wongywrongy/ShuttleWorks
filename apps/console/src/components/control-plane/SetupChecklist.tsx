@@ -20,6 +20,12 @@ interface Props {
   /** Invoked with the step's target segment. Omitted in `compact`. */
   onAction?: (segment: AppTab) => void;
   testId?: string;
+  /** Render labels exactly as given. The default title-cases them, because
+   *  `signals.setup` keys arrive as machine words ("roster", "bracketBuilt")
+   *  and `setupLabel` only splits them. A caller that writes its own copy —
+   *  the readiness checklist does — has already chosen its case, and the
+   *  transform would turn "Courts assigned" into "Courts Assigned". */
+  preserveLabelCase?: boolean;
 }
 
 /** State icon: done → filled check; blocked → hollow muted; actionable →
@@ -48,7 +54,13 @@ function StepIcon({ step }: { step: ChecklistStep }) {
   );
 }
 
-export function SetupChecklist({ steps, variant = 'full', onAction, testId }: Props) {
+export function SetupChecklist({
+  steps,
+  variant = 'full',
+  onAction,
+  testId,
+  preserveLabelCase = false,
+}: Props) {
   if (steps.length === 0) return null;
   const compact = variant === 'compact';
 
@@ -74,7 +86,8 @@ export function SetupChecklist({ steps, variant = 'full', onAction, testId }: Pr
           <div className="min-w-0 flex-1">
             <span
               className={[
-                'block capitalize',
+                'block',
+                preserveLabelCase ? '' : 'capitalize',
                 compact ? 'text-xs' : 'text-sm',
                 step.done ? '' : step.blocked ? '' : 'font-medium',
               ].join(' ')}

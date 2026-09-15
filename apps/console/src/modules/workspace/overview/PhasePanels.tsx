@@ -17,7 +17,10 @@ import type { AppTab } from '../../../store/uiStore';
 import type { EventProgressDTO, TournamentSummaryDTO } from '../../../api/dto';
 import type { WorkspacePhase } from '../../../platform/domain/lifecycle';
 import type { ChecklistStep } from '../../../platform/domain/setupChecklist';
-import { checklistProgress } from '../../../platform/domain/setupChecklist';
+import {
+  buildReadinessChecklist,
+  checklistProgress,
+} from '../../../platform/domain/setupChecklist';
 import { SetupChecklist } from '../../../components/control-plane/SetupChecklist';
 import { NextUpList } from '../../../components/control-plane/NextUpList';
 import { EYEBROW_CLASS, TEXT_MUTED_SM } from '../../../lib/utils';
@@ -161,7 +164,10 @@ function EventProgress({ events }: { events: EventProgressDTO[] }) {
               data-testid={`overview-event-${event.code}`}
               className="flex items-center gap-3 py-2"
             >
-              <span className="w-28 shrink-0 truncate text-sm font-medium text-foreground">
+              {/* Wraps rather than clips: two events can share a prefix, and
+                  a hidden character is the difference between them
+                  (truncationContract). */}
+              <span className="w-28 shrink-0 break-words text-sm font-medium text-foreground">
                 {event.label || event.code}
               </span>
               <Meter
@@ -270,10 +276,37 @@ function ReadyPanel({ summary, steps, onNavigate }: PanelProps) {
   const seg = segments(summary.kind);
   const m = summary.signals?.matches;
   const first = summary.signals?.nextUp?.[0];
+  const readiness = buildReadinessChecklist(summary);
+  const readinessProgress = checklistProgress(readiness);
   return (
     <section className="space-y-5">
       <ReadySummary steps={steps} />
       <PlanNotFinalized summary={summary} onNavigate={onNavigate} />
+      {/* D16: by READY the setup steps are history and the question is
+          whether the DAY is ready — a draw, courts and times on every match,
+          the draw public, entries shut. Each incomplete row carries the
+          surface that fixes it, the same grammar the setup checklist uses. */}
+      {readiness.length > 0 ? (
+        <div>
+          <div className="mb-1 flex items-baseline justify-between">
+            <SectionLabel>Ready to run</SectionLabel>
+            {readinessProgress ? (
+              <span data-testid="overview-readiness-progress" className="text-2xs text-text-muted">
+                <span className="sw-num">
+                  {readinessProgress.ready} of {readinessProgress.total}
+                </span>{' '}
+                checks passed
+              </span>
+            ) : null}
+          </div>
+          <SetupChecklist
+            steps={readiness}
+            onAction={onNavigate}
+            preserveLabelCase
+            testId="overview-readiness"
+          />
+        </div>
+      ) : null}
       <div>
         <SectionLabel>Schedule</SectionLabel>
         <Figures

@@ -206,6 +206,78 @@ describe('PhasePanels — Live court occupancy and per-event progress (D16)', ()
   });
 });
 
+// D16: READY owes a readiness checklist whose every incomplete row links to
+// the surface that fixes it.
+describe('PhasePanels — Ready readiness checklist (D16)', () => {
+  const readySignals = (over: object = {}) => ({
+    health: 'good' as const,
+    attention: [],
+    modules: { enabled: 1, available: 1, disabled: 0, comingSoon: 0 },
+    setup: { scheduled: true },
+    collaboration: { memberCount: 0, activeInviteCount: 0 },
+    phase: 'ready' as const,
+    planFinalized: true,
+    matches: { total: 6, scheduled: 4, toDo: 0 },
+    ...over,
+  });
+
+  it('lists each check and routes an incomplete one to its surface', () => {
+    const onNavigate = vi.fn();
+    render(
+      <PhasePanels
+        phase="ready"
+        summary={summary({ signals: readySignals() } as Partial<TournamentSummaryDTO>)}
+        steps={[]}
+        onNavigate={onNavigate}
+      />,
+    );
+    const list = screen.getByTestId('overview-readiness');
+    expect(list).toHaveTextContent('Schedule generated');
+    expect(list).toHaveTextContent('Courts assigned');
+    expect(list).toHaveTextContent('4 of 6 matches have a court and a time');
+    expect(screen.getByTestId('overview-readiness-progress')).toHaveTextContent(
+      '1 of 2 checks passed',
+    );
+    screen.getByTestId('setup-action-courts').click();
+    expect(onNavigate).toHaveBeenCalledWith('schedule');
+  });
+
+  it('adds the publication and entries checks where there is an entry page', () => {
+    const onNavigate = vi.fn();
+    render(
+      <PhasePanels
+        phase="ready"
+        summary={summary({
+          signals: readySignals({
+            matches: { total: 6, scheduled: 6, toDo: 0 },
+            entries: {
+              total: 4, pending: 0, waitlisted: 0, confirmed: 4, uncommitted: 0,
+              closed: true, drawsPublished: false,
+            },
+          }),
+        } as Partial<TournamentSummaryDTO>)}
+        steps={[]}
+        onNavigate={onNavigate}
+      />,
+    );
+    const list = screen.getByTestId('overview-readiness');
+    expect(list).toHaveTextContent('Draw published');
+    expect(list).toHaveTextContent('Entries closed');
+    screen.getByTestId('setup-action-publication').click();
+    expect(onNavigate).toHaveBeenCalledWith('ws-sharing');
+    expect(screen.getByTestId('overview-readiness-progress')).toHaveTextContent(
+      '3 of 4 checks passed',
+    );
+  });
+
+  it('renders no checklist at all on a payload with no signals', () => {
+    render(
+      <PhasePanels phase="ready" summary={summary()} steps={[]} onNavigate={() => {}} />,
+    );
+    expect(screen.queryByTestId('overview-readiness')).toBeNull();
+  });
+});
+
 // P2: "Plan not finalized · Open Plan" is the workspace's NEXT ACTION on the
 // Overview, not a status pill in the Live day header. Until the plan is marked
 // ready nothing is late and the floor has no authority behind it.

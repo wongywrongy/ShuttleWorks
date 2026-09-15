@@ -153,6 +153,95 @@ export function buildChecklist(summary: TournamentSummaryDTO | null): ChecklistS
   });
 }
 
+/**
+ * The READY-phase readiness checklist (debt-log D16).
+ *
+ * A different question from `buildChecklist`, which asks "is this workspace
+ * configured": by `ready` the setup steps are behind the operator and what
+ * is owed is "is the day actually ready to run" — is there a draw, does
+ * every match have a court and a time, is the draw public, are entries shut.
+ *
+ * Every row is a fact the server already computed, and every incomplete row
+ * carries the surface that fixes it. Rows are INDEPENDENT, not a sequence,
+ * so nothing is `blocked`: publishing a draw does not wait on entries
+ * closing, and quieting one behind the other would hide a real gap.
+ *
+ * The two entry-page rows appear only where there IS an entry page
+ * (`signals.entries`), the same sparseness the entries phases have — a
+ * local-mode workspace has nothing to publish and no window to close.
+ */
+export function buildReadinessChecklist(
+  summary: TournamentSummaryDTO | null,
+): ChecklistStep[] {
+  const signals = summary?.signals;
+  if (!summary || !signals) return [];
+
+  const br = summary.kind === 'bracket';
+  const setup = signals.setup ?? {};
+  const matches = signals.matches;
+  const entries = signals.entries;
+
+  const step = (
+    key: string,
+    label: string,
+    done: boolean,
+    reason: string | null,
+    action: ChecklistAction,
+  ): ChecklistStep => ({
+    key,
+    label,
+    done,
+    reason: done ? null : reason,
+    action: done ? null : action,
+    blocked: false,
+  });
+
+  const total = matches?.total ?? 0;
+  const scheduled = matches?.scheduled ?? 0;
+  const steps: ChecklistStep[] = [
+    step(
+      'draws',
+      br ? 'Draws generated' : 'Schedule generated',
+      Boolean(br ? setup.bracketBuilt : setup.scheduled),
+      br ? 'No draw has been generated yet' : 'No schedule has been generated yet',
+      {
+        label: br ? 'Build the bracket' : 'Generate schedule',
+        segment: br ? 'bracket-draws' : 'schedule',
+      },
+    ),
+    step(
+      'courts',
+      'Courts assigned',
+      total > 0 && scheduled >= total,
+      total > 0
+        ? `${scheduled} of ${total} matches have a court and a time`
+        : 'There are no matches to assign yet',
+      { label: 'Open the plan', segment: br ? 'bracket-schedule' : 'schedule' },
+    ),
+  ];
+
+  if (entries) {
+    steps.push(
+      step(
+        'publication',
+        'Draw published',
+        Boolean(entries.drawsPublished),
+        'The draw is not visible on the entry page yet',
+        { label: 'Open publication settings', segment: 'ws-sharing' },
+      ),
+      step(
+        'entriesClosed',
+        'Entries closed',
+        Boolean(entries.closed),
+        'At least one event is still taking entries',
+        { label: 'Open the entries desk', segment: 'entries' },
+      ),
+    );
+  }
+
+  return steps;
+}
+
 /** ready / total over the merged list; null when there are no steps. */
 export function checklistProgress(
   steps: readonly ChecklistStep[],
