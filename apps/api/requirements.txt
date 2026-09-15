@@ -1,8 +1,8 @@
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
-python-dotenv>=1.0.0
+pydantic>=2.13.5
+pydantic-settings>=2.15.0
+python-dotenv>=1.2.3
 # Exact pin: CP-SAT results are only reproducible within a single solver
 # version, and determinism is a product guarantee (SP-CLOUD-1 Rule 5e).
 # Bumping this requires re-running the determinism e2e test and accepting
@@ -18,7 +18,7 @@ alembic>=1.13.0
 psycopg[binary]>=3.2
 # Argon2id password hashing (RFC 9106 / OWASP-recommended KDF) for the
 # self-hosted account system (SP-CLOUD-2).
-argon2-cffi>=23.1
+argon2-cffi>=25.1.0
 # Authenticated encryption for portable event-node recovery bundles.
 cryptography>=44.0
 
