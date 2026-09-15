@@ -115,6 +115,7 @@ class MatchStateDTO(StrictIgnoringModel):
     actualStartTime: Optional[Timestamp] = None  # ISO-8601 UTC
     actualEndTime: Optional[Timestamp] = None  # ISO-8601 UTC
     score: Optional[MatchScore] = None
+    sets: Optional[list[MatchScore]] = Field(None, max_length=5)
     notes: Optional[Notes] = None
     updatedAt: Optional[Timestamp] = None
     originalSlotId: Optional[int] = Field(None, ge=0, le=MAX_SLOT_INDEX)
@@ -150,6 +151,7 @@ def _dto_to_fields(update: MatchStateDTO) -> dict:
         "notes": update.notes,
         "original_slot_id": update.originalSlotId,
         "original_court_id": update.originalCourtId,
+        "set_scores": [score.model_dump() for score in update.sets] if update.sets is not None else None,
     }
     if update.score is not None:
         fields["score_side_a"] = update.score.sideA
@@ -177,6 +179,7 @@ def row_to_dto(row: MatchState) -> MatchStateDTO:
         actualStartTime=row.actual_start_time,
         actualEndTime=row.actual_end_time,
         score=score,
+        sets=row.set_scores,
         notes=row.notes,
         updatedAt=row.updated_at.isoformat() if row.updated_at else None,
         originalSlotId=row.original_slot_id,

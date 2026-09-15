@@ -146,6 +146,7 @@ BLOB_VERSIONS: dict[str, Optional[int]] = {
     "bracket_matches.meta": None,  # same
     "submissions.fee_basis": None,  # money provenance kept for disputes
     "bracket_results.score": None,  # Result; ADR 0006 forbids reshaping it here
+    "match_states.set_scores": None,  # Meet game scores, [{sideA, sideB}] <= 5; shape bounded by MatchStateDTO.sets (D19)
     # -- not yet needed by any phase -----------------------------------
     "tournament_backups.snapshot": None,  # see the recorded edge above
     "commands.payload": None,  # operator command args
