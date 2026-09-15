@@ -419,4 +419,61 @@ describe("Schedule / Live", () => {
     expect(empty).toContain("No matches found");
     expect(empty).toContain("Clear filters");
   });
+
+  it("names events in the filter with the tier's own vocabulary (B-5)", async () => {
+    // The organiser's freeform `discipline` used to win, and on real data it
+    // carried the storage slug — so the filter offered "mens_doubles_final"
+    // where every other surface says "Men's doubles". The fixture spells it
+    // "Men's Singles"; the canonical map spells it "Men's singles", so this
+    // reddens if the organiser's string is preferred again.
+    const html = await render();
+    expect(html).toMatch(/<option value="MS">Men&#x27;s singles<\/option>/);
+    expect(html).not.toContain(">Men&#x27;s Singles</option>");
+  });
+
+  it("keeps an organiser's own wording for an event the map does not cover", async () => {
+    // The canonical label exists for the five standard disciplines. Anything
+    // else — a plate, a veterans' grade, a club's own bracket — has no
+    // canonical name, and the organiser's is the only one anyone can say.
+    const html = await render("/e/spring-open/schedule", {
+      ...MATCHES,
+      facets: { ...MATCHES.facets, events: ["MS", "U15B"] },
+    });
+    expect(html).toContain('<option value="U15B">');
+  });
+
+  it("gives every filter a visible label, not only an accessible one (B-20)", async () => {
+    // The labels were real `<label for>` elements held `sr-only`, so the
+    // only visible text was the current option: "All events" reads as a
+    // heading and "Court 3" reads as a fact, and neither says what changing
+    // it would do.
+    const html = await render();
+    for (const [id, text] of [
+      ["schedule-event", "Event"],
+      ["schedule-court", "Court"],
+      ["schedule-state", "Status"],
+    ]) {
+      const label = new RegExp(`<label[^>]*for="${id}"[^>]*>${text}</label>`).exec(html);
+      expect(label, `${id} has no label`).not.toBeNull();
+      expect(label![0]).not.toContain("sr-only");
+    }
+  });
+
+  it("offers numbered pages, not only Next (B-19)", async () => {
+    const html = await render("/e/spring-open/schedule?page=3", {
+      ...MATCHES,
+      page: 3,
+      pageSize: 1,
+      total: 7,
+    });
+
+    // The current page is stated, not linked to itself.
+    expect(html).toMatch(/aria-current="page"[^>]*>3</);
+    // …and its neighbours plus the ends are one click away.
+    for (const page of [1, 2, 4, 5, 7]) {
+      expect(html, `page ${page} is not linked`).toContain(`aria-label="Page ${page} of 7"`);
+    }
+    expect(html).toContain("Previous");
+    expect(html).toContain("Next");
+  });
 });

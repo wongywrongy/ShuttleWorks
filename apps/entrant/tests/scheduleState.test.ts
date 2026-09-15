@@ -12,6 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { MatchCard } from "../app/components/MatchCard";
+import { pageNumbers } from "../app/routes/schedule";
 import {
   schedulePublicState,
   schedulePublicStateLabel,
@@ -121,5 +122,61 @@ describe("MatchCard schedule rendering — no placeholder apology", () => {
     );
     expect(html).toContain("Called");
     expect(html).not.toContain("Live now");
+  });
+});
+
+// ---- B-19: the numbered page window ---------------------------------------
+
+describe("pageNumbers", () => {
+  it("renders nothing at all for a single page", () => {
+    // A paginator for one page is furniture.
+    expect(pageNumbers(1, 1)).toEqual([]);
+    expect(pageNumbers(1, 0)).toEqual([]);
+  });
+
+  it("lists every page contiguously while they fit the window", () => {
+    expect(pageNumbers(1, 5).map((entry) => entry.page)).toEqual([1, 2, 3, 4, 5]);
+    expect(pageNumbers(1, 5).some((entry) => entry.gapBefore)).toBe(false);
+  });
+
+  it("keeps first, last and the current page with two either side", () => {
+    expect(pageNumbers(10, 40).map((entry) => entry.page)).toEqual([
+      1, 8, 9, 10, 11, 12, 40,
+    ]);
+  });
+
+  it("clamps the run at the ends rather than shrinking it", () => {
+    // `current ± 2` trimmed at the edge gave "1 2 3 | 40" on page one — a
+    // gap mark whose whole job was hiding pages 4 and 5.
+    expect(pageNumbers(1, 40).map((entry) => entry.page)).toEqual([1, 2, 3, 4, 5, 40]);
+    expect(pageNumbers(40, 40).map((entry) => entry.page)).toEqual([
+      1, 36, 37, 38, 39, 40,
+    ]);
+  });
+
+  it("marks exactly the entries that do not follow their predecessor", () => {
+    // The mark is drawn as a rule rather than an ellipsis: this tier's
+    // no-truncation contract bans the character, and a page list is not a
+    // value somebody cut.
+    expect(
+      pageNumbers(10, 40)
+        .filter((entry) => entry.gapBefore)
+        .map((entry) => entry.page),
+    ).toEqual([8, 40]);
+  });
+
+  it("stays bounded however many pages there are", () => {
+    // The whole point: a seven-page day and a seven-hundred-page one render
+    // the same amount of chrome, so the row never wraps on a phone.
+    expect(pageNumbers(350, 700).length).toBeLessThanOrEqual(7);
+    expect(pageNumbers(1, 700).length).toBeLessThanOrEqual(7);
+    expect(pageNumbers(700, 700).length).toBeLessThanOrEqual(7);
+  });
+
+  it("never names a page outside the range", () => {
+    for (const entry of pageNumbers(1, 3)) {
+      expect(entry.page).toBeGreaterThanOrEqual(1);
+      expect(entry.page).toBeLessThanOrEqual(3);
+    }
   });
 });
