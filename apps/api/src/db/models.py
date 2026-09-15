@@ -2495,11 +2495,18 @@ class CompetitionEvent(Base):
     level: Mapped[Optional[str]] = mapped_column(String(40))
     bracket_event_id: Mapped[Optional[str]] = mapped_column(String(100))
     meet_event_id: Mapped[Optional[str]] = mapped_column(String(40))
+    # S-3 (migration 0010). The other four competition tables carried a status
+    # and a CHECK; the event carried neither, so "has this event started" had
+    # to be re-derived from its draw every time somebody asked.
+    status: Mapped[str] = mapped_column(String(20), default="scheduled", server_default="scheduled", nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
     __mapper_args__ = {"version_id_col": version}
-    __table_args__ = (UniqueConstraint("tournament_id", "category_code"),)
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "category_code"),
+        CheckConstraint("status IN ('scheduled', 'in_progress', 'completed')", name="ck_competition_events_status"),
+    )
 
 
 class CompetitionUnit(Base):
