@@ -200,13 +200,22 @@ export function EventPicker(props: EventPickerProps) {
         >
           {option.code}
         </span>
+        {/* The whitespace text nodes are for the accessible name: adjacent
+            inline spans concatenate ("MS25 entries"), and a flex row does
+            not render whitespace-only text. */}
         {option.name ? (
-          <span className="min-w-0 break-words text-foreground">{option.name}</span>
+          <>
+            {' '}
+            <span className="min-w-0 break-words text-foreground">{option.name}</span>
+          </>
         ) : null}
         {option.meta != null || option.occupiedBy != null ? (
-          <span className="ml-auto shrink-0 pl-2 text-xs text-muted-foreground">
-            {option.meta ?? option.occupiedBy}
-          </span>
+          <>
+            {' '}
+            <span className="ml-auto shrink-0 pl-2 text-xs text-muted-foreground">
+              {option.meta ?? option.occupiedBy}
+            </span>
+          </>
         ) : null}
       </label>
     );

@@ -157,7 +157,7 @@ export function LoginPage({ locked = false }: { locked?: boolean } = {}) {
           <div>
             <h1 className="type-display flex items-center gap-2.5 text-2xl">
               <SwMonogram />
-              {BRAND.productName}
+              {BRAND.productName}{' '}
               <span className="text-xs font-medium text-muted-foreground">{BRAND.endorsement}</span>
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Choose a new password</p>
@@ -275,7 +275,7 @@ export function LoginPage({ locked = false }: { locked?: boolean } = {}) {
         <div>
           <h1 className="type-display flex items-center gap-2.5 text-2xl">
             <SwMonogram />
-            {BRAND.productName}
+            {BRAND.productName}{' '}
             <span className="text-xs font-medium text-muted-foreground">{BRAND.endorsement}</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
