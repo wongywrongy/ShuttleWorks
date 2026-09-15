@@ -14,7 +14,7 @@
 import type { ReactNode } from 'react';
 import { Button } from '@scheduler/design-system';
 import type { AppTab } from '../../../store/uiStore';
-import type { TournamentSummaryDTO } from '../../../api/dto';
+import type { EventProgressDTO, TournamentSummaryDTO } from '../../../api/dto';
 import type { WorkspacePhase } from '../../../platform/domain/lifecycle';
 import type { ChecklistStep } from '../../../platform/domain/setupChecklist';
 import { checklistProgress } from '../../../platform/domain/setupChecklist';
@@ -56,6 +56,131 @@ function Figures({ items }: { items: { value: number | string; label: string }[]
         </div>
       ))}
     </dl>
+  );
+}
+
+/** A proportion bar. `label` is the accessible name — the bar is never the
+ *  only statement of the number it draws, but a progressbar with no name is
+ *  unreadable to anyone not looking at it. */
+function Meter({
+  value,
+  max,
+  label,
+  testId,
+  tone = 'bg-status-success-fg',
+  className = '',
+}: {
+  value: number;
+  max: number;
+  label: string;
+  testId?: string;
+  tone?: string;
+  className?: string;
+}) {
+  const safeMax = Math.max(0, max);
+  const safeValue = Math.min(Math.max(0, value), safeMax);
+  const pct = safeMax > 0 ? Math.round((safeValue / safeMax) * 100) : 0;
+  return (
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={safeMax}
+      aria-valuenow={safeValue}
+      data-testid={testId}
+      className={`h-1.5 overflow-hidden rounded-full bg-surface-sunken ${className}`}
+    >
+      <div className={`h-full rounded-full ${tone}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/**
+ * Court occupancy during a live day (debt-log D16).
+ *
+ * The three-value answer the occupancy contract (§4.1) insists on: a court is
+ * in play, free, or disputed, and a disputed court belongs to neither of the
+ * other two. Renders only where the workspace has said how many courts it
+ * has — `courtsFree` is null otherwise, and "0 courts free" would be a lie
+ * about a workspace that simply has not said.
+ */
+function CourtOccupancy({ matches }: { matches: NonNullable<TournamentSummaryDTO['signals']>['matches'] }) {
+  const free = matches?.courtsFree;
+  if (matches == null || free == null) return null;
+  const inPlay = matches.playing ?? 0;
+  const disputed = matches.disputedCourts ?? 0;
+  const total = inPlay + free + disputed;
+  if (total === 0) return null;
+  return (
+    <div data-testid="overview-court-occupancy">
+      <SectionLabel>Courts</SectionLabel>
+      <Figures
+        items={[
+          { value: inPlay, label: 'in play' },
+          { value: free, label: 'free' },
+          ...(disputed > 0 ? [{ value: disputed, label: 'in conflict' }] : []),
+        ]}
+      />
+      <Meter
+        value={inPlay}
+        max={total}
+        label="Courts in play"
+        testId="overview-courts-meter"
+        tone="bg-status-live"
+        className="mt-3 max-w-80"
+      />
+      <p className="mt-2 text-xs text-muted-foreground">
+        <span className="sw-num">
+          {inPlay} of {total}
+        </span>{' '}
+        court{total === 1 ? '' : 's'} in play
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Per-event play-through (debt-log D16).
+ *
+ * The workspace triplet says the day is half done without saying which half;
+ * these rows say which events are finished and which are still running. Every
+ * number is the server's count — the panel derives nothing, so a row can
+ * never disagree with the total above it.
+ */
+function EventProgress({ events }: { events: EventProgressDTO[] }) {
+  if (events.length === 0) return null;
+  return (
+    <div data-testid="overview-event-progress">
+      <SectionLabel>Progress by event</SectionLabel>
+      <ul className="divide-y divide-rule-soft">
+        {events.map((event) => {
+          const remaining = Math.max(0, event.total - event.played);
+          return (
+            <li
+              key={event.code}
+              data-testid={`overview-event-${event.code}`}
+              className="flex items-center gap-3 py-2"
+            >
+              <span className="w-28 shrink-0 truncate text-sm font-medium text-foreground">
+                {event.label || event.code}
+              </span>
+              <Meter
+                value={event.played}
+                max={event.total}
+                label={`${event.label || event.code} matches played`}
+                className="min-w-16 flex-1"
+              />
+              <span className="shrink-0 text-xs text-text-muted">
+                <span className="sw-num">
+                  {event.played} of {event.total}
+                </span>{' '}
+                played{remaining > 0 ? `, ${remaining} to go` : ''}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -182,9 +307,7 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
   // phase reads). Optional on older payloads — the bar simply doesn't render.
   const played = m?.played;
   const showProgress = m != null && played != null && m.total > 0;
-  const pct = showProgress
-    ? Math.round((Math.min(played, m.total) / m.total) * 100)
-    : 0;
+  const events = summary.signals?.events ?? [];
   return (
     <section className="space-y-5">
       <PlanNotFinalized summary={summary} onNavigate={onNavigate} />
@@ -209,29 +332,27 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
           }
         />
         {showProgress ? (
-          <div
-            role="progressbar"
-            aria-label="Matches played"
-            aria-valuemin={0}
-            aria-valuemax={m.total}
-            aria-valuenow={Math.min(played, m.total)}
-            data-testid="overview-played-progress"
-            className="mt-3 h-1.5 max-w-80 overflow-hidden rounded-full bg-surface-sunken"
-          >
-            <div
-              className="h-full rounded-full bg-status-success-fg"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+          <Meter
+            value={played}
+            max={m.total}
+            label="Matches played"
+            testId="overview-played-progress"
+            className="mt-3 max-w-80"
+          />
         ) : null}
         {/* The live line (OV-4, the inspector's mirror): the triplet is
             planning information; what LIVE is asked is "is anything
-            happening, and is a court free". Only while something is.
-            V3-OC19.2/V3-03-3: a disputed court is its own bucket, never
-            folded into "playing" — shown whenever either count is nonzero,
-            so a dispute is never masked just because nothing else is
-            currently on court (contract §4.1: "a tally that cannot show
-            [disputedCourts] must show none of them" — here it always can). */}
+            happening". Only while something is. V3-OC19.2/V3-03-3: a
+            disputed court is its own bucket, never folded into "playing" —
+            shown whenever either count is nonzero, so a dispute is never
+            masked just because nothing else is currently on court (contract
+            §4.1: "a tally that cannot show [disputedCourts] must show none
+            of them" — here it always can).
+
+            The free-court count that used to ride along here moved into the
+            Courts section below (D16), which owns the whole three-value
+            answer and names its denominator; two statements of the same
+            arithmetic on one panel is how they drift. */}
         {(m?.playing ?? 0) > 0 || (m?.disputedCourts ?? 0) > 0 ? (
           <p
             data-testid="overview-live-line"
@@ -240,9 +361,6 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
             <span className="font-medium text-status-live">
               {m?.playing ?? 0} playing matches
             </span>
-            {m?.courtsFree != null
-              ? ` · ${m.courtsFree} court${m.courtsFree === 1 ? '' : 's'} free`
-              : ''}
             {m?.disputedCourts ? (
               <span
                 data-testid="overview-disputed-courts"
@@ -269,6 +387,10 @@ function LivePanel({ summary, onNavigate }: PanelProps) {
           </div>
         ) : null}
       </div>
+      {/* D16: the two things a live day asks after "is anything on court" —
+          which courts are working, and how far each event has got. */}
+      <CourtOccupancy matches={m} />
+      <EventProgress events={events} />
       {/* "Open live day" lives in the page header (G3.1). V3-OC05.1: this
           list is upcoming-only (the backend excludes anything on court from
           `nextUp`, mirroring the meet path) — a match already under way
