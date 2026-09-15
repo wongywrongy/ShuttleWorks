@@ -12,11 +12,15 @@ Authoritative sources this page indexes (all in the repo, all enforced):
 | --- | --- |
 | `packages/design-system/DESIGN.md` | The rulebook: 12 hard styling rules (no raw hex, no stock Tailwind palette, radius and type ladders, accent reservation) |
 | `packages/design-system/DESIGN_COLOR.md` | The two-layer color architecture and the color budget |
-| `packages/design-system/BRAND.md` | Brand voice and the brutalist card/shadow language |
 | `packages/design-system/MOTION.md` | The motion scale (`--motion-*`) and easing vocabulary |
 | ADR 0013 (`docs/explanation/decisions/0013-shared-ui-promotion-policy.md`) | Where shared UI lives and when it moves |
 | ADR 0019 (`docs/explanation/decisions/0019-design-system-consolidation-pass.md`) | The 2026-08 consolidation pass and its recorded deferrals |
-| ADR 0020 (`docs/explanation/decisions/0020-design-language-resolutions.md`) | The design-language rulings: per-tier radius, one status-tone source, EmptyState variants, dialog primaries |
+| ADR 0020 (`docs/explanation/decisions/0020-design-language-resolutions.md`) | The design-language rulings: one status-tone source, EmptyState variants, dialog primaries |
+| ADR 0027 (`docs/explanation/decisions/0027-curated-data-components.md`) | Per-tier/role radius, elevation, Card/StatusPill/Badge/Avatar, the Button construction |
+
+`packages/design-system/BRAND.md` is historical only: it recorded the
+brutalist card/shadow language ADR 0027 superseded (`BRAND.md`:1-3,
+`DESIGN.md`:6-27). It is not an authoritative source for current styling.
 
 ## Token architecture
 
@@ -130,7 +134,7 @@ styles* of the system:
 | Constant | Location | Treatment |
 | --- | --- | --- |
 | `INTERACTIVE_BASE` / `INTERACTIVE_BASE_QUIET` | `apps/console/src/lib/utils.ts` | Click feedback: transition, focus ring, press scale, disabled |
-| `EYEBROW_CLASS` | `packages/design-system/components/textStyles.ts` (re-exported from console `lib/utils.ts`) | The 10px semibold uppercase micro-label (tone appended by caller) |
+| `EYEBROW_CLASS` | `packages/design-system/components/textStyles.ts` (re-exported from console `lib/utils.ts`) | The 12px, weight 600, uppercase, 0.06em-tracked micro-label (tone appended by caller) |
 | `STATUS_TONE` | `packages/design-system/components/statusTone.ts` | Per-part tone→class map (`bg`/`text`/`border`/`dot`) both status registers compose from |
 | `PANEL_RADIUS` | `apps/console/src/lib/utils.ts` | `rounded-sm` — the deliberate console panel radius (ADR 0020) |
 | `TEXT_MUTED_2XS` / `TEXT_MUTED_XS` / `TEXT_MUTED_SM` | same | The secondary-text ladder |

@@ -58,7 +58,11 @@ fixed row height.
 
 Reuse the existing settings sections, labeled fields, and aligned rows for Setup,
 Publish, and administrative property editors. Avoid duplicate headings and added
-indents. Use 6px controls, 8px panels, and 12px overlays; smaller marks can use 4px.
+indents. Radius scales with control height, not with role: the smallest controls
+(`xs`, `icon-sm`, `icon-xs`) take 6px (`rounded-sm`), `sm`/`default`/`icon` take
+8px (`rounded`), and `lg` takes 9px (`rounded-md`) — see `Button.tsx`'s `size`
+variants for the concrete mapping. Panels stay 8px and overlays 12px; smaller
+marks can use 4px.
 
 Shared components contain domain-neutral UI only. Apps own tournament semantics,
 API access, permissions, and navigation. Meet and Bracket share presentation

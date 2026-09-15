@@ -1,7 +1,9 @@
 # 0020 — Design-language resolutions
 
 **Status:** Accepted — 2026-08-31. Supersedes deferral items 1–3 (and the
-dialog subset of item 5) of ADR 0019.
+dialog subset of item 5) of ADR 0019. Decisions 1 and 2 below are
+**partially superseded by [ADR 0027](/explanation/decisions/0027-curated-data-components)**
+(2026-09-04, rulings recorded 2026-09-15).
 
 ## Context
 
@@ -16,18 +18,27 @@ system gains one source of truth without a visual migration.
 1. **Card radius is per-tier, by decision.** The operator console is
    sharp (`rounded-sm` on panels — `PANEL_RADIUS` in
    `apps/console/src/lib/utils.ts`); the public entrant tier is soft
-   (`rounded-lg` — `CARD` in `apps/entrant/app/lib/ui.ts`); the shared
-   `Card` stays square per `packages/design-system/BRAND.md`. In Figma
+   (`rounded-lg` — `CARD` in `apps/entrant/app/lib/ui.ts`); ~~the shared
+   `Card` stays square per `packages/design-system/BRAND.md` ~~. In Figma
    these are two card components, not one with a wrong radius on one
    tier. Adoption of `PANEL_RADIUS` is opportunistic; no sweep.
+
+   **Superseded 2026-09-15 by [ADR 0027](/explanation/decisions/0027-curated-data-components):**
+   the shared `Card` takes the container radius (8px, `rounded`) instead
+   of staying square; `BRAND.md` is no longer authoritative. The per-tier
+   console/entrant radii above are otherwise intact.
 
 2. **Status badges draw one tone palette in two registers.**
    `packages/design-system/components/statusTone.ts` (`STATUS_TONE`) is
    the single tone→class source. `StatusPill` (operator register:
-   uppercase micro-label, `rounded-sm`) and the entrant `StatusChip`
-   (public register: sentence case, `rounded-full`) both compose from it
+   uppercase micro-label, `rounded-sm`) and ~~the entrant `StatusChip`
+   (public register: sentence case, `rounded-full`)~~ both compose from it
    — per-part, in each register's historical order, so rendered strings
    are byte-identical to before and drift is now impossible.
+
+   **Superseded 2026-09-15 by [ADR 0027](/explanation/decisions/0027-curated-data-components):**
+   `StatusPill` and the entrant `StatusChip` are now both `rounded-xs`
+   with no dot; the pill/chip distinction above no longer holds.
 
 3. **EmptyState is one component with three explicit variants.**
    `packages/design-system/components/EmptyState.tsx` renders

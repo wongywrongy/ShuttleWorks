@@ -86,7 +86,7 @@ Locked named tokens. Use these, not raw `ms` values, on every surface:
 | `--motion-fast` | `120ms` | Press feedback, hover-state colour shifts |
 | `--motion-standard` | `200ms` | Toggle thumb, Seg active swap, focus ring fade-in |
 | `--motion-moderate` | `300ms` | Modal/Toast enter, banner mount, success state |
-| `--motion-slow` | `450ms` | Reserved — only solver-theatre + sheen + slide-up. New surfaces don't use this. |
+| `--motion-slow` | `450ms` | Reserved — only solver-theatre + sheen + slide-up, plus the recorded `sw-dock-transition` exception (§10). New surfaces don't use this. |
 
 Reach for the next-fastest tier when in doubt — Emil's "180ms feels more responsive than 400ms."
 
@@ -351,6 +351,10 @@ animation cannot reflow siblings. Scope guards: one instance per surface,
 `prefers-reduced-motion` kills the transition entirely (close is then a
 hard cut with no retention, honoring item 5's intent). Do not cite this
 exception for chrome/decoration — it exists only for the dock geometry.
+
+The entrant `.sw-sweep` animation (formerly `NowStrip.tsx`, a `6s`
+continuous sweep with no named duration token) no longer exists in the
+codebase; it is not a second exception to track here.
 
 ---
 
