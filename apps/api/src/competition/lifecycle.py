@@ -120,3 +120,29 @@ def set_draw_status(session, draw, target: str, *, actor_id=None):
         return None
     return transition(DRAW_INSTANCE, draw, event_between(DRAW_INSTANCE, draw.status, target),
                       session=session, actor_id=actor_id)
+
+
+#: S-8.5. The draw reaching `started` IS the first recorded result: bracket
+#: flips a generated event to `started` on the first result and nowhere else.
+_EVENT_PROGRESS = {"started": ("in_progress", "first_result"),
+                   "completed": ("completed", "complete")}
+
+
+def note_draw_progress(session, event, draw_status: str, *, actor_id=None):
+    """Carry a draw's progress onto its competition event (S-8.5).
+
+    A no-op wherever the move is not available: the event is already there,
+    or it is `completed` and a draw revision moved underneath it. A finished
+    event does not reopen because its draw was touched — that is a director's
+    decision, and the graph has no edge for the software to take it.
+    """
+    mapping = _EVENT_PROGRESS.get(draw_status)
+    if mapping is None:
+        return None
+    target, name = mapping
+    if event.status == target:
+        return None
+    if not any(event.status in t.from_states and t.event == name
+               for t in COMPETITION_EVENT.transitions):
+        return None
+    return transition(COMPETITION_EVENT, event, name, session=session, actor_id=actor_id)

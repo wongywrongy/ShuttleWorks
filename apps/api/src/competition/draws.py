@@ -48,4 +48,5 @@ def record_status(session, tournament_id, bracket_event_id, status, *, config=No
         session.add(current)
     else:
         lifecycle.set_draw_status(session, current, status)
+    lifecycle.note_draw_progress(session, event, status)
     session.flush()
