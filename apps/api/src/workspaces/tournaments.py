@@ -26,7 +26,7 @@ from core.dependencies import (
 from core.config import cloud_modules_enabled
 from core.error_codes import ErrorCode, http_error
 from core.exceptions import ConflictError
-from core.limits import Code, Identifier, StrictModel
+from core.limits import Code, Email, Identifier, Name, Password, StrictModel
 from core.schemas import (
     MeetStandingRowDTO,
     TournamentConfig,
@@ -42,7 +42,8 @@ from db.models import (
 )
 from repositories import LocalRepository, get_repository
 from identity import members as members_service
-from identity.auth import ensure_user_personal_org_id
+from identity.auth import AuthError, ensure_user_personal_org_id
+from identity.auth_routes import auth_error_response
 from operations import conflict_metrics
 from bracket import response_cache
 from shared.court_occupancy import find_planned_clashes
@@ -1457,6 +1458,114 @@ def create_invite_link(
         tournamentId=str(tournament_id),
         role=invite.role,  # type: ignore[arg-type]
         createdAt=invite.created_at.isoformat(),
+    )
+
+
+class OperatorCreateDTO(StrictModel):
+    """Body for ``POST /tournaments/{tournament_id}/operators``.
+
+    The same three fields ``/auth/register`` takes, bounded by the same
+    types — in particular ``Password``, which is capped well above the
+    128-character policy so an over-long value is a clean
+    ``AUTH_WEAK_PASSWORD`` rather than an unbounded string handed to Argon2.
+    """
+    email: Email
+    password: Password
+    displayName: Optional[Name] = None
+
+
+class OperatorCreatedDTO(BaseModel):
+    """The new account, never a session.
+
+    Deliberately no cookie and no token: this route provisions an account for
+    SOMEONE ELSE, who signs in themselves. ``/auth/register`` sets a session
+    because the registrant is the caller; here that would hand the owner a
+    credential for an identity that is not theirs.
+    """
+    id: str
+    email: str
+    displayName: Optional[str] = None
+    createdAt: str
+
+
+@router.post(
+    "/{tournament_id}/operators",
+    response_model=OperatorCreatedDTO,
+    status_code=201,
+    dependencies=[Depends(require_tournament_access("owner", fresh=True))],
+)
+def create_operator_account(
+    body: OperatorCreateDTO,
+    tournament_id: uuid.UUID = Path(...),
+    user: AuthUser = Depends(get_current_user),
+    repo: LocalRepository = Depends(get_repository),
+):
+    """Create another operator account, without the public signup throttle.
+
+    **The gap this closes (D12).** Until now the only way to make an account
+    on a self-hosted instance was public self-service, and that path is
+    throttled at ``REGISTRATION_MAX_PER_IP`` **successful** registrations per
+    IP per hour — deliberately, since SEC-03: account creation itself has to
+    be bounded or an open instance is an open account factory. An admin
+    standing an instance up for six clubs from one office therefore got four
+    accounts and then a five-minute wall with doubling backoff, and there was
+    no other provisioning path at all: no admin route, no CLI, and
+    invite-accept needs an account to already exist. The throttle is not
+    loosened here; this route simply is not the public one.
+
+    **Why the workspace in the path.** An owner is the tightest role the
+    ladder has, and ownership is per workspace — so the workspace is the
+    thing the caller proves they own. The seam is the standard one
+    (``require_tournament_access("owner", fresh=True)``): a non-member, a
+    viewer, an operator and an unknown id all get the identical 404, which
+    is what keeps this route from being an oracle for which workspaces
+    exist. It does NOT add the new account to that workspace — invites do
+    membership, and an admin provisioning accounts for six different clubs
+    does not want five of them in their own workspace. The workspace is the
+    authorization anchor and nothing else.
+
+    ``fresh=True`` requires a recent password + authenticator proof, like
+    ``/auth/mfa/*`` and invite revocation: creating a credential that
+    outlives the session is exactly the class of action a stolen idle
+    session must not be able to perform.
+    """
+    owner_uuid = user.as_uuid()
+    if owner_uuid is None:
+        # The owner dep already resolved the caller; defensive, as in
+        # ``create_invite_link`` above.
+        raise http_error(403, ErrorCode.STATE_CORRUPT, "user id is not a UUID")
+
+    from identity import auth as auth_service
+
+    try:
+        email = auth_service.normalize_email(body.email)
+        auth_service.validate_password(body.password)
+        created = repo.execute_transaction(
+            lambda session: auth_service.create_user(
+                session,
+                email=email,
+                password=body.password,
+                display_name=(body.displayName or "").strip() or None,
+            )
+        )
+    except AuthError as exc:
+        raise auth_error_response(exc)
+
+    # Audit. An account that can be created without the public path leaving a
+    # throttle record needs a record of its own — who provisioned it, for
+    # which identity, and under which workspace's ownership.
+    log.info(
+        "operator account provisioned user=%s email=%s by=%s workspace=%s",
+        created.id,
+        email,
+        owner_uuid,
+        tournament_id,
+    )
+    return OperatorCreatedDTO(
+        id=str(created.id),
+        email=created.email,
+        displayName=created.display_name,
+        createdAt=created.created_at.isoformat(),
     )
 
 

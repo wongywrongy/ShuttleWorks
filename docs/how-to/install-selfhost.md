@@ -150,7 +150,7 @@ to start without it, or misbehaves in a way you will not notice.
 | `SOLVE_WALL_CLOCK_CEILING_SECONDS` | `300.0` | – | ✓ | ✓ | Outer safety kill only; must stay well above the deterministic budget. |
 | `AUTH_THROTTLE_MAX_FAILURES` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` | `5` / `900` / `60` | ✓ | ✓ | not read | Credential-stuffing backoff. |
 | `MFA_KEYRING_FILE` | `''` | leave empty | **required** (`secrets/operator_mfa_keys.json`) | not read | Operators must enroll an authenticator in cloud mode, and the seeds are encrypted with this ring. The API refuses to start without a readable, valid ring. Losing it strands every enrolled operator; replacing it does the same. Keep it with your recovery material. |
-| `REGISTRATION_MAX_PER_IP` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` | `5` / `3600` / `300` | ✓ | ✓ | not read | Operator self-registration budget per client IP. First-run provisioning of more than a handful of staff accounts from one office IP hits it; invite staff instead, or raise it for the provisioning hour. |
+| `REGISTRATION_MAX_PER_IP` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` | `5` / `3600` / `300` | ✓ | ✓ | not read | Operator self-registration budget per client IP, counting successes as well as failures. First-run provisioning of more than a handful of staff accounts from one office IP hits it; invite them, or use the owner-authenticated `POST /tournaments/{id}/operators` route — see [first-run provisioning](#first-run-provisioning-of-more-than-a-handful-of-accounts) — rather than raising this. |
 | `SESSION_TTL_DAYS` / `SESSION_COOKIE_NAME` / `SESSION_COOKIE_DOMAIN` | `0.5` (maximum) / `sw_session` / `''` | ✓ | ✓ | not read | `SESSION_TTL_DAYS` above `0.5` (twelve hours) is a startup error; older `.env` files carried `30` and must be edited. **`SESSION_COOKIE_DOMAIN` must stay blank and the API refuses to start otherwise.** Host-only cookies are the entire mechanism keeping the two hostnames apart; a `Domain=` cookie is sent to every subdomain, handing the operator session to the public entrant tier. `Path=` is not a substitute — it is not enforced against same-origin script. |
 | `PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH` / `RESET_TOKEN_TTL_MINUTES` | `8` / `128` / `60` | ✓ | ✓ | not read | NIST 800-63B: length only. |
 | `INVITE_TTL_DAYS` | `14.0` | ✓ | ✓ | not read | Email-invite expiry. |
@@ -570,6 +570,40 @@ Without the header this answers `403` — that is the guard working, not a fault
 Then open `https://<your-hostname>`, register the first account, and create the
 first workspace. The first registered user is a normal account — there is no
 superuser — and owns whatever they create.
+
+### First-run provisioning of more than a handful of accounts
+
+Public signup is throttled per client IP: `REGISTRATION_MAX_PER_IP` (default
+`5`, with `REGISTRATION_MAX_PER_IP_WINDOW_SECONDS` / `_LOCK_SECONDS` — see the
+[reference table](#reference)) counts **successful** registrations, not just
+failures, because account creation itself has to be bounded on a public
+instance. Standing an instance up for several clubs from one office therefore
+walls after a handful of signups, with doubling backoff.
+
+Three ways past it, in order of preference:
+
+1. **Invite them.** Settings → Share issues an invite per workspace; the
+   invitee registers themselves, from their own IP.
+2. **Provision the accounts yourself.** Signed in as the **owner** of any
+   workspace, with a recent password + authenticator proof:
+
+   ```bash
+   curl -sS https://<app-hostname>/api/tournaments/<workspace-id>/operators \
+     -H 'Content-Type: application/json' \
+     -H 'X-ShuttleWorks-CSRF: 1' \
+     -b "sw_session=<your session cookie>" \
+     -d '{"email":"director@club.example","password":"<a strong passphrase>",
+          "displayName":"Club director"}'
+   ```
+
+   Same password policy and same Argon2id hashing as public signup, and no
+   session is returned — the new operator signs in themselves and should
+   change the passphrase you chose. It does **not** join them to the workspace
+   in the path; that workspace is only how you prove you are an owner (anyone
+   who is not one gets the same 404 an unknown workspace gets). The public
+   throttle is untouched: this route neither spends it nor is bounded by it.
+3. **Raise the knob for the provisioning hour**, then put it back. Least
+   preferred: it is the only one of the three that widens the public surface.
 
 ## 8. Boot recovery
 

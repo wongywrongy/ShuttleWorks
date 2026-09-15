@@ -173,7 +173,18 @@ Mechanics (see `apps/api/src/identity/auth.py`, `apps/api/src/identity/auth_rout
   sends it on every request). Cookie-less local bootstrap traffic is
   exempt by construction.
 - Throttle: DB-backed per-account + per-IP backoff on credential
-  endpoints (429 + `retryAfterSeconds`).
+  endpoints (429 + `retryAfterSeconds`). `/auth/register` additionally
+  spends a separate per-IP **registration** budget on SUCCESS
+  (`REGISTRATION_MAX_PER_IP`), so an open instance is not an open account
+  factory.
+- Provisioning without that budget: `POST
+  /tournaments/{tournament_id}/operators` (D12) lets an **owner** with fresh
+  proof create another operator account — same password policy, same Argon2id
+  hashing, no session returned, and no membership granted (the workspace is
+  the authorization anchor, invites do membership). It neither spends the
+  registration budget nor is bounded by it, which is what makes standing an
+  instance up for several clubs from one office possible; see
+  `docs/how-to/install-selfhost.md`, "first-run provisioning".
 - Tenancy: **orgs own workspaces** (`tournaments.org_id`); every user
   gets a personal org (`apps/api/src/identity/auth.ensure_personal_org`).
   Membership stays per-workspace in `tournament_members` (FK to
