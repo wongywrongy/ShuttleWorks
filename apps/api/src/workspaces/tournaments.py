@@ -60,6 +60,8 @@ from workspaces.workspace_signals import RowCounts, WorkspaceSignalsDTO, build_s
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 log = logging.getLogger("scheduler.tournaments")
 
+# The wire type. Its members are held to ``TOURNAMENT_STATUSES`` -- the
+# column's authority in code -- by ``test_tournament_status_vocabulary``.
 TournamentStatus = Literal["draft", "active", "archived"]
 
 # Keys inside the state blob that only the server may set, mapped to the

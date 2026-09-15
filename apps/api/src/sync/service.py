@@ -28,6 +28,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 from db.models import (
+    DEFAULT_TOURNAMENT_STATUS,
+    TOURNAMENT_STATUSES,
     AuthorityTransition,
     BracketEvent,
     BracketMatch,
@@ -493,6 +495,22 @@ def _import_scalar(name: str, value: Any) -> Any:
     return value
 
 
+def _checkpoint_status(record: dict[str, Any]) -> str:
+    """The workspace status a checkout checkpoint may project.
+
+    The checkpoint arrives from another node, so its ``status`` is input, not
+    a value this process produced. An unknown one is refused with the
+    checkpoint's own error rather than left to ``ck_tournaments_status`` to
+    turn into a 500 halfway through the adoption transaction.
+    """
+    status = record.get("status", DEFAULT_TOURNAMENT_STATUS)
+    if status not in TOURNAMENT_STATUSES:
+        raise ProtocolError(
+            409, "invalid_checkpoint", "Checkpoint tournament status is invalid"
+        )
+    return status
+
+
 def _validate_checkpoint(checkpoint: dict[str, Any], expected_hash: str | None) -> uuid.UUID:
     if not isinstance(checkpoint, dict):
         record_authority_rejection("invalid_checkpoint")
@@ -623,7 +641,7 @@ def import_checkpoint(
     tournament = Tournament(
         id=tournament_id,
         name=record.get("name"),
-        status=record.get("status", "draft"),
+        status=_checkpoint_status(record),
         kind=record.get("kind", "bracket"),
         tournament_date=record.get("tournament_date"),
         tournament_end_date=record.get("tournament_end_date"),

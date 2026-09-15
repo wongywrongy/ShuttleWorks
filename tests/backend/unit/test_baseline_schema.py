@@ -266,6 +266,9 @@ def test_outbox_inherits_one_parent_and_cascades_only_that_tenant(migrated):
     "table,column,value",
     [
         ("tournaments", "kind", "invalid"),
+        # 0012: the fifth constraint, once ``TOURNAMENT_STATUSES`` gave the
+        # column a vocabulary produced in code.
+        ("tournaments", "status", "invalid"),
         ("matches", "status", "invalid"),
         ("entries", "state", "invalid"),
         ("tournament_members", "role", "invalid"),

@@ -83,6 +83,22 @@ class MatchStatus(str, enum.Enum):
     RETIRED = "retired"
 
 
+# Workspace lifecycle vocabulary — the authority for ``tournaments.status``.
+# ``draft`` — being set up; ``active`` — running; ``archived`` — closed and
+# hidden from the Hub's live list.
+#
+# It lives here, beside ``MatchStatus`` and ``MODULE_STATUSES``, because it is
+# the one place every writer can name: the workspaces routes validate against
+# it, the blob writer and the workspace PATCH in ``repositories/local.py``
+# validate against it, and the checkout projection in ``sync/service.py``
+# validates against it — and ``repositories`` may not reach up into a domain
+# package (import-linter's persistence-direction contract).
+TOURNAMENT_STATUSES: tuple[str, ...] = ("draft", "active", "archived")
+
+#: The status a workspace is created in, and the column's server-side default.
+DEFAULT_TOURNAMENT_STATUS = "draft"
+
+
 def _utcnow() -> datetime:
     """Timezone-aware UTC clock — used as the default for every timestamp."""
     return datetime.now(timezone.utc)
@@ -124,9 +140,11 @@ class Tournament(Base):
     # old one on workspaces they already created.
     owner_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
     # ``draft`` / ``active`` / ``archived`` — used by the Step 6 status
-    # pill. Stored as plain string for ease of evolution; enforcement
-    # lives at the application layer.
-    status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    # pill. The vocabulary is ``TOURNAMENT_STATUSES`` above; every write path
+    # validates against it and ``ck_tournaments_status`` backs it up.
+    status: Mapped[str] = mapped_column(
+        String(20), default=DEFAULT_TOURNAMENT_STATUS, nullable=False
+    )
     # ``meet`` (default — intercollegiate dual / tri-meet workflow,
     # uses the Setup / Roster / Matches / Schedule / Live / TV tabs)
     # or ``bracket`` (single-elimination / round-robin draws, uses the
@@ -231,12 +249,18 @@ class Tournament(Base):
         # ``workspaces/tournaments.py`` ("kind must be 'meet' or 'bracket'").
         # Hardcoded rather than imported — ``db`` may not reach up into a
         # domain package (import-linter's persistence-direction contract).
-        # ``status`` is deliberately NOT constrained here: its comment above
-        # says enforcement lives at the application layer, and no validator
-        # in the API produces its allowed set. It is on P7a's deferred list.
         CheckConstraint(
             "kind IN ('meet', 'bracket')",
             name="ck_tournaments_kind",
+        ),
+        # P7a deferred this one because ``status`` had no authority in code to
+        # take its vocabulary from. ``TOURNAMENT_STATUSES`` above is now that
+        # authority. Spelled out rather than derived from the tuple, like the
+        # other four, so the string is character-identical to migration
+        # ``0012``.
+        CheckConstraint(
+            "status IN ('draft', 'active', 'archived')",
+            name="ck_tournaments_status",
         ),
     )
 
