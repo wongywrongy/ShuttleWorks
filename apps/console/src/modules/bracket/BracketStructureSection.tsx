@@ -29,7 +29,8 @@ import { useTournamentId } from '../../hooks/useTournamentId';
 import { Row, Section } from '../../platform/engine-config/SettingsControls';
 import { INTERACTIVE_BASE } from '../../lib/utils';
 import { NAV_LINK_ROW, NavCaret } from '../../components/NavCaret';
-import { disciplineLabel, formatLabel } from './bracketLabels';
+import { disciplineLabel } from '../../platform/domain/bracketLabels';
+import { formatLabel } from './formatRegistry';
 
 const NAV_LINK_CLASSES =
   'inline-flex items-center gap-1 rounded-sm text-xs font-medium text-accent hover:underline';

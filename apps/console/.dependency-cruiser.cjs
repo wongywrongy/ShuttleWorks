@@ -38,12 +38,22 @@
  *
  *  1. workspace -> settings   an aggregator edge: WorkspaceShellSurface hosts
  *                             the six settings tabs it renders.
- *  2. operations -> bracket   the genuine debt: Operations reaches into
- *                             Bracket's UI (MatchDetailPanel,
- *                             BracketScheduleModal, bracketLabels). Note the
- *                             API has NO such edge — import-linter contract 4
- *                             pins its absence — so this is a console-only
- *                             coupling that the backend seam map does not have.
+ *  2. operations -> bracket   two RENDER edges: the Run surface mounts
+ *                             Bracket's own run controls in the shared
+ *                             MatchInspector, and the Plan board opens
+ *                             Bracket's schedule modal. Both are one module
+ *                             deliberately mounting another module's control
+ *                             — the control does bracket writes through the
+ *                             bracket API, so there is no shared home to move
+ *                             it to that would not just relabel the coupling.
+ *                             The one piece that WAS shared, `bracketLabels`,
+ *                             moved to `platform/domain/bracketLabels.ts`
+ *                             (2026-09-15), so `opsBlock` no longer reaches
+ *                             into Bracket at all. Note the API has NO such
+ *                             edge — import-linter contract 4 pins its
+ *                             absence — so this stays a console-only
+ *                             coupling that the backend seam map does not
+ *                             have.
  */
 // The module name is a CAPTURE GROUP in every entry, and that is load-bearing:
 // the debt rule below excludes same-module imports with `^src/modules/$1/`, and
@@ -53,8 +63,6 @@
 const KNOWN_CROSS_MODULE = [
   '^src/modules/(workspace)/WorkspaceShellSurface[.]tsx$',
   '^src/modules/(operations)/OperationsProduct[.]tsx$',
-  '^src/modules/(operations)/OpsDetailRail[.]tsx$',
-  '^src/modules/(operations)/opsBlock[.]ts$',
   '^src/modules/(operations)/run/RunSurface[.]tsx$',
 ];
 

@@ -7,7 +7,7 @@
  * (and on a changed TEAM row) through the existing upsert payload builder.
  */
 import type { BracketEventUpsertIn, Participant } from '../../api/bracketDto';
-import { teamName } from './bracketLabels';
+import { teamName } from "../../platform/domain/bracketLabels";
 import {
   nextTeamId,
   toUpsertParticipant,

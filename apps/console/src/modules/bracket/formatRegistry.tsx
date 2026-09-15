@@ -439,3 +439,11 @@ export function descriptorFor(format: string | undefined): FormatDescriptor | un
   const id = format.toLowerCase();
   return DRAW_FORMATS.find((d) => d.id === id);
 }
+
+/** Draw format id ('se' / 'rr' / 'de' / …) → its full name, from the
+ *  registry above. The codes are storage shorthand, not UI copy — never show
+ *  them bare. Unknown values pass through. */
+export function formatLabel(format: string | null | undefined): string {
+  if (!format) return '';
+  return descriptorFor(format)?.label ?? format;
+}

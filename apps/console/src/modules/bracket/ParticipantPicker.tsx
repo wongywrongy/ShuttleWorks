@@ -20,7 +20,7 @@ import {
 import { OverflowMenu } from "../../components/control-plane/OverflowMenu";
 import { EYEBROW_CLASS } from "../../lib/utils";
 import { formatPersonName, formatSideName } from "../../platform/domain/sides";
-import { teamName } from "./bracketLabels";
+import { teamName } from "../../platform/domain/bracketLabels";
 import { nextTeamId } from "./rosterEvents";
 
 /** R-DM-2(a): the roster player already holds the person key, so a pick that

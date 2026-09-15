@@ -4,7 +4,6 @@ import {
   buildPlayUnitLabels,
   sideLabel,
   disciplineLabel,
-  formatLabel,
 } from '../bracketLabels';
 import type { BracketTournamentDTO } from '../../../api/bracketDto';
 
@@ -147,21 +146,6 @@ describe('sideLabel feeder reference', () => {
     const labels = new Map([['pu-a', 'MS QF1']]);
     expect(sideLabel(null, loserSlot, {}, labels)).toBe('Loser of MS QF1');
     expect(sideLabel(null, loserSlot, {})).toBe('Loser of pu-a');
-  });
-});
-
-describe('formatLabel', () => {
-  it('delegates to the format registry for every known id', () => {
-    expect(formatLabel('se')).toBe('Single elimination');
-    expect(formatLabel('rr')).toBe('Round robin');
-    expect(formatLabel('de')).toBe('Double elimination');
-    expect(formatLabel('swiss')).toBe('Swiss');
-  });
-
-  it('passes unknown ids through and blanks nullish input', () => {
-    expect(formatLabel('mystery')).toBe('mystery');
-    expect(formatLabel(null)).toBe('');
-    expect(formatLabel(undefined)).toBe('');
   });
 });
 

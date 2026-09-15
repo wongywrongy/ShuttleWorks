@@ -37,7 +37,7 @@ import { descriptorFor } from "./formatRegistry";
 import { StandingsTable } from "./StandingsTable";
 import { EYEBROW_CLASS } from "../../lib/utils";
 import { formatBracketSlot, type BracketSlotContext } from "./formatBracketSlot";
-import { buildPlayUnitLabels } from "./bracketLabels";
+import { buildPlayUnitLabels } from "../../platform/domain/bracketLabels";
 import { formatSideCondensed, formatSideLines, sideFromWire } from "../../platform/domain/sides";
 import { ACCENT_PRESS } from '../../lib/utils';
 import { TEXT_SECONDARY } from '../../lib/textRoles';

@@ -61,7 +61,7 @@ import {
   buildPlayUnitIdentities,
   disciplineLabel,
   sideLabel,
-} from './bracketLabels';
+} from '../../platform/domain/bracketLabels';
 import {
   BracketMatchContingencyControls,
   BracketMatchPlayerControls,

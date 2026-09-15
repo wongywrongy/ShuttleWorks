@@ -1,10 +1,17 @@
 /**
- * Pure label helpers shared by the bracket Draw / Live surfaces.
+ * Pure label helpers for bracket play units, shared by the bracket Draw /
+ * Live surfaces and by Operations, which folds bracket play units into the
+ * canonical `Match` shape (`opsBlock.ts`). Two modules read it, so it lives
+ * here beside `matchIdentity.ts` rather than inside Bracket (CODE_HEALTH 1b,
+ * debt-log D3).
  *
  * ``sideLabel`` resolves a play-unit side to operator-readable names:
  * confirmed participants when the side is set, the feeder reference
  * ("Winner of MS-R0-1") while the upstream match is unplayed, or
  * "Bye" for a structural bye slot.
+ *
+ * The draw-FORMAT name (`formatLabel`) stays in Bracket's `formatRegistry`:
+ * it is a lookup in that registry, and the registry renders React.
  */
 import type { PlayUnitDTO, BracketTournamentDTO } from '../../api/bracketDto';
 import { DISCIPLINE_NAMES } from '../../lib/disciplineNames';
@@ -15,14 +22,13 @@ import {
   formatMatchIdentity,
   type BracketMatchIdentity,
   type MatchIdentity,
-} from '../../platform/domain/matchIdentity';
-import { descriptorFor } from './formatRegistry';
+} from './matchIdentity';
 import {
   formatSideCondensed,
   meetSideFromIds,
   resolveFeederReference,
   type Side,
-} from '../../platform/domain/sides';
+} from './sides';
 
 /** Round-of-K stage name, derived from how many rounds remain to the final.
  *  0 ⇒ Final, 1 ⇒ SF, 2 ⇒ QF, n≥3 ⇒ R16/R32/R64… (round of 2^(n+1)). */
@@ -132,14 +138,6 @@ export function buildPlayUnitLabels(data: BracketTournamentDTO): Map<string, str
       formatMatchIdentity(identity),
     ]),
   );
-}
-
-/** Draw format id ('se' / 'rr' / 'de' / …) → its full name, delegated to
- *  the format registry. The codes are storage shorthand, not UI copy —
- *  never show them bare. Unknown values pass through. */
-export function formatLabel(format: string | null | undefined): string {
-  if (!format) return '';
-  return descriptorFor(format)?.label ?? format;
 }
 
 /** Discipline code ('MS' → "Men's Singles"). Free-text disciplines that
