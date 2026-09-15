@@ -42,7 +42,16 @@ def event_for(session, tournament_id, event_id):
     return event
 
 
-def assert_editable(session, event):
+DRAWN_STATUSES = ("generated", "started", "completed")
+
+
+def has_draw(session, event):
+    """Is this event drawn? The `assert_editable` predicate, given a name.
+
+    S-8.4 needs the same question answered without the refusal: a withdrawal
+    after the draw is allowed, it just ends the unit instead of returning it
+    to the roster queue.
+    """
     draw = (
         session.get(BracketEvent, (event.tournament_id, event.bracket_event_id))
         if event.bracket_event_id
@@ -53,11 +62,15 @@ def assert_editable(session, event):
         .where(
             DrawInstance.tournament_id == event.tournament_id,
             DrawInstance.competition_event_id == event.id,
-            DrawInstance.status.in_(["generated", "started", "completed"]),
+            DrawInstance.status.in_(list(DRAWN_STATUSES)),
         )
         .limit(1)
     )
-    if drawn or (draw is not None and draw.status in {"generated", "started", "completed"}):
+    return bool(drawn) or (draw is not None and draw.status in set(DRAWN_STATUSES))
+
+
+def assert_editable(session, event):
+    if has_draw(session, event):
         raise CompetitionError(
             "DRAW_NOT_EDITABLE", "This event has a draw; roster changes require a draw revision"
         )
@@ -373,21 +386,42 @@ def rebind(
     return outcome(member, "moved")
 
 
-def withdraw_membership(session, tournament_id, entry_id, *, withdraw_unit=False, actor_id=None):
+def withdraw_membership(session, tournament_id, entry_id, *, withdraw_unit=None, actor_id=None):
+    """Take one membership out of its unit.
+
+    **S-8.4.** Before the draw, the unit returns to the roster queue and the
+    desk re-pairs it. After the draw it does not: the unit is withdrawn, its
+    remaining members with it, and re-pairing is an operator act that creates
+    a new unit. ``withdraw_unit`` defaults to that question rather than to a
+    constant; pass it explicitly to override.
+    """
     member = membership_for(session, tournament_id, entry_id)
     if member is None or member.status == "withdrawn":
         return
     unit = session.get(CompetitionUnit, (tournament_id, member.unit_id))
+    if withdraw_unit is None:
+        withdraw_unit = has_draw(
+            session, event_for(session, tournament_id, unit.competition_event_id)
+        )
     unit.version += 1
+    # Park the unit so the roster trigger allows its memberships to be edited;
+    # the move it really made is recorded below, from where it started.
+    origin = unit.status
+    unit.status = "pending"
+    session.flush()
+    lifecycle.withdraw_member(session, member, actor_id=actor_id)
+    if withdraw_unit:
+        for other in members_of(session, unit, active=True):
+            lifecycle.withdraw_member(session, other, actor_id=actor_id)
+    session.flush()
     lifecycle.set_unit_status(
         session,
         unit,
         "withdrawn" if withdraw_unit else "pending",
         event="member_withdrew_after_draw" if withdraw_unit else None,
+        source_state=origin,
         actor_id=actor_id,
     )
-    session.flush()
-    lifecycle.withdraw_member(session, member, actor_id=actor_id)
     audit(session, tournament_id, "withdraw", outcome(member), actor_id=actor_id)
     session.flush()
     from competition.projection import project

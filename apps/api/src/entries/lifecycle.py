@@ -252,8 +252,10 @@ def withdraw(
     operator decides the exception.
 
     A bound entry keeps its membership row. Withdrawal marks that membership
-    withdrawn and returns its unit to pending; a published draw keeps its unit
-    reference for the director to reconcile explicitly.
+    withdrawn; before the draw its unit returns to pending for the desk to
+    re-pair, and after the draw the unit is withdrawn instead (S-8.4) — a
+    drawn unit that lost a member is not a roster gap, it is a unit that
+    cannot play, and re-pairing is a new unit.
     """
     if by_operator:
         if entry.state not in LIVE_STATES:
