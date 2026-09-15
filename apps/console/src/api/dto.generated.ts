@@ -4326,11 +4326,13 @@ export interface components {
          *     snapshot — advancement is NOT re-run (SP-G1 Seam C).
          *
          *     ``kind`` is the operation type; currently only ``"record_result"`` is
-         *     supported. ``seen_version`` is an optional optimistic-concurrency token
+         *     supported. ``seen_version`` is the optimistic-concurrency token
          *     mirroring ``RecordResultIn.seen_version`` (SP-F3): the server rejects
-         *     with 409 ``stale_version`` when present and stale.  The replay check
-         *     always runs BEFORE the version guard so a re-delivered command whose
-         *     version has advanced is still accepted.
+         *     with 409 ``stale_version`` when it is stale, and a body that omits it is
+         *     refused with 422 at the parse boundary (D5 ruling — an optional
+         *     precondition is a precondition a caller silently forgets).  The replay
+         *     check always runs BEFORE the version guard so a re-delivered command
+         *     whose version has advanced is still accepted.
          *     ``reason`` annotates contingency results (walkover/retired/forfeit).
          */
         BracketCommandRequest: {
@@ -4352,7 +4354,7 @@ export interface components {
              */
             winner_side: "A" | "B";
             /** Seen Version */
-            seen_version?: number | null;
+            seen_version: number;
             /** Finished At Slot */
             finished_at_slot?: number | null;
             /**
@@ -7989,7 +7991,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /** Seen Version */
-            seen_version?: number | null;
+            seen_version: number;
         };
         /** RecoveryCodesDTO */
         RecoveryCodesDTO: {

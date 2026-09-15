@@ -398,7 +398,8 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
   - *Match-state writes* use `ETag` / `If-Match`. A `GET …/match-states/{mid}` returns
     `ETag: "<matches.version>"` (`"0"` for an unseen match); `PUT` / `DELETE` must send a matching
     `If-Match` or get `412 Precondition Failed`.
-  - *The command pipeline* and *bracket result writes* carry `seen_version`; a mismatch raises a
+  - *The command pipeline* and *bracket result writes* carry a **mandatory** `seen_version`
+    (ruling D5 — a body without one is `422`); a mismatch raises a
     `ConflictError` → `409` with `error: "stale_version"`. An illegal state-machine transition is
     `409` with `error: "conflict"`. See
     [Data flow](/explanation/architecture/data-flow#the-command-pipeline-write-path).

@@ -1804,6 +1804,10 @@ class ApiClient {
     body: {
       play_unit_id: string;
       winner_side: 'A' | 'B';
+      /** Mandatory since the D5 ruling — the server answers 422 without it.
+       *  The optimistic-concurrency check used to be skipped when absent,
+       *  which made it fail *open* for any caller that forgot the token. */
+      seen_version: number;
       finished_at_slot?: number | null;
       walkover?: boolean;
       score?: BracketScore | null;
@@ -2013,7 +2017,8 @@ class ApiClient {
       kind?: 'record_result' | 'correct_result';
       play_unit_id: string;
       winner_side: 'A' | 'B';
-      seen_version?: number;
+      /** Mandatory since the D5 ruling (422 without it). */
+      seen_version: number;
       finished_at_slot?: number;
       score?: unknown;
       walkover?: boolean;

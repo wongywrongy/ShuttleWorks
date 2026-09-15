@@ -635,7 +635,11 @@ export function BracketMatchesTab({
                       play_unit_id: selected.id,
                       winner_side: winner,
                       reason,
-                      seen_version: selected.version,
+                      // Mandatory since D5. `?? 1` matches the backend's own
+                      // default for a freshly generated match (and the sibling
+                      // call in DrawView), so an older cached payload without
+                      // the token still records rather than 422ing.
+                      seen_version: selected.version ?? 1,
                     });
                     onData?.(next);
                     setContingency(null);

@@ -63,6 +63,8 @@ export interface BracketApi {
   recordResult: (body: {
     play_unit_id: string;
     winner_side: Exclude<WinnerSide, 'none'>;
+    /** Mandatory since the D5 ruling — the server answers 422 without it. */
+    seen_version: number;
     finished_at_slot?: number | null;
     walkover?: boolean;
     score?: BracketScore | null;
@@ -79,7 +81,8 @@ export interface BracketApi {
     play_unit_id: string;
     winner_side: 'A' | 'B';
     reason: 'walkover' | 'retired' | 'forfeit';
-    seen_version?: number;
+    /** Mandatory since the D5 ruling — the server answers 422 without it. */
+    seen_version: number;
   }) => Promise<BracketTournamentDTO>;
   validateMove: (body: BracketValidateIn) => Promise<BracketValidationOut>;
   pinMatch: (body: BracketPinIn) => Promise<BracketTournamentDTO>;

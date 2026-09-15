@@ -496,11 +496,14 @@ class RecordResultIn(StrictModel):
     # the bracket carries an opaque score blob + winner_side, the meet
     # carries integer side scores). Omitted in winner-only / simple mode.
     score: Optional[dict] = None
-    # Optimistic-concurrency token (SP-F3). When present, the route rejects
-    # the write with 409 stale_version if it doesn't match the match's
-    # current ``BracketMatch.version``. Omitted by legacy callers, which keep
-    # the un-guarded behavior.
-    seen_version: Optional[int] = None
+    # Optimistic-concurrency token (SP-F3), MANDATORY since the D5 ruling:
+    # the route rejects the write with 409 stale_version if it doesn't match
+    # the match's current ``BracketMatch.version``, and a body that omits it
+    # is refused with 422 at the parse boundary. It used to be optional and
+    # guarded only ``if not None``, which made the check fail *open* for any
+    # caller that forgot it — the same defect class SP-CLOUD-4 closed on
+    # ``PUT …/state`` by making ``If-Match`` mandatory.
+    seen_version: int = Field(..., ge=0)
 
 
 class MatchActionIn(StrictModel):
