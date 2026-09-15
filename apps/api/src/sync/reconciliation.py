@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from sync.errors import ProtocolError
+from sync.lifecycle import resolve_quarantine as _record_resolution
 from sync.service import capability_matches, utcnow
 
 
@@ -114,7 +115,7 @@ def resolve_quarantine(
             "correction_not_acknowledged",
             "Cloud has not acknowledged the correction",
         )
-    quarantine.status = "resolved"
+    _record_resolution(session, quarantine, actor_id=actor_id, reason=reason.strip())
     quarantine.resolved_at = utcnow()
     quarantine.resolved_by = actor_id
     quarantine.resolution_operation_id = operation.operation_id

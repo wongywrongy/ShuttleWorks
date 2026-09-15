@@ -134,3 +134,17 @@ DRAW_INSTANCE = machine("draw_instance", "draft generated started completed supe
     edge("supersede", "draft generated started completed", "superseded", "system",
          description="The event left the drawn states, or was deleted; this revision stops being current."),
 ])
+
+
+SYNC_QUARANTINE = machine("sync_quarantine", "open resolved", "open", "resolved", [
+    edge("resolve", "open", "resolved",
+         description="An accepted correction operation supersedes the rejected envelope, which stays as evidence."),
+])
+
+AUTHORITY_EPOCH = machine("authority_epoch", "preparing active closed recovered cloud",
+                          "preparing active cloud", "closed recovered", [
+    edge("ready", "preparing", "active", description="The node presented its readiness proof."),
+    edge("close", "active", "closed", description="Check-in or handoff drained the operation log."),
+    edge("recover", "preparing active", "recovered",
+         description="Lost-node recovery rebuilt from a backup plus the receipted operation suffix."),
+], "state")

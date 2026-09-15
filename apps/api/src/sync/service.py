@@ -49,6 +49,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from sync.compatibility import supports_checkpoint_schema, supports_operation_schema
+from sync.lifecycle import transition_authority
 from sync.errors import ProtocolError
 from sync.signing_keys import decode_key_material as _decode_key_material, key_id, read_verification_keys
 from sync.schemas import (
@@ -975,7 +976,8 @@ def mark_ready(
     if authority.state != "preparing":
         record_authority_rejection("invalid_state")
         raise ProtocolError(409, "invalid_authority_state", "Authority cannot become ready")
-    authority.state = "active"
+    # The node itself presents the readiness proof; attribute it to the node.
+    transition_authority(session, authority, "ready", actor_id=node_id)
     authority.ready_at = utcnow()
     session.commit()
     record_authority_transition("ready")
@@ -1279,7 +1281,7 @@ def return_to_cloud(
             "snapshot_hash_mismatch",
             "Cloud projection digest does not match the final snapshot",
         )
-    authority.state = "closed"
+    transition_authority(session, authority, "close", actor_id=actor_id, reason=reason)
     authority.closed_at = utcnow()
     epoch = _next_epoch(session, tournament_id)
     cloud = _cloud_epoch(
@@ -1344,7 +1346,7 @@ def planned_transfer(
             declared_last_sequence=declared_last_sequence,
             highest_contiguous_sequence=cloud_sequence,
         )
-    authority.state = "closed"
+    transition_authority(session, authority, "close", actor_id=actor_id, reason=reason)
     authority.closed_at = utcnow()
     epoch = _next_epoch(session, tournament_id)
     replacement, replacement_capability = _preparing_epoch(
