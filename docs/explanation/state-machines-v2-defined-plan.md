@@ -294,7 +294,12 @@ Each is an existing operation-log path with its own audit rows
 ### Effects E-1 … E-7
 
 One per consequential cross-table effect. `tests/backend/test_lifecycle_effects.py`
-asserts the state of every table named and the exact `state_transitions` row count.
+asserts the state of every table named and the exact `state_transitions` rows —
+the whole ordered list, not just the count, because an effect that records the
+wrong act is as wrong as one that records nothing.
+
+Creating a row in its initial state is not a transition and writes no history,
+which is why E-5 names only the supersede.
 
 | Effect | Trigger | Tables asserted | Transitions expected |
 |---|---|---|---|
@@ -302,7 +307,7 @@ asserts the state of every table named and the exact `state_transitions` row cou
 | E-2 | Invited partner accepts | `partner_invitations`, `submissions`, `entries` | `partner_invitation.accept` |
 | E-3 | Member withdraws **before** the draw | `entries`, `unit_memberships`, `competition_units` | `entry.withdraw`, `unit_membership.withdraw`, `unit.member_withdrew` |
 | E-4 | Member withdraws **after** the draw (S-8.4) | `entries`, `unit_memberships`, `competition_units` | `entry.withdraw`, `unit_membership.withdraw`, `unit.member_withdrew_after_draw` |
-| E-5 | A draw is generated, then superseded | `draw_instances` | `draw_instance.generate`, `draw_instance.supersede` |
+| E-5 | A draw revision is superseded when the event leaves the drawn states | `draw_instances` | `draw_instance.supersede` |
 | E-6 | First result on a generated event (S-8.5) | `draw_instances`, `competition_events` | `draw_instance.start`, `competition_event.first_result` |
 | E-7 | Operator cancels a submitted submission | `submissions`, `entries`, `unit_memberships` | `entry.operator_withdraw` per live entry, then `submission.cancel` |
 
