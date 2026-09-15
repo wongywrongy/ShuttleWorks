@@ -31,7 +31,7 @@ import { formatCents } from '../lib/money';
 import { FORM_FIELD } from '../lib/formField';
 import { mintFormCsrf } from '../lib/formCsrf.server';
 import { ApiError, apiGet } from '../lib/apiFetch.server';
-import { CARD, PAGE_TITLE } from '../lib/ui';
+import { CARD, PAGE_TITLE, SELECT_CONTROL } from '../lib/ui';
 import { hasEntrantSession } from '../lib/session.server';
 import { safeNext } from '../lib/nextTarget';
 import type { Route } from './+types/partner';
@@ -313,7 +313,11 @@ export default function PartnerInvitePage({ loaderData }: Route.ComponentProps) 
                 id="partner-gender"
                 name="gender"
                 required
-                className="h-10 rounded-md border border-border bg-bg-elev px-3 text-sm text-foreground"
+                // A-11: the tier's one select skin, not a fourth hand-rolled
+                // copy of it. `SELECT_CONTROL` is `FIELD_INPUT` plus
+                // `font-normal`, which also settles A-9 here — `rounded-sm`
+                // is what every other entrant select wears.
+                className={SELECT_CONTROL}
                 defaultValue=""
               >
                 <option value="" disabled>

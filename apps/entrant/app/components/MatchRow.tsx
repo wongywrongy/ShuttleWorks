@@ -74,7 +74,7 @@ function SideLine({
   );
   return (
     <div className="flex min-w-0 items-start justify-between gap-3">
-      <div className={`min-w-0 ${won ? 'font-[650] text-foreground' : 'text-foreground'} ${highlighted ? 'underline decoration-2 underline-offset-2' : ''}`}>
+      <div className={`min-w-0 ${won ? 'font-semibold text-foreground' : 'text-foreground'} ${highlighted ? 'underline decoration-2 underline-offset-2' : ''}`}>
         {won ? <span className="sr-only">Winner: </span> : null}
         <PersonGroup
           slug={slug}

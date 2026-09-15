@@ -106,7 +106,7 @@ export function HeroHeader({
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 pb-2.5">
             <div className="grid min-w-0 flex-1 basis-80 gap-0.5">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                <h1 id="tournament-title" className="type-display text-xl leading-tight tracking-[-0.02em] text-foreground">
+                <h1 id="tournament-title" className="type-display text-lg leading-tight tracking-[-0.02em] text-foreground">
                   {title}
                 </h1>
                 <span className={`text-sm font-medium ${statusClass}`}>{statusLabel}</span>
@@ -144,7 +144,7 @@ export function HeroHeader({
             {/* Migration-created bootstrap workspaces are an internal
                 ownership placeholder, not a tournament organizer identity. */}
             {orgName && orgName !== 'Local Workspace' ? <p className="text-sm text-muted-foreground">{orgName}</p> : null}
-            <h1 id="tournament-title" className="type-display max-w-3xl text-balance text-2xl leading-tight tracking-[-0.025em] text-foreground md:text-[1.875rem]">
+            <h1 id="tournament-title" className="type-display max-w-3xl text-balance text-2xl leading-tight tracking-[-0.025em] text-foreground md:text-page">
               {title}
             </h1>
             {metaLine ? (

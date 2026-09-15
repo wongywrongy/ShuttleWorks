@@ -43,6 +43,7 @@ import { useContext, type ReactNode } from 'react';
 import { BRAND, BRAND_SIGNATURE } from '@scheduler/brand';
 
 import { EntrantSessionContext } from '../lib/sessionContext';
+import { EYEBROW_CLASS } from '../lib/ui';
 
 const DISCOVERY_HREF = '/e/';
 
@@ -72,11 +73,11 @@ export function PlayShell({
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:py-2.5">
           <a href={DISCOVERY_HREF} className="inline-flex min-h-8 min-w-0 max-w-full flex-wrap items-center gap-3" aria-label={`${BRAND.publicProductName} home`}>
             <span className="inline-block -skew-x-12 bg-card px-3 py-1.5 shadow-md">
-              <span className="inline-block skew-x-12 type-display text-[15px] tracking-[-0.02em] text-accent">
+              <span className="inline-block skew-x-12 type-display text-base tracking-[-0.02em] text-accent">
                 {BRAND.productName}
               </span>
             </span>
-            <span className="break-words text-xs font-bold uppercase tracking-[0.06em] text-foreground">
+            <span className={`break-words ${EYEBROW_CLASS} text-foreground`}>
               Tournaments
             </span>
           </a>

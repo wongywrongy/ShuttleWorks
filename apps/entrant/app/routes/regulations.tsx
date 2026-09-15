@@ -345,7 +345,7 @@ export default function Regulations({ loaderData }: Route.ComponentProps) {
                     in a row said nothing the second time (S10/S42). An
                     organizer's own headings always render. */}
                 {sections.length === 1 && section.title === 'Full regulations' ? null : (
-                  <h3 className="font-display text-xl font-bold tracking-tight text-foreground">{section.title}</h3>
+                  <h3 className="font-display text-lg font-bold tracking-tight text-foreground">{section.title}</h3>
                 )}
                 {section.blocks.map((block, index) =>
                   block.kind === 'list' ? (

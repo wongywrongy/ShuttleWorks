@@ -54,7 +54,7 @@ import {
   roundShortLabel,
 } from "../lib/draws.types";
 import type { EntryPageDTO } from "../lib/entryPage.types";
-import { ACTION_LINK, ACTION_LINK_MUTED, SECTION_TITLE } from "../lib/ui";
+import { ACTION_LINK, ACTION_LINK_MUTED, EYEBROW_CLASS, SECTION_TITLE } from "../lib/ui";
 import { sectionHref, sectionLabel } from "../lib/tournamentFrame";
 import { formatCalendarDay } from "../lib/format";
 import type { MatchCardData } from "../components/MatchCard";
@@ -234,7 +234,7 @@ function StandingsTable({ draw, slug }: { draw: DrawDetailDTO; slug: string }) {
     <div className="overflow-x-auto rounded-lg border border-rule-soft bg-surface-raised shadow-sm">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-rule-soft text-left text-xs uppercase tracking-[0.06em] text-muted-foreground">
+          <tr className={`border-b border-rule-soft text-left ${EYEBROW_CLASS} text-muted-foreground`}>
             <th scope="col" className="px-3 py-2 font-semibold">Pos</th>
             <th scope="col" className="px-3 py-2 font-semibold">Player</th>
             <th scope="col" className="px-3 py-2 text-right font-semibold">PL</th>
@@ -458,7 +458,7 @@ function MatchList({
     <div className="grid gap-4">
       {rounds.map((round) => (
         <section key={round.label}>
-          <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
+          <h2 className={`${EYEBROW_CLASS} text-muted-foreground`}>
             {round.label}
           </h2>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -753,7 +753,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
                 className="flex w-72 shrink-0 snap-start flex-col"
               >
                 <h2
-                  className={`bracket-round-header ${ROUND_HEADER_HEIGHT} flex items-center text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground`}
+                  className={`bracket-round-header ${ROUND_HEADER_HEIGHT} flex items-center ${EYEBROW_CLASS} text-muted-foreground`}
                 >
                   {round.label}
                 </h2>
@@ -981,7 +981,7 @@ export default function Draw({ loaderData }: Route.ComponentProps) {
               {segment
                 ? segment.rounds.map((round) => (
                     <section key={round.label}>
-                      <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
+                      <h2 className={`${EYEBROW_CLASS} text-muted-foreground`}>
                         {round.label}
                       </h2>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">

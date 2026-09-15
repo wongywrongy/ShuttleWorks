@@ -466,8 +466,12 @@ describe('signing in says so on the page the browser lands on', () => {
     const created = await render(PAGE, '/e/spring-open/enter/created');
     const plain = await render();
 
-    expect(created).toContain('Your entrant account is ready');
-    expect(plain).not.toContain('Your entrant account is ready');
+    // B-8 reworded this (ruling, 2026-09-15): the banner now says WHY the
+    // sign-in is still needed, because sign-up not signing in is by design
+    // and a reader who is not told that reads it as a half-worked form.
+    expect(created).toContain('Your entrant account is created');
+    expect(created).toContain('we do not sign you in automatically');
+    expect(plain).not.toContain('Your entrant account is created');
     expect(created).toContain('/e/login?next=/e/spring-open/enter/signed-in');
     // Non-vacuity: it is the enter page, not an error boundary.
     expect(created).toContain('action="/e/api/submit/spring-open"');

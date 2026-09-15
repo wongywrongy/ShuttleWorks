@@ -38,8 +38,13 @@ if (container && status) {
     if (retryButton) return;
     retryButton = document.createElement('button');
     retryButton.type = 'button';
+    // The twin of `BUTTON_SECONDARY` in `app/lib/ui.ts`, byte-identical and
+    // pinned so by `tests/uiTwins.test.ts`. A browser ES module cannot
+    // import that file, so the string is copied — which is exactly the drift
+    // A-9/A-13 found: this copy wore the 44px control's radius on a 40px
+    // control and carried no focus ring at all.
     retryButton.className =
-      'inline-flex min-h-10 items-center rounded-md border border-rule-soft px-3 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised';
+      'inline-flex min-h-10 select-none items-center justify-center rounded border border-rule-control px-4 py-2 text-sm font-semibold tracking-[0.01em] text-foreground transition-colors duration-fast ease-out-quick ring-offset-surface-base hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground';
     retryButton.textContent = 'Try the human check again';
     retryButton.addEventListener('click', () => {
       removeRetry();

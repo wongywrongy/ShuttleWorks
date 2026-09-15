@@ -26,6 +26,7 @@
  * above it (`relative z-10`, `SeasonStatusCell`).
  */
 import { formatDateLong } from '../lib/format';
+import { EYEBROW_CLASS } from '../lib/ui';
 import {
   actionCell,
   displayTitle,
@@ -48,7 +49,7 @@ function SectionHeader({ label, live = false }: { label: string; live?: boolean 
     // The live header carries the live TONE in its text (ADR 0028: text, no
     // tinted band, no dot) — the one visual distinction between a tournament
     // being played and one still to come.
-    <h3 className={`px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.06em] ${live ? 'text-status-live' : 'text-muted-foreground'}`}>
+    <h3 className={`px-4 pb-1 pt-3 ${EYEBROW_CLASS} ${live ? 'text-status-live' : 'text-muted-foreground'}`}>
       {label}
     </h3>
   );

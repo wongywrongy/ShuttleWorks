@@ -286,6 +286,10 @@ const STATUS_TEXT_CLASS = {
 const CHIP =
   'inline-flex h-badge items-center rounded-xs border px-2.5 text-xs font-medium leading-none';
 
+/** JS twin of `app/lib/ui.ts` `BUTTON_DESTRUCTIVE` — same pinning (B-18). */
+const DESTRUCTIVE_BUTTON =
+  'inline-flex h-10 select-none items-center justify-center rounded border border-destructive bg-destructive px-3.5 text-sm font-semibold leading-none tracking-[0.01em] text-destructive-foreground transition-colors duration-fast ease-out-quick ring-offset-surface-base hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground';
+
 function el(doc, tag, className, text) {
   const node = doc.createElement(tag);
   if (className) node.className = className;
@@ -600,15 +604,26 @@ function withdrawSubject(line) {
  */
 function withdrawControls(doc, entryId, card, line) {
   const wrap = el(doc, 'div', 'grid gap-2');
+  // B-7. Every step of this control replaces `wrap`'s children wholesale —
+  // arm, confirm, outcome — so the focused button is destroyed under the
+  // reader's cursor and focus falls to `<body>`. A screen-reader user was
+  // told none of it. The region announces its own changes, and each step
+  // below moves focus to the control it just rendered.
+  wrap.setAttribute('role', 'status');
+  wrap.setAttribute('aria-live', 'polite');
   const linkClass =
     'text-sm font-medium text-muted-foreground underline-offset-4 hover:underline';
 
-  function build() {
+  function build(moveFocus) {
     wrap.textContent = '';
     const start = el(doc, 'button', linkClass, 'Withdraw entry');
     start.type = 'button';
     start.addEventListener('click', confirm);
     wrap.appendChild(start);
+    // Only when coming BACK from the confirmation. On first render the
+    // control is one card among many and stealing focus would be worse than
+    // not having it.
+    if (moveFocus) start.focus();
   }
 
   function confirm() {
@@ -663,12 +678,11 @@ function withdrawControls(doc, entryId, card, line) {
     panel.appendChild(eraseRow);
 
     const actions = el(doc, 'div', 'flex flex-wrap items-center gap-3');
-    const go = el(
-      doc,
-      'button',
-      'text-sm font-medium text-status-attention underline-offset-4 hover:underline',
-      'Withdraw entry',
-    );
+    // B-18: the twin of `BUTTON_DESTRUCTIVE` in `app/lib/ui.ts`, pinned
+    // byte-identical by `tests/uiTwins.test.ts`. This is the most
+    // destructive act a public visitor can perform on the product and it
+    // was underlined 12px text, indistinguishable from "Keep it" next to it.
+    const go = el(doc, 'button', DESTRUCTIVE_BUTTON, 'Withdraw entry');
     go.type = 'button';
     go.addEventListener('click', () => {
       go.disabled = true;
@@ -676,13 +690,15 @@ function withdrawControls(doc, entryId, card, line) {
     });
     const cancel = el(doc, 'button', linkClass, 'Keep it');
     cancel.type = 'button';
-    cancel.addEventListener('click', build);
+    cancel.addEventListener('click', () => build(true));
     actions.append(go, cancel);
     panel.appendChild(actions);
     wrap.appendChild(panel);
+    // B-7: the confirm step's own commit is where the reader now is.
+    go.focus();
   }
 
-  build();
+  build(false);
   return wrap;
 }
 
@@ -715,10 +731,7 @@ async function submitWithdraw(doc, entryId, erase, wrap) {
       },
     );
   } catch {
-    wrap.textContent = '';
-    wrap.appendChild(
-      el(doc, 'p', 'text-sm text-status-attention', 'Could not reach the server. Try again.'),
-    );
+    outcome(doc, wrap, 'text-sm text-status-attention', 'Could not reach the server. Try again.');
     return;
   }
   if (!response.ok) {
@@ -729,19 +742,32 @@ async function submitWithdraw(doc, entryId, erase, wrap) {
     } catch {
       /* keep the default — a body we cannot read is not a message. */
     }
-    wrap.textContent = '';
-    wrap.appendChild(el(doc, 'p', 'text-sm text-status-attention', message));
+    outcome(doc, wrap, 'text-sm text-status-attention', message);
     return;
   }
-  wrap.textContent = '';
-  wrap.appendChild(
-    el(
-      doc,
-      'p',
-      'text-sm text-muted-foreground',
-      erase ? 'Withdrawn, and the details were erased.' : 'Withdrawn.',
-    ),
+  outcome(
+    doc,
+    wrap,
+    'text-sm text-muted-foreground',
+    erase ? 'Withdrawn, and the details were erased.' : 'Withdrawn.',
   );
+}
+
+/**
+ * Replace the control with its outcome and put the reader on it (B-7).
+ *
+ * The three endings all destroyed the focused button and appended a plain
+ * `<span>`, so focus fell to `<body>` — a keyboard reader was returned to
+ * the top of the document and told nothing. `wrap` is now a live region, so
+ * the sentence is announced; `tabindex="-1"` makes it a legal focus target
+ * without adding a tab stop for anyone who did not just press the button.
+ */
+function outcome(doc, wrap, className, message) {
+  wrap.textContent = '';
+  const said = el(doc, 'p', className, message);
+  said.tabIndex = -1;
+  wrap.appendChild(said);
+  said.focus();
 }
 
 
@@ -886,7 +912,7 @@ export function render(root, data) {
   for (const group of activeAndPast(cards)) {
     const section = el(doc, 'section', 'grid gap-3');
     section.appendChild(
-      el(doc, 'h2', 'mt-2 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground',
+      el(doc, 'h2', 'mt-2 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground',
         group.label),
     );
     for (const card of group.cards) {

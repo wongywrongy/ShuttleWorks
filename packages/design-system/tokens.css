@@ -137,12 +137,23 @@
     --space-9:   64px;
     --space-10:  96px;
 
-    /* ----- Radii (warmed — rounded corners + gentle elevation) ----------- */
+    /* ----- Radii -------------------------------------------------------- */
+    /* RADIUS SCALES WITH CONTROL HEIGHT, not with a control's role. A 40px
+     * button and a 40px input take the same corner; a primary button does
+     * NOT get a rounder one for being primary. `Button.tsx` is the reference
+     * implementation and ADR 0027 the decision. The mapping:
+     *
+     *   xs / icon-sm / icon-xs (32px) -> --radius-sm  6px
+     *   sm / default / icon (36px, 40px, 36px) -> --radius  8px
+     *   lg (44px)                     -> --radius-md  9px
+     *   panels and cards              -> --radius     8px
+     *   overlays (modals, sheets, popovers) -> --radius-lg  12px
+     */
     --radius-xs: 4px;      /* micro tags, source-initial squares             */
-    --radius-sm: 6px;      /* status pills, small controls                   */
-    --radius:    8px;      /* default: buttons, chips, inputs                */
-    --radius-md: 9px;      /* primary buttons, nav rows (handoff radius-lg)  */
-    --radius-lg: 12px;     /* cards, metric tiles, modals                    */
+    --radius-sm: 6px;      /* the short (32px) controls, status pills        */
+    --radius:    8px;      /* the common control heights, and panels         */
+    --radius-md: 9px;      /* the tall (lg) control only                     */
+    --radius-lg: 12px;     /* overlays: modals, sheets, popovers             */
     --radius-xl: 14px;     /* screen frame                                   */
 
     /* ----- Easing (canonical app curves) -------------------------------- */
@@ -242,7 +253,13 @@
     --h3-size: 1rem;       --h3-weight: 600;
     --p-size:  0.875rem;   --p-weight:  400; --p-leading: 1.5;
     --label-size:   0.75rem;    --label-weight:   500;
-    --eyebrow-size: 0.625rem;   --eyebrow-weight: 600; --eyebrow-tracking: 0.08em;
+    /* Retuned to agree with `EYEBROW_CLASS` (components/textStyles.ts), which
+     * is THE eyebrow: 12px / 600 / 0.06em. The CSS token and the class had
+     * drifted to two different treatments of one role, so `.eyebrow` and a
+     * `<span className={EYEBROW_CLASS}>` beside it rendered differently. 10px
+     * also sat below the product's own caption floor for anything carrying
+     * words (v3 consolidated plan, package 07, ruling R1). */
+    --eyebrow-size: 0.75rem;    --eyebrow-weight: 600; --eyebrow-tracking: 0.06em;
 
     /* ----- Display type -------------------------------------------------- */
     --display-tracking: -0.03em;
