@@ -24,6 +24,11 @@ test('demo launcher remains recovery-first', () => {
 
   assert.match(launcher, /restore_drill "\$target"\n    if \[\[ -e "\$postgres_marker" \]\]; then\n      create_postgres_backup/)
   assert.match(launcher, /rebuild\)\n    backup_if_present/)
+  // The Postgres data directory is owned by the container user (0700): only a
+  // same-parent rename is permitted to the host user, so quarantine never
+  // moves state into a subdirectory.
+  assert.match(launcher, /mv -- "\$postgres_dir" "\$quarantine-postgres"/)
+  assert.doesNotMatch(launcher, /mv -- "\$postgres_dir" "\$quarantine\/postgres"/)
   assert.match(launcher, /down\)\n    backup_if_present/)
   assert.match(launcher, /verify_backup_files "\$tmp"/)
   assert.match(launcher, /needs_tailnet=false/)
