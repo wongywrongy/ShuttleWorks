@@ -29,14 +29,16 @@
  */
 
 /**
- * The three clusters that exist today, by SOURCE. Each is a decision owed, not
- * an oversight — see debt-log D3.
+ * The clusters that exist today, by SOURCE — see debt-log D3, ruled on
+ * 2026-09-15. The workspace -> display cluster is RETIRED: the board editor
+ * shared the public board's pure layout/rotation maths and its chrome, so
+ * those three modules moved to `lib/courtLayout.ts`, `lib/boardRotation.ts`
+ * and `components/boardChrome.tsx` and neither module reaches into the other
+ * any more. What remains is not oversight, it is a seam each way.
  *
  *  1. workspace -> settings   an aggregator edge: WorkspaceShellSurface hosts
  *                             the six settings tabs it renders.
- *  2. workspace -> display    the display-config board reuses the public
- *                             board's real renderer, for visual fidelity.
- *  3. operations -> bracket   the genuine debt: Operations reaches into
+ *  2. operations -> bracket   the genuine debt: Operations reaches into
  *                             Bracket's UI (MatchDetailPanel,
  *                             BracketScheduleModal, bracketLabels). Note the
  *                             API has NO such edge — import-linter contract 4
@@ -50,7 +52,6 @@
 // warnings instead of 16 -- which reads as a boundary problem and is not one.
 const KNOWN_CROSS_MODULE = [
   '^src/modules/(workspace)/WorkspaceShellSurface[.]tsx$',
-  '^src/modules/(workspace)/displayConfig/',
   '^src/modules/(operations)/OperationsProduct[.]tsx$',
   '^src/modules/(operations)/OpsDetailRail[.]tsx$',
   '^src/modules/(operations)/opsBlock[.]ts$',

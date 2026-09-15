@@ -16,7 +16,7 @@ import { FullscreenButton } from '../publicDisplay/FullscreenButton';
 import { BoardSwitch } from '../publicDisplay/BoardSwitch';
 import { LiveStatusPill } from '../publicDisplay/LiveStatusPill';
 import { staleCaption, STALE_MS } from '../publicDisplay/freshness';
-import { BoardBanner, BoardClock, BoardMark } from '../publicDisplay/boardChrome';
+import { BoardBanner, BoardClock, BoardMark } from '../../../components/boardChrome';
 import { DEFAULT_BOARD_SETTINGS } from '../useDisplayKind';
 import type { BoardSettingsDTO } from '../../../api/dto';
 import { formatDateTime } from '../../../lib/formatDateTime';

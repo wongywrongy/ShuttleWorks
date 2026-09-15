@@ -14,8 +14,8 @@
  *  - branding (logo, banner, title) is operator-set and public by
  *    construction: it is what gets projected on the wall.
  */
-import { formatDateTime } from '../../../lib/formatDateTime';
-import { demoNow } from '../../../lib/demoClock';
+import { formatDateTime } from '../lib/formatDateTime';
+import { demoNow } from '../lib/demoClock';
 
 /** The default board accent, used when the operator has set none. */
 export const DEFAULT_BOARD_ACCENT = '#10b981';

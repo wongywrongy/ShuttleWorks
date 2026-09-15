@@ -34,7 +34,7 @@ import { staleCaption, STALE_MS } from './publicDisplay/freshness';
 import { formatDateTime } from '../../lib/formatDateTime';
 import { useFullscreen } from './publicDisplay/useFullscreen';
 import { formatTournamentDate } from './publicDisplay/helpers';
-import { BoardBanner, BoardClock, BoardMark, resolveBoardAccent } from './publicDisplay/boardChrome';
+import { BoardBanner, BoardClock, BoardMark, resolveBoardAccent } from '../../components/boardChrome';
 import { DEFAULT_BOARD_SETTINGS } from './useDisplayKind';
 import type { BoardSettingsDTO } from '../../api/dto';
 import { FullscreenButton } from './publicDisplay/FullscreenButton';
@@ -42,7 +42,7 @@ import { BoardSwitch } from './publicDisplay/BoardSwitch';
 import { LiveStatusPill } from './publicDisplay/LiveStatusPill';
 import { ScheduleView } from './publicDisplay/ScheduleView';
 import { StandingsView } from './publicDisplay/StandingsView';
-import { DEFAULT_DWELL_SECONDS, rotationSlides, slideAt } from './publicDisplay/rotation';
+import { DEFAULT_DWELL_SECONDS, rotationSlides, slideAt } from '../../lib/boardRotation';
 import { CourtsView } from './publicDisplay/CourtsView';
 import { assignLanes, type LaneItem } from './publicDisplay/courtLanes';
 import {
@@ -52,7 +52,7 @@ import {
   type OccupancyMatchLike,
 } from '../../platform/domain/courtOccupancy';
 import { DEFAULT_PRESET_ID } from './publicDisplay/displayPresets';
-import { orderCourts, visibleCourts, defaultColumns, autoLayout } from './publicDisplay/courtLayout';
+import { orderCourts, visibleCourts, defaultColumns, autoLayout } from '../../lib/courtLayout';
 import { standingsPlacement } from './publicDisplay/standingsLayout';
 import {
   resolveCardHeightPx,
