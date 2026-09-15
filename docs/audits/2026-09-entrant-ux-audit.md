@@ -1,6 +1,6 @@
 # Entrant tier UI/UX audit (2026-09)
 
-Status: Findings, awaiting owner rulings.
+Status: Rulings taken 2026-09-15; implementation in progress.
 
 ## Scope
 
@@ -150,6 +150,76 @@ The three Blockers, one sentence each:
 | B-22 | Accessible name grammar | Draws tab cards | Accessible names drop apostrophes: "Mens Doubles Final draw", "Womens Singles Final draw", while the draw pages themselves say "Men's Singles" | H2 | Nit | Derive the accessible name from the same discipline label the draw page uses |
 
 ## Rulings the owner must make
+
+### Rulings taken (2026-09-15)
+
+- **Contradiction 1 (eyebrow tracking).** The design-system class wins:
+  12px, weight 600, uppercase, 0.06em tracking everywhere. The entrant
+  tier drops its hand-rolled bold weight to match.
+- **Contradiction 2 (mono eyebrows).** Moot; `DESIGN.md` no longer
+  carries the table the finding cited.
+- **Contradiction 3 (radius by role vs. by size).** Code stands: radius
+  scales with control height/size, not with role. `DESIGN.md` and
+  `tokens.css`'s comments are rewritten to say so.
+- **Contradictions 4, 5, 6, 7.** Docs reconciled to code: ADR 0020's
+  square-`Card` and `rounded-full`-`StatusChip` sentences are struck with
+  a dated supersession note pointing at ADR 0027; `design-system.md`
+  drops `BRAND.md` from the authoritative-sources table and re-indexes
+  per-tier/role radius to ADR 0027; `MOTION.md`'s `--motion-slow` rule
+  now names the `sw-dock-transition` exception explicitly.
+- **Heuristics.** The nine "Recommend" items are adopted as numbered,
+  testable rules in `DESIGN.md`; the five "Defer" items are listed there
+  as "Not yet rules" with the reason each is deferred.
+- **B-16 (bracket truncation allowlist).** Already resolved in code:
+  `apps/entrant/tests/noTruncation.test.ts`'s allowlist no longer carries
+  `MatchCard.tsx`; only `StatusChip.tsx` and the `nowrap` entry remain.
+- **A-1/A-3 (page-title type step).** Already resolved in code: the
+  `text-page` step exists in the shared scale and `PAGE_TITLE`
+  (`apps/entrant/app/lib/ui.ts`) uses it; the three ad hoc call sites
+  that still bypass it are being fixed as part of this batch.
+- **Scope.** Everything still live (not resolved, not moot) is being
+  implemented; see "Re-verification 2026-09-15" below for which findings
+  that covers.
+
+### Re-verification 2026-09-15
+
+| Finding | Status |
+| --- | --- |
+| B-1 | LIVE |
+| A-3 | LIVE |
+| A-4/A-5/A-6 | LIVE |
+| A-9 | LIVE |
+| A-13 | LIVE |
+| B-5 | LIVE |
+| B-7 | LIVE |
+| A-2 | LIVE |
+| A-11 | LIVE |
+| A-12 | LIVE |
+| A-8 | LIVE |
+| B-8 | LIVE |
+| B-14 (title half) | LIVE |
+| B-18 | LIVE |
+| B-19 (numbered links) | LIVE |
+| B-20 (labels sr-only) | LIVE |
+| B-2 | RESOLVED |
+| B-3 | RESOLVED |
+| A-1 | RESOLVED |
+| B-15/A-20 | RESOLVED |
+| B-4 | RESOLVED |
+| B-6 | RESOLVED |
+| B-9 | RESOLVED |
+| B-11 | RESOLVED |
+| B-10 | RESOLVED |
+| B-12 | RESOLVED |
+| B-13 | RESOLVED |
+| B-16 | RESOLVED |
+| B-17 | RESOLVED |
+| B-21 | RESOLVED |
+| B-22 | RESOLVED |
+| B-14 (unknown tab 404s) | RESOLVED |
+| B-19 (chip labels, Previous link) | RESOLVED |
+| A-24 (recorded exception) | RESOLVED |
+| A-21 | MOOT |
 
 1. **Seven source contradictions**, each with the finding it blocks:
    1. Eyebrow tracking 0.08em (`tokens.css:231`, `.eyebrow`, `EYEBROW_CLASS`) vs 0.06em
