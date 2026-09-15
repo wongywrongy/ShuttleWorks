@@ -533,6 +533,27 @@ entirely.
 docker compose -f infra/compose/docker-compose.selfhost.yml up -d --build
 ```
 
+That builds the three application images from this checkout. To deploy a
+**published release** instead, add `infra/compose/release.override.yml`, which
+replaces those three `build:` sections with image digests that
+`tools/verify-release.py` has checked the cosign signature and the GitHub SLSA
+provenance of:
+
+```bash
+.venv/bin/python tools/verify-release.py FULL_40_CHARACTER_COMMIT_SHA \
+  --output verified-release.env
+docker compose --env-file verified-release.env \
+  -f infra/compose/docker-compose.selfhost.yml \
+  -f infra/compose/release.override.yml up -d
+```
+
+Everything else on this page applies unchanged — the two shapes differ in
+where the images come from and in nothing else. There is no tag input: a tag
+is mutable, so an unverified deployment fails at `docker compose config` time
+rather than pulling whatever `latest` points at today. (Until 2026-09-15 this
+was a second stack, `docker-compose.release.yml`, describing a SQLite,
+direct-port, local-auth deployment that had not been production for months.)
+
 The API applies Alembic migrations in its startup lifespan — it is the only
 process that ever does. Watch for `alembic_upgrade_head_complete`, then:
 

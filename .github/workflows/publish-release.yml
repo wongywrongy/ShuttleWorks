@@ -1,9 +1,11 @@
 # Builds and pushes the backend + frontend + entrant container images to GHCR
 # for an explicit release ref. Publication is deliberately a separate step
 # after CI: it first proves that the exact commit being checked out has a
-# successful CI run. There is no mutable ``latest`` release channel. Operators
-# select a semver tag or an immutable commit-SHA tag in the release compose
-# file.
+# successful CI run. There is no mutable ``latest`` release channel, and no
+# tag input in the deployment path either: ``tools/verify-release.py`` resolves
+# the ``sha-<commit>`` tag published here to a registry DIGEST, verifies its
+# signature and provenance, and writes the digests
+# ``infra/compose/release.override.yml`` requires.
 name: Publish release images
 
 on:
@@ -39,9 +41,9 @@ jobs:
             # the repo root, so a narrowed context can't satisfy it.
             context: .
           - name: entrant
-            # The public entrant SSR tier. docker-compose.release.yml
-            # references ghcr.io/<owner>/scheduler-entrant, so it has to
-            # be published here or that stack cannot be pulled.
+            # The public entrant SSR tier. release.override.yml references
+            # ghcr.io/<owner>/scheduler-entrant, so it has to be published
+            # here or a release deployment cannot be pulled.
             dockerfile: apps/entrant/Dockerfile
             context: .
     steps:

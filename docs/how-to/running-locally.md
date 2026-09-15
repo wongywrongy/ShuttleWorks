@@ -79,19 +79,26 @@ After it is up:
 
 ### Running a published release
 
-The release stack is pull-only and requires an explicit `TAG`; it never
-defaults to a mutable `latest` image. Use the semver tag produced by the
-release workflow, or the long commit-SHA tag when exact provenance matters:
+A release is the self-host stack with its three `build:` sections replaced by
+verified image digests. There is no tag input at all — not even an explicit
+one: a tag is mutable, so `tools/verify-release.py` resolves the release's
+`sha-<commit>` tags to registry digests, verifies the cosign signature and the
+GitHub SLSA provenance of each digest, and writes them to an env file.
 
 ```bash
-TAG=1.2.3 docker compose -f infra/compose/docker-compose.release.yml pull
-TAG=1.2.3 docker compose -f infra/compose/docker-compose.release.yml up -d
+.venv/bin/python tools/verify-release.py FULL_40_CHARACTER_COMMIT_SHA \
+  --output verified-release.env
+docker compose --env-file verified-release.env \
+  -f infra/compose/docker-compose.selfhost.yml \
+  -f infra/compose/release.override.yml up -d
 ```
 
-Set `OWNER` for a fork or another GHCR namespace. Publication is gated on a
-successful CI run for the exact commit and embeds that commit in each image's
-OCI revision label; keep the selected tag in the deployment record for
-rollback and support.
+That stack is real production — Postgres, cloud auth and a Cloudflare Tunnel —
+so it needs the rest of its configuration too; see
+[Install (self-host)](/how-to/install-selfhost). Set `OWNER` for a fork or
+another GHCR namespace. Publication is gated on a successful CI run for the
+exact commit and embeds that commit in each image's OCI revision label; keep
+`verified-release.env` in the deployment record for rollback and support.
 
 ## Tailscale tech demo on a Linux server
 

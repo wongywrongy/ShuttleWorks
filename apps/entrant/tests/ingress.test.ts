@@ -278,8 +278,8 @@ describe('the rate-limit bucket cannot be chosen by the client', () => {
   // justified by a premise stated in the file: "nginx publishes no host port
   // in any shipped stack, so the only route in is cloudflared, which
   // overwrites the header". The premise was FALSE — `docker-compose.yml`
-  // publishes `${FRONTEND_HOST_PORT:-80}:8080` and
-  // `docker-compose.release.yml` publishes `80:8080` — so on those stacks a
+  // publishes `${FRONTEND_HOST_PORT:-80}:8080`, and the since-retired
+  // `docker-compose.release.yml` published `80:8080` — so on such a stack a
   // client sends `CF-Connecting-IP: <random>` per request, every zone becomes
   // a fresh bucket, and `sw_auth`/`sw_entries`/`sw_display` limit nothing at
   // all.

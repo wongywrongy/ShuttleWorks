@@ -1,0 +1,46 @@
+# Verified-release image inputs for the self-host production stack.
+#
+# This file used to be a whole second production stack,
+# `docker-compose.release.yml`: its own SQLite backend, its own published
+# ports, local auth, its own pinned network. Self-hosted production had long
+# since become Postgres, cloud auth and a Cloudflare Tunnel, so the two files
+# described different products while both reading like "production" (D31). The
+# topology now lives in ONE place — `docker-compose.selfhost.yml` — and this
+# override changes the only thing a release actually changes: where the three
+# application images come from.
+#
+#   docker compose --env-file verified-release.env \
+#     -f docker-compose.selfhost.yml -f release.override.yml up -d
+#
+# `verified-release.env` is written by `tools/verify-release.py`, which
+# resolves each `sha-<commit>` tag to its registry digest and then verifies the
+# cosign signature and the GitHub SLSA provenance of that exact digest before
+# writing anything usable. It emits `OWNER` and the three `*_DIGEST` values
+# this file reads, and nothing else — there is deliberately no TAG input
+# anywhere in this repository's release path, because a tag is mutable and a
+# digest is not. Each `:?` below means an unverified deployment fails at
+# `docker compose config` time, before an image is pulled.
+#
+# `build: !reset null` is load-bearing, not tidiness. Compose merges this
+# override onto the base file, and a service with BOTH a `build:` section and a
+# digest-pinned `image:` cannot be built at all — buildx refuses with "build
+# tag cannot contain a digest". Dropping the build section is what keeps
+# `docker compose build` meaningful on the base stack (the from-source install
+# in docs/how-to/install-selfhost.md) while this composition stays pull-only.
+#
+# Everything else — Postgres, the tunnel, the secrets, the pinned subnet and
+# every environment variable — is inherited, so a release and a from-source
+# install differ in provenance and in nothing else.
+
+services:
+  api:
+    build: !reset null
+    image: ghcr.io/${OWNER:-wongywrongy}/scheduler-backend@${BACKEND_DIGEST:?Run tools/verify-release.py to produce verified release digests}
+
+  entrant:
+    build: !reset null
+    image: ghcr.io/${OWNER:-wongywrongy}/scheduler-entrant@${ENTRANT_DIGEST:?Run tools/verify-release.py to produce verified release digests}
+
+  frontend:
+    build: !reset null
+    image: ghcr.io/${OWNER:-wongywrongy}/scheduler-frontend@${FRONTEND_DIGEST:?Run tools/verify-release.py to produce verified release digests}
