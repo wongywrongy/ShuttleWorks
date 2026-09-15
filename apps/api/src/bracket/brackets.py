@@ -2765,9 +2765,22 @@ def generate_event_route(
     )
 
     # Run the solver (in memory only — no DB writes until success).
+    #
+    # Ruling D11: pass the session's solver options, the way every other
+    # bracket solve path does (`schedule_next_round`, the streaming
+    # sibling). This driver was built with none, so the persisted
+    # per-session time budget AND the workspace's deterministic/seed knobs
+    # were silently dropped — a solve that is supposed to be reproducible
+    # was not, and a budget the operator set did not apply.
+    generate_row = repo.tournaments.get_by_id(tournament_id)
+    generate_blob = (generate_row.data or {}) if generate_row else {}
     driver = TournamentDriver(
         state=session.state,
         config=session.config,
+        solver_options=_bracket_solver_options(
+            _session_time_limit_seconds(generate_blob.get("bracket_session") or {}),
+            generate_blob.get("config") or {},
+        ),
         rest_between_rounds=session.rest_between_rounds,
         player_extras=session.player_extras,
     )

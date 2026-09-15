@@ -101,7 +101,7 @@ the draw inside the same module.
 | --- | --- |
 | `POST · GET · DELETE …/bracket` | create / read / clear the bracket (`DELETE` is refused `409 DRAW_PUBLISHED` while draws are published — see the publication lock below) |
 | `POST …/bracket/events/{eid}` | upsert one event (forced to `draft`) |
-| `POST …/bracket/events/{eid}/generate` | generate the draw for an event |
+| `POST …/bracket/events/{eid}/generate` | generate the draw for an event (honours the session's solve budget and `deterministic`/`randomSeed`, like the other solve paths — ruling D11) |
 | `DELETE …/bracket/events/{eid}` | delete a `draft` event (refused `409 DRAW_PUBLISHED` while draws are published) |
 | `POST …/bracket/schedule-next` | solve the next ready round (batch) |
 | `POST …/bracket/schedule-next/stream` | solve next round with SSE progress + candidate pool |
