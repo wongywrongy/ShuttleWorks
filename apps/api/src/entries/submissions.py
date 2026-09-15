@@ -379,7 +379,8 @@ def adopt_or_mint(
     extracted from ``_write`` so the partner path (R-DM-1 (ii)) applies the
     identical rule instead of constructing rows on its own. Returns
     ``(player, adopted)``. On adoption the DESCRIPTIVE fields take the
-    fresh values (see the R-P7c comment at the ``_write`` call site).
+    fresh values (see the R-P7c comment at the ``_write`` call site) —
+    ``gender`` included, since ruling D22.
 
     ``blank_clears`` keeps the entry form's blank-means-clear (R-P7c) as the
     default; the partner accept form passes ``False`` because a blank there
@@ -404,6 +405,19 @@ def adopt_or_mint(
     club = (spec.club or "").strip() or None
     representation = normalize_representation(spec.representation)
     remarks = (spec.remarks or "").strip() or None
+    # Ruling D22 (2026-09-15): newest wins, like every other descriptive
+    # field. Adoption used to leave ``gender`` at whatever the FIRST
+    # submission declared, so a partner's differing self-declaration was
+    # silently ignored — and it is read: ``lifecycle.recompute_reasons``
+    # feeds ``entry_players.gender`` to ``gender_flags``, so a stale value
+    # produces a stale advisory on the desk.
+    #
+    # Blank never clears it, unlike club/representation/remarks: the column
+    # is NOT NULL and the value is a person's own declaration, so a form
+    # that did not ask keeps the one on file rather than erasing it.
+    gender = (spec.gender or "").strip()
+    if gender:
+        player.gender = gender
     if blank_clears or club is not None:
         player.club = club
     if blank_clears or representation is not None:

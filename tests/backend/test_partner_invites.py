@@ -998,3 +998,118 @@ def test_partner_names_on_the_player_page(client, world, mailbox):
     assert _reference_name(xd["partner"]) == "Sam Ali"
     assert set(xd["partner"]) == {"identity", "resolution", "label"}
     assert set(xd["partner"]["identity"]) == {"id", "name"}
+
+
+def test_adoption_takes_the_newest_gender_declaration(client, world, mailbox):
+    """Ruling D22 (2026-09-15): newest wins on ``gender`` too.
+
+    ``adopt_or_mint`` refreshed the descriptive fields the accept form asks
+    for but left ``gender`` at whatever the FIRST submission declared, so a
+    person correcting their own self-declaration on the accept form was
+    silently ignored. It is not cosmetic: ``lifecycle.recompute_reasons``
+    feeds ``entry_players.gender`` to ``gender_flags``, so a stale value
+    produces a stale advisory on the operator's desk.
+    """
+    import uuid as _uuid
+
+    from sqlalchemy import select
+
+    from db.models import EntrantAccount, EntryEvent, EntryPage, EntryPlayer
+    from db.session import SessionLocal
+    from entries.submissions import PlayerInput, create_submission
+
+    _verified_entrant(client, mailbox, "sam@example.com")
+    session = SessionLocal()
+    try:
+        sam = session.scalars(
+            select(EntrantAccount).where(EntrantAccount.email == "sam@example.com")
+        ).one()
+        page = session.get(EntryPage, _uuid.UUID(world["tid"]))
+        ms = session.get(EntryEvent, (_uuid.UUID(world["tid"]), _uuid.UUID(world["ms"])))
+        own = create_submission(
+            session,
+            tournament_id=_uuid.UUID(world["tid"]),
+            page=page,
+            account_id=sam.id,
+            # The first declaration — deliberately the one corrected below.
+            players=[PlayerInput("Sam Ali", "M", birth_year=2000, events=[ms])],
+            fee_total_cents=2000,
+            fee_basis={"basis": "schedule", "players": []},
+        )
+        session.commit()
+        own_person_id = str(own.players[0].id)
+    finally:
+        session.close()
+
+    _verified_entrant(client, mailbox, "alex@example.com")
+    _, token = _nominate(client, world, partner_email="sam@example.com")["invites"][0]
+
+    client.cookies.clear()
+    assert client.post(
+        "/e/account/login",
+        json={"email": "sam@example.com", "password": PW},
+        headers=CSRF,
+    ).status_code == 200
+    # ``_accept`` declares gender "F"; the same name + birth year make this
+    # the certain match, so the existing row is ADOPTED, not minted.
+    r = _accept(client, token, birthYear="2000")
+    assert r.status_code == 200, r.text
+
+    theirs = _entry(world["tid"], r.json()["entryId"])
+    assert str(theirs.entry_player_id) == own_person_id
+
+    session = SessionLocal()
+    try:
+        person = session.get(
+            EntryPlayer, (_uuid.UUID(world["tid"]), _uuid.UUID(own_person_id))
+        )
+        assert person.gender == "F"
+    finally:
+        session.close()
+
+
+def test_adoption_does_not_blank_gender_when_the_form_does_not_ask(client, world):
+    """The other half of D22: newest wins, but a BLANK is not a value.
+
+    ``gender`` is NOT NULL and is a person's own declaration, so — unlike
+    club / representation / remarks under ``blank_clears=False`` — an empty
+    string keeps what is on file rather than erasing it.
+    """
+    import uuid as _uuid
+
+    from db.models import EntrantAccount, EntryPlayer
+    from db.session import SessionLocal
+    from entries.submissions import PlayerInput, adopt_or_mint
+
+    session = SessionLocal()
+    try:
+        tid = _uuid.UUID(world["tid"])
+        # A real account: ``player_representatives`` has an FK to it.
+        account = EntrantAccount(email="blank-case@example.com", password_hash="x")
+        session.add(account)
+        session.flush()
+        account_id = account.id
+        minted, adopted = adopt_or_mint(
+            session,
+            tid,
+            account_id,
+            PlayerInput("Blank Case", "F", birth_year=1999),
+        )
+        assert adopted is False
+
+        again, adopted = adopt_or_mint(
+            session,
+            tid,
+            account_id,
+            PlayerInput("Blank Case", "", birth_year=1999),
+            blank_clears=False,
+        )
+        assert adopted is True
+        assert again.id == minted.id
+        session.flush()
+
+        person = session.get(EntryPlayer, (tid, minted.id))
+        assert person.gender == "F"
+    finally:
+        session.rollback()
+        session.close()
