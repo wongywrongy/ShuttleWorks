@@ -28,7 +28,7 @@ Owners name repository responsibilities; the maintainer coordinates delivery. Pa
 | P08 | App-owned MFA, sessions and recovery | identity-module-owner | P04, P05 | Implemented 2026-09-14 (voluntary enrollment, code reissue, key rotation, resumable fresh proof, CI browser journey); hosted CI passes; independent review pending. Review residuals closed 2026-09-14 (ADR 0033, migration 0008, event-node browser journey, container key-rotation drill) |
 | P09 | Atomic writes and concurrency | architecture | P03 | In progress |
 | P10 | Authority history and key rotation | sync-module-owner | P09 | In progress |
-| P11 | Canonical membership and persisted match outcomes | architecture | P09 | Pending |
+| P11 | Canonical membership and persisted match outcomes | architecture | P09 | In progress (D19 Meet game scores persisted 2026-09-15) |
 | P12 | Purpose-based retention and erasure | identity-module-owner | P05, P11 | Pending |
 | P13 | Verified release installation and dependency hygiene | release-owner | P02 | In progress |
 | P14 | Recovery, mail delivery and operational rehearsals | platform-oncall | P08, P10, P12, P13 | In progress |
@@ -162,7 +162,7 @@ Each non-Closed section entry is assigned a stable inventory ID below. This incl
 | DL-112 | Open — needs an owner decision / D10 | comingSoon keeps retired vocabulary alive in the contract. | P23 | Unreconciled |
 | DL-113 | Open — needs an owner decision / D11 | Bracket POST /events/{id}/generate ignores the session solver config | P15 | Unreconciled |
 | DL-114 | Open — needs an owner decision / D12 | Self-hosted first-run provisioning is throttled at four operator accounts per hour per IP. | P08 | Reconciled: default kept as abuse protection; `REGISTRATION_MAX_PER_IP` / `_WINDOW_SECONDS` / `_LOCK_SECONDS` documented in the self-host reference; invitations are the intended path for staff |
-| DL-115 | Open — needs an owner decision / D19 | Meet set-by-set scores do not persist server-side. | P11 | Unreconciled |
+| DL-115 | Open — needs an owner decision / D19 | Meet set-by-set scores do not persist server-side. | P11 | Implementation verified 2026-09-15 (migration 0009, `test_meet_set_scores.py`); review pending |
 | DL-116 | Open — needs an owner decision / D14 | Should a scheduled — not per-PR — entrant e2e job exist? | P23 | Unreconciled |
 | DL-117 | Open — needs an owner decision / D15 | --status-started (sky) reads as interactive next to the azure accent, and --module-meet is the accent hex. | P23 | Unreconciled |
 | DL-118 | Open — needs an owner decision / D16 | The ready / live / complete Overview panels are minimal. | P16 | Unreconciled |

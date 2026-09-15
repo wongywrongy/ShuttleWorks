@@ -6943,6 +6943,8 @@ export interface components {
             /** Actualendtime */
             actualEndTime?: string | null;
             score?: components["schemas"]["MatchScore"] | null;
+            /** Sets */
+            sets?: components["schemas"]["MatchScore"][] | null;
             /** Notes */
             notes?: string | null;
             /** Updatedat */

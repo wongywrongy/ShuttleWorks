@@ -369,6 +369,7 @@ class MatchState(Base):
     actual_end_time: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     score_side_a: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     score_side_b: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    set_scores: Mapped[Optional[list[dict[str, int]]]] = mapped_column(JSON, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     original_slot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     original_court_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
