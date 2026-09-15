@@ -72,6 +72,15 @@ jobs:
         run: npm run figma:tokens:check
       - name: Lint
         run: npm run lint:scheduler
+      # The browser-evidence suite belongs to no app — it drives both tiers —
+      # so neither `lint:scheduler` nor `lint:entrant` covered it and until
+      # D14 (2026-09-15) nothing did. It rides this job rather than getting one
+      # of its own: it is eslint over fourteen files and needs only the root
+      # install this job has already done. The specs themselves run in the
+      # browser jobs (console contracts per PR, the entrant evidence spec
+      # nightly) — this is the half that can be a lean per-PR gate.
+      - name: Lint (browser-evidence suite)
+        run: npm run lint:e2e
       - name: Unit tests
         run: npm --prefix apps/console run test:run
       - name: Architecture boundaries (dependency-cruiser)

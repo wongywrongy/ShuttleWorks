@@ -501,6 +501,10 @@ check-full:
 	npm run typecheck:entrant
 	npm run test:entrant
 	npm run depcruise:entrant
+# The browser-evidence suite (D14). Lint only — the specs need Docker and a
+# browser, which is what the nightly workflow is for; this is the half that
+# costs a second and catches the dead variable before a nightly does.
+	npm run lint:e2e
 	ruff check $(PY_SOURCES)
 # The API's architecture contracts. Run from apps/api/src because that is the
 # sys.path root the packages import from (R4: src is a ROOT, not a package);
@@ -532,6 +536,7 @@ check-fast:
 	npm run typecheck:entrant
 	npm run test:entrant:unit
 	npm run depcruise:entrant
+	npm run lint:e2e
 	ruff check $(PY_SOURCES)
 	cd apps/api/src && lint-imports --config ../.importlinter
 	$(PYTEST_PARALLEL) tests/backend/unit -m 'not slow'

@@ -1,0 +1,93 @@
+name: Nightly
+
+# The jobs that are real controls but too heavy for a per-PR gate: each boots
+# Docker and runs a full stack, which is minutes, not seconds. CLAUDE.md's
+# lean-gate philosophy says such a check belongs on a schedule rather than in
+# front of every push — it still runs unattended, every night, on main, and
+# `workflow_dispatch` makes it runnable on demand before a release.
+#
+# Nothing here is required for a PR to merge. A red nightly is a bug report
+# against main, not a blocked contributor.
+
+on:
+  schedule:
+    # 03:17 UTC — off the hour, so this does not join the stampede every other
+    # repository schedules at :00 and then waits in GitHub's queue.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+# Least privilege, matching ci.yml: nothing here writes back to GitHub.
+permissions:
+  contents: read
+
+# One nightly at a time. These jobs bind host ports and Docker resources; two
+# overlapping runs on the same runner pool are fine, but a manual dispatch
+# racing the scheduled run on the same ref is not worth the confusion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  entrant-evidence:
+    name: Entrant browser evidence (full Docker stack)
+    runs-on: ubuntu-latest
+    # The stack is BUILT from source here (E2E_REBUILD=1, three images), then
+    # the suite drives both origins across two viewport widths.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install workspaces
+        run: npm ci
+
+      # Same cache shape and same reasoning as the console-browser-contracts
+      # job in ci.yml: the browser binary is immutable per Playwright version,
+      # so it keys on the lockfile that pins it, and `install-deps` still runs
+      # on a hit because system libraries are not in the cache path.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/e2e/package-lock.json') }}
+
+      - name: Install Chromium
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps --only-shell chromium
+          fi
+
+      # `make test-e2e-rebuild` is the single definition of how this spec runs:
+      # the two published frontend ports (operator 8090, public 8091 — the
+      # suite needs both since SP-HOST-1), the matching base URLs, and
+      # E2E_REBUILD=1 so the images come from THIS commit rather than whatever
+      # a previous run left in the Docker cache. The suite's own global setup
+      # brings the stack up and its teardown brings it down; the stack is the
+      # default local one, so no secret, credential or private host is
+      # involved.
+      - name: Entrant evidence spec (builds and runs the stack)
+        run: make test-e2e-rebuild
+
+      # The teardown already runs `docker compose down` on a clean exit. This
+      # is the crash path: a suite that dies before Playwright's global
+      # teardown would otherwise leave the stack and its bind-mounted SQLite
+      # file behind on a self-hosted runner.
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f infra/compose/docker-compose.yml down --volumes --remove-orphans || true
+
+      - name: Upload the failure trace
+        if: failure()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: entrant-evidence-report
+          path: tests/e2e/playwright-report/
+          retention-days: 7

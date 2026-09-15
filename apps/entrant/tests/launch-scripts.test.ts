@@ -90,7 +90,9 @@ test('the Makefile targets invoke the scripts that actually exist', () => {
   // command — `build` is a workspace script, not a root one. Nothing can hide
   // behind the strip: a recipe line always begins with a TAB, never a `#`.
   const recipes = makefile.replace(/^\s*#.*$/gm, '');
-  const invoked = [...recipes.matchAll(/npm run ([a-z:.-]+)/g)].map((m) => m[1]);
+  // Digits are part of a script name (`lint:e2e`): without them the match
+  // stops mid-name and reports a script nobody wrote as missing.
+  const invoked = [...recipes.matchAll(/npm run ([a-z0-9:.-]+)/g)].map((m) => m[1]);
   const missing = invoked.filter((name) => !(name in scripts) && !(name in e2eScripts()));
   expect(missing).toEqual([]);
 });
@@ -141,6 +143,7 @@ test('keeps check full and defines the narrower fast developer gate', () => {
     'npm run typecheck:entrant',
     'npm run test:entrant',
     'npm run depcruise:entrant',
+    'npm run lint:e2e',
     'ruff check $(PY_SOURCES)',
     'cd apps/api/src && lint-imports --config ../.importlinter',
     '$(PYTEST_PARALLEL)',
@@ -161,6 +164,7 @@ test('keeps check full and defines the narrower fast developer gate', () => {
     'npm run typecheck:entrant',
     'npm run test:entrant:unit',
     'npm run depcruise:entrant',
+    'npm run lint:e2e',
     'ruff check $(PY_SOURCES)',
     'cd apps/api/src && lint-imports --config ../.importlinter',
     "$(PYTEST_PARALLEL) tests/backend/unit -m 'not slow'",
@@ -278,6 +282,34 @@ test('keeps e2e ownership explicit and excludes retired specs', () => {
   expect(setup).not.toMatch(/execSync\(\s*['"]docker-compose/);
   expect(teardown).not.toMatch(/execSync\(\s*['"]docker-compose/);
   expect(factories).not.toContain('e2e/fixtures/seed.ts');
+});
+
+test('the browser-evidence suite is linted per PR and run nightly (D14)', () => {
+  const root = rootScripts();
+  const ci = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
+  const nightly = readFileSync(join(REPO_ROOT, '.github/workflows/nightly.yml'), 'utf8');
+  const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
+
+  // tests/e2e is in neither app workspace, so its lint has to name its own
+  // flat config explicitly — an `eslint tests/e2e` from the repo root finds no
+  // config at all and lints nothing while exiting 0.
+  expect(root['lint:e2e']).toBe('eslint --config tests/e2e/eslint.config.js tests/e2e');
+  expect(
+    readFileSync(join(REPO_ROOT, 'tests/e2e/eslint.config.js'), 'utf8'),
+  ).toContain('files: [\'**/*.ts\']');
+  expect(ci).toContain('npm run lint:e2e');
+
+  // The browser half is scheduled, not per-PR: it builds three images and
+  // boots the whole stack. Pinned here because a schedule that silently stops
+  // firing looks exactly like a schedule that keeps passing.
+  expect(nightly).toMatch(/^\s+schedule:$/m);
+  expect(nightly).toMatch(/^\s+- cron: "[\d\s*/,-]+"$/m);
+  expect(nightly).toMatch(/^\s+workflow_dispatch:$/m);
+  expect(nightly).toContain('make test-e2e-rebuild');
+  // ...and that Makefile target is what actually names the evidence spec.
+  expect(recipeCommands(makefile, 'test-e2e-rebuild').join('\n')).toContain(
+    'npm run test:entrant-evidence',
+  );
 });
 
 test('waits for the entrant origin only for entrant evidence', () => {

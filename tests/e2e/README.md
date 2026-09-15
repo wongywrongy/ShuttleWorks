@@ -57,11 +57,14 @@ entrant build with:
 npm run test:pagination --prefix tests/e2e
 ```
 
-The entrant evidence suite is an explicit compose/dev verification run, not a
-PR gate. The CI browser gate runs the console contract suite against its
-isolated canonical fixture; it does not silently substitute for entrant
-evidence. Run entrant evidence when changing the public tier, nginx ingress,
-security headers, or production-shaped images:
+The entrant evidence suite is not a PR gate: it builds three images and boots
+the whole compose stack, which is minutes. Since D14 (2026-09-15) it runs
+**nightly** — `.github/workflows/nightly.yml`, job *Entrant browser evidence*,
+which calls `make test-e2e-rebuild` and is also runnable on demand through
+`workflow_dispatch`. The per-PR browser gate remains the console contract suite
+against its isolated canonical fixture; it does not silently substitute for
+entrant evidence. Run entrant evidence locally when changing the public tier,
+nginx ingress, security headers, or production-shaped images:
 
 ```bash
 make test-e2e-install   # one-time browser install
@@ -70,6 +73,18 @@ make test-e2e-rebuild   # rebuild images first
 make full-dev
 make test-e2e-dev       # use local dev origins
 ```
+
+## Lint
+
+This directory is in neither app workspace, so it carries its own flat eslint
+config (`tests/e2e/eslint.config.js`) and the root script that names it:
+
+```bash
+npm run lint:e2e
+```
+
+It runs per PR in CI's *Frontend* job and in `make check`. Python helpers here
+are linted by `ruff` with the rest of the tree.
 
 ## Environment variables
 
