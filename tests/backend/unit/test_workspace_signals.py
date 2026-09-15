@@ -479,3 +479,71 @@ def test_next_up_rows_carry_identity_so_they_can_be_opened():
     first = sig.nextUp[0]
     assert first.matchId in {"m1", "m2", "m3", "m4"}
     assert first.source == "meet"
+
+
+# ── per-event progress (debt-log D16) ────────────────────────────────────
+
+
+def test_meet_event_progress_groups_by_event_code():
+    """The live Overview panel's per-event rows. Grouped from the authored
+    ``eventRank`` letters; the rows sum to the workspace total."""
+    data = {
+        "matches": [
+            {"id": "m1", "eventRank": "MS1"},
+            {"id": "m2", "eventRank": "MS2"},
+            {"id": "m3", "eventRank": "WD1"},
+        ],
+        "schedule": {"assignments": []},
+    }
+    counts = RowCounts(match_status_by_id={"m1": "finished", "m3": "playing"})
+    sig = build_signals(_row(data=data), _meet_mods(), counts)
+    assert [(e.code, e.total, e.played) for e in sig.events] == [
+        ("MS", 2, 1),
+        ("WD", 1, 0),
+    ]
+    assert sum(e.total for e in sig.events) == sig.matches.total
+
+
+def test_meet_event_progress_skips_matches_with_no_event_coordinate():
+    """A machine id is never split into a made-up event code."""
+    data = {"matches": [{"id": "m1"}, {"id": "m2", "eventCode": "XD"}]}
+    sig = build_signals(_row(data=data), _meet_mods(), RowCounts())
+    assert [e.code for e in sig.events] == ["XD"]
+
+
+def test_bracket_event_progress_counts_recorded_results():
+    units = [
+        {"id": "u1", "event_id": "MS", "event_code": "Men's Singles"},
+        {"id": "u2", "event_id": "MS", "event_code": "Men's Singles"},
+        {"id": "u3", "event_id": "XD", "event_code": "XD"},
+    ]
+    counts = RowCounts(
+        bracket_matches=3,
+        bracket_units={u["id"]: u for u in units},
+        bracket_resolved_ids={"u1"},
+    )
+    sig = build_signals(_row(kind="bracket"), _bracket_mods(), counts)
+    assert [(e.code, e.label, e.total, e.played) for e in sig.events] == [
+        ("MS", "Men's Singles", 2, 1),
+        # The discipline repeats the code, so it is dropped rather than
+        # rendered twice on one row.
+        ("XD", None, 1, 0),
+    ]
+
+
+def test_event_progress_is_empty_without_event_coordinates():
+    """An empty list is the honest answer — never one nameless row."""
+    sig = build_signals(_row(kind="bracket"), _bracket_mods(), RowCounts(bracket_matches=4))
+    assert sig.events == []
+
+
+def test_entries_metrics_carry_the_draws_publication_gate():
+    """D16: the ready-phase readiness checklist reads "is the draw public"
+    from the same payload it reads "are entries closed" from."""
+    counts = RowCounts(entries=EntriesFacts(page_open=True, draws_published=True))
+    sig = build_signals(_row(status="active"), _meet_mods(), counts)
+    assert sig.entries is not None
+    assert sig.entries.drawsPublished is True
+
+    closed = RowCounts(entries=EntriesFacts(page_open=True))
+    assert build_signals(_row(status="active"), _meet_mods(), closed).entries.drawsPublished is False

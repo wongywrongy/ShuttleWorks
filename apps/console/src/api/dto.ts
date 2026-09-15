@@ -1021,6 +1021,19 @@ export interface NextMatchDTO {
   sideB?: string | null;
 }
 
+/** One event's play-through, for the live Overview's per-event progress
+ *  (debt-log D16). Counted server-side from the same rows `matches.played`
+ *  reads, so the rows can never disagree with the total they sit under. */
+export interface EventProgressDTO {
+  /** Operator-facing event code, e.g. "MS". */
+  code: string;
+  /** Fuller name where the engine has one; absent rather than a repeat of
+   *  the code. */
+  label?: string | null;
+  total: number;
+  played: number;
+}
+
 export interface WorkspaceSignalsDTO {
   health: 'good' | 'attention' | 'draft' | 'archived';
   attention: AttentionReasonDTO[];
@@ -1033,6 +1046,10 @@ export interface WorkspaceSignalsDTO {
   /** Next ≤3 upcoming matches (finished/on-court ones are filtered
    *  server-side since the 2026-07-09 audit). Optional / empty when none. */
   nextUp?: NextMatchDTO[];
+  /** Per-event play-through for the live panel (D16). Empty where the
+   *  engine's rows carry no event coordinate — the panel then renders
+   *  nothing rather than one nameless row. Optional for older payloads. */
+  events?: EventProgressDTO[];
   /** Lifecycle phase derived from real play state (2026-07-09 audit):
    *  setup → ready → live → complete. Optional for older payloads. */
   /** SP-G1 Plan→Run handoff: true once the operator has marked the plan
@@ -1053,6 +1070,10 @@ export interface WorkspaceSignalsDTO {
      *  are some. */
     uncommitted: number;
     closed: boolean;
+    /** The draws publication gate (SP-P7 §4) — what the ready-phase
+     *  readiness checklist reads for "is the draw public yet". Optional for
+     *  older payloads, where false is also the honest default. */
+    drawsPublished?: boolean;
   } | null;
   // E4 (program Phase 9): three entries phases at the FRONT; the four play
   // phases keep their exact meanings. A workspace with no entry page never

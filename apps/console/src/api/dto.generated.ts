@@ -5629,6 +5629,11 @@ export interface components {
              * @default false
              */
             closed: boolean;
+            /**
+             * Drawspublished
+             * @default false
+             */
+            drawsPublished: boolean;
         };
         /** EntryBindOutcomeDTO */
         EntryBindOutcomeDTO: {
@@ -6279,6 +6284,37 @@ export interface components {
             };
             /** Participants */
             participants?: components["schemas"]["ParticipantOut"][];
+        };
+        /**
+         * EventProgressDTO
+         * @description One event's play-through, for the live Overview panel (debt-log D16).
+         *
+         *     "How far along is each event" is the second question a live day asks
+         *     after "is anything on court", and it was the one the Overview could not
+         *     answer: the workspace-level triplet (played / remaining / total) says the
+         *     day is half done without saying which half. The counts come from the rows
+         *     already loaded here for ``matches.played`` — no extra query, and by
+         *     construction the per-event totals sum to the workspace total.
+         *
+         *     ``code`` is the operator-facing event code ("MS", "XD"); ``label`` is the
+         *     fuller name where the engine has one, and is absent rather than a repeat
+         *     of the code.
+         */
+        EventProgressDTO: {
+            /** Code */
+            code: string;
+            /** Label */
+            label?: string | null;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Played
+             * @default 0
+             */
+            played: number;
         };
         /** EventRequest */
         EventRequest: {
@@ -9730,6 +9766,8 @@ export interface components {
             matches?: components["schemas"]["MatchMetricsDTO"];
             /** Nextup */
             nextUp?: components["schemas"]["NextMatchDTO"][];
+            /** Events */
+            events?: components["schemas"]["EventProgressDTO"][];
             /**
              * Phase
              * @default setup
