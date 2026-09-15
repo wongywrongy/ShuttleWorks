@@ -147,6 +147,17 @@ not update the application containers.
 - **Verify recovery:** `make demo-backup-verify` and `make demo-restore-drill`.
   Live restore and reset have separate explicit confirmation safeguards.
 
+CI rehearses that lifecycle every night without touching this host. The
+*Demo backup, drill and restore* job in `.github/workflows/nightly.yml` builds
+the application images, starts the demo configuration against a **disposable**
+Postgres under the runner's temp directory, seeds one workspace, then runs
+`make demo-up`, `demo-backup`, `demo-backup-verify`, `demo-restore-drill` and a
+confirmed `demo-restore`, and finally checks the application still serves the
+seeded workspace. It fakes exactly one thing — the tailnet address, which it
+adds to loopback, because the runner has no Tailscale. What it cannot rehearse
+stays yours: the demo host's real data, its Tailscale ingress, and the systemd
+user timer from `make demo-backup-install`.
+
 After changing these instructions or their helpers, run `npm run test:docs`,
 `npm run docs:paths`, and `npm run docs:build`. Deployment verification additionally
 requires live HTTP checks and a browser check of both published origins.

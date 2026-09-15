@@ -389,6 +389,33 @@ test('the Tailscale demo has isolated lifecycle targets and guarded config', () 
   expect(demoOverride).toContain('!override');
 });
 
+test('the nightly workflow rehearses the demo recovery lifecycle (D33)', () => {
+  const nightly = readFileSync(join(REPO_ROOT, '.github/workflows/nightly.yml'), 'utf8');
+
+  // Every step of the lifecycle, in order and by the Makefile target that
+  // owns it: a dump nobody restores is a hypothesis, and a drill that stops
+  // before the live restore never exercises the database swap.
+  for (const target of [
+    'make demo-up',
+    'make demo-backup',
+    'make demo-backup-verify',
+    'make demo-restore-drill',
+    'make demo-restore',
+  ]) {
+    expect(nightly).toContain(target);
+  }
+  // Disposable by construction: the tool refuses a backup root inside the
+  // live state directory, and neither may be the demo host's real one.
+  expect(nightly).toMatch(/DEMO_STATE_DIR: .*demo-state/);
+  expect(nightly).toMatch(/DEMO_BACKUP_DIR: .*demo-backups/);
+  // No Tailscale on a runner: the tailnet-shaped address is synthesised, and
+  // the demo tool validates it is inside 100.64.0.0/10 before starting.
+  expect(nightly).toContain('DEMO_TAILSCALE_IP: 100.64.0.1');
+  expect(nightly).toContain('ip addr add 100.64.0.1/32 dev lo');
+  // The live restore's typed confirmation is never defaulted away.
+  expect(nightly).toContain('DEMO_RESTORE_CONFIRM: restore-demo');
+});
+
 test('each surface gets the backend variable its own code reads', () => {
   const makefile = readFileSync(join(REPO_ROOT, 'Makefile'), 'utf8');
   // The entrant SSR server reads API_BASE_URL (apiFetch.server.ts, which throws
