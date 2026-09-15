@@ -65,6 +65,16 @@ class ErrorCode(str, Enum):
     CONFIG_LOCKED = "CONFIG_LOCKED"
     ROSTER_LOCKED = "ROSTER_LOCKED"
     DRAW_STARTED = "DRAW_STARTED"
+    # Publication lock (ruling D24). ``bracket_events.id`` IS the entrant
+    # tier's public draw address — the ``/e/{slug}/draws/{drawKey}`` URL
+    # segment — so deleting or re-importing a draw while ``draws_published``
+    # is on silently re-keys a link that is already on a poster, in a chat,
+    # and in a search index. The lock is deliberately coarse (the page's
+    # publication flag, not a per-draw one, because that is the flag the
+    # product has) and deliberately liftable: the operator unpublishes
+    # draws, rebuilds, and publishes again — a visible sequence rather
+    # than an invisible re-key.
+    DRAW_PUBLISHED = "DRAW_PUBLISHED"
     # Setup facade (SP-OPCON-1, ruling R-N A): the section's truth lives in
     # domain rows now — the Setup page shows a read-only summary and edits
     # belong on the owning surface.

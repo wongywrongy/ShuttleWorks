@@ -66,6 +66,7 @@ from core.dependencies import (
     require_pre_checkout_configuration_write,
     require_tournament_access,
 )
+from core.error_codes import ErrorCode, http_error
 from core.schemas import (
     BracketCommandRequest,
     BracketPlayerDTO,
@@ -1711,6 +1712,47 @@ def _ensure_tournament_exists(repo: LocalRepository, tournament_id: uuid.UUID) -
         raise HTTPException(status_code=404, detail="tournament not found")
 
 
+def _draws_are_published(repo: LocalRepository, tournament_id: uuid.UUID) -> bool:
+    """Whether this workspace's draws are on the public entrant site.
+
+    Reads ``entry_pages.draws_published`` through ``db.models`` rather than
+    through the Entries package: the publication flag is a persisted column,
+    and Bracket names no other domain (import contract
+    ``bracket-independence``).
+    """
+    from db.models import EntryPage
+
+    page = repo.execute_query(
+        lambda session, key: session.get(EntryPage, key), tournament_id
+    )
+    return bool(page is not None and page.draws_published)
+
+
+def _assert_draws_unpublished(
+    repo: LocalRepository, tournament_id: uuid.UUID, action: str
+) -> None:
+    """Refuse a write that would re-key a PUBLISHED draw (ruling D24).
+
+    ``bracket_events.id`` is the entrant tier's public ``drawKey`` — the
+    ``/e/{slug}/draws/{drawKey}`` URL segment. Deleting a draw and building
+    a new one is the documented recovery from a bad draw, but while draws
+    are published it silently changes an address that is already on a
+    poster and in a search index. So it is refused, not prevented: the
+    operator unpublishes draws, rebuilds, and publishes again.
+
+    Regeneration is NOT locked — ``generate`` recreates the event row under
+    the same id, so the public address survives.
+    """
+    if _draws_are_published(repo, tournament_id):
+        raise http_error(
+            409,
+            ErrorCode.DRAW_PUBLISHED,
+            f"Draws are published, so {action} would change a public draw "
+            "address that entrants already have. Turn off Publish · Draws "
+            "first, then rebuild and publish again.",
+        )
+
+
 def _clear_bracket(
     repo: LocalRepository, tournament_id: uuid.UUID, *, commit: bool = True
 ) -> None:
@@ -2065,7 +2107,13 @@ def delete_bracket(
     user: AuthUser = Depends(get_current_user),
     repo: LocalRepository = Depends(get_repository),
 ) -> Dict[str, bool]:
+    """Clear the whole bracket.
+
+    Refused with 409 ``DRAW_PUBLISHED`` while draws are published — every
+    event id here is a live public draw address (ruling D24).
+    """
     _ensure_tournament_exists(repo, tournament_id)
+    _assert_draws_unpublished(repo, tournament_id, "clearing the bracket")
     actor_id = user.as_uuid()
     if actor_id is None:
         raise HTTPException(status_code=422, detail="authenticated user id is not a UUID")
@@ -3040,8 +3088,12 @@ def delete_event_route(
     Only 'draft' events may be deleted. 'generated' and 'started' events
     must be explicitly demoted via upsert (with the understanding that
     upsert only allows demotion on 'generated') before deletion.
+
+    Refused with 409 ``DRAW_PUBLISHED`` while draws are published: this
+    event's id is its public address (ruling D24).
     """
     _ensure_tournament_exists(repo, tournament_id)
+    _assert_draws_unpublished(repo, tournament_id, "deleting a draw")
     existing = repo.brackets.get_event(tournament_id, event_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="event not found")
@@ -3403,8 +3455,12 @@ def import_tournament_json(
     any existing bracket for this tournament before installing the
     imported one — same destructive semantics as the prototype's
     POST /tournament/import.
+
+    Because the wipe re-keys every draw, it is refused with 409
+    ``DRAW_PUBLISHED`` while draws are published (ruling D24).
     """
     _ensure_tournament_exists(repo, tournament_id)
+    _assert_draws_unpublished(repo, tournament_id, "re-importing the bracket")
     try:
         slot = parse_json_payload(body)
     except Exception as exc:
@@ -3503,8 +3559,12 @@ async def import_tournament_csv(
 
     Mirrors the prototype's ``POST /tournament/import.csv``: the body
     is the raw CSV; session config comes in as query params.
+
+    Refused with 409 ``DRAW_PUBLISHED`` while draws are published — it
+    wipes and re-keys the existing draws (ruling D24).
     """
     _ensure_tournament_exists(repo, tournament_id)
+    _assert_draws_unpublished(repo, tournament_id, "re-importing the bracket")
     payload = (await request.body()).decode("utf-8", errors="replace")
     try:
         slot = parse_csv_payload(

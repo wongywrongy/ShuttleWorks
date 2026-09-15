@@ -99,10 +99,10 @@ the draw inside the same module.
 
 | Method · Path | Purpose |
 | --- | --- |
-| `POST · GET · DELETE …/bracket` | create / read / clear the bracket |
+| `POST · GET · DELETE …/bracket` | create / read / clear the bracket (`DELETE` is refused `409 DRAW_PUBLISHED` while draws are published — see the publication lock below) |
 | `POST …/bracket/events/{eid}` | upsert one event (forced to `draft`) |
 | `POST …/bracket/events/{eid}/generate` | generate the draw for an event |
-| `DELETE …/bracket/events/{eid}` | delete a `draft` event |
+| `DELETE …/bracket/events/{eid}` | delete a `draft` event (refused `409 DRAW_PUBLISHED` while draws are published) |
 | `POST …/bracket/schedule-next` | solve the next ready round (batch) |
 | `POST …/bracket/schedule-next/stream` | solve next round with SSE progress + candidate pool |
 | `POST …/bracket/schedule-next/commit` | persist the operator-chosen candidate's assignments |
@@ -113,8 +113,19 @@ the draw inside the same module.
 | `POST …/bracket/pin` | re-pin one match + re-solve around it |
 | `POST …/bracket/assign` | **non-solver** direct court+slot placement (Run surface) |
 | `POST …/bracket/unassign` | **non-solver** return-to-queue |
-| `POST …/bracket/import`(+`.csv`) | import a pre-paired bracket |
+| `POST …/bracket/import`(+`.csv`) | import a pre-paired bracket (wipes first, so refused `409 DRAW_PUBLISHED` while draws are published) |
 | `GET …/bracket/export.{json,csv,ics}` | snapshot / order-of-play CSV / iCalendar feed |
+
+:::warning The publication lock (ruling D24)
+`bracket_events.id` is the entrant tier's public `drawKey` — the
+`/e/{slug}/draws/{drawKey}` URL segment. Deleting a draw (or the whole bracket)
+and re-importing therefore re-keys an address entrants already have, so all
+three are refused with `409 DRAW_PUBLISHED` while the workspace's
+`entry_pages.draws_published` flag is on. The operator turns Publish · Draws
+off, rebuilds, and publishes again — a visible sequence instead of a silent
+re-key. **Regeneration is not locked**: `POST …/events/{eid}/generate`
+recreates the row under the same id, so the public address survives it.
+:::
 
 :::info `/bracket/commands` vs `/bracket/results`
 Both record a result and advance the draw. `POST /bracket/commands`

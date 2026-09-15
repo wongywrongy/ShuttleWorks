@@ -666,7 +666,13 @@ export interface paths {
          *     client must ``DELETE /bracket`` first to recreate.
          */
         post: operations["create_bracket_tournaments__tournament_id__bracket_post"];
-        /** Delete Bracket */
+        /**
+         * Delete Bracket
+         * @description Clear the whole bracket.
+         *
+         *     Refused with 409 ``DRAW_PUBLISHED`` while draws are published — every
+         *     event id here is a live public draw address (ruling D24).
+         */
         delete: operations["delete_bracket_tournaments__tournament_id__bracket_delete"];
         options?: never;
         head?: never;
@@ -786,6 +792,9 @@ export interface paths {
          *     Only 'draft' events may be deleted. 'generated' and 'started' events
          *     must be explicitly demoted via upsert (with the understanding that
          *     upsert only allows demotion on 'generated') before deletion.
+         *
+         *     Refused with 409 ``DRAW_PUBLISHED`` while draws are published: this
+         *     event's id is its public address (ruling D24).
          */
         delete: operations["delete_event_route_tournaments__tournament_id__bracket_events__event_id__delete"];
         options?: never;
@@ -1120,6 +1129,9 @@ export interface paths {
          *     any existing bracket for this tournament before installing the
          *     imported one — same destructive semantics as the prototype's
          *     POST /tournament/import.
+         *
+         *     Because the wipe re-keys every draw, it is refused with 409
+         *     ``DRAW_PUBLISHED`` while draws are published (ruling D24).
          */
         post: operations["import_tournament_json_tournaments__tournament_id__bracket_import_post"];
         delete?: never;
@@ -1143,6 +1155,9 @@ export interface paths {
          *
          *     Mirrors the prototype's ``POST /tournament/import.csv``: the body
          *     is the raw CSV; session config comes in as query params.
+         *
+         *     Refused with 409 ``DRAW_PUBLISHED`` while draws are published — it
+         *     wipes and re-keys the existing draws (ruling D24).
          */
         post: operations["import_tournament_csv_tournaments__tournament_id__bracket_import_csv_post"];
         delete?: never;
