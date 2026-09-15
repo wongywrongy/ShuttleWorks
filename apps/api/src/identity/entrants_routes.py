@@ -295,6 +295,57 @@ _RESET_PASSWORD_FAILED_PAGE = "/e/reset/password-failed"
 # side states no address and no branch.
 _LOGIN_FAILED_PAGE = "/e/login/failed"
 
+# The same shape for a sign-up the password policy refused (B-1, entrant UX
+# audit 2026-09). Unlike the sign-in refusal above this one CAN carry a
+# reason, because it is decided before the account lookup and therefore says
+# nothing about whether the address is registered: the entrant needs to know
+# which rule they broke, and "we could not create the account" would send
+# them back to guess.
+_SIGNUP_FAILED_PAGE = "/e/signup/failed"
+
+# The reasons that may cross the wire, by name. An ALLOWLIST rather than
+# ``exc.code`` passed through: the far side renders fixed copy keyed on this
+# value and never prose from a URL, so an unrecognised code has to degrade to
+# the generic sentence rather than to whatever a crafted link says.
+_SIGNUP_FAILURE_REASONS = frozenset(
+    {
+        "INVALID_EMAIL",
+        "PASSWORD_TOO_SHORT",
+        "PASSWORD_TOO_LONG",
+        "PASSWORD_TOO_COMMON",
+    }
+)
+
+# What a refusal hands back to the form so the entrant does not retype it.
+# The password is deliberately absent — it is the field that was wrong, and a
+# credential has no business in a ``Location`` header, a browser history
+# entry, or a proxy log.
+_SIGNUP_ECHO_FIELDS = ("email", "displayName", "phone")
+
+
+def _signup_failed_url(exc: AuthError, body: "SignupRequest", next_raw) -> str:
+    """The refusal page's URL: a reason, the non-secret fields, the ``next``.
+
+    Every part is bounded. The reason is checked against
+    ``_SIGNUP_FAILURE_REASONS``; the echoed fields are the entrant's own
+    input, truncated to the lengths ``SignupRequest`` already accepts so a
+    long paste cannot make a ``Location`` header the far end refuses; and
+    ``next`` goes through ``next_target``, the same allowlist the success
+    branch uses, because an open redirect reached through the failure branch
+    is the same phishing primitive as one reached through the success branch.
+    """
+    query: dict[str, str] = {}
+    if exc.code in _SIGNUP_FAILURE_REASONS:
+        query["reason"] = exc.code
+    for field in _SIGNUP_ECHO_FIELDS:
+        value = (getattr(body, field, None) or "").strip()
+        if value:
+            query[field] = value[:320]
+    retry = next_target(next_raw, "")
+    if retry:
+        query["next"] = retry
+    return _SIGNUP_FAILED_PAGE + (f"?{urlencode(query)}" if query else "")
+
 
 def next_target(raw: Optional[str], fallback: str) -> str:
     """Where a form post sends the browser, and nowhere else.
@@ -662,6 +713,21 @@ def signup(
         auth_service.validate_password(body.password)
     except AuthError as exc:
         repo.execute_transaction(_record_signup_attempt, throttle_key)
+        if "text/html" in request.headers.get("accept", ""):
+            # The same argument ``/login`` makes below, on the one route
+            # where it matters more: a native form post is a NAVIGATION, so
+            # the 400's ``{"detail":{"code":"AUTH_WEAK_PASSWORD",…}}`` was
+            # painted across the whole window on step 2 of the entry path,
+            # taking every typed field with it.
+            #
+            # Nothing here is an enumeration oracle: this branch is reached
+            # BEFORE the account lookup, on the shape of the submission
+            # alone, so it says exactly as much about whether the address is
+            # registered as a syntax check does — nothing.
+            return RedirectResponse(
+                url=_signup_failed_url(exc, body, next_raw),
+                status_code=status.HTTP_303_SEE_OTHER,
+            )
         raise _auth_error(exc)
 
     if repo.execute_query(entrant_service.get_account_by_email, email) is None:

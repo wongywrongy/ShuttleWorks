@@ -28,11 +28,18 @@
  * a uniform 202 (303 for a form post) whether the address was registered or
  * not, spends an Argon2id hash on both branches so timing is not the oracle
  * either, and hands out no cookie on either (`api/entrants.py`, module
- * docstring). This tier must not reintroduce the distinction, so the loader
- * takes **no parameters at all** — it cannot be handed an address, from a
- * `?email=` prefill or from anywhere else, and therefore cannot branch on one.
- * `tests/signup.test.ts` compares the rendered documents for a fresh
- * and an already-registered address byte for byte.
+ * docstring). This tier must not reintroduce the distinction, so on THIS path
+ * the loader reads no address at all — a `?email=` prefill is inert, and
+ * `tests/signup.test.ts` compares the rendered documents for a fresh and an
+ * already-registered address byte for byte.
+ *
+ * The one place an address IS read is `/e/signup/failed` (B-1), the second
+ * path bound to this module, where the backend echoes the non-secret fields
+ * of a submission its password policy refused. That refusal is decided
+ * BEFORE the account lookup, on the shape of the submission alone, so it
+ * distinguishes nothing: the echo is the entrant's own input handed straight
+ * back, not an answer about it. The scoping to one path is what keeps the
+ * byte comparison above meaningful.
  *
  * **CSRF on a page with no session.** There is no session yet — obtaining one
  * is what this page is for — which is exactly what the `sw_play_csrf` nonce
@@ -48,7 +55,7 @@
  * between a missing capability and an inscrutable "the human check did not
  * pass" after filling the whole form in. Everything else here works unhydrated.
  */
-import { Button, TextField } from '@scheduler/design-system/components';
+import { Button, Notice, TextField } from '@scheduler/design-system/components';
 import { brandedTitle } from '@scheduler/brand';
 import { data } from 'react-router';
 
@@ -87,6 +94,78 @@ export interface SignupLoaderData {
    * would already have failed on.
    */
   tournamentName: string | null;
+  /**
+   * Which policy rule the last submission broke, or `null` when this is a
+   * first visit (B-1).
+   *
+   * Read ONLY on `/e/signup/failed`, the second path bound to this module,
+   * and only as one of four known names — the copy is fixed in this file and
+   * keyed on the name, so a crafted link can select a sentence but can never
+   * write one.
+   */
+  failureReason: SignupFailureReason | null;
+  /**
+   * The non-secret fields the refused submission carried, echoed so the
+   * entrant does not retype them. Empty strings on a first visit. The
+   * password is absent by construction: it is the field that was wrong, and
+   * it must not travel in a URL.
+   */
+  echo: { email: string; displayName: string; phone: string };
+}
+
+/** The four `AuthError` codes `POST /e/account/signup` may hand back. */
+type SignupFailureReason =
+  | 'INVALID_EMAIL'
+  | 'PASSWORD_TOO_SHORT'
+  | 'PASSWORD_TOO_LONG'
+  | 'PASSWORD_TOO_COMMON';
+
+/**
+ * The allowlist, as a narrowing function rather than a module-scope array:
+ * `tests/enter.loader.test.ts` refuses any shared mutable container at
+ * module scope in a route, and a `readonly` annotation is a compile-time
+ * claim the runtime object does not carry.
+ */
+function knownReason(raw: string | null): SignupFailureReason | null {
+  switch (raw) {
+    case 'INVALID_EMAIL':
+    case 'PASSWORD_TOO_SHORT':
+    case 'PASSWORD_TOO_LONG':
+    case 'PASSWORD_TOO_COMMON':
+      return raw;
+    default:
+      return null;
+  }
+}
+
+/**
+ * The sentence each reason renders as. Fixed copy in this file, never the
+ * backend's prose relayed through a query string: the URL selects which of
+ * these four strings appears and nothing more.
+ */
+function failureMessage(reason: SignupFailureReason): string {
+  switch (reason) {
+    case 'INVALID_EMAIL':
+      return 'That email address does not look right. Check it and try again.';
+    case 'PASSWORD_TOO_SHORT':
+      return 'Use at least 8 characters.';
+    case 'PASSWORD_TOO_LONG':
+      return 'Use at most 128 characters.';
+    case 'PASSWORD_TOO_COMMON':
+      return 'That password is on the list of most commonly breached passwords. Pick another one.';
+  }
+}
+
+/** The suffix of the second path bound to this module (`app/routes.ts`). */
+const FAILED_SUFFIX = '/failed';
+
+/** The maximum a `defaultValue` may carry back, matching the field's own
+ * `maxLength`, so a crafted link cannot paint a page with a long string. */
+const ECHO_LIMIT = 320;
+
+function echoed(params: URLSearchParams, name: string, failed: boolean): string {
+  if (!failed) return '';
+  return (params.get(name) ?? '').slice(0, ECHO_LIMIT);
 }
 
 /**
@@ -118,7 +197,15 @@ export async function loader({
   // tournament, race with deletion) falls back to the generic heading
   // rather than turning a signup page into a 404 the entry page itself
   // has not raised.
-  const requestedNextRaw = safeNext(new URL(request.url).searchParams.get('next'), ACCOUNT_READY_PAGE);
+  const url = new URL(request.url);
+  // The echo and the failure notice exist on ONE of this module's two paths.
+  // Scoping them to the path is what keeps `/e/signup?email=…` inert, which
+  // is the byte-identical property `tests/signup.test.ts` compares: a loader
+  // that read an address on the bare page would be the way this tier
+  // reintroduced the distinction the backend pays an Argon2 hash to avoid.
+  const failed = url.pathname.endsWith(FAILED_SUFFIX);
+  const failureReason = knownReason(failed ? url.searchParams.get('reason') : null);
+  const requestedNextRaw = safeNext(url.searchParams.get('next'), ACCOUNT_READY_PAGE);
   // `/login/signed-in` is the login page's generic completion state. Signup
   // has its own completion state, so do not carry that presentation URL into
   // the signup POST as if it were a destination.
@@ -145,6 +232,12 @@ export async function loader({
     formCsrf: csrf.token,
     next: requestedNext,
     tournamentName,
+    failureReason,
+    echo: {
+      email: echoed(url.searchParams, 'email', failed),
+      displayName: echoed(url.searchParams, 'displayName', failed),
+      phone: echoed(url.searchParams, 'phone', failed),
+    },
   };
   return data(payload, csrf.responseInit);
 }
@@ -189,7 +282,16 @@ export const meta: Route.MetaFunction = () => [
 const ACCOUNT_READY_PAGE = '/e/login/created';
 
 export default function SignupPage({ loaderData }: Route.ComponentProps) {
-  const { turnstileSiteKey, formCsrf, tournamentName } = loaderData;
+  const { turnstileSiteKey, formCsrf, tournamentName, failureReason, echo } = loaderData;
+  // Which field wears the message. `INVALID_EMAIL` is the email's; the three
+  // password rules are the password's. Both also appear once above the form,
+  // because a native form post reloads the page and the entrant needs to see
+  // that something went wrong before they reach the field.
+  const emailError = failureReason === 'INVALID_EMAIL' ? failureMessage(failureReason) : undefined;
+  const passwordError =
+    failureReason !== null && failureReason !== 'INVALID_EMAIL'
+      ? failureMessage(failureReason)
+      : undefined;
   const next = loaderData.next;
   const entryPath = next.match(/^\/e\/([^/]+)\/enter(?:\/created|\/signed-in)?$/);
   const invitationPath = next.match(/^\/e\/partner\/[^/]+$/);
@@ -217,6 +319,18 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
             contact details on entries they receive.
           </p>
         </header>
+
+        {/* The refusal, in words (B-1). Before this, a password the policy
+            refused answered `{"detail":{"code":"AUTH_WEAK_PASSWORD",…}}` and,
+            a native form post being a navigation, that JSON WAS the document.
+            The sentence is picked from `FAILURE_MESSAGE` by a name the
+            backend allowlisted; it names a rule, never an account, so it
+            says nothing about whether the address is registered. */}
+        {failureReason ? (
+          <Notice tone="warning">
+            We could not create your account. {failureMessage(failureReason)}
+          </Notice>
+        ) : null}
 
         <div className={`grid min-w-0 gap-6 ${CARD}`}>
           {/*
@@ -268,6 +382,11 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
               maxLength={320}
               autoComplete="email"
               hint="Use the email where you want entry updates."
+              // Echoed back by the refusal redirect so a rejected password
+              // does not cost the entrant every other field (B-1). Empty on
+              // a first visit, and never the password.
+              defaultValue={echo.email}
+              error={emailError}
               className="min-w-0"
             />
 
@@ -292,6 +411,7 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
               // with an `onClick`; this form's only module is reserved for the
               // Turnstile lifecycle, so the credential reveal stays absent.
               revealable={false}
+              error={passwordError}
               className="min-w-0"
             />
 
@@ -302,6 +422,7 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
               maxLength={200}
               autoComplete="name"
               hint="Name shown to the organizer."
+              defaultValue={echo.displayName}
               className="min-w-0"
             />
 
@@ -313,6 +434,7 @@ export default function SignupPage({ loaderData }: Route.ComponentProps) {
               maxLength={200}
               autoComplete="tel"
               hint="Only used if the organizer needs to reach you about an entry."
+              defaultValue={echo.phone}
               className="min-w-0"
             />
 

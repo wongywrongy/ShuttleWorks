@@ -30,6 +30,7 @@ no entry page can exist, so an entrant account has nothing to act on.
 from __future__ import annotations
 
 import json
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -1154,6 +1155,143 @@ def test_a_scripted_form_post_that_is_not_navigating_still_gets_the_401(
 
     assert r.status_code == 401
     assert r.json()["detail"]["code"] == "AUTH_INVALID_CREDENTIALS"
+
+
+# ---- Signup's refusal, in the same shape (B-1, entrant UX audit 2026-09) --
+
+
+def _form_signup(
+    client,
+    email="parent@example.com",
+    password=GOOD_PW,
+    headers=_BROWSER,
+    **overrides,
+):
+    """A scriptless browser's sign-up: urlencoded body, ``_csrf`` in it, and
+    the Accept a navigation carries."""
+    from core.form_csrf import form_csrf_token
+
+    client.cookies.set(PLAY_CSRF, "v")
+    body = {
+        "email": email,
+        "password": password,
+        "cf-turnstile-response": "a-solved-token",
+        "_csrf": form_csrf_token("v"),
+    }
+    body.update(overrides)
+    return client.post(SIGNUP, data=body, headers=headers, follow_redirects=False)
+
+
+def test_a_refused_form_signup_is_a_page_and_not_a_json_blob(client, turnstile):
+    """**B-1.** A native form post is a NAVIGATION, so the 400's body —
+    ``{"detail":{"code":"AUTH_WEAK_PASSWORD",…}}`` — was the whole document
+    on step 2 of the only revenue path, with every typed field destroyed.
+    Same wrapper argument as the sign-in refusal above.
+    """
+    r = _form_signup(client, password="short")
+
+    assert r.status_code == 303, r.text
+    assert r.headers["location"].startswith("/e/signup/failed?")
+    assert "AUTH_WEAK_PASSWORD" not in r.text
+    assert _accounts() == 0
+
+
+def test_the_refusal_names_the_rule_and_echoes_back_everything_but_the_password(
+    client, turnstile
+):
+    """The reason is an allowlisted NAME, never the backend's prose, and the
+    typed fields come back so the entrant does not refill the form.
+
+    The password is absent by construction: it is the field that was wrong,
+    and a credential has no business in a ``Location``, a history entry or a
+    proxy log.
+    """
+    r = _form_signup(
+        client,
+        email="parent@example.com",
+        password="short",
+        displayName="Ana Ruiz",
+        phone="555-0100",
+    )
+
+    query = parse_qs(urlsplit(r.headers["location"]).query)
+    assert query["reason"] == ["PASSWORD_TOO_SHORT"]
+    assert query["email"] == ["parent@example.com"]
+    assert query["displayName"] == ["Ana Ruiz"]
+    assert query["phone"] == ["555-0100"]
+    assert "password" not in query
+    assert "short" not in r.headers["location"]
+
+
+def test_the_refusal_keeps_the_destination_it_arrived_with(client, turnstile):
+    r = _form_signup(client, password="short", next="/e/spring-open/enter/created")
+
+    query = parse_qs(urlsplit(r.headers["location"]).query)
+    assert query["next"] == ["/e/spring-open/enter/created"]
+
+
+def test_a_crafted_next_does_not_survive_a_refused_signup_either(client, turnstile):
+    """An open redirect reached through the failure branch is the same
+    phishing primitive as one reached through the success branch."""
+    r = _form_signup(client, password="short", next="https://evil.example/steal")
+
+    assert r.status_code == 303
+    assert "evil.example" not in r.headers["location"]
+    assert "next" not in parse_qs(urlsplit(r.headers["location"]).query)
+
+
+def test_an_unusable_address_reaches_the_same_page_under_its_own_reason(
+    client, turnstile
+):
+    r = _form_signup(client, email="not-an-address")
+
+    query = parse_qs(urlsplit(r.headers["location"]).query)
+    assert r.headers["location"].startswith("/e/signup/failed?")
+    assert query["reason"] == ["INVALID_EMAIL"]
+
+
+def test_the_refusal_page_never_says_whether_the_address_is_registered(
+    client, turnstile
+):
+    """Non-enumeration, unchanged.
+
+    The policy runs BEFORE the account lookup, so a registered address and a
+    fresh one that break the same rule reach the same page with the same
+    reason — the redirect is a statement about the submission, not about the
+    account.
+    """
+    assert _signup(client, email="taken@example.com").status_code == 202
+    assert _accounts("taken@example.com") == 1
+
+    taken = _form_signup(client, email="taken@example.com", password="short")
+    fresh = _form_signup(client, email="nobody@example.com", password="short")
+
+    assert taken.status_code == fresh.status_code == 303
+    assert parse_qs(urlsplit(taken.headers["location"]).query)["reason"] == parse_qs(
+        urlsplit(fresh.headers["location"]).query
+    )["reason"]
+
+
+def test_a_scripted_signup_post_that_is_not_navigating_still_gets_the_400(
+    client, turnstile
+):
+    """Non-vacuity: the branch is on ``Accept``. A programmatic caller keeps
+    the status and the error body it has always parsed."""
+    r = _form_signup(client, password="short", headers={"accept": "*/*"})
+
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "AUTH_WEAK_PASSWORD"
+
+
+def test_a_refused_form_signup_still_costs_the_budget(client, turnstile):
+    """The throttle is charged on this branch exactly as it was before the
+    redirect: a bot posting junk passwords must not get an unbounded ride."""
+    from core.config import settings
+
+    for _ in range(int(settings.entrant_signup_max_per_ip)):
+        assert _form_signup(client, password="short").status_code == 303
+
+    assert _form_signup(client, password="short").status_code == 429
 
 
 def test_a_form_logout_proves_itself_with_the_session_derived_token(

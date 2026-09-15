@@ -498,3 +498,64 @@ describe('a tournament-scoped signup names the tournament', () => {
     expect(html).toMatch(/<h1[^>]*>Create an account<\/h1>/);
   });
 });
+
+// ---- B-1: the refusal is a page, and the form comes back filled in --------
+
+describe('a sign-up the password policy refused', () => {
+  it('renders the form again with the rule named and the typed fields kept', async () => {
+    // `POST /e/account/signup` 303s here with an allowlisted reason and the
+    // non-secret fields. Before B-1 the browser was handed raw JSON instead.
+    const html = await render(
+      '/e/signup/failed?reason=PASSWORD_TOO_SHORT&email=ana%40example.test&displayName=Ana%20Ruiz&phone=555-0100',
+    );
+
+    expect(html).toContain('Use at least 8 characters.');
+    expect(html).toContain('action="/e/account/signup"');
+    expect(html).toContain('value="ana@example.test"');
+    expect(html).toContain('value="Ana Ruiz"');
+    expect(html).toContain('value="555-0100"');
+    // The password field is marked invalid but never prefilled: it is the
+    // field that was wrong, and the backend does not carry it here at all.
+    expect(html).toMatch(/id="signup-password"[^>]*aria-invalid="true"/);
+  });
+
+  it('names the email field when the address is what was wrong', async () => {
+    const html = await render('/e/signup/failed?reason=INVALID_EMAIL&email=not-an-address');
+
+    expect(html).toContain('That email address does not look right.');
+    expect(html).toMatch(/id="signup-email"[^>]*aria-invalid="true"/);
+    expect(html).toContain('value="not-an-address"');
+  });
+
+  it('renders no sentence a crafted link wrote', async () => {
+    // The URL selects one of four fixed strings; it never supplies one. An
+    // unrecognised reason degrades to the ordinary first-visit page.
+    const html = await render(
+      '/e/signup/failed?reason=%3Cscript%3Ealert(1)%3C%2Fscript%3E%20call%20this%20number',
+    );
+
+    expect(html).not.toContain('call this number');
+    expect(html).not.toContain('<script>alert(1)');
+    expect(html).not.toContain('We could not create your account');
+  });
+
+  it('keeps the bare signup page inert to the same query fields', async () => {
+    // The scoping that keeps the byte-identical comparison above meaningful:
+    // the echo lives on `/failed` and nowhere else.
+    const html = await render(
+      '/e/signup?reason=PASSWORD_TOO_SHORT&email=ana%40example.test&displayName=Ana%20Ruiz',
+    );
+
+    expect(html).not.toContain('Use at least 8 characters.');
+    expect(html).not.toContain('ana@example.test');
+    expect(html).not.toContain('Ana Ruiz');
+  });
+
+  it('keeps the destination the refusal carried back', async () => {
+    const html = await render(
+      '/e/signup/failed?reason=PASSWORD_TOO_SHORT&next=%2Fe%2Fspring-open%2Fenter%2Fcreated',
+    );
+
+    expect(html).toContain('name="next" value="/e/spring-open/enter/created"');
+  });
+});
