@@ -71,3 +71,27 @@ ENTRY = machine("entry", "unverified pending waitlisted confirmed rejected withd
     edge("withdraw", "unverified pending waitlisted confirmed", "withdrawn", "entrant", "before_withdrawal_deadline"),
     edge("operator_withdraw", "unverified pending waitlisted confirmed", "withdrawn"),
 ], "state")
+
+# ---- S-3, derived 2026-09-15 ------------------------------------------
+# Six registration/competition graphs plus the two CHECK vocabularies that
+# had transition code and no machine (SMV2-3). Derived from the CHECK
+# constraints, ADR 0030 and the existing write paths; the appendix in
+# docs/explanation/state-machines-v2-defined-plan.md records the derivation
+# line by line, including which paths are deliberately NOT modelled.
+
+PARTNER_INVITATION = machine("partner_invitation", "sent accepted expired revoked",
+                             "sent", "accepted expired revoked", [
+    edge("accept", "sent", "accepted", "entrant",
+         description="The named partner completed their own entry; the token is spent."),
+    edge("revoke", "sent", "revoked", "entrant",
+         description="A fresh invitation supersedes the live one, which is withdrawn with its token."),
+    edge("expire", "sent", "expired", "system",
+         description="The invitation deadline passed. No write path reaches this today; resolution refuses an expired token by deadline rather than by status."),
+])
+
+# No `submit` edge: a submission is created in the state it is meant to
+# hold, and `delete_draft` removes a draft rather than moving it.
+SUBMISSION = machine("submission", "draft submitted cancelled", "draft submitted", "cancelled", [
+    edge("cancel", "submitted", "cancelled",
+         description="The desk cancels a submitted record; its live entries are withdrawn and nothing is refunded."),
+])
