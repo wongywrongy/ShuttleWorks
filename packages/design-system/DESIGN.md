@@ -60,7 +60,7 @@ Reuse the existing settings sections, labeled fields, and aligned rows for Setup
 Publish, and administrative property editors. Avoid duplicate headings and added
 indents. Radius scales with control height, not with role: the smallest controls
 (`xs`, `icon-sm`, `icon-xs`) take 6px (`rounded-sm`), `sm`/`default`/`icon` take
-8px (`rounded`), and `lg` takes 9px (`rounded-md`) — see `Button.tsx`'s `size`
+8px (`rounded`), and `lg` takes 9px (`rounded-md`); see `Button.tsx`'s `size`
 variants for the concrete mapping. Panels stay 8px and overlays 12px; smaller
 marks can use 4px.
 
@@ -92,12 +92,12 @@ Adopted from the 2026-09 entrant UX audit's fourteen unsourced heuristics
 The nine below are standing rules; an audit can cite them directly instead
 of arguing from first principles each time.
 
-1. **In-flight feedback for native form POSTs.** Any route that submits a
-   form with no client script must still show the browser's own
-   navigation/loading affordance is not obscured or fought; where a route
-   layers its own pending state on top (a disabled submit, a status
-   region), it must appear before the round trip completes, not only
-   after. Applies to every entrant form. An audit checks it by submitting
+1. **In-flight feedback for native form POSTs.** A route that submits a
+   form with no client script must leave the browser's own navigation
+   and loading affordance visible, never obscured or fought. Where a
+   route layers its own pending state on top (a disabled submit, a status
+   region), that state must appear before the round trip completes, not
+   only after. Applies to every entrant form. An audit checks it by submitting
    with scripting on and off and confirming the user gets a visible cue
    the submit was received.
 2. **Form errors are identified, explained, and prevented (WCAG 3.3.1,
