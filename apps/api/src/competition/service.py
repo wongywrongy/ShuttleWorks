@@ -15,6 +15,7 @@ from db.models import (
     Tournament,
     UnitMembership,
 )
+from competition import lifecycle
 
 
 class CompetitionError(ValueError):
@@ -100,7 +101,9 @@ def settle_unit(session, unit):
         raise CompetitionError(
             "ROSTER_SIZE", f"This format allows at most {fmt.roster_max} players"
         )
-    unit.status = "confirmed" if fmt.roster_min <= count <= fmt.roster_max else "pending"
+    lifecycle.set_unit_status(
+        session, unit, "confirmed" if fmt.roster_min <= count <= fmt.roster_max else "pending"
+    )
     session.flush()
 
 
@@ -336,13 +339,15 @@ def rebind(
         )
     before = outcome(member)
     source.version += 1
-    source.status = "pending"
+    lifecycle.set_unit_status(session, source, "pending", actor_id=actor_id)
     if target is None:
         target = CompetitionUnit(
             tournament_id=tournament_id, competition_event_id=target_event_id, status="pending"
         )
         session.add(target)
     else:
+        # Precondition for the roster trigger, not an act: the target is
+        # gaining a member, and `settle_unit` below records what it becomes.
         target.status = "pending"
     session.flush()
     member.unit_id = target.id
@@ -374,9 +379,15 @@ def withdraw_membership(session, tournament_id, entry_id, *, withdraw_unit=False
         return
     unit = session.get(CompetitionUnit, (tournament_id, member.unit_id))
     unit.version += 1
-    unit.status = "withdrawn" if withdraw_unit else "pending"
+    lifecycle.set_unit_status(
+        session,
+        unit,
+        "withdrawn" if withdraw_unit else "pending",
+        event="member_withdrew_after_draw" if withdraw_unit else None,
+        actor_id=actor_id,
+    )
     session.flush()
-    member.status = "withdrawn"
+    lifecycle.withdraw_member(session, member, actor_id=actor_id)
     audit(session, tournament_id, "withdraw", outcome(member), actor_id=actor_id)
     session.flush()
     from competition.projection import project
@@ -396,12 +407,17 @@ def withdraw_competition_unit(session, tournament_id, unit_id, *, expected_versi
         return {"id": str(unit.id), "status": unit.status, "version": unit.version}
     if unit.version != expected_version:
         raise CompetitionError("VERSION_CONFLICT", "The unit changed; reload before withdrawing")
+    # Park the unit so the roster trigger allows its memberships to be edited;
+    # the withdrawal itself is recorded below, from where it really started.
+    origin = unit.status
     unit.status = "pending"
     session.flush()
     for member in members_of(session, unit, active=True):
-        member.status = "withdrawn"
+        lifecycle.withdraw_member(session, member, actor_id=actor_id)
     session.flush()
-    unit.status = "withdrawn"
+    lifecycle.set_unit_status(
+        session, unit, "withdrawn", event="withdraw", source_state=origin, actor_id=actor_id
+    )
     audit(session, tournament_id, "withdraw_unit", {"unitId": str(unit.id)}, actor_id=actor_id)
     from competition.projection import project
 

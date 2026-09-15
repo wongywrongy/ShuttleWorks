@@ -9,9 +9,11 @@ from core.state_machine import REGISTRY, Machine, Transition, TransitionError, a
 from core.state_machines import MATCH
 
 MACHINES = tuple(REGISTRY.values())
-# I4: expanding this set requires explicit review. unit.member_withdrew belongs
-# to the schema-dependent competition graph, not the four-machine first slice.
-NON_CONSEQUENTIAL = {"entry.waitlist_at_cap", "entry.verify", "solve_job.reap"}
+# I4: expanding this set requires explicit review. unit.member_withdrew is the
+# fourth and last entry the v2 plan names: a complete unit that loses a member
+# returns to the roster queue, which refuses nobody and is operator-reversible.
+NON_CONSEQUENTIAL = {"entry.waitlist_at_cap", "entry.verify", "solve_job.reap",
+                     "unit.member_withdrew"}
 
 
 @pytest.mark.parametrize("machine", MACHINES, ids=lambda m: m.name)

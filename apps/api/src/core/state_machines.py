@@ -95,3 +95,42 @@ SUBMISSION = machine("submission", "draft submitted cancelled", "draft submitted
     edge("cancel", "submitted", "cancelled",
          description="The desk cancels a submitted record; its live entries are withdrawn and nothing is refunded."),
 ])
+
+COMPETITION_EVENT = machine("competition_event", "scheduled in_progress completed",
+                            "scheduled", "completed", [
+    edge("start", "scheduled", "in_progress",
+         description="S-8.5: the director starts the event explicitly, before any result."),
+    edge("first_result", "scheduled", "in_progress", "system",
+         description="S-8.5: the first recorded result starts the event. Today the draw reaching `started` is that signal."),
+    edge("complete", "scheduled in_progress", "completed", "system",
+         description="The event's draw reached `completed`."),
+])
+
+UNIT = machine("unit", "pending confirmed withdrawn", "pending", "withdrawn", [
+    edge("roster_complete", "pending", "confirmed", "system", description="The roster reached the format's bounds."),
+    edge("member_withdrew", "confirmed", "pending", "system", consequential=False,
+         description="I4: a member left a complete unit before the draw. A queue position, not a decision — the desk re-pairs or withdraws."),
+    edge("member_withdrew_after_draw", "pending confirmed", "withdrawn", "system",
+         description="S-8.4: a member withdrew after the draw was made. Re-pairing is a new unit, so this one ends."),
+    edge("withdraw", "pending confirmed", "withdrawn",
+         description="The director withdraws the whole unit; every active membership goes with it."),
+])
+
+UNIT_MEMBERSHIP = machine("unit_membership", "active withdrawn", "active", "withdrawn", [
+    edge("withdraw", "active", "withdrawn", "system",
+         description="The entry behind this membership was withdrawn, or the unit was."),
+])
+
+# A draw instance MIRRORS the bracket event's status, so every ordered pair
+# is reachable: a re-import can move a started draw back to generated. The
+# graph is permissive on purpose and says so rather than refusing a move the
+# mirror has always made.
+DRAW_INSTANCE = machine("draw_instance", "draft generated started completed superseded",
+                        "draft generated started completed", "superseded", [
+    edge("generate", "draft started completed", "generated", "system"),
+    edge("start", "draft generated completed", "started", "system",
+         description="The first result on a generated event."),
+    edge("complete", "draft generated started", "completed", "system"),
+    edge("supersede", "draft generated started completed", "superseded", "system",
+         description="The event left the drawn states, or was deleted; this revision stops being current."),
+])

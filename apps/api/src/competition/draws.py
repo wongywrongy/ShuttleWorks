@@ -2,6 +2,7 @@
 
 from sqlalchemy import func, select
 from db.models import CompetitionEvent, DrawInstance
+from competition import lifecycle
 
 
 def record_status(session, tournament_id, bracket_event_id, status, *, config=None):
@@ -24,7 +25,7 @@ def record_status(session, tournament_id, bracket_event_id, status, *, config=No
     )
     if status not in {"generated", "started", "completed"}:
         if current:
-            current.status = "superseded"
+            lifecycle.set_draw_status(session, current, "superseded")
         session.flush()
         return
     if current is None:
@@ -46,5 +47,5 @@ def record_status(session, tournament_id, bracket_event_id, status, *, config=No
         )
         session.add(current)
     else:
-        current.status = status
+        lifecycle.set_draw_status(session, current, status)
     session.flush()
