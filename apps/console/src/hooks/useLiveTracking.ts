@@ -261,32 +261,46 @@ export function useLiveTracking() {
       } catch (apiError) {
         console.error('Failed to sync match status to backend:', apiError);
 
-        // ── 412 / 409: refetch + rollback ─────────────────────────
+        // ── 409 / 412: reconcile from the body, else refetch ───────
         if (apiError instanceof MatchVersionMismatch) {
-          try {
-            const fresh = await apiClient.getMatchState(tid, matchId);
-            setMatchState(matchId, fresh);
+          // Ruling D6: a stale-version refusal CARRIES the server's current
+          // state, the same way `PUT …/state` answers `StateVersionConflict`.
+          // Apply it directly — a refetch would only ask for what we were
+          // just handed, and the round trip is a window for a third writer.
+          if (apiError.currentState) {
+            setMatchState(matchId, apiError.currentState);
+            if (apiError.currentVersion !== undefined) {
+              useMatchStateStore
+                .getState()
+                .setMatchVersion(matchId, apiError.currentVersion);
+            }
+          } else {
             try {
-              const v = await apiClient.getMatchVersion(tid, matchId);
-              useMatchStateStore.getState().setMatchVersion(matchId, v);
-            } catch { /* best-effort */ }
-          } catch {
-            // Refetch failed (transient). Roll back the optimistic
-            // apply explicitly so the operator UX doesn't show a
-            // status the server will never confirm.
-            useMatchStateStore.getState().applyOptimisticStatus(matchId, previousStatus);
+              const fresh = await apiClient.getMatchState(tid, matchId);
+              setMatchState(matchId, fresh);
+              try {
+                const v = await apiClient.getMatchVersion(tid, matchId);
+                useMatchStateStore.getState().setMatchVersion(matchId, v);
+              } catch { /* best-effort */ }
+            } catch {
+              // Refetch failed (transient). Roll back the optimistic
+              // apply explicitly so the operator UX doesn't show a
+              // status the server will never confirm.
+              useMatchStateStore.getState().applyOptimisticStatus(matchId, previousStatus);
+            }
           }
-          // A 409 and a 412 mean different things and must not read the same.
-          //   412 — our version was stale. Replaying with the fresh version
-          //         succeeds, so Retry is real.
-          //   409 — the server refused the TRANSITION: the match already moved
-          //         on (another device called/started/finished it). Replaying
-          //         re-sends the same illegal move and fails identically, so
-          //         offering Retry is a lie. Say what happened instead; the
-          //         refetch above already re-synced to the server's truth.
+          // The two refusals mean different things and must not read the same.
+          //   stale_version / precondition — our version was behind. Replaying
+          //         with the fresh version succeeds, so Retry is real.
+          //   conflict — the server refused the TRANSITION: the match already
+          //         moved on (another device called/started/finished it).
+          //         Replaying re-sends the same illegal move and fails
+          //         identically, so offering Retry is a lie. Say what happened
+          //         instead; the re-sync above already applied the truth.
           // (Audit finding A1: every 409 used to read "version mismatch" and
-          //  carry a Retry that could never succeed.)
-          const isTransitionConflict = apiError.status === 409;
+          //  carry a Retry that could never succeed. Since D6 the STATUS no
+          //  longer discriminates — both are 409 — so branch on `kind`.)
+          const isTransitionConflict = apiError.kind === 'conflict';
           try {
             useUiStore.getState().pushToast(
               isTransitionConflict

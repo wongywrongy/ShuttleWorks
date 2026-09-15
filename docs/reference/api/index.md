@@ -136,7 +136,7 @@ architectural module with no enable flag.
 | --- | --- |
 | `GET …/match-states` | all live states (`{matchId: MatchStateDTO}`) |
 | `GET …/match-states/{mid}` | one live state; response carries `ETag: "<version>"` |
-| `PUT …/match-states/{mid}` | update one state (requires `If-Match`; `412` on stale/missing) |
+| `PUT …/match-states/{mid}` | update one state (requires `If-Match`; `412` when missing or malformed, `409` `STATE_VERSION_CONFLICT` with `currentState` when stale — ruling D6) |
 | `DELETE …/match-states/{mid}` | reset one state (also requires `If-Match`) |
 | `POST …/match-states/reset` | reset all states |
 | `GET …/match-states/export/download` | download all states as a JSON file |
@@ -396,8 +396,10 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
   the axios interceptor falls back to treating `detail` as the message.
 - **Optimistic concurrency** — two families:
   - *Match-state writes* use `ETag` / `If-Match`. A `GET …/match-states/{mid}` returns
-    `ETag: "<matches.version>"` (`"0"` for an unseen match); `PUT` / `DELETE` must send a matching
-    `If-Match` or get `412 Precondition Failed`.
+    `ETag: "<matches.version>"` (`"0"` for an unseen match); `PUT` / `DELETE` must send an
+    `If-Match` or get `412 Precondition Failed`, and a STALE one is refused with
+    `409 STATE_VERSION_CONFLICT` carrying `currentState` — the same dialect `PUT …/state`
+    speaks (ruling D6, 2026-09-15; it used to answer `412` for stale as well).
   - *The command pipeline* and *bracket result writes* carry a **mandatory** `seen_version`
     (ruling D5 — a body without one is `422`); a mismatch raises a
     `ConflictError` → `409` with `error: "stale_version"`. An illegal state-machine transition is

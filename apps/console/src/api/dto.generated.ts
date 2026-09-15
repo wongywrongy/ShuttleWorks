@@ -485,7 +485,9 @@ export interface paths {
          *
          *     Step D: the request must carry an ``If-Match`` header whose value
          *     matches the current ``matches.version`` (``"0"`` for a brand-new
-         *     match). Missing or stale headers return 412 Precondition Failed.
+         *     match). A missing or malformed header returns 412 Precondition
+         *     Failed; a STALE one returns 409 with ``currentState`` in the body
+         *     (ruling D6 — one conflict dialect, the one ``PUT …/state`` speaks).
          *
          *     Enforces the state-machine transition guard against the canonical
          *     ``matches.status`` before writing. A ``ConflictError`` bubbles up
@@ -504,7 +506,8 @@ export interface paths {
          *     Step D: the request must carry an ``If-Match`` header whose
          *     value matches the current ``matches.version``. This stops a
          *     stale client from rolling a match it didn't observe back to
-         *     ``scheduled``.
+         *     ``scheduled``. Missing/malformed → 412; stale → 409 with
+         *     ``currentState`` (ruling D6).
          *
          *     Admin override on the transition side: bypasses the transition
          *     guard so an operator can unblock a stuck terminal state. Also
