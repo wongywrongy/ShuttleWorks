@@ -380,7 +380,10 @@ def test_draw_progress_states_where_play_has_reached(client, bracket_page):
 
 
 def test_historical_draw_uses_advertised_size_and_source_round_labels(client):
-    tid = _make_workspace(client, slug="historical-open", draws_published=True)
+    # D24 locks re-import while published; this workspace's own draw does not
+    # exist yet, so publish AFTER the import that creates it, the way a real
+    # operator would.
+    tid = _make_workspace(client, slug="historical-open")
     payload = {
         "courts": 1,
         "total_slots": 8,
@@ -431,6 +434,7 @@ def test_historical_draw_uses_advertised_size_and_source_round_labels(client):
     }
     imported = client.post(f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF)
     assert imported.status_code == 200, imported.text
+    _set_flags(tid, draws_published=True)
 
     draws = client.get("/e/api/page/historical-open/draws").json()
     assert draws["draws"][0]["size"] == 32
@@ -479,9 +483,9 @@ def test_draw_node_publishes_the_approved_day_beside_the_source_record(client):
     a live match read as last October while the operator console and the
     public schedule agreed it was today.
     """
-    tid = _make_workspace(
-        client, slug="parity-open", draws_published=True, results_published=True
-    )
+    # D24 locks re-import while published; publish AFTER the import that
+    # creates this workspace's draw.
+    tid = _make_workspace(client, slug="parity-open")
     payload = {
         "courts": 2,
         "total_slots": 64,
@@ -525,6 +529,7 @@ def test_draw_node_publishes_the_approved_day_beside_the_source_record(client):
         f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF
     )
     assert imported.status_code == 200, imported.text
+    _set_flags(tid, draws_published=True, results_published=True)
 
     # The desk approves a different court on a LATER DAY: slot 51 is
     # 09:00 + 51 × 30min = 25.5h after the 2026-09-12 start, i.e. 10:30 on
@@ -567,7 +572,10 @@ def test_draw_node_publishes_the_approved_day_beside_the_source_record(client):
 
 
 def test_draw_players_are_published_draw_roster_people_with_profiles(client):
-    tid = _make_workspace(client, slug="roster-open", draws_published=True)
+    # D24 locks import while published; both imports below happen before any
+    # draw exists (the first is refused for an unrelated reason and creates
+    # nothing), so publish only after the second one succeeds.
+    tid = _make_workspace(client, slug="roster-open")
     _set_bracket_players(
         tid,
         [
@@ -618,6 +626,7 @@ def test_draw_players_are_published_draw_roster_people_with_profiles(client):
     payload["events"][0]["participants"][1]["members"] = ["P-D", "P-C"]
     imported = client.post(f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF)
     assert imported.status_code == 200, imported.text
+    _set_flags(tid, draws_published=True)
 
     players = client.get("/e/api/page/roster-open/players").json()
     # P6 (2026-09-08), a DELIBERATE behaviour change: a published draw's own
@@ -713,8 +722,10 @@ def test_an_imported_person_is_one_person_across_workspaces(client):
     display name on its own, and never anything reaching into the entries
     spine.
     """
-    first = _make_workspace(client, name="Alpha Open", slug="alpha-open", draws_published=True)
-    second = _make_workspace(client, name="Beta Open", slug="beta-open", draws_published=True)
+    # D24 locks import while published; publish AFTER each import creates
+    # its workspace's draw.
+    first = _make_workspace(client, name="Alpha Open", slug="alpha-open")
+    second = _make_workspace(client, name="Beta Open", slug="beta-open")
     _set_bracket_players(
         first,
         [
@@ -743,6 +754,8 @@ def test_an_imported_person_is_one_person_across_workspaces(client):
         [{"id": "B-9", "name": "Rin Sato"}, {"id": "B-8", "name": "Lee Chen"}],
         [[{"id": "B-F", "side_a": ["B-9"], "side_b": ["B-8"]}]],
     )
+    _set_flags(first, draws_published=True)
+    _set_flags(second, draws_published=True)
 
     body = client.get("/e/api/page/alpha-open/players/A-1").json()
     history = {row["slug"]: row for row in body["history"]}
@@ -779,7 +792,9 @@ def test_an_import_keeps_the_imported_person_id_on_its_participants(client):
     console's echo-back upsert cannot erase it), and the public directory
     keeps resolving the person off the roster row it has always read.
     """
-    tid = _make_workspace(client, slug="import-person-open", draws_published=True)
+    # D24 locks import while published; publish AFTER the import that
+    # creates this workspace's draw.
+    tid = _make_workspace(client, slug="import-person-open")
     payload = {
         "courts": 1,
         "total_slots": 4,
@@ -807,6 +822,7 @@ def test_an_import_keeps_the_imported_person_id_on_its_participants(client):
     }
     imported = client.post(f"/tournaments/{tid}/bracket/import", json=payload, headers=CSRF)
     assert imported.status_code == 200, imported.text
+    _set_flags(tid, draws_published=True)
 
     state = client.get(f"/tournaments/{tid}/bracket").json()
     participants = {p["id"]: p for p in state["events"][0]["participants"]}
@@ -842,15 +858,12 @@ def test_a_career_expands_every_published_workspace_and_no_unpublished_one(clien
     went with it. The publication gate did not: the workspace that has not
     published its draws is still absent, not summarised.
     """
+    # D24 locks import while published; publish each workspace AFTER the
+    # import that creates its draw. ``quiet`` stays unpublished throughout —
+    # that absence is the read-side behaviour this test proves.
     published = []
     for index in range(7):
-        tid = _make_workspace(
-            client,
-            name=f"Open {index}",
-            slug=f"career-{index}",
-            draws_published=True,
-            results_published=True,
-        )
+        tid = _make_workspace(client, name=f"Open {index}", slug=f"career-{index}")
         published.append((tid, f"career-{index}"))
     quiet = _make_workspace(client, name="Quiet Open", slug="career-quiet")
     for tid, _slug in [*published, (quiet, "career-quiet")]:
@@ -868,6 +881,8 @@ def test_a_career_expands_every_published_workspace_and_no_unpublished_one(clien
             [{"id": "R-1", "name": "Rin Sato"}, {"id": "R-2", "name": "Kim Park"}],
             [[{"id": "R-F", "side_a": ["R-1"], "side_b": ["R-2"]}]],
         )
+    for tid, _slug in published:
+        _set_flags(tid, draws_published=True, results_published=True)
 
     body = client.get("/e/api/page/career-0/players/R-1").json()
     history = {row["slug"]: row for row in body["history"]}
@@ -890,7 +905,10 @@ def test_a_career_expands_every_published_workspace_and_no_unpublished_one(clien
 
 def test_an_unpublished_draw_keeps_a_person_out_of_the_history(client):
     """A workspace that has not published its draws is absent, not summarised."""
-    first = _make_workspace(client, name="Alpha Open", slug="alpha-2", draws_published=True)
+    # D24 locks import while published; publish ``first`` AFTER the import
+    # that creates its draw. ``quiet`` stays unpublished throughout — that
+    # absence is the read-side behaviour this test proves.
+    first = _make_workspace(client, name="Alpha Open", slug="alpha-2")
     quiet = _make_workspace(client, name="Quiet Open", slug="quiet-2")
     for tid, keys in ((first, ("A-1", "A-2")), (quiet, ("Q-1", "Q-2"))):
         _set_bracket_players(
@@ -907,6 +925,7 @@ def test_an_unpublished_draw_keeps_a_person_out_of_the_history(client):
             [{"id": keys[0], "name": "Rin Sato"}, {"id": keys[1], "name": "Kim Park"}],
             [[{"id": f"{keys[0]}-F", "side_a": [keys[0]], "side_b": [keys[1]]}]],
         )
+    _set_flags(first, draws_published=True)
 
     body = client.get("/e/api/page/alpha-2/players/A-1").json()
     assert [row["slug"] for row in body["history"]] == ["alpha-2"]
