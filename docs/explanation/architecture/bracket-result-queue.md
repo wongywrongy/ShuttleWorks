@@ -76,14 +76,17 @@ before the version is even inspected.
 
 ### 3. Server guard 2 — `seen_version`
 
-After the play-unit-exists check (404 if missing), an optional
-`seen_version` is compared to the match's current version:
+After the play-unit-exists check (404 if missing), `seen_version` is
+compared to the match's current version. Since ruling D5 (2026-09-15) the
+token is **mandatory** on both `POST /bracket/results` and
+`POST /bracket/commands` — a body that omits it is refused with 422 before
+the handler runs, because a check that only fires `if not None` fails *open*
+for exactly the caller most likely to need it:
 
 ```python
-if body.seen_version is not None:
-    current_version = session.match_versions.get(body.play_unit_id, 1)
-    if body.seen_version != current_version:
-        raise ConflictError(match_id=..., current_version=..., seen_version=...)
+current_version = session.match_versions.get(body.play_unit_id, 1)
+if body.seen_version != current_version:
+    raise ConflictError(match_id=..., current_version=..., seen_version=...)
 ```
 
 `ConflictError` carries the version fields, so its flat body reports

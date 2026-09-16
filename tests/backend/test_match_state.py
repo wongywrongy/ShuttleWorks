@@ -250,23 +250,37 @@ def test_put_without_if_match_returns_412(client, tid):
     assert "If-Match header required" in body["message"]
 
 
-def test_put_with_stale_if_match_returns_412(client, tid):
+def test_put_with_stale_if_match_returns_409_with_current_state(client, tid):
+    """Ruling D6 (2026-09-15): a STALE version is 409 carrying the current
+    state — the dialect ``PUT /tournaments/{id}/state`` already speaks — so
+    a client reconciles in one round trip. It used to be 412, which is now
+    reserved for a MISSING (or malformed) precondition header.
+    """
     # First write moves the version 0 → 1.
     r1 = client.put(
         f"{_base(tid)}/m1", json=_ok_state("m1", "called"), headers=_if_match(0)
     )
     assert r1.status_code == 200
-    # Second write with a stale If-Match (still 0) should 412.
+    # Second write with a stale If-Match (still 0).
     r2 = client.put(
         f"{_base(tid)}/m1",
         json=_ok_state("m1", "started"),
         headers=_if_match(0),
     )
-    assert r2.status_code == 412
-    body = r2.json()
-    assert body["error"] == "precondition_failed"
-    assert "Match version is 1" in body["message"]
-    assert "If-Match sent 0" in body["message"]
+    assert r2.status_code == 409
+    detail = r2.json()["detail"]
+    assert detail["code"] == "STATE_VERSION_CONFLICT"
+    assert detail["matchId"] == "m1"
+    assert detail["seenVersion"] == 0
+    assert detail["currentVersion"] == 1
+    # The current state travels with the refusal, so no second read is needed.
+    assert detail["currentState"]["matchId"] == "m1"
+    assert detail["currentState"]["status"] == "called"
+
+    # Nothing was written: the match is still where the first write left it.
+    after = client.get(f"{_base(tid)}/m1")
+    assert after.json()["status"] == "called"
+    assert after.headers["ETag"] == '"1"'
 
 
 def test_put_with_correct_if_match_succeeds_and_etag_increments(client, tid):
@@ -302,13 +316,18 @@ def test_delete_without_if_match_returns_412(client, tid):
     assert r.status_code == 412
 
 
-def test_delete_with_stale_if_match_returns_412(client, tid):
+def test_delete_with_stale_if_match_returns_409_with_current_state(client, tid):
+    """Ruling D6: stale is 409-with-state on DELETE too (was 412)."""
     client.put(
         f"{_base(tid)}/m1", json=_ok_state("m1", "called"), headers=_if_match(0)
     )
     # Current version is 1; sending If-Match: 0 is stale.
     r = client.delete(f"{_base(tid)}/m1", headers=_if_match(0))
-    assert r.status_code == 412
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["code"] == "STATE_VERSION_CONFLICT"
+    assert detail["currentVersion"] == 1
+    assert detail["currentState"]["status"] == "called"
 
 
 def test_if_match_accepts_unquoted_value(client, tid):

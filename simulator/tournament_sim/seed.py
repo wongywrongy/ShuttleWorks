@@ -1919,6 +1919,22 @@ def _run_path(run_dir: Path, key: str) -> Path:
     return run_dir / f"{safe}.json"
 
 
+def _bracket_play_unit_version(client: SimClient, workspace_id: str, play_unit_id: str) -> int:
+    """``BracketMatch.version`` for one play unit, as the draw reports it.
+
+    ``seen_version`` is mandatory on the bracket command path since the D5
+    ruling, and it is not guessable: advancement bumps the downstream units'
+    versions, so only the served draw knows. A unit the draw does not name is
+    at the initial version 1 — the same assumption the server makes for an
+    untouched match.
+    """
+    session = client.get_bracket_or_none(workspace_id) or {}
+    for unit in session.get("play_units") or []:
+        if unit.get("id") == play_unit_id:
+            return int(unit.get("version") or 1)
+    return 1
+
+
 def _write_manifest(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
@@ -2809,6 +2825,9 @@ def apply(
                 )
                 entry_event_ids[row.event] = str(created["id"])
             entry["entryEventIds"] = entry_event_ids
+            # D24 locks bracket import/delete while draws_published is set, so
+            # this cannot flip drawsPublished before the import below creates
+            # the draw — it is set separately, after that import succeeds.
             client.patch_entry_page_publication(
                 tid,
                 {
@@ -2818,7 +2837,6 @@ def apply(
                     # flag. Leaving it off is what made every
                     # ``/e/{slug}/players/{key}`` request a 404.
                     "entrantsPublished": True,
-                    "drawsPublished": True,
                     "resultsPublished": tournament.id != _DEMO_UPCOMING_TOURNAMENT or not demo_seed,
                 },
             )
@@ -2959,6 +2977,9 @@ def apply(
                 )
                 entry["liveMatchIds"] = live_match_ids
             client.import_bracket(tid, import_body)
+            # The draw now exists, so it can be published (D24 locked this
+            # flag out of the publication patch above, which ran first).
+            client.patch_entry_page_publication(tid, {"drawsPublished": True})
             if results:
                 imported = client.get_bracket(tid)
                 units = {unit["event_id"]: unit for unit in imported.get("play_units", [])}
@@ -2990,6 +3011,16 @@ def apply(
                 body = {
                     "id": command_uuid(0, seed_key, tournament.id, result["play_unit_id"]),
                     "kind": "record_result",
+                    # ``seen_version`` is mandatory since the D5 ruling, and
+                    # it cannot be assumed: recording a result advances the
+                    # downstream slots, and each advancement bumps THEIR
+                    # version. Read the unit's version from the draw the
+                    # product is serving right now, immediately before the
+                    # write. A fixture that states its own still wins via the
+                    # spread below.
+                    "seen_version": _bracket_play_unit_version(
+                        client, tid, result["play_unit_id"]
+                    ),
                     **{k: v for k, v in result.items() if k != "event_id"},
                 }
                 body = {key: value for key, value in body.items() if value is not None}
@@ -3140,6 +3171,10 @@ def apply_synthetic_outcomes(
             "play_unit_id": outcome["playUnitId"],
             "winner_side": outcome["winnerSide"],
             "reason": outcome["reason"],
+            # Mandatory since the D5 ruling — read from the served draw.
+            "seen_version": _bracket_play_unit_version(
+                client, workspace_id, outcome["playUnitId"]
+            ),
         }
         if outcome["score"] is not None:
             body["score"] = outcome["score"]
@@ -3535,6 +3570,10 @@ def apply_synthetic_bye(
                 "play_unit_id": bye_unit_id,
                 "winner_side": "A",
                 "reason": "walkover",
+                # Mandatory since the D5 ruling — read from the served draw.
+                "seen_version": _bracket_play_unit_version(
+                    client, workspace_id, bye_unit_id
+                ),
             },
         )
         session = client.get_bracket_or_none(workspace_id)

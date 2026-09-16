@@ -294,7 +294,9 @@ def test_unresolved_planned_match_cannot_start_or_record_result(bracket_client):
     )
     result = bracket_client.post(
         f"/tournaments/{tid}/bracket/results",
-        json={"play_unit_id": "F", "winner_side": "A"},
+        # ``seen_version`` is mandatory since D5; send the untouched match's
+        # version so this still exercises the unresolved-participants guard.
+        json={"play_unit_id": "F", "winner_side": "A", "seen_version": 1},
     )
 
     assert started.status_code == 409

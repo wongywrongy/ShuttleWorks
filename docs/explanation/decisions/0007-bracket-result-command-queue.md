@@ -45,13 +45,16 @@ Shared (implemented):
   the full-DTO ok-outcome. `useBracketResultQueue` + `applyOptimisticResult`
   add the optimistic apply and inline conflict surfacing in
   `MatchDetailPanel`.
-- **An optional `seen_version` on `RecordResultIn`.** The result route
+- **A mandatory `seen_version` on `RecordResultIn`.** The result route
   (`apps/api/src/bracket/brackets.py`) checks it **before** any mutation: a token
   that doesn't match the match's current `version` raises `ConflictError`,
   which serialises to HTTP 409 `error: stale_version`. A stale write
-  therefore records nothing and advances nothing. Omitting `seen_version`
-  preserves the legacy un-guarded path. **No migration** — the `version`
-  column already existed.
+  therefore records nothing and advances nothing. **No migration** — the
+  `version` column already existed.
+  *Amended 2026-09-15 (ruling D5):* the token shipped as `Optional`, guarded
+  only `if not None`, so the check failed **open** for any caller that omitted
+  it. It is now required on both `RecordResultIn` and `BracketCommandRequest`,
+  and a body without one is refused with 422 at the parse boundary.
 
 Not merged (deliberate):
 

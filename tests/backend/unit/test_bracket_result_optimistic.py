@@ -4,11 +4,11 @@ Bracket result writes now route through a client command queue that mirrors
 the meet path: a UUID idempotency key (client-side, in IndexedDB) plus
 version-based optimistic concurrency on the server. ``BracketMatch`` already
 carries a ``version`` column, so this needs no Alembic migration — only the
-``/results`` route grows an optional ``seen_version`` token.
+``/results`` route grows a ``seen_version`` token.
 
 Semantics (mirroring the meet ``submitCommand`` 409 contract):
-  - Omitting ``seen_version`` keeps the legacy behavior untouched (every
-    pre-existing caller + test still passes).
+  - Omitting ``seen_version`` is refused with 422 (D5 ruling, 2026-09-15);
+    it used to be accepted and silently skip the check.
   - A ``seen_version`` that does not match the match's current version is a
     stale write — the route returns 409 ``stale_version`` and records nothing
     and advances nothing.
@@ -153,13 +153,23 @@ def test_fresh_seen_version_commits_and_advances(client, tid):
     )
 
 
-def test_omitted_seen_version_keeps_legacy_behavior(client, tid):
-    """No ``seen_version`` → no optimistic check; records and advances."""
+def test_omitted_seen_version_is_refused(client, tid):
+    """D5 ruling: ``seen_version`` is MANDATORY.
+
+    It used to be optional, guarded only ``if not None`` — a fail-*open*
+    optimistic-concurrency check that silently unprotected every caller who
+    forgot the token. A body without one is now refused at the parse
+    boundary (422) and nothing is recorded.
+    """
     client.post(_bracket_url(tid), json=_se_4_body())
     state = client.get(_bracket_url(tid)).json()
     sf1 = _semifinal(state)
 
-    r = client.post(
+    # ``client.request`` bypasses the conftest shim that fills the token in
+    # for the many tests that merely need a result recorded. This test is
+    # about the precondition, so it must send what a forgetful client sends.
+    r = client.request(
+        "POST",
         _bracket_url(tid, "results"),
         json={
             "play_unit_id": sf1["id"],
@@ -167,12 +177,35 @@ def test_omitted_seen_version_keeps_legacy_behavior(client, tid):
             "finished_at_slot": 0,
         },
     )
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert any(
-        res["play_unit_id"] == sf1["id"] and res["winner_side"] == "B"
-        for res in body["results"]
+    assert r.status_code == 422, r.text
+
+    after = client.get(_bracket_url(tid)).json()
+    assert after["results"] == []
+
+
+def test_omitted_seen_version_is_refused_on_the_command_path(client, tid):
+    """The same fail-open lived on ``POST /bracket/commands`` (the path ADR
+    0007 makes canonical for result recording). D5 closes both."""
+    import uuid as _uuid
+
+    client.post(_bracket_url(tid), json=_se_4_body())
+    state = client.get(_bracket_url(tid)).json()
+    sf1 = _semifinal(state)
+
+    r = client.request(
+        "POST",
+        _bracket_url(tid, "commands"),
+        json={
+            "id": str(_uuid.uuid4()),
+            "kind": "record_result",
+            "play_unit_id": sf1["id"],
+            "winner_side": "A",
+        },
     )
+    assert r.status_code == 422, r.text
+
+    after = client.get(_bracket_url(tid)).json()
+    assert after["results"] == []
 
 
 def test_stale_write_to_advanced_match_is_rejected(client, tid):

@@ -223,10 +223,10 @@ def test_stale_write_is_detectable_at_all(client, tid):
 def test_missing_if_match_is_refused_not_guessed(client, tid):
     """Fail-closed: an absent precondition is rejected, not assumed current.
 
-    This is the difference between this guard and ``seen_version`` on
-    /bracket/results, which is Optional and therefore silently does nothing
-    for any caller that forgets it. A precondition that is optional is a
-    precondition that will be omitted.
+    A precondition that is optional is a precondition that will be omitted —
+    which is why the D5 ruling made ``seen_version`` on /bracket/results and
+    /bracket/commands mandatory too (422 when absent). Both preconditions are
+    now fail-closed; only the status differs, for the reason below.
 
     412 rather than 409: there is no conflict to reconcile and no state worth
     returning — it is a client bug.

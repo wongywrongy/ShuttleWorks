@@ -485,7 +485,9 @@ export interface paths {
          *
          *     Step D: the request must carry an ``If-Match`` header whose value
          *     matches the current ``matches.version`` (``"0"`` for a brand-new
-         *     match). Missing or stale headers return 412 Precondition Failed.
+         *     match). A missing or malformed header returns 412 Precondition
+         *     Failed; a STALE one returns 409 with ``currentState`` in the body
+         *     (ruling D6 — one conflict dialect, the one ``PUT …/state`` speaks).
          *
          *     Enforces the state-machine transition guard against the canonical
          *     ``matches.status`` before writing. A ``ConflictError`` bubbles up
@@ -504,7 +506,8 @@ export interface paths {
          *     Step D: the request must carry an ``If-Match`` header whose
          *     value matches the current ``matches.version``. This stops a
          *     stale client from rolling a match it didn't observe back to
-         *     ``scheduled``.
+         *     ``scheduled``. Missing/malformed → 412; stale → 409 with
+         *     ``currentState`` (ruling D6).
          *
          *     Admin override on the transition side: bypasses the transition
          *     guard so an operator can unblock a stuck terminal state. Also
@@ -663,7 +666,13 @@ export interface paths {
          *     client must ``DELETE /bracket`` first to recreate.
          */
         post: operations["create_bracket_tournaments__tournament_id__bracket_post"];
-        /** Delete Bracket */
+        /**
+         * Delete Bracket
+         * @description Clear the whole bracket.
+         *
+         *     Refused with 409 ``DRAW_PUBLISHED`` while draws are published — every
+         *     event id here is a live public draw address (ruling D24).
+         */
         delete: operations["delete_bracket_tournaments__tournament_id__bracket_delete"];
         options?: never;
         head?: never;
@@ -783,6 +792,9 @@ export interface paths {
          *     Only 'draft' events may be deleted. 'generated' and 'started' events
          *     must be explicitly demoted via upsert (with the understanding that
          *     upsert only allows demotion on 'generated') before deletion.
+         *
+         *     Refused with 409 ``DRAW_PUBLISHED`` while draws are published: this
+         *     event's id is its public address (ruling D24).
          */
         delete: operations["delete_event_route_tournaments__tournament_id__bracket_events__event_id__delete"];
         options?: never;
@@ -1117,6 +1129,9 @@ export interface paths {
          *     any existing bracket for this tournament before installing the
          *     imported one — same destructive semantics as the prototype's
          *     POST /tournament/import.
+         *
+         *     Because the wipe re-keys every draw, it is refused with 409
+         *     ``DRAW_PUBLISHED`` while draws are published (ruling D24).
          */
         post: operations["import_tournament_json_tournaments__tournament_id__bracket_import_post"];
         delete?: never;
@@ -1140,6 +1155,9 @@ export interface paths {
          *
          *     Mirrors the prototype's ``POST /tournament/import.csv``: the body
          *     is the raw CSV; session config comes in as query params.
+         *
+         *     Refused with 409 ``DRAW_PUBLISHED`` while draws are published — it
+         *     wipes and re-keys the existing draws (ruling D24).
          */
         post: operations["import_tournament_csv_tournaments__tournament_id__bracket_import_csv_post"];
         delete?: never;
@@ -4373,11 +4391,13 @@ export interface components {
          *     snapshot — advancement is NOT re-run (SP-G1 Seam C).
          *
          *     ``kind`` is the operation type; currently only ``"record_result"`` is
-         *     supported. ``seen_version`` is an optional optimistic-concurrency token
+         *     supported. ``seen_version`` is the optimistic-concurrency token
          *     mirroring ``RecordResultIn.seen_version`` (SP-F3): the server rejects
-         *     with 409 ``stale_version`` when present and stale.  The replay check
-         *     always runs BEFORE the version guard so a re-delivered command whose
-         *     version has advanced is still accepted.
+         *     with 409 ``stale_version`` when it is stale, and a body that omits it is
+         *     refused with 422 at the parse boundary (D5 ruling — an optional
+         *     precondition is a precondition a caller silently forgets).  The replay
+         *     check always runs BEFORE the version guard so a re-delivered command
+         *     whose version has advanced is still accepted.
          *     ``reason`` annotates contingency results (walkover/retired/forfeit).
          */
         BracketCommandRequest: {
@@ -4399,7 +4419,7 @@ export interface components {
              */
             winner_side: "A" | "B";
             /** Seen Version */
-            seen_version?: number | null;
+            seen_version: number;
             /** Finished At Slot */
             finished_at_slot?: number | null;
             /**
@@ -8072,7 +8092,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /** Seen Version */
-            seen_version?: number | null;
+            seen_version: number;
         };
         /** RecoveryCodesDTO */
         RecoveryCodesDTO: {

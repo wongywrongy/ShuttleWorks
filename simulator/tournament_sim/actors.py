@@ -30,6 +30,22 @@ def _seen_version(client: SimClient, ctx: RunContext, match_id: str) -> int:
     return ctx.versions[match_id]
 
 
+def _bracket_seen_version(client: SimClient, ctx: RunContext, play_unit_id: str) -> int:
+    """``BracketMatch.version`` for one play unit, read from the draw the
+    product serves.
+
+    Mandatory on the bracket command path since the D5 ruling, so it is
+    resolved here rather than omitted: a unit the draw does not name (or a
+    draw that is not there yet) is at the initial version 1, which is what
+    the server itself assumes for an untouched match.
+    """
+    session = client.get_bracket_or_none(ctx.tid) or {}
+    for unit in session.get("play_units") or []:
+        if unit.get("id") == play_unit_id:
+            return int(unit.get("version") or 1)
+    return 1
+
+
 class Director:
     """Meet floor control through ``POST /tournaments/{tid}/commands``."""
 
@@ -171,13 +187,16 @@ class BracketDirector:
             "play_unit_id": play_unit_id,
             "winner_side": winner_side,
             "walkover": walkover,
+            "seen_version": (
+                seen_version
+                if seen_version is not None
+                else _bracket_seen_version(client, ctx, play_unit_id)
+            ),
         }
         if score is not None:
             body["score"] = score
         if finished_at_slot is not None:
             body["finished_at_slot"] = finished_at_slot
-        if seen_version is not None:
-            body["seen_version"] = seen_version
         resp = client.bracket_command(ctx.tid, body, expect=expect)
         if resp.status_code == 200:
             ctx.ledger.applied_command_ids.add(cmd_id)

@@ -61,6 +61,7 @@ describe('bracket API — the write gate', () => {
         play_unit_id: 'pu1',
         winner_side: 'A',
         reason: 'walkover',
+        seen_version: 1,
       });
       expect(apiClient.recordBracketResultCommand).toHaveBeenCalledTimes(1);
     });
@@ -81,6 +82,7 @@ describe('bracket API — the write gate', () => {
             play_unit_id: 'pu1',
             winner_side: 'A',
             reason: 'walkover',
+            seen_version: 1,
           }),
       ],
     ])('refuses %s without touching the network', async (_name, call) => {

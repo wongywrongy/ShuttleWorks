@@ -21,12 +21,19 @@ ETag / If-Match (Step D)
 ------------------------
 
 Single-match mutation routes (PUT, DELETE) require an ``If-Match``
-header whose value matches the current ``matches.version``. Missing
-or stale headers return HTTP 412 Precondition Failed. The GET on a
-single match returns the current version as an ``ETag`` response
+header whose value matches the current ``matches.version``. The GET on
+a single match returns the current version as an ``ETag`` response
 header so the frontend always has the value to send back. A match
 that hasn't been written yet has implicit version 0 — the first
 successful write transitions to version 1.
+
+**One conflict dialect (ruling D6, 2026-09-15).** A *missing* or
+malformed ``If-Match`` is HTTP **412**: a client bug, with no conflict
+to resolve and no state worth returning. A *stale* ``If-Match`` is HTTP
+**409** carrying ``currentState`` — the same answer
+``PUT /tournaments/{id}/state`` gives, so a client reconciles from the
+refusal in one round trip instead of branching on a second dialect.
+This route used to answer 412 for all three.
 
 Bulk / admin routes (``reset_all``, the two ``import_*`` handlers)
 intentionally bypass both the transition guard *and* the If-Match
@@ -276,6 +283,24 @@ def _parse_if_match_header(raw: Optional[str]) -> Optional[int]:
         return None
 
 
+def _current_match_state_dto(
+    repo: LocalRepository,
+    tournament_id: uuid.UUID,
+    match_id: str,
+) -> MatchStateDTO:
+    """The match state a ``GET`` would answer with — including the
+    default ``scheduled`` for a match that has never been written.
+
+    Travels WITH a stale-version refusal so the caller can reconcile
+    without a second round trip, exactly as ``currentState`` does on
+    ``PUT /tournaments/{id}/state``.
+    """
+    row = repo.match_states.get(tournament_id, match_id)
+    if row is None:
+        return MatchStateDTO(matchId=match_id, status="scheduled")
+    return row_to_dto(row)
+
+
 def _enforce_if_match(
     request: Request,
     repo: LocalRepository,
@@ -283,9 +308,14 @@ def _enforce_if_match(
     match_id: str,
 ) -> int:
     """Verify the request's ``If-Match`` header against the current
-    ``matches.version``. Raises 412 on missing or stale. Returns the
-    current version (the value the response ``ETag`` will carry on
-    success — incremented after the write).
+    ``matches.version``. Returns the current version (the value the
+    response ``ETag`` will carry on success — incremented after the
+    write).
+
+    Ruling D6: a MISSING or malformed header raises 412 (a client bug —
+    there is nothing to reconcile), a STALE one raises 409 carrying the
+    current state, which is the one dialect the whole product speaks for
+    "your copy is out of date".
     """
     raw = request.headers.get("If-Match")
     if raw is None:
@@ -301,12 +331,21 @@ def _enforce_if_match(
         )
     current = _current_match_version(repo, tournament_id, match_id)
     if parsed != current:
-        raise _precondition_failed(
-            match_id,
+        raise http_error(
+            409,
+            ErrorCode.STATE_VERSION_CONFLICT,
             (
                 f"Match version is {current}; If-Match sent {parsed}. "
-                "Reload and retry."
+                "This match changed since you loaded it."
             ),
+            extra={
+                "matchId": match_id,
+                "seenVersion": parsed,
+                "currentVersion": current,
+                "currentState": _current_match_state_dto(
+                    repo, tournament_id, match_id
+                ).model_dump(mode="json"),
+            },
         )
     return current
 
@@ -362,7 +401,9 @@ def update_match_state(
 
     Step D: the request must carry an ``If-Match`` header whose value
     matches the current ``matches.version`` (``"0"`` for a brand-new
-    match). Missing or stale headers return 412 Precondition Failed.
+    match). A missing or malformed header returns 412 Precondition
+    Failed; a STALE one returns 409 with ``currentState`` in the body
+    (ruling D6 — one conflict dialect, the one ``PUT …/state`` speaks).
 
     Enforces the state-machine transition guard against the canonical
     ``matches.status`` before writing. A ``ConflictError`` bubbles up
@@ -433,7 +474,8 @@ def delete_match_state(
     Step D: the request must carry an ``If-Match`` header whose
     value matches the current ``matches.version``. This stops a
     stale client from rolling a match it didn't observe back to
-    ``scheduled``.
+    ``scheduled``. Missing/malformed → 412; stale → 409 with
+    ``currentState`` (ruling D6).
 
     Admin override on the transition side: bypasses the transition
     guard so an operator can unblock a stuck terminal state. Also

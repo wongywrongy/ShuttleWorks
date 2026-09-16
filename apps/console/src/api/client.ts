@@ -293,18 +293,41 @@ const stateEtags = new Map<string, string>();
 // setup edit can never accidentally reuse a stale token from another route.
 const setupEtags = new Map<string, string>();
 
-/** Thrown when the server rejects a match-state mutation due to a
- *  stale or missing If-Match version (HTTP 412) or a state-machine
- *  transition conflict (HTTP 409). Callers can branch on `name` to
- *  decide whether to refetch + retry or roll back optimistic state. */
+/** Thrown when the server rejects a match-state mutation.
+ *
+ *  Three refusals, one error type — branch on `kind`, not on `status`:
+ *  - `precondition` (412) — the If-Match header was absent or malformed.
+ *    A client bug; there is nothing to reconcile.
+ *  - `stale_version` (409 `STATE_VERSION_CONFLICT`) — our version was
+ *    superseded. Since ruling D6 the refusal CARRIES `currentState`, the
+ *    same reconcile-in-one-round-trip shape `PUT …/state` answers with
+ *    (`StateVersionConflict` above), so a caller applies it instead of
+ *    paying a refetch. Replaying with the fresh version is real: Retry.
+ *  - `conflict` (409 `error: "conflict"`) — the state machine refused the
+ *    TRANSITION. Replaying re-sends the same illegal move, so Retry is a
+ *    lie; re-sync and say what happened.
+ *
+ *  Before D6 a stale version answered 412 and a transition conflict 409,
+ *  which made the status code carry the meaning. It no longer can. */
 export class MatchVersionMismatch extends Error {
   override name = 'MatchVersionMismatch';
   readonly status: 412 | 409;
+  readonly kind: 'precondition' | 'stale_version' | 'conflict';
   readonly currentVersion?: number;
-  constructor(status: 412 | 409, message: string, currentVersion?: number) {
+  /** The server's current match state, when the refusal carried one. */
+  readonly currentState?: MatchStateDTO;
+  constructor(
+    status: 412 | 409,
+    message: string,
+    kind: 'precondition' | 'stale_version' | 'conflict',
+    currentVersion?: number,
+    currentState?: MatchStateDTO,
+  ) {
     super(message);
     this.status = status;
+    this.kind = kind;
     this.currentVersion = currentVersion;
+    this.currentState = currentState;
   }
 }
 
@@ -1495,8 +1518,9 @@ class ApiClient {
    * `matchStateStore.setMatchVersion` so the next mutation on the
    * same match doesn't pay the cold-read roundtrip.
    *
-   * Throws `MatchVersionMismatch` on 412 (header missing or stale)
-   * or 409 (state-machine conflict). All other failures propagate
+   * Throws `MatchVersionMismatch` on 412 (header missing or malformed)
+   * and on 409 — either a stale version (which carries `currentState`,
+   * ruling D6) or a state-machine conflict. All other failures propagate
    * via the axios interceptor's toast pipeline.
    */
   async updateMatchState(
@@ -1529,11 +1553,50 @@ class ApiClient {
         (err as { status?: number }).status ??
         (err as { response?: { status?: number } }).response?.status;
       if (status === 412 || status === 409) {
+        // Two 409 body shapes reach here: the D6 stale-version refusal
+        // (`detail.code === 'STATE_VERSION_CONFLICT'`, carrying the current
+        // state — read exactly the way `putTournamentState` reads its own
+        // refusal) and the flat state-machine ConflictError
+        // (`{ error: 'conflict' | 'stale_version', … }`).
+        const data = (err as {
+          response?: {
+            data?: {
+              message?: string;
+              error?: string;
+              current_version?: number;
+              detail?: {
+                code?: string;
+                message?: string;
+                currentVersion?: number;
+                currentState?: MatchStateDTO;
+              };
+            };
+          };
+        }).response?.data;
+        const detail = data?.detail;
         const msg =
-          (err as { response?: { data?: { message?: string } } }).response?.data?.message ??
+          detail?.message ??
+          data?.message ??
           (err as { message?: string }).message ??
           'Match version mismatch';
-        throw new MatchVersionMismatch(status, msg);
+        if (status === 412) {
+          throw new MatchVersionMismatch(412, msg, 'precondition');
+        }
+        if (detail?.code === 'STATE_VERSION_CONFLICT') {
+          throw new MatchVersionMismatch(
+            409,
+            msg,
+            'stale_version',
+            detail.currentVersion,
+            detail.currentState,
+          );
+        }
+        throw new MatchVersionMismatch(
+          409,
+          msg,
+          data?.error === 'stale_version' ? 'stale_version' : 'conflict',
+          data?.current_version,
+        );
       }
       throw err;
     }
@@ -1804,6 +1867,10 @@ class ApiClient {
     body: {
       play_unit_id: string;
       winner_side: 'A' | 'B';
+      /** Mandatory since the D5 ruling — the server answers 422 without it.
+       *  The optimistic-concurrency check used to be skipped when absent,
+       *  which made it fail *open* for any caller that forgot the token. */
+      seen_version: number;
       finished_at_slot?: number | null;
       walkover?: boolean;
       score?: BracketScore | null;
@@ -2013,7 +2080,8 @@ class ApiClient {
       kind?: 'record_result' | 'correct_result';
       play_unit_id: string;
       winner_side: 'A' | 'B';
-      seen_version?: number;
+      /** Mandatory since the D5 ruling (422 without it). */
+      seen_version: number;
       finished_at_slot?: number;
       score?: unknown;
       walkover?: boolean;

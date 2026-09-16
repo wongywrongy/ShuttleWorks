@@ -99,10 +99,10 @@ the draw inside the same module.
 
 | Method · Path | Purpose |
 | --- | --- |
-| `POST · GET · DELETE …/bracket` | create / read / clear the bracket |
+| `POST · GET · DELETE …/bracket` | create / read / clear the bracket (`DELETE` is refused `409 DRAW_PUBLISHED` while draws are published — see the publication lock below) |
 | `POST …/bracket/events/{eid}` | upsert one event (forced to `draft`) |
-| `POST …/bracket/events/{eid}/generate` | generate the draw for an event |
-| `DELETE …/bracket/events/{eid}` | delete a `draft` event |
+| `POST …/bracket/events/{eid}/generate` | generate the draw for an event (honours the session's solve budget and `deterministic`/`randomSeed`, like the other solve paths — ruling D11) |
+| `DELETE …/bracket/events/{eid}` | delete a `draft` event (refused `409 DRAW_PUBLISHED` while draws are published) |
 | `POST …/bracket/schedule-next` | solve the next ready round (batch) |
 | `POST …/bracket/schedule-next/stream` | solve next round with SSE progress + candidate pool |
 | `POST …/bracket/schedule-next/commit` | persist the operator-chosen candidate's assignments |
@@ -113,8 +113,19 @@ the draw inside the same module.
 | `POST …/bracket/pin` | re-pin one match + re-solve around it |
 | `POST …/bracket/assign` | **non-solver** direct court+slot placement (Run surface) |
 | `POST …/bracket/unassign` | **non-solver** return-to-queue |
-| `POST …/bracket/import`(+`.csv`) | import a pre-paired bracket |
+| `POST …/bracket/import`(+`.csv`) | import a pre-paired bracket (wipes first, so refused `409 DRAW_PUBLISHED` while draws are published) |
 | `GET …/bracket/export.{json,csv,ics}` | snapshot / order-of-play CSV / iCalendar feed |
+
+:::warning The publication lock (ruling D24)
+`bracket_events.id` is the entrant tier's public `drawKey` — the
+`/e/{slug}/draws/{drawKey}` URL segment. Deleting a draw (or the whole bracket)
+and re-importing therefore re-keys an address entrants already have, so all
+three are refused with `409 DRAW_PUBLISHED` while the workspace's
+`entry_pages.draws_published` flag is on. The operator turns Publish · Draws
+off, rebuilds, and publishes again — a visible sequence instead of a silent
+re-key. **Regeneration is not locked**: `POST …/events/{eid}/generate`
+recreates the row under the same id, so the public address survives it.
+:::
 
 :::info `/bracket/commands` vs `/bracket/results`
 Both record a result and advance the draw. `POST /bracket/commands`
@@ -136,7 +147,7 @@ architectural module with no enable flag.
 | --- | --- |
 | `GET …/match-states` | all live states (`{matchId: MatchStateDTO}`) |
 | `GET …/match-states/{mid}` | one live state; response carries `ETag: "<version>"` |
-| `PUT …/match-states/{mid}` | update one state (requires `If-Match`; `412` on stale/missing) |
+| `PUT …/match-states/{mid}` | update one state (requires `If-Match`; `412` when missing or malformed, `409` `STATE_VERSION_CONFLICT` with `currentState` when stale — ruling D6) |
 | `DELETE …/match-states/{mid}` | reset one state (also requires `If-Match`) |
 | `POST …/match-states/reset` | reset all states |
 | `GET …/match-states/export/download` | download all states as a JSON file |
@@ -397,9 +408,12 @@ The bracket's `POST /bracket/commands` is a parallel idempotent command whose on
   the axios interceptor falls back to treating `detail` as the message.
 - **Optimistic concurrency** — two families:
   - *Match-state writes* use `ETag` / `If-Match`. A `GET …/match-states/{mid}` returns
-    `ETag: "<matches.version>"` (`"0"` for an unseen match); `PUT` / `DELETE` must send a matching
-    `If-Match` or get `412 Precondition Failed`.
-  - *The command pipeline* and *bracket result writes* carry `seen_version`; a mismatch raises a
+    `ETag: "<matches.version>"` (`"0"` for an unseen match); `PUT` / `DELETE` must send an
+    `If-Match` or get `412 Precondition Failed`, and a STALE one is refused with
+    `409 STATE_VERSION_CONFLICT` carrying `currentState` — the same dialect `PUT …/state`
+    speaks (ruling D6, 2026-09-15; it used to answer `412` for stale as well).
+  - *The command pipeline* and *bracket result writes* carry a **mandatory** `seen_version`
+    (ruling D5 — a body without one is `422`); a mismatch raises a
     `ConflictError` → `409` with `error: "stale_version"`. An illegal state-machine transition is
     `409` with `error: "conflict"`. See
     [Data flow](/explanation/architecture/data-flow#the-command-pipeline-write-path).
