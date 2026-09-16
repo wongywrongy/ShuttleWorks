@@ -30,7 +30,7 @@ no entry page can exist, so an entrant account has nothing to act on.
 from __future__ import annotations
 
 import json
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 import pytest
 
@@ -1190,21 +1190,35 @@ def test_a_refused_form_signup_is_a_page_and_not_a_json_blob(client, turnstile):
     """
     r = _form_signup(client, password="short")
 
-    assert r.status_code == 303, r.text
+    assert r.status_code == 307, r.text
     assert r.headers["location"].startswith("/e/signup/failed?")
     assert "AUTH_WEAK_PASSWORD" not in r.text
     assert _accounts() == 0
 
 
-def test_the_refusal_names_the_rule_and_echoes_back_everything_but_the_password(
-    client, turnstile
-):
-    """The reason is an allowlisted NAME, never the backend's prose, and the
-    typed fields come back so the entrant does not refill the form.
+def test_the_refusal_is_a_307_so_the_typing_rides_in_the_body(client, turnstile):
+    """**307, not 303** — the same decision ``_echo_redirect`` took for the
+    quote round trip (``entries/entries_json.py``) after a browser pass read
+    an entrant's name and club back out of the address bar.
 
-    The password is absent by construction: it is the field that was wrong,
-    and a credential has no business in a ``Location``, a history entry or a
-    proxy log.
+    A 303 re-issues as GET, so the typed fields could only survive it as a
+    query string, and a URL is written into the browser's history, into every
+    nginx access log and into any intermediary's. 307 preserves the method
+    and the body, so the browser re-posts the same form to the page and the
+    ``Location`` carries only what the SERVER authored.
+    """
+    r = _form_signup(client, password="short")
+
+    assert r.status_code == 307
+    # Not 303: the distinction is the whole fix, so name it.
+    assert r.status_code != 303
+
+
+def test_the_refusal_puts_no_entrant_field_in_the_location(client, turnstile):
+    """No PII in the URL, asserted per field AND as a whole.
+
+    The password was never there; email, display name and phone were, and a
+    ``Location`` is the one part of this exchange that gets logged verbatim.
     """
     r = _form_signup(
         client,
@@ -1213,14 +1227,39 @@ def test_the_refusal_names_the_rule_and_echoes_back_everything_but_the_password(
         displayName="Ana Ruiz",
         phone="555-0100",
     )
+    location = r.headers["location"]
+    query = parse_qs(urlsplit(location).query)
 
-    query = parse_qs(urlsplit(r.headers["location"]).query)
+    # Only server-authored keys survive.
+    assert set(query) <= {"reason", "next"}
     assert query["reason"] == ["PASSWORD_TOO_SHORT"]
-    assert query["email"] == ["parent@example.com"]
-    assert query["displayName"] == ["Ana Ruiz"]
-    assert query["phone"] == ["555-0100"]
-    assert "password" not in query
-    assert "short" not in r.headers["location"]
+    # And no posted VALUE appears anywhere in the URL, in any encoding — a
+    # key-name check alone would pass a future field spelled differently.
+    for secret in ("parent", "example.com", "Ana", "Ruiz", "555-0100", "short-and-secret"):
+        assert secret not in location
+        assert quote(secret, safe="") not in location
+
+
+def test_the_refusal_names_the_rule_and_never_the_message(client, turnstile):
+    """The reason is an allowlisted NAME, never ``exc.message``.
+
+    The landing URL is addressable and therefore shareable: a free-text
+    reason would let a stranger put plausible prose on the official sign-up
+    page for whoever was sent the link. No XSS is needed — the page escaping
+    it faithfully is the problem.
+    """
+    short = _form_signup(client, password="short")
+    common = _form_signup(client, password="password")
+
+    assert parse_qs(urlsplit(short.headers["location"]).query)["reason"] == [
+        "PASSWORD_TOO_SHORT"
+    ]
+    assert parse_qs(urlsplit(common.headers["location"]).query)["reason"] == [
+        "PASSWORD_TOO_COMMON"
+    ]
+    # The prose the exception carries stays server-side.
+    assert "commonly breached" not in common.headers["location"]
+    assert "at least" not in short.headers["location"]
 
 
 def test_the_refusal_keeps_the_destination_it_arrived_with(client, turnstile):
@@ -1235,7 +1274,7 @@ def test_a_crafted_next_does_not_survive_a_refused_signup_either(client, turnsti
     phishing primitive as one reached through the success branch."""
     r = _form_signup(client, password="short", next="https://evil.example/steal")
 
-    assert r.status_code == 303
+    assert r.status_code == 307
     assert "evil.example" not in r.headers["location"]
     assert "next" not in parse_qs(urlsplit(r.headers["location"]).query)
 
@@ -1266,7 +1305,7 @@ def test_the_refusal_page_never_says_whether_the_address_is_registered(
     taken = _form_signup(client, email="taken@example.com", password="short")
     fresh = _form_signup(client, email="nobody@example.com", password="short")
 
-    assert taken.status_code == fresh.status_code == 303
+    assert taken.status_code == fresh.status_code == 307
     assert parse_qs(urlsplit(taken.headers["location"]).query)["reason"] == parse_qs(
         urlsplit(fresh.headers["location"]).query
     )["reason"]
@@ -1289,7 +1328,7 @@ def test_a_refused_form_signup_still_costs_the_budget(client, turnstile):
     from core.config import settings
 
     for _ in range(int(settings.entrant_signup_max_per_ip)):
-        assert _form_signup(client, password="short").status_code == 303
+        assert _form_signup(client, password="short").status_code == 307
 
     assert _form_signup(client, password="short").status_code == 429
 

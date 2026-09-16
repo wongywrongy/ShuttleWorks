@@ -29,6 +29,7 @@
  *    (`routeFiles()`) already scan this file for relay shapes and module state;
  *    they cover it the moment it lands, with no line to add.
  */
+import { readFileSync } from 'node:fs';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
 import { createRequestHandler, type ServerBuild } from 'react-router';
@@ -501,26 +502,61 @@ describe('a tournament-scoped signup names the tournament', () => {
 
 // ---- B-1: the refusal is a page, and the form comes back filled in --------
 
+/**
+ * Re-post the form the way a browser does after the backend's 307.
+ *
+ * The typed fields are in the BODY, not the URL — that is the whole point of
+ * the 307 (`entrants_routes._SIGNUP_FAILED_PAGE`, and `_echo_redirect` before
+ * it): a 303 could only carry them in a query string, and a query string is
+ * written into history, into nginx's access log and into any intermediary's.
+ */
+async function repost(
+  path: string,
+  fields: Record<string, string>,
+): Promise<string> {
+  stubConfig();
+  const build = (await vite.ssrLoadModule(
+    'virtual:react-router/server-build',
+  )) as unknown as ServerBuild;
+  const response = await createRequestHandler(build, 'development')(
+    new Request(`http://entrant.test${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(fields).toString(),
+    }),
+  );
+  return response.text();
+}
+
 describe('a sign-up the password policy refused', () => {
   it('renders the form again with the rule named and the typed fields kept', async () => {
-    // `POST /e/account/signup` 303s here with an allowlisted reason and the
-    // non-secret fields. Before B-1 the browser was handed raw JSON instead.
-    const html = await render(
-      '/e/signup/failed?reason=PASSWORD_TOO_SHORT&email=ana%40example.test&displayName=Ana%20Ruiz&phone=555-0100',
-    );
+    // The browser re-posts the same body here. Before B-1 it was handed raw
+    // JSON instead, with every field destroyed.
+    const html = await repost('/e/signup/failed?reason=PASSWORD_TOO_SHORT', {
+      email: 'ana@example.test',
+      password: 'short',
+      displayName: 'Ana Ruiz',
+      phone: '555-0100',
+    });
 
     expect(html).toContain('Use at least 8 characters.');
     expect(html).toContain('action="/e/account/signup"');
     expect(html).toContain('value="ana@example.test"');
     expect(html).toContain('value="Ana Ruiz"');
     expect(html).toContain('value="555-0100"');
-    // The password field is marked invalid but never prefilled: it is the
-    // field that was wrong, and the backend does not carry it here at all.
+    // The password field is marked invalid but NEVER prefilled: it is the
+    // field that was wrong, and re-rendering a credential into an HTML
+    // attribute is not a thing this page does.
     expect(html).toMatch(/id="signup-password"[^>]*aria-invalid="true"/);
+    expect(html).not.toContain('"short"');
+    expect(html).not.toMatch(/id="signup-password"[^>]*value=/);
   });
 
   it('names the email field when the address is what was wrong', async () => {
-    const html = await render('/e/signup/failed?reason=INVALID_EMAIL&email=not-an-address');
+    const html = await repost('/e/signup/failed?reason=INVALID_EMAIL', {
+      email: 'not-an-address',
+      password: 'a perfectly fine passphrase',
+    });
 
     expect(html).toContain('That email address does not look right.');
     expect(html).toMatch(/id="signup-email"[^>]*aria-invalid="true"/);
@@ -539,14 +575,27 @@ describe('a sign-up the password policy refused', () => {
     expect(html).not.toContain('We could not create your account');
   });
 
-  it('keeps the bare signup page inert to the same query fields', async () => {
+  it('renders an empty form on a plain GET, because there is no body to put back', async () => {
+    // The URL is typeable and shareable. It states the rule and asks again;
+    // it cannot fill anything in, and no query field can make it.
+    const html = await render(
+      '/e/signup/failed?reason=PASSWORD_TOO_SHORT&email=ana%40example.test&displayName=Ana%20Ruiz',
+    );
+
+    expect(html).toContain('Use at least 8 characters.');
+    expect(html).not.toContain('ana@example.test');
+    expect(html).not.toContain('Ana Ruiz');
+  });
+
+  it('keeps the bare signup page inert to the failure vocabulary', async () => {
     // The scoping that keeps the byte-identical comparison above meaningful:
-    // the echo lives on `/failed` and nowhere else.
+    // the reason and the echo live on `/failed` and nowhere else.
     const html = await render(
       '/e/signup?reason=PASSWORD_TOO_SHORT&email=ana%40example.test&displayName=Ana%20Ruiz',
     );
 
     expect(html).not.toContain('Use at least 8 characters.');
+    expect(html).not.toContain('We could not create your account');
     expect(html).not.toContain('ana@example.test');
     expect(html).not.toContain('Ana Ruiz');
   });
@@ -557,5 +606,41 @@ describe('a sign-up the password policy refused', () => {
     );
 
     expect(html).toContain('name="next" value="/e/spring-open/enter/created"');
+  });
+
+  it('never names the password field in the module that reads the body', async () => {
+    // Structural, and the half that matters. The re-posted body contains the
+    // password — unavoidable once the browser re-posts — so the guarantee is
+    // that nothing here reads it. An explicit three fields, not a loop over
+    // the body: a loop would put the next credential somebody adds to this
+    // form on the page by default.
+    const source = readFileSync(
+      new URL('../app/routes/signupFailed.tsx', import.meta.url),
+      'utf8',
+    );
+    const action = source.match(/export async function action[\s\S]*?\n}/)?.[0];
+    expect(action).toBeTruthy();
+    expect(action!).not.toMatch(/\bpassword\b/);
+    expect(action!).toContain("field(posted, 'email')");
+    // Non-vacuity: the extraction really found the body-reading function.
+    expect(action!).toContain('request.text()');
+  });
+
+  it('leaves the posting page without an action, which is why this one exists', async () => {
+    // `routes/signup.tsx` must never hold the backend's answer (see its
+    // banner). The 307 needs an action to land on, so the failure page is a
+    // SECOND MODULE and the view is what they share.
+    const posting = (await vite.ssrLoadModule('/app/routes/signup.tsx')) as Record<
+      string,
+      unknown
+    >;
+    const failed = (await vite.ssrLoadModule('/app/routes/signupFailed.tsx')) as Record<
+      string,
+      unknown
+    >;
+
+    expect(posting.action).toBeUndefined();
+    expect(typeof failed.action).toBe('function');
+    expect(typeof failed.headers).toBe('function');
   });
 });

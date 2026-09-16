@@ -34,20 +34,28 @@ export default [
   // Static, so it ranks above the `:slug` route below and a workspace can
   // never be called "signup".
   route('signup', 'routes/signup.tsx'),
-  // The SAME module at a second path: where `POST /e/account/signup` sends a
-  // browser whose submission the password policy refused (B-1, entrant UX
-  // audit 2026-09). Before it, a mistyped password on step 2 of the entry
-  // path answered `{"detail":{"code":"AUTH_WEAK_PASSWORD",…}}` — and a native
-  // form post is a navigation, so that WAS the document: no title, no form,
-  // every typed field gone.
+  // Where `POST /e/account/signup` sends a browser whose submission the
+  // password policy refused (B-1, entrant UX audit 2026-09). Before it, a
+  // mistyped password on step 2 of the entry path answered
+  // `{"detail":{"code":"AUTH_WEAK_PASSWORD",…}}` — and a native form post is
+  // a navigation, so that WAS the document: no title, no form, every typed
+  // field gone.
   //
-  // Unlike `login/failed`, this path DOES read its query string, and the
-  // reason it may: the refusal happens before the account lookup, on the
-  // shape of the submission alone, so nothing it renders can distinguish a
-  // registered address from a fresh one. The page's zero-branch behaviour on
-  // the bare `/e/signup` path is what keeps the byte-identical property in
-  // `tests/signup.test.ts` true — the echo is scoped to this path.
-  route('signup/failed', 'routes/signup.tsx', { id: 'signup-failed' }),
+  // A DIFFERENT MODULE, not a second path on `routes/signup.tsx`, and that
+  // is the load-bearing part. The backend answers a **307**, so the browser
+  // re-POSTS the form here and the typed fields never travel in a URL (the
+  // same decision `_echo_redirect` took for the quote round trip). A POST on
+  // a node route needs an `action`, and `signup.tsx` must not have one — an
+  // action there would put the signup's own answer in node's hands, which is
+  // what `tests/signup.test.ts` pins. The two routes share the VIEW
+  // (`components/SignupPage.tsx`) instead of the module.
+  //
+  // Unlike `login/failed`, this path DOES read a query field, and the reason
+  // it may: the refusal happens before the account lookup, on the shape of
+  // the submission alone, so nothing it renders can distinguish a registered
+  // address from a fresh one. `signup.tsx` reads neither the reason nor an
+  // address, which is what keeps its byte-identical property true.
+  route('signup/failed', 'routes/signupFailed.tsx'),
   // The login PAGE, node-owned for exactly the reason above: `/e/account/login`
   // is FastAPI's POST and a node GET there is a 405 in production and fine in
   // dev, which is the worst pair. Static, so it ranks above `:slug`.
