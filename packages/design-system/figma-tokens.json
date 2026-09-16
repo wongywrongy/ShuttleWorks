@@ -1571,7 +1571,7 @@
     "eyebrow": {
       "size": {
         "$type": "dimension",
-        "$value": "0.625rem"
+        "$value": "0.75rem"
       },
       "weight": {
         "$type": "number",
@@ -1579,7 +1579,7 @@
       },
       "tracking": {
         "$type": "string",
-        "$value": "0.08em"
+        "$value": "0.06em"
       }
     },
     "z": {
