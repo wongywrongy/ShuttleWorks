@@ -2825,6 +2825,9 @@ def apply(
                 )
                 entry_event_ids[row.event] = str(created["id"])
             entry["entryEventIds"] = entry_event_ids
+            # D24 locks bracket import/delete while draws_published is set, so
+            # this cannot flip drawsPublished before the import below creates
+            # the draw — it is set separately, after that import succeeds.
             client.patch_entry_page_publication(
                 tid,
                 {
@@ -2834,7 +2837,6 @@ def apply(
                     # flag. Leaving it off is what made every
                     # ``/e/{slug}/players/{key}`` request a 404.
                     "entrantsPublished": True,
-                    "drawsPublished": True,
                     "resultsPublished": tournament.id != _DEMO_UPCOMING_TOURNAMENT or not demo_seed,
                 },
             )
@@ -2975,6 +2977,9 @@ def apply(
                 )
                 entry["liveMatchIds"] = live_match_ids
             client.import_bracket(tid, import_body)
+            # The draw now exists, so it can be published (D24 locked this
+            # flag out of the publication patch above, which ran first).
+            client.patch_entry_page_publication(tid, {"drawsPublished": True})
             if results:
                 imported = client.get_bracket(tid)
                 units = {unit["event_id"]: unit for unit in imported.get("play_units", [])}
