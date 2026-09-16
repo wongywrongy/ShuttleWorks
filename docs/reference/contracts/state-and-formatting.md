@@ -650,7 +650,7 @@ used to talk to the other.
 | D14 | `apps/api/src/workspaces/workspace_signals.py:324-328 _side_names` | redirects to authority | 03 |
 | D14 | `apps/api/src/bracket/io/export_schedule.py:219` | **kept as a documented view-local rule** — an export file format, not a UI string; it calls the authority for the names and applies its own file separator | 10 |
 | D14 | `apps/api/src/entries/entries.py::team_name` | kept as authority for the *stored* participant name; must not be used for wire side rendering | 04 |
-| D14 | `apps/console/src/modules/bracket/bracketLabels.ts:152-192` | redirects to authority | 10 |
+| D14 | `apps/console/src/platform/domain/bracketLabels.ts:152-192` | redirects to authority | 10 |
 | D14 | `apps/console/src/modules/operations/opsBlock.ts:36-38` | redirects to authority | 03 |
 | D14 | `apps/console/src/modules/display/bracketDisplay/bracketDisplayData.ts:16-33` (`'–'` fallback) | redirects to authority | 17 |
 | D14 | `apps/console/src/modules/meet/matches/MatchesSpreadsheet.tsx:220-231` (`'No players'`) | redirects to authority | 10 |
