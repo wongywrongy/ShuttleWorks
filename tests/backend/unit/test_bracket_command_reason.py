@@ -33,6 +33,9 @@ def _body(**overrides):
         "kind": "record_result",
         "play_unit_id": "pu1",
         "winner_side": "A",
+        # Mandatory on the model since ruling D5. These cases construct
+        # ``BracketCommandRequest`` directly, so no HTTP shim fills it in.
+        "seen_version": 1,
     }
     base.update(overrides)
     return base

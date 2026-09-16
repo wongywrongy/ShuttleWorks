@@ -165,7 +165,11 @@ def test_omitted_seen_version_is_refused(client, tid):
     state = client.get(_bracket_url(tid)).json()
     sf1 = _semifinal(state)
 
-    r = client.post(
+    # ``client.request`` bypasses the conftest shim that fills the token in
+    # for the many tests that merely need a result recorded. This test is
+    # about the precondition, so it must send what a forgetful client sends.
+    r = client.request(
+        "POST",
         _bracket_url(tid, "results"),
         json={
             "play_unit_id": sf1["id"],
@@ -188,7 +192,8 @@ def test_omitted_seen_version_is_refused_on_the_command_path(client, tid):
     state = client.get(_bracket_url(tid)).json()
     sf1 = _semifinal(state)
 
-    r = client.post(
+    r = client.request(
+        "POST",
         _bracket_url(tid, "commands"),
         json={
             "id": str(_uuid.uuid4()),
