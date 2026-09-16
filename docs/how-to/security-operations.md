@@ -269,8 +269,10 @@ With authenticated Docker/gh and cosign installed, prepare the three image diges
 The command resolves the source-SHA tags, verifies cosign's GitHub release-workflow
 identity and GitHub SLSA provenance for that exact source commit, then atomically
 writes the env file. Any registry, signature or provenance failure exits non-zero
-before writing it. This does not deploy. A deployment uses that file with
-`infra/compose/docker-compose.release.yml`; `TAG=latest` cannot select an image.
+before writing it. This does not deploy. A deployment uses that file with the
+self-host stack plus `infra/compose/release.override.yml`, which replaces the
+three `build:` sections with the verified digests; `TAG=latest` cannot select
+an image.
 Do not construct the digest file by hand or treat a previous successful file as
 evidence for a failed verification of a different commit.
 

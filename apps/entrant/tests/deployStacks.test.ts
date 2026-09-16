@@ -17,11 +17,14 @@
  *      its session cookie, node for the `sw_play_csrf` nonce — on ONE
  *      origin. Nothing checked they agreed. A node container missing it
  *      issues the nonce without `Secure` on an HTTPS-only deployment.
- *   4. The release stack's image names must be names something BUILDS.
- *      `docker-compose.release.yml` pulls `ghcr.io/<owner>/scheduler-entrant`
+ *   4. The release override's image names must be names something BUILDS.
+ *      `release.override.yml` pulls `ghcr.io/<owner>/scheduler-entrant`
  *      and `publish-release.yml` publishes `scheduler-${{ matrix.name }}`;
  *      nothing connected the two, so a renamed matrix entry stayed green here
- *      and 404'd at `docker compose pull`.
+ *      and 404'd at `docker compose pull`. (D31 retired the standalone
+ *      `docker-compose.release.yml`: a release is the self-host stack with
+ *      its three `build:` sections replaced by verified digests, so the image
+ *      names are now the only thing that file carries.)
  *   5. The images must build on the node CI tests on. All three install the
  *      one root lockfile but each pins its own base image, and nothing
  *      compared the pins — the frontend image built the production bundle on
@@ -95,7 +98,6 @@ describe('the compose files are actually being read', () => {
       'docker-compose.event-node.yml',
       'docker-compose.lan-tls.yml',
       'docker-compose.observability-rehearsal.yml',
-      'docker-compose.release.yml',
       'docker-compose.selfhost.yml',
       'docker-compose.worker.yml',
       'docker-compose.yml',
@@ -118,8 +120,8 @@ describe('the compose files are actually being read', () => {
   });
 });
 
-describe('the release stack pulls images something actually builds', () => {
-  // `docker-compose.release.yml` names `ghcr.io/<owner>/scheduler-entrant`;
+describe('the release override pulls images something actually builds', () => {
+  // `release.override.yml` names `ghcr.io/<owner>/scheduler-entrant`;
   // `.github/workflows/publish-release.yml` builds
   // `scheduler-${{ matrix.name }}`. NOTHING tied the two together — rename the
   // matrix entry and every test in this repo stays green while the release
@@ -142,7 +144,7 @@ describe('the release stack pulls images something actually builds', () => {
     repoName(imagesLine).replace('${{ matrix.name }}', m[1]),
   );
   const referenced = [
-    ...stackSource('docker-compose.release.yml').matchAll(/^\s*image:\s*ghcr\.io\/(.+)$/gm),
+    ...stackSource('release.override.yml').matchAll(/^\s*image:\s*ghcr\.io\/(.+)$/gm),
   ].map((m) => repoName(m[1].trim()));
 
   it('reads both sides before comparing them', () => {
@@ -170,7 +172,6 @@ describe('the entrant tier ships exactly where nginx can reach it', () => {
       );
     }
     expect(withEntrant.map(([f]) => f).sort()).toEqual([
-      'docker-compose.release.yml',
       'docker-compose.selfhost.yml',
       'docker-compose.yml',
     ]);
@@ -234,10 +235,13 @@ describe('the chain from "who is the client" to "which bucket" holds in every st
    *     BEFORE applying a `:-` default — so a dead value in the template beat
    *     a compose file that was already right. One bucket for the whole
    *     internet: the fifth failed sign-in from anyone locks out every user.
-   *   - `docker-compose.release.yml` set nothing at all, so every request
-   *     through nginx presented nginx's address and `entrant_signup_key(ip)`,
-   *     `entrant_ip_key(ip)` and `entries_key(ip)` shared one budget for the
-   *     whole internet.
+   *   - the retired `docker-compose.release.yml` set nothing at all, so every
+   *     request through nginx presented nginx's address and
+   *     `entrant_signup_key(ip)`, `entrant_ip_key(ip)` and `entries_key(ip)`
+   *     shared one budget for the whole internet. That stack is gone (D31) —
+   *     a release is now the self-host stack with verified image digests, so
+   *     it inherits the trust list checked below instead of declaring a
+   *     second, divergent one.
    *
    * Neither is visible from either process, and both fail SILENTLY — which is
    * why the assertions below compare the configured value against the network
@@ -251,7 +255,7 @@ describe('the chain from "who is the client" to "which bucket" holds in every st
    * since two stacks cannot hold the same block. nginx's half still meters it
    * per real client.
    */
-  const PROXIED = ['docker-compose.release.yml', 'docker-compose.selfhost.yml'];
+  const PROXIED = ['docker-compose.selfhost.yml'];
 
   const subnetOf = (file: string): string | undefined =>
     /^\s*-\s*subnet:\s*(\S+)/m.exec(stackSource(file))?.[1];

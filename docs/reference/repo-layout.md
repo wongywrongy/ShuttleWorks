@@ -67,7 +67,9 @@ The root `package.json` declares the workspaces:
 
 Root scripts (`dev:scheduler`, `build:scheduler`, `docs:dev`, `docs:build`, …) delegate into the
 workspace, and the entrant tier has its own pair of each (`dev:entrant`, `build:entrant`,
-`lint:entrant`, `typecheck:entrant`, `test:entrant`, `depcruise:entrant`). The frontend has its own
+`lint:entrant`, `typecheck:entrant`, `test:entrant`, `depcruise:entrant`). `tests/e2e` is not a
+workspace but is linted all the same, through `lint:e2e` and its own
+`tests/e2e/eslint.config.js`. The frontend has its own
 `package.json` (`type: module`); the **repo root is
 CommonJS**, which is why the VitePress config is `docs/.vitepress/config.mts` (the `.mts`
 extension forces ESM loading regardless of the root package type).

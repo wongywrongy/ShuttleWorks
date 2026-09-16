@@ -32,6 +32,7 @@
     "build:all": "npm run build:scheduler && npm run build:entrant",
     "lint:scheduler": "npm run -w apps/console lint",
     "lint:entrant": "npm run -w apps/entrant lint",
+    "lint:e2e": "eslint --config tests/e2e/eslint.config.js tests/e2e",
     "test:contrast": "node packages/design-system/scripts/check-contrast.mjs",
     "test:classes": "node packages/design-system/scripts/check-classes.mjs",
     "figma:tokens": "node tools/export-figma-tokens.mjs",

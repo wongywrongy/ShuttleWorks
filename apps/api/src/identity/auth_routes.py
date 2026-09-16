@@ -158,6 +158,15 @@ def _auth_error(exc: AuthError):
     return http_error(status.HTTP_400_BAD_REQUEST, code, exc.message)
 
 
+#: Public alias. The owner-authenticated operator-provisioning route (D12,
+#: ``POST /tournaments/{tournament_id}/operators``) applies the same password
+#: policy and the same hashing as ``/auth/register``, so it must also answer
+#: with the same error codes. Re-implementing the mapping there is how the two
+#: drift into telling a caller two different things about one rejected
+#: password.
+auth_error_response = _auth_error
+
+
 def _throttle_guard(repo: LocalRepository, *keys: str) -> None:
     for key in keys:
         remaining = repo.execute_query(throttle.throttle_check, key)

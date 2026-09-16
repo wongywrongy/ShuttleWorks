@@ -310,7 +310,7 @@
         ".github/workflows/security.yml",
         ".github/workflows/ci.yml",
         ".github/workflows/phase4-observability-rehearsal.yml",
-        "infra/compose/docker-compose.release.yml",
+        "infra/compose/release.override.yml",
         "tools/verify-release.py",
         "tools/check-source-secrets.py",
         ".github/dependabot.yml"

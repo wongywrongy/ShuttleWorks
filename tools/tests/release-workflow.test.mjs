@@ -5,7 +5,10 @@ import { test } from 'node:test'
 const workflow = readFileSync('.github/workflows/publish-release.yml', 'utf8')
 const ci = readFileSync('.github/workflows/ci.yml', 'utf8')
 const security = readFileSync('.github/workflows/security.yml', 'utf8')
-const compose = readFileSync('infra/compose/docker-compose.release.yml', 'utf8')
+// D31 retired the standalone release stack. The release shape is now the
+// self-host stack plus this override, which is the only file that names a
+// GHCR application image.
+const compose = readFileSync('infra/compose/release.override.yml', 'utf8')
 
 test('release publication is gated by CI for the exact source revision', () => {
   assert.match(workflow, /tags:\s*\['v\*\.\*\.\*'\]/)
@@ -34,6 +37,14 @@ test('release Compose requires verified immutable image digests', () => {
     assert.ok(compose.includes('@${' + component + '_DIGEST:?'))
   }
   assert.doesNotMatch(compose, /\$\{TAG/)
+  // A service carrying both a build section and a digest-pinned image cannot
+  // be built at all ("build tag cannot contain a digest"), so the override
+  // drops the base stack's builds. Without this the composition renders but
+  // `docker compose build` on it fails, which is a worse way to find out.
+  assert.equal(compose.match(/^ {4}build: !reset null$/gm)?.length, 3)
+  // The release composition is the self-host stack, not a second production
+  // topology: this file must add nothing but image provenance.
+  assert.doesNotMatch(compose, /^\s*(ports|environment|volumes|networks|secrets):/m)
 })
 
 test('every Compose registry image is selected by digest', () => {
@@ -42,7 +53,7 @@ test('every Compose registry image is selected by digest', () => {
     const source = readFileSync(`infra/compose/${name}`, 'utf8')
     for (const match of source.matchAll(/^\s*image:\s*(.+)$/gm)) {
       count += 1
-      if (name === 'docker-compose.release.yml') {
+      if (name === 'release.override.yml') {
         assert.match(match[1], /@\$\{(?:BACKEND|ENTRANT|FRONTEND)_DIGEST:\?[^}]+\}$/)
       } else {
         assert.match(match[1], /@sha256:[a-f0-9]{64}$/, name)

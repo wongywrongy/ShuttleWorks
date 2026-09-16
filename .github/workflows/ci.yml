@@ -72,6 +72,15 @@ jobs:
         run: npm run figma:tokens:check
       - name: Lint
         run: npm run lint:scheduler
+      # The browser-evidence suite belongs to no app — it drives both tiers —
+      # so neither `lint:scheduler` nor `lint:entrant` covered it and until
+      # D14 (2026-09-15) nothing did. It rides this job rather than getting one
+      # of its own: it is eslint over fourteen files and needs only the root
+      # install this job has already done. The specs themselves run in the
+      # browser jobs (console contracts per PR, the entrant evidence spec
+      # nightly) — this is the half that can be a lean per-PR gate.
+      - name: Lint (browser-evidence suite)
+        run: npm run lint:e2e
       - name: Unit tests
         run: npm --prefix apps/console run test:run
       - name: Architecture boundaries (dependency-cruiser)
@@ -285,7 +294,6 @@ jobs:
           status=0
           for f in docker-compose.yml \
                    docker-compose.dev.yml \
-                   docker-compose.release.yml \
                    docker-compose.cloud.yml \
                    docker-compose.selfhost.yml \
                    docker-compose.worker.yml \
@@ -299,6 +307,26 @@ jobs:
           # part of the publication gate.
           echo "::group::docker-compose.event-node.yml"
           docker compose -f docker-compose.yml -f docker-compose.event-node.yml config -q || status=1
+          echo "::endgroup::"
+          # The release shape is the SELF-HOST stack with its three build
+          # sections replaced by verified image digests (D31 retired the
+          # separate docker-compose.release.yml). The dummy digests in this
+          # job's env are what make the `${*_DIGEST:?}` guards resolvable
+          # here; a real deployment supplies tools/verify-release.py's output.
+          echo "::group::release.override.yml"
+          docker compose -f docker-compose.selfhost.yml -f release.override.yml config -q || status=1
+          echo "::endgroup::"
+          # ...and the same composition must REFUSE a mutable input. `TAG` was
+          # the old release stack's tag knob; nothing in the release path
+          # accepts one any more, and a digest-less deployment must fail at
+          # config time rather than pull whatever `latest` points at today.
+          echo "::group::release.override.yml rejects mutable image inputs"
+          if TAG=latest \
+             BACKEND_DIGEST= ENTRANT_DIGEST= FRONTEND_DIGEST= \
+             docker compose -f docker-compose.selfhost.yml -f release.override.yml config -q; then
+            echo "::error::the release composition rendered without verified digests"
+            status=1
+          fi
           echo "::endgroup::"
           # The demo is an override of the default stack rather than a
           # standalone deployment stack, so validate the combined files too.

@@ -159,6 +159,14 @@ def test_recovery_code_cannot_be_reused_or_bypass_password(authenticated_app):
     ("DELETE", "/members/{user_id}", None, 409),  # last-owner rule still applies
     ("POST", "/transfer-ownership", {}, 422),
     ("POST", "/invites", {"role": "operator"}, 201),
+    # D12: provisioning another operator creates a credential that outlives
+    # this session, so a stale one must not be able to do it.
+    (
+        "POST",
+        "/operators",
+        {"email": "provisioned@example.test", "password": "another private operator phrase"},
+        201,
+    ),
     ("POST", "/display-token/rotate", "display", 200),
     ("DELETE", "/display-token", None, 204),
     ("POST", "/state/backup", None, 200),

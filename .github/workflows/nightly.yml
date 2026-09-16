@@ -1,0 +1,199 @@
+name: Nightly
+
+# The jobs that are real controls but too heavy for a per-PR gate: each boots
+# Docker and runs a full stack, which is minutes, not seconds. CLAUDE.md's
+# lean-gate philosophy says such a check belongs on a schedule rather than in
+# front of every push — it still runs unattended, every night, on main, and
+# `workflow_dispatch` makes it runnable on demand before a release.
+#
+# Nothing here is required for a PR to merge. A red nightly is a bug report
+# against main, not a blocked contributor.
+
+on:
+  schedule:
+    # 03:17 UTC — off the hour, so this does not join the stampede every other
+    # repository schedules at :00 and then waits in GitHub's queue.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+# Least privilege, matching ci.yml: nothing here writes back to GitHub.
+permissions:
+  contents: read
+
+# One nightly at a time. These jobs bind host ports and Docker resources; two
+# overlapping runs on the same runner pool are fine, but a manual dispatch
+# racing the scheduled run on the same ref is not worth the confusion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  entrant-evidence:
+    name: Entrant browser evidence (full Docker stack)
+    runs-on: ubuntu-latest
+    # The stack is BUILT from source here (E2E_REBUILD=1, three images), then
+    # the suite drives both origins across two viewport widths.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install workspaces
+        run: npm ci
+
+      # Same cache shape and same reasoning as the console-browser-contracts
+      # job in ci.yml: the browser binary is immutable per Playwright version,
+      # so it keys on the lockfile that pins it, and `install-deps` still runs
+      # on a hit because system libraries are not in the cache path.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/e2e/package-lock.json') }}
+
+      - name: Install Chromium
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps --only-shell chromium
+          fi
+
+      # `make test-e2e-rebuild` is the single definition of how this spec runs:
+      # the two published frontend ports (operator 8090, public 8091 — the
+      # suite needs both since SP-HOST-1), the matching base URLs, and
+      # E2E_REBUILD=1 so the images come from THIS commit rather than whatever
+      # a previous run left in the Docker cache. The suite's own global setup
+      # brings the stack up and its teardown brings it down; the stack is the
+      # default local one, so no secret, credential or private host is
+      # involved.
+      - name: Entrant evidence spec (builds and runs the stack)
+        run: make test-e2e-rebuild
+
+      # The teardown already runs `docker compose down` on a clean exit. This
+      # is the crash path: a suite that dies before Playwright's global
+      # teardown would otherwise leave the stack and its bind-mounted SQLite
+      # file behind on a self-hosted runner.
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f infra/compose/docker-compose.yml down --volumes --remove-orphans || true
+
+      - name: Upload the failure trace
+        if: failure()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: entrant-evidence-report
+          path: tests/e2e/playwright-report/
+          retention-days: 7
+
+  demo-backup-drill:
+    name: Demo backup, drill and restore (disposable Postgres)
+    runs-on: ubuntu-latest
+    # Builds the three application images, then dump -> verify -> drill ->
+    # live restore against a real Postgres 16.
+    timeout-minutes: 90
+    # D33: `compose-lint` in ci.yml proves the demo configuration PARSES.
+    # Nothing proved that its recovery lifecycle actually works — a dump that
+    # restores, a drill that compares row counts, a live restore that swaps
+    # databases and brings the application back up. That needs a running
+    # Postgres, so it is a nightly, not a PR gate.
+    #
+    # Nothing private is involved. The tooling's only external requirement is
+    # a tailnet address, and that is synthesised below; the Postgres password
+    # is generated into the disposable state directory by the tool itself, the
+    # demo runs `AUTH_MODE=local`, and the state and backup roots are the
+    # runner's temp directory. The Tailscale daemon, the demo HOST, its real
+    # data and its systemd backup timer (`make demo-backup-install`, which
+    # writes user units) are all deliberately out of scope — a timer that
+    # installs into a throwaway runner would prove nothing about the host it
+    # is meant to run on.
+    env:
+      # Outside the repo and outside $HOME's real state dir, so nothing here
+      # can touch a developer's or the demo host's durable state. The tool
+      # refuses a backup root inside the state dir, hence two directories.
+      DEMO_STATE_DIR: ${{ github.workspace }}/../demo-state
+      DEMO_BACKUP_DIR: ${{ github.workspace }}/../demo-backups
+      # `demo.override.yml` binds every published port to this address, and
+      # tools/demo-compose.sh validates it is inside 100.64.0.0/10 — the
+      # tailnet range — before it will start anything. The runner has no
+      # Tailscale, so the address is added to loopback below. This is the one
+      # thing the job fakes, and it is deployment configuration, not product
+      # behaviour: the containers, the database, the images and every recovery
+      # command are the real ones.
+      DEMO_TAILSCALE_IP: 100.64.0.1
+      API: http://100.64.0.1:8092
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Synthesise the tailnet address the demo binds to
+        run: |
+          sudo ip addr add 100.64.0.1/32 dev lo
+          ip -4 addr show dev lo
+
+      # Builds the application images and starts postgres + backend + entrant
+      # + frontend, then asserts the database schema matches the image's
+      # Alembic head. The postgres data directory is created fresh under
+      # DEMO_STATE_DIR, so this is an empty, freshly migrated database.
+      - name: Start the demo stack on a disposable database
+        run: make demo-up
+
+      # A backup of an empty database would pass every check below while
+      # proving nothing about the data path, so put a row in it first. The
+      # demo runs AUTH_MODE=local, which resolves a credential-less request to
+      # the bootstrap operator — no account, no secret. Port 8092 is the API
+      # container directly, so the route has no `/api` prefix.
+      - name: Seed one workspace so the backup is not vacuously empty
+        run: |
+          curl -fsS -X POST "$API/tournaments" \
+            -H 'Content-Type: application/json' \
+            -H 'X-ShuttleWorks-CSRF: 1' \
+            -d '{"name":"Nightly Drill Open","tournamentDate":"2026-08-01"}' \
+            | tee /tmp/seeded.json
+          grep -q 'Nightly Drill Open' /tmp/seeded.json
+
+      # pg_dump + pg_dumpall globals + a per-table row-count manifest + the
+      # Alembic revision, checksummed and verified in place.
+      - name: Create and verify a backup
+        run: make demo-backup
+
+      - name: Verify the latest backup again from its checksums
+        run: make demo-backup-verify
+
+      # Restores the dump into a throwaway database beside the live one and
+      # compares every table's row count and the schema revision against the
+      # manifest, then drops it.
+      - name: Restore drill
+        run: make demo-restore-drill
+
+      # The real thing: candidate restore, database swap, application restart
+      # and health wait, with rollback on failure. Typed confirmation is the
+      # tool's guard against an accidental live restore; here it is explicit.
+      - name: Restore the live database from the verified backup
+        env:
+          DEMO_RESTORE_CONFIRM: restore-demo
+        run: make demo-restore
+
+      # The point of a restore is that the application serves the data again.
+      - name: The restored database still serves the seeded workspace
+        run: |
+          curl -fsS "$API/tournaments" | tee /tmp/restored.json
+          grep -q 'Nightly Drill Open' /tmp/restored.json
+
+      - name: Show the backups this run produced
+        if: always()
+        run: ls -la "$DEMO_BACKUP_DIR" || true
+
+      - name: Tear down and delete the disposable state
+        if: always()
+        run: |
+          docker ps -aq --filter label=com.docker.compose.project=shuttleworks-demo \
+            | xargs -r docker rm -f
+          # The Postgres data directory belongs to the container's postgres
+          # user, so removing it needs root on the runner.
+          sudo rm -rf "$DEMO_STATE_DIR" "$DEMO_BACKUP_DIR"

@@ -1620,6 +1620,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{tournament_id}/operators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Operator Account
+         * @description Create another operator account, without the public signup throttle.
+         *
+         *     **The gap this closes (D12).** Until now the only way to make an account
+         *     on a self-hosted instance was public self-service, and that path is
+         *     throttled at ``REGISTRATION_MAX_PER_IP`` **successful** registrations per
+         *     IP per hour — deliberately, since SEC-03: account creation itself has to
+         *     be bounded or an open instance is an open account factory. An admin
+         *     standing an instance up for six clubs from one office therefore got four
+         *     accounts and then a five-minute wall with doubling backoff, and there was
+         *     no other provisioning path at all: no admin route, no CLI, and
+         *     invite-accept needs an account to already exist. The throttle is not
+         *     loosened here; this route simply is not the public one.
+         *
+         *     **Why the workspace in the path.** An owner is the tightest role the
+         *     ladder has, and ownership is per workspace — so the workspace is the
+         *     thing the caller proves they own. The seam is the standard one
+         *     (``require_tournament_access("owner", fresh=True)``): a non-member, a
+         *     viewer, an operator and an unknown id all get the identical 404, which
+         *     is what keeps this route from being an oracle for which workspaces
+         *     exist. It does NOT add the new account to that workspace — invites do
+         *     membership, and an admin provisioning accounts for six different clubs
+         *     does not want five of them in their own workspace. The workspace is the
+         *     authorization anchor and nothing else.
+         *
+         *     ``fresh=True`` requires a recent password + authenticator proof, like
+         *     ``/auth/mfa/*`` and invite revocation: creating a credential that
+         *     outlives the session is exactly the class of action a stolen idle
+         *     session must not be able to perform.
+         */
+        post: operations["create_operator_account_tournaments__tournament_id__operators_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{tournament_id}/members": {
         parameters: {
             query?: never;
@@ -7257,6 +7304,42 @@ export interface components {
             /** Schema Version */
             schema_version: number;
         };
+        /**
+         * OperatorCreateDTO
+         * @description Body for ``POST /tournaments/{tournament_id}/operators``.
+         *
+         *     The same three fields ``/auth/register`` takes, bounded by the same
+         *     types — in particular ``Password``, which is capped well above the
+         *     128-character policy so an over-long value is a clean
+         *     ``AUTH_WEAK_PASSWORD`` rather than an unbounded string handed to Argon2.
+         */
+        OperatorCreateDTO: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Displayname */
+            displayName?: string | null;
+        };
+        /**
+         * OperatorCreatedDTO
+         * @description The new account, never a session.
+         *
+         *     Deliberately no cookie and no token: this route provisions an account for
+         *     SOMEONE ELSE, who signs in themselves. ``/auth/register`` sets a session
+         *     because the registrant is the caller; here that would hand the owner a
+         *     credential for an identity that is not theirs.
+         */
+        OperatorCreatedDTO: {
+            /** Id */
+            id: string;
+            /** Email */
+            email: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Createdat */
+            createdAt: string;
+        };
         /** PageDTO */
         PageDTO: {
             /** Slug */
@@ -12201,6 +12284,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InviteCreatedDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_operator_account_tournaments__tournament_id__operators_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorCreateDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorCreatedDTO"];
                 };
             };
             /** @description Validation Error */
