@@ -9,7 +9,7 @@
  * free-form body, which the receipt's three cards keep.
  */
 import type { ReactNode } from 'react';
-import { CARD, LIST_CARD, LIST_CARD_ROW } from '../lib/ui';
+import { CARD, EYEBROW_CLASS, LIST_CARD, LIST_CARD_ROW } from '../lib/ui';
 
 export function SectionCard({
   title,
@@ -33,7 +33,7 @@ export function SectionCard({
             directly under the page's one `<h1>`, so an `h3` here skipped a
             level (plan §6 "Accessibility"). The uppercase eyebrow STYLE is
             unchanged; only the semantic level moved. */}
-        <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+        <h2 className={`${EYEBROW_CLASS} text-muted-foreground`}>
           {title}
         </h2>
         <div className="mt-3 grid gap-2 text-sm text-foreground">{children}</div>

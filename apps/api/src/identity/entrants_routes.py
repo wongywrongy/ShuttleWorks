@@ -295,6 +295,66 @@ _RESET_PASSWORD_FAILED_PAGE = "/e/reset/password-failed"
 # side states no address and no branch.
 _LOGIN_FAILED_PAGE = "/e/login/failed"
 
+# The same shape for a sign-up the password policy refused (B-1, entrant UX
+# audit 2026-09). Unlike the sign-in refusal above this one CAN carry a
+# reason, because it is decided before the account lookup and therefore says
+# nothing about whether the address is registered: the entrant needs to know
+# which rule they broke, and "we could not create the account" would send
+# them back to guess.
+#
+# Reached by a **307**, not a 303 — the same decision and the same reasoning
+# as ``entries/entries_json.py``'s ``_echo_redirect`` (2026-08-10 browser
+# pass). A 303 re-issues as GET, so the typed fields could only survive it by
+# being written into the query string, and a URL is written into the
+# browser's history, into every nginx access log and into any intermediary's,
+# none of which is scoped to hold an entrant's name, email or phone number.
+# 307 preserves the method and the body, so the browser re-posts the same
+# form to the page below and the query string carries only what the SERVER
+# authored. The cost is the one that path already accepts: this is not
+# POST/redirect/GET, so reloading the failure page re-posts and the browser
+# asks — acceptable here because the target writes nothing and a re-post is
+# a re-render.
+_SIGNUP_FAILED_PAGE = "/e/signup/failed"
+
+# The reasons that may cross the wire, by name. An ALLOWLIST rather than
+# ``exc.code`` passed through: the far side renders fixed copy keyed on this
+# value and never prose from a URL, so an unrecognised code has to degrade to
+# the generic sentence rather than to whatever a crafted link says.
+_SIGNUP_FAILURE_REASONS = frozenset(
+    {
+        "INVALID_EMAIL",
+        "PASSWORD_TOO_SHORT",
+        "PASSWORD_TOO_LONG",
+        "PASSWORD_TOO_COMMON",
+    }
+)
+
+def _signup_failed_url(exc: AuthError, next_raw) -> str:
+    """The refusal page's URL: two server-authored keys, and nothing else.
+
+    **No loop over the body, and no field name from it** — which is what
+    makes the privacy property structural rather than a denylist somebody has
+    to keep in step with the form. The entrant's typing survives this round
+    trip in the re-posted BODY (307, see ``_SIGNUP_FAILED_PAGE``), so it never
+    needs a URL to travel in and never reaches a log line.
+
+    ``reason`` is a NAME checked against ``_SIGNUP_FAILURE_REASONS``, never
+    ``exc.message``: the landing URL is addressable and therefore shareable,
+    and a free-text reason would let a stranger put plausible prose on the
+    official signup page for whoever was sent it (no XSS needed — the page
+    escaping it faithfully is the problem). ``next`` goes through
+    ``next_target``, the same allowlist the success branch uses, because an
+    open redirect reached through the failure branch is the same phishing
+    primitive as one reached through the success branch.
+    """
+    query: dict[str, str] = {}
+    if exc.code in _SIGNUP_FAILURE_REASONS:
+        query["reason"] = exc.code
+    retry = next_target(next_raw, "")
+    if retry:
+        query["next"] = retry
+    return _SIGNUP_FAILED_PAGE + (f"?{urlencode(query)}" if query else "")
+
 
 def next_target(raw: Optional[str], fallback: str) -> str:
     """Where a form post sends the browser, and nowhere else.
@@ -607,7 +667,16 @@ def _send_verification(account, token: str, next_path: str = "") -> bool:
     "/signup",
     response_model=SignupResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    responses={303: {"description": "Form post: redirect to the login page"}},
+    responses={
+        303: {"description": "Form post: redirect to the login page"},
+        307: {
+            "description": (
+                "Form post the password policy refused: re-post to the "
+                "signup page's failure variant, which carries only a reason "
+                "code (the typed fields ride in the re-posted body)"
+            )
+        },
+    },
 )
 def signup(
     request: Request,
@@ -662,6 +731,25 @@ def signup(
         auth_service.validate_password(body.password)
     except AuthError as exc:
         repo.execute_transaction(_record_signup_attempt, throttle_key)
+        if "text/html" in request.headers.get("accept", ""):
+            # The same argument ``/login`` makes below, on the one route
+            # where it matters more: a native form post is a NAVIGATION, so
+            # the 400's ``{"detail":{"code":"AUTH_WEAK_PASSWORD",…}}`` was
+            # painted across the whole window on step 2 of the entry path,
+            # taking every typed field with it.
+            #
+            # **307**, so the browser re-posts this body to the page and the
+            # typing never touches a URL (``_SIGNUP_FAILED_PAGE``). This
+            # response carries no field the caller sent — not even a name.
+            #
+            # Nothing here is an enumeration oracle: this branch is reached
+            # BEFORE the account lookup, on the shape of the submission
+            # alone, so it says exactly as much about whether the address is
+            # registered as a syntax check does — nothing.
+            return RedirectResponse(
+                url=_signup_failed_url(exc, next_raw),
+                status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            )
         raise _auth_error(exc)
 
     if repo.execute_query(entrant_service.get_account_by_email, email) is None:

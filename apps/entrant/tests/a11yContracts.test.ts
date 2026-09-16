@@ -575,12 +575,22 @@ describe('colour is never the only carrier of status meaning', () => {
 
 describe('target size: public primary actions are >= 44px', () => {
   it('the entry-wizard primary "Continue"/"Review entry" buttons are 44px (h-11)', () => {
+    // A-13 moved the class string off the tags and into `ui.ts`'s
+    // `BUTTON_PRIMARY`, so the height is now asserted where it is DEFINED
+    // and the tags are only checked for reaching it. The contract is
+    // unchanged — 44px — and this spelling holds it for every future call
+    // site rather than only the two that once inlined the string.
     const source = readFileSync(resolve(APP, 'routes/enter.tsx'), 'utf8');
     const primaryButtons = [...source.matchAll(/<button[^>]*data-wizard-next="[^"]*"[^>]*>/g)];
     expect(primaryButtons.length).toBeGreaterThan(0);
     for (const [tag] of primaryButtons) {
-      expect(tag, tag).toMatch(/\bh-11\b/);
+      expect(tag, tag).toContain('className={BUTTON_PRIMARY}');
     }
+
+    const ui = readFileSync(resolve(APP, 'lib/ui.ts'), 'utf8');
+    const primary = /BUTTON_PRIMARY\s*=\s*\n?\s*'([^']+)'/.exec(ui);
+    expect(primary, 'BUTTON_PRIMARY not found').not.toBeNull();
+    expect(primary![1]).toMatch(/\bh-11\b/);
   });
 
   it('the design-system Button "lg" size (used for every account-form submit) is 44px', () => {

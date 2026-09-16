@@ -28,11 +28,17 @@
  * a uniform 202 (303 for a form post) whether the address was registered or
  * not, spends an Argon2id hash on both branches so timing is not the oracle
  * either, and hands out no cookie on either (`api/entrants.py`, module
- * docstring). This tier must not reintroduce the distinction, so the loader
- * takes **no parameters at all** — it cannot be handed an address, from a
- * `?email=` prefill or from anywhere else, and therefore cannot branch on one.
- * `tests/signup.test.ts` compares the rendered documents for a fresh
- * and an already-registered address byte for byte.
+ * docstring). This tier must not reintroduce the distinction, so this route
+ * reads no address and no reason at all — a `?email=` prefill is inert here.
+ * `tests/signup.test.ts` compares the rendered documents for a fresh and an
+ * already-registered address byte for byte.
+ *
+ * A submission the PASSWORD POLICY refuses is a different thing, decided
+ * before the account is ever looked up, and it is handled by a different
+ * module: `routes/signupFailed.tsx` (B-1). The view both render is
+ * `components/SignupPage.tsx`; sharing the view rather than the module is
+ * what lets that route have the `action` a 307 re-post needs while this one
+ * keeps none.
  *
  * **CSRF on a page with no session.** There is no session yet — obtaining one
  * is what this page is for — which is exactly what the `sw_play_csrf` nonce
@@ -48,104 +54,31 @@
  * between a missing capability and an inscrutable "the human check did not
  * pass" after filling the whole form in. Everything else here works unhydrated.
  */
-import { Button, TextField } from '@scheduler/design-system/components';
 import { brandedTitle } from '@scheduler/brand';
 import { data } from 'react-router';
 
 import { MessagePage } from '../components/MessagePage';
-import { PlayShell } from '../components/PlayShell';
-import { apiGet } from '../lib/apiFetch.server';
-import type { EntryPageDTO } from '../lib/entryPage.types';
-import { FORM_FIELD } from '../lib/formField';
-import { safeNext } from '../lib/nextTarget';
+import { SignupPage } from '../components/SignupPage';
 import { mintFormCsrf } from '../lib/formCsrf.server';
+import { signupPageData, type SignupLoaderData } from '../lib/signupPage.server';
 import type { Route } from './+types/signup';
-import { CARD, EYEBROW, PAGE_TITLE } from '../lib/ui';
 
-/** `EntrantConfigDTO` — `api/entries_json.py`. Exactly two keys, both public
- * by nature: a sitekey is rendered into every signup page, and the auth mode
- * is observable from whether an anonymous write is refused. */
-interface EntrantConfig {
-  turnstileSiteKey: string;
-  authMode: string;
-}
-
-export interface SignupLoaderData {
-  turnstileSiteKey: string;
-  /** The pre-session double-submit token, minted together with the nonce set
-   * on this very response. Node's own — there is no projection to read one
-   * from here, and there is no session to derive one from. */
-  formCsrf: string;
-  /** Validated same-tier continuation, used when signup came from a receipt. */
-  next: string;
-  /**
-   * The human tournament name (V3-PE24.1), when this signup was reached
-   * from a tournament's entry page. `null` on the
-   * bare `/e/signup` route — there is no slug to name — and also `null` on
-   * a lookup failure, in which case the heading falls back to generic
-   * wording rather than block the page on a read the entry page itself
-   * would already have failed on.
-   */
-  tournamentName: string | null;
-}
+export type { SignupLoaderData };
 
 /**
- * Reads the request for nothing, because it is not given the request.
+ * Reads the request for its URL's `next`, and for nothing that names a
+ * person.
  *
- * The zero-arity signature is the enumeration control at its cheapest: a
- * function with no parameters cannot be handed an email address, so no amount
- * of later editing inside it can make the page differ for a registered address
- * versus a fresh one without first changing this line — which is a visible,
- * reviewable act rather than a quiet one. `mintFormCsrf` is pinned the same
- * way, for the same reason.
+ * `readReason: false` is the other half: this route does not accept the
+ * failure vocabulary either, so neither an address nor a refusal code can be
+ * put on this page by whoever wrote the link. A loader that read one here
+ * would be the way this tier reintroduced the distinction the backend pays
+ * an Argon2 hash to avoid, and it would have to be added on this line —
+ * a visible, reviewable act rather than a quiet one.
  */
-export async function loader({
-  request,
-}: {
-  request: Request;
-}) {
-  // The sitekey is fetched rather than duplicated into a node env var: its
-  // pair, the secret, is validated only in the backend, and a sitekey that
-  // drifts from its secret fails the challenge for every honest entrant while
-  // looking like a Cloudflare outage. A failure here reaches the boundary
-  // below as fixed copy — fail closed, since a signup with no widget is a
-  // signup the backend will refuse anyway.
-  const config = await apiGet<EntrantConfig>('/e/api/config');
-
-  // V3-PE24.1: name the tournament on the page, not just "this tournament".
-  // Best-effort — the same anonymous read `enter.tsx` already performs for
-  // this slug — and never blocks the page: a lookup failure (closed
-  // tournament, race with deletion) falls back to the generic heading
-  // rather than turning a signup page into a 404 the entry page itself
-  // has not raised.
-  const requestedNextRaw = safeNext(new URL(request.url).searchParams.get('next'), ACCOUNT_READY_PAGE);
-  // `/login/signed-in` is the login page's generic completion state. Signup
-  // has its own completion state, so do not carry that presentation URL into
-  // the signup POST as if it were a destination.
-  const requestedNext = requestedNextRaw === '/e/login/signed-in' ? ACCOUNT_READY_PAGE : requestedNextRaw;
-  const contextMatch = requestedNext.match(/^\/e\/([^/]+)\/enter(?:\/created|\/signed-in)?$/);
-  let tournamentName: string | null = null;
-  if (contextMatch) {
-    try {
-      const page = await apiGet<EntryPageDTO>(
-        `/e/api/page/${encodeURIComponent(contextMatch[1])}`,
-      );
-      tournamentName = page?.tournament?.name ?? null;
-    } catch {
-      // Best-effort only (see the field's doc comment above): any failure —
-      // a 404, a network error, or a shape this page did not expect — falls
-      // back to the generic heading rather than surfacing here at all.
-      tournamentName = null;
-    }
-  }
-
+export async function loader({ request }: { request: Request }) {
   const csrf = mintFormCsrf();
-  const payload: SignupLoaderData = {
-    turnstileSiteKey: config.turnstileSiteKey,
-    formCsrf: csrf.token,
-    next: requestedNext,
-    tournamentName,
-  };
+  const payload = await signupPageData(request, csrf.token, { readReason: false });
   return data(payload, csrf.responseInit);
 }
 
@@ -172,214 +105,17 @@ export function headers({ loaderHeaders }: { loaderHeaders: Headers }) {
 
 /**
  * Document title (2026-08-11 design audit, finding #4, deferred half — see
- * `root.tsx`). Zero-arg, same shape as `discovery.tsx`'s and this module's own
- * zero-arity `loader`: nothing loader-derived is worth titling with, and
- * `SignupLoaderData` carries `formCsrf`, which has no business being in reach
- * of a function that renders into `<head>`.
+ * `root.tsx`). Zero-arg, same shape as `discovery.tsx`'s: nothing
+ * loader-derived is worth titling with, and `SignupLoaderData` carries
+ * `formCsrf`, which has no business being in reach of a function that renders
+ * into `<head>`.
  */
 export const meta: Route.MetaFunction = () => [
   { title: brandedTitle('Create an account') },
 ];
 
-/**
- * Where a completed sign-up lands when this page was reached without a
- * tournament — the login page's "your account is ready" variant, which is
- * what the hidden field held unconditionally before E3.
- */
-const ACCOUNT_READY_PAGE = '/e/login/created';
-
-export default function SignupPage({ loaderData }: Route.ComponentProps) {
-  const { turnstileSiteKey, formCsrf, tournamentName } = loaderData;
-  const next = loaderData.next;
-  const entryPath = next.match(/^\/e\/([^/]+)\/enter(?:\/created|\/signed-in)?$/);
-  const invitationPath = next.match(/^\/e\/partner\/[^/]+$/);
-  const formNext = entryPath ? `/e/${entryPath[1]}/enter/created` : next;
-  const signInDestination = entryPath ? `/e/${entryPath[1]}/enter/signed-in` : invitationPath ? next : next === ACCOUNT_READY_PAGE ? '' : next;
-  const signInHref = signInDestination
-    ? `/e/login?next=${signInDestination}`
-    : '/e/login';
-
-  return (
-    // E1: the page system, not a bare column. Brief §4 — "auth pages as small
-    // centered cards" — the same shape `login.tsx` wears, so the two pages a
-    // visitor bounces between read as one place.
-    <PlayShell>
-      <main className="mx-auto grid min-w-0 w-full max-w-md gap-6 px-4 py-10 md:py-14">
-        <header className="grid min-w-0 gap-1">
-          <h1 className={PAGE_TITLE}>
-            {entryPath
-              ? `Create your account to enter ${tournamentName ?? 'this tournament'}`
-              : 'Create an account'}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Use one account to manage your tournament entries. Creating an
-            account does not submit an entry. The organizer sees your name and
-            contact details on entries they receive.
-          </p>
-        </header>
-
-        <div className={`grid min-w-0 gap-6 ${CARD}`}>
-          {/*
-            Posts ACROSS the tier boundary, not to this page's own URL: all of
-            `/e/account/*` is FastAPI's (R8-A), and this page is node's, which
-            is why the two URLs differ. `encType` is omitted — urlencoded is
-            the HTML default for `method=post`.
-            A plain `<form>`, never React Router's `<Form>`, so RR7 never
-            intercepts and a hydrated browser posts exactly as a scriptless one
-            does — one submission path, not two that can drift.
-
-            The answer is a 303 to `/e/account/login` (Task 20) on BOTH
-            branches: account created and account already present are
-            indistinguishable by status, body and target alike. Nothing on this
-            page is allowed to become the distinction the backend refuses to
-            be.
-          */}
-          <form method="post" action="/e/account/signup" className="grid min-w-0 gap-4">
-            {/* Channel two. There is no session on this page — obtaining one
-                is what it is for — so the proof-of-intent is the `sw_play_csrf`
-                nonce set on this very response, and this is its digest. The
-                NAME comes from `FORM_FIELD` rather than a literal, so the
-                cross-tier pin against `app/form_csrf.FORM_FIELD` is
-                load-bearing. */}
-            <input type="hidden" name={FORM_FIELD} value={formCsrf} />
-            {/* Where the 303 goes. Without it the backend falls back to
-                `/e/account/login` (`api/entrants.py:466`), which is POST-only —
-                so a successful signup ended on a 405. A node-owned GET, and
-                one that carries no per-visitor information, so it cannot
-                become the distinction the uniform 202/303 exists to avoid.
-
-                **`/created`, not bare `/e/login` (E3).** Both are this same
-                login page; the suffix is the one signal node gets that a
-                sign-up completed, because the backend redirects here on
-                success and answers 401/422 without redirecting otherwise.
-                Landing on the bare page said nothing, so a completed sign-up
-                and a silently failed one rendered the same document.
-
-                The value is a validated node-owned GET, which keeps the 303
-                off a 405. */}
-            <input type="hidden" name="next" value={formNext} />
-
-            <TextField
-              id="signup-email"
-              label="Email"
-              name="email"
-              type="email"
-              required
-              maxLength={320}
-              autoComplete="email"
-              hint="Use the email where you want entry updates."
-              className="min-w-0"
-            />
-
-            <TextField
-              id="signup-password"
-              label="Password"
-              name="password"
-              type="password"
-              required
-              // Stated before submission rather than discovered on refusal.
-              // `services/auth.validate_password` is the authority
-              // (`settings.password_min_length`, 8); this is the client-side
-              // echo of it and the server decides either way, so a drift is a
-              // form that asks for the wrong thing, never one that lets the
-              // wrong thing in.
-              minLength={8}
-              maxLength={128}
-              autoComplete="new-password"
-              hint="Use at least 8 characters and avoid common passwords."
-              // Deleted for the reason spelled out in `login.tsx`: `TextField`'s
-              // default "Show password" toggle is a `<button type="button">`
-              // with an `onClick`; this form's only module is reserved for the
-              // Turnstile lifecycle, so the credential reveal stays absent.
-              revealable={false}
-              className="min-w-0"
-            />
-
-            <TextField
-              id="signup-name"
-              label="Your name (optional)"
-              name="displayName"
-              maxLength={200}
-              autoComplete="name"
-              hint="Name shown to the organizer."
-              className="min-w-0"
-            />
-
-            <TextField
-              id="signup-phone"
-              label="Phone (optional)"
-              name="phone"
-              type="tel"
-              maxLength={200}
-              autoComplete="tel"
-              hint="Only used if the organizer needs to reach you about an entry."
-              className="min-w-0"
-            />
-
-            {/* Cloudflare's widget writes its solution into a hidden input
-                named `cf-turnstile-response`, which `_payload` maps onto the
-                JSON surface's `turnstileToken` — one spelling of one field, in
-                one codebase (`api/entrants.py`). The sitekey comes from the
-                backend's own config so it cannot drift from the secret it is
-                paired with. */}
-            {/* The one thing on this page that does not work without script,
-                said where the check itself sits. The backend refuses an empty
-                challenge token with no round trip
-                (`services/turnstile.verify_turnstile`), so a scriptless
-                submission is refused as "the human check did not pass" — which
-                reads as an accusation rather than as a missing capability. */}
-            <div className="grid min-w-0 gap-2 rounded-sm border border-rule-control bg-surface-sunken p-3">
-              <p className={EYEBROW}>Human check</p>
-              <div
-                id="turnstile-widget"
-                className="cf-turnstile"
-                data-sitekey={turnstileSiteKey}
-                data-action="signup"
-              />
-              <p
-                id="turnstile-status"
-                className="text-sm text-muted-foreground"
-                role="status"
-                aria-live="polite"
-              >
-                Loading the human check
-              </p>
-              <p id="turnstile-help" className="text-xs text-muted-foreground">
-                The human check needs JavaScript. With scripting turned off, the
-                form still fills in and submits, but the check cannot run. Ask
-                the organizer to set your account up instead.
-              </p>
-            </div>
-            <script
-              src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-              data-cfasync="false"
-              async
-              defer
-            />
-            <script type="module" src="/e/assets/turnstile.js" defer />
-
-            <Button type="submit" size="lg" className="justify-self-start">
-              Create account
-            </Button>
-          </form>
-
-          <p className="border-t border-rule-soft pt-4 text-sm text-muted-foreground">
-            {/* The other half of Task 20's wiring: the two account pages point
-                at each other, and both targets are node-owned GETs.
-                `/e/account/login` is FastAPI's POST — an `<a href>` to it is a
-                405, which is what R8-E removed from the entry page.
-                `tests/login.test.ts` reads every href in this document and
-                fails on any under a backend prefix. */}
-            Already have one?{' '}
-            <a className="text-accent underline underline-offset-4" href={signInHref}>
-              Sign in
-            </a>
-            .
-          </p>
-        </div>
-      </main>
-    </PlayShell>
-  );
+export default function Signup({ loaderData }: Route.ComponentProps) {
+  return <SignupPage {...loaderData} />;
 }
 
 /**

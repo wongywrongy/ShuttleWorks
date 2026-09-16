@@ -119,6 +119,20 @@ describe('per-route meta/OG tags on /e/{slug}', () => {
     expect(head(html)).toContain('<title>Spring Open · Enter now</title>');
   });
 
+  it('gives each tab its own title (B-14)', async () => {
+    // The three tabs are three pages as far as a browser's history, a
+    // bookmark bar and a set of open windows are concerned, and all three
+    // answered to one title.
+    const draws = await (await renderResponse(PAGE, 200, '/e/spring-open?tab=draws')).text();
+    const players = await (await renderResponse(PAGE, 200, '/e/spring-open?tab=players')).text();
+
+    expect(head(draws)).toContain('<title>Spring Open · Draws</title>');
+    expect(head(players)).toContain('<title>Spring Open · Players</title>');
+    // Overview keeps the phase-derived suffix: "Enter now" on the landing
+    // section is what a search result and a shared link most need to say.
+    expect(head(await render())).toContain('<title>Spring Open · Enter now</title>');
+  });
+
   it('labels a closed published historical page as results, not an invitation to enter', async () => {
     const html = await render({
       ...PAGE,

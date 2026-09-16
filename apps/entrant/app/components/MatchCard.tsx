@@ -42,7 +42,7 @@ import { schedulePublicState, schedulePublicStateLabel, scheduleStateLabel } fro
 import { labelledClock } from '../lib/format';
 import { gameScore, pairedScoreLine } from '../lib/score';
 import { sideSummaryPhrase } from '../lib/side';
-import { LIST_CARD, TEXT_HELPER, TEXT_SECONDARY } from '../lib/ui';
+import { EYEBROW_CLASS, LIST_CARD, TEXT_HELPER, TEXT_SECONDARY } from '../lib/ui';
 import { PersonGroup } from './PersonGroup';
 import { personRefModel } from '../../public/assets/person-ref.js';
 
@@ -91,6 +91,24 @@ function SidePeople({ side, slug, compact = false, highlightPersonId, highlightP
   />;
 }
 
+/**
+ * The one off-ladder height in the entrant tier, named rather than inlined
+ * (A-12).
+ *
+ * 22px is not on the 0/2/4/8/12/16/24/32/48/64/96 spacing ladder and is not
+ * meant to be: it is HALF a bracket node. The elimination grid places each
+ * node against a connector geometry that `tests/e2e/11-public-bracket-
+ * geometry.spec.ts` measures and `tests/publicUniversality.test.ts` derives
+ * its column maths from, so the two sides of a node must sum to the node
+ * height exactly — 24px a side would push every node 4px and walk the whole
+ * bracket out of alignment with its connectors.
+ *
+ * It is a FLOOR, not a fixed height: a doubles side with two person lines
+ * grows past it, which is the case the geometry spec exists to protect.
+ * Changing it means re-deriving the bracket geometry, not editing one class.
+ */
+const BRACKET_SIDE_MIN_HEIGHT = 'min-h-[22px]';
+
 function Side({ side, score, index, slug, compact = false, live = false, first = false, showGames = true, highlightPersonId, highlightPersonName }: { side: PlayerMatchSideDTO; score: number[][] | null; index: 0 | 1; slug?: string; compact?: boolean; live?: boolean; first?: boolean; showGames?: boolean; highlightPersonId?: string | null; highlightPersonName?: string | null }) {
   // Contract §3.4: never padded to the configured game count — the ledger
   // has exactly as many columns as there are recorded games, in every
@@ -110,10 +128,10 @@ function Side({ side, score, index, slug, compact = false, live = false, first =
   const won = side.winner && !live;
   return (
     <div
-      className={`grid min-w-0 items-stretch ${compact ? 'min-h-[22px] text-sm' : 'min-h-10 text-sm'} ${first ? '' : 'border-t border-rule-soft'}`}
+      className={`grid min-w-0 items-stretch ${compact ? `${BRACKET_SIDE_MIN_HEIGHT} text-sm` : 'min-h-10 text-sm'} ${first ? '' : 'border-t border-rule-soft'}`}
       style={{ gridTemplateColumns: columns }}
     >
-      <div className={`flex min-w-0 items-center ${compact ? 'px-2 py-0.5' : 'px-4 py-2'} ${won ? 'font-[650] text-foreground' : 'text-foreground'}`}>
+      <div className={`flex min-w-0 items-center ${compact ? 'px-2 py-0.5' : 'px-4 py-2'} ${won ? 'font-semibold text-foreground' : 'text-foreground'}`}>
         {won ? (
           <span className="sr-only">{compact ? 'Winner advancing: ' : 'Winner: '}</span>
         ) : null}
@@ -272,7 +290,7 @@ export function MatchCard({ match, variant = 'card', slug, highlightPersonId, hi
         <header
           className={`flex items-center justify-between gap-3 border-b border-rule-soft px-4 py-2 ${TEXT_SECONDARY} ${card ? 'rounded-t-lg' : ''}`}
         >
-          <p className="flex min-w-0 items-baseline gap-2 text-xs font-bold uppercase tracking-[0.06em]">
+          <p className={`flex min-w-0 items-baseline gap-2 ${EYEBROW_CLASS}`}>
             {cue ? <span className="font-semibold normal-case tracking-normal text-foreground">{cue}</span> : null}
             <span>{title}</span>
           </p>

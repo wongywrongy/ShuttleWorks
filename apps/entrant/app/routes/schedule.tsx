@@ -14,6 +14,7 @@ import { ApiError, apiGet } from "../lib/apiFetch.server";
 import { demoNowMs } from "../lib/demoClock.server";
 import type { EntryPageDTO } from "../lib/entryPage.types";
 import { eventDisciplineLabel } from "../lib/draws.types";
+import { eventLabel, isStandardEventCode } from "../lib/eventLabels";
 import { formatCalendarDayShort, formatInstantInZone } from "../lib/format";
 import {
   SCHEDULE_STATES,
@@ -26,7 +27,7 @@ import {
   type ScheduleMatchDTO,
   type ScheduleState,
 } from "../lib/schedule.types";
-import { ACTION_LINK, ACTION_LINK_MUTED, EYEBROW, LIST_CARD, SELECT_CONTROL, TEXT_SECONDARY } from "../lib/ui";
+import { ACTION_LINK, ACTION_LINK_MUTED, EYEBROW, EYEBROW_CLASS, LIST_CARD, SELECT_CONTROL, TEXT_SECONDARY } from "../lib/ui";
 import { Chevron } from "../components/Chevron";
 import type { Route } from "./+types/schedule";
 
@@ -87,6 +88,41 @@ function parseFilters(request: Request): ScheduleFilters {
 function dayMatchCountLabel(count: number): string {
   return `${count} ${count === 1 ? "match" : "matches"}`;
 }
+/**
+ * The bounded set of page numbers to render (B-19).
+ *
+ * First, last, and the current page with two either side. `gapBefore` marks
+ * an entry that does NOT follow its predecessor — drawn as a rule, never as
+ * an ellipsis: this tier's no-truncation contract forbids the character
+ * outright, and a rule says "these are not consecutive" without borrowing
+ * the glyph that elsewhere means "a value was cut".
+ *
+ * Exported for `tests/scheduleState.test.ts` — the arithmetic is the whole
+ * of this control, and asserting it through rendered HTML would test the
+ * markup instead.
+ */
+export function pageNumbers(
+  current: number,
+  pages: number,
+): { page: number; gapBefore: boolean }[] {
+  if (pages <= 1) return [];
+  // A run of five CLAMPED into the range, not `current ± 2` trimmed at the
+  // edges: on page 1 of 5 the trimmed version dropped page 4 and left
+  // "1 2 3 | 5", a gap mark earning its keep by hiding one page.
+  const width = Math.min(5, pages);
+  const start = Math.min(Math.max(current - 2, 1), pages - width + 1);
+  const wanted = new Set<number>([1, pages]);
+  for (let page = start; page < start + width; page += 1) wanted.add(page);
+  let previous = 0;
+  return [...wanted]
+    .sort((a, b) => a - b)
+    .map((page) => {
+      const gapBefore = previous !== 0 && page - previous > 1;
+      previous = page;
+      return { page, gapBefore };
+    });
+}
+
 function matchesPath(slug: string, filters: ScheduleFilters): string {
   const params = new URLSearchParams();
   if (filters.day) params.set("day", filters.day);
@@ -215,7 +251,18 @@ function scheduleToMatch(
   };
 }
 /** `EYEBROW` recoloured in the live tone (kept literal for the Tailwind scan). */
-const LIVE_EYEBROW = "text-xs font-bold uppercase tracking-[0.06em] text-status-live";
+const LIVE_EYEBROW = `${EYEBROW_CLASS} text-status-live`;
+
+/**
+ * The filter bar's visible label (B-20).
+ *
+ * These three were real `<label htmlFor>` elements held `sr-only`, so the
+ * only visible text was the current option — "All events" reads as a
+ * heading, "Court 3" reads as a fact, and neither says what changing it
+ * would do. Compact and above the control, matching the entry form's own
+ * `FIELD_LABEL` pattern rather than inventing a second one.
+ */
+const FILTER_LABEL = 'mb-1 block text-xs font-medium text-muted-foreground';
 /**
  * One schedule match as one aligned ROW (public refinement 2026-09-12): the
  * card grid is gone from the main listing, so a spectator scans time and
@@ -253,7 +300,7 @@ function RowHeader() {
   return (
     <div
       aria-hidden
-      className={`hidden gap-x-4 px-3 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-[0.06em] ${TEXT_SECONDARY} md:grid ${MATCH_ROW_COLUMNS}`}
+      className={`hidden gap-x-4 px-3 pb-1.5 pt-2 ${EYEBROW_CLASS} ${TEXT_SECONDARY} md:grid ${MATCH_ROW_COLUMNS}`}
     >
       <span>Time · court</span>
       <span>Event · round</span>
@@ -474,7 +521,16 @@ function ScheduleControls({
     ...(filters.event && !matches.facets.events.includes(filters.event) ? [filters.event] : []),
   ].filter((code, index, list) => list.indexOf(code) === index).map((code) => ({
     code,
-    label: eventMetadata.get(code)?.discipline ?? eventDisciplineLabel(code),
+    // B-5: the CANONICAL label wins over the organiser's freeform
+    // `discipline` string. That string is whatever the import carried, and
+    // on real data it carried the storage slug — so the filter offered
+    // "mens_doubles_final" where every other surface on the tier says
+    // "Men's doubles". The organiser's own wording is kept only for an
+    // event the canonical map does not cover, which is where it is the only
+    // thing anyone can say.
+    label: isStandardEventCode(code)
+      ? eventLabel(code)
+      : eventMetadata.get(code)?.discipline ?? eventDisciplineLabel(code),
   }));
   const courts = [
     ...new Set(
@@ -535,7 +591,7 @@ function ScheduleControls({
             </summary>
             <div className="mt-2 grid gap-2 sm:grid-cols-3 md:mt-0 md:flex md:flex-wrap md:items-center">
               <div>
-                <label className="sr-only" htmlFor="schedule-event">Event</label>
+                <label className={FILTER_LABEL} htmlFor="schedule-event">Event</label>
                 <select
                   id="schedule-event"
                   name="event"
@@ -551,7 +607,7 @@ function ScheduleControls({
                 </select>
               </div>
               <div>
-                <label className="sr-only" htmlFor="schedule-court">Court</label>
+                <label className={FILTER_LABEL} htmlFor="schedule-court">Court</label>
                 <select
                   id="schedule-court"
                   name="court"
@@ -565,7 +621,7 @@ function ScheduleControls({
                 </select>
               </div>
               <div>
-                <label className="sr-only" htmlFor="schedule-state">Status</label>
+                <label className={FILTER_LABEL} htmlFor="schedule-state">Status</label>
                 <select
                   id="schedule-state"
                   name="state"
@@ -746,6 +802,11 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
     filters.page > 1 ? { ...filters, page: filters.page - 1 } : null;
   const next =
     filters.page < pages ? { ...filters, page: filters.page + 1 } : null;
+  // B-19: numbered pages, not just a Next link. Bounded — the current page
+  // plus two either side, with the first and last always reachable — so a
+  // seven-page day and a seventy-page one render the same amount of chrome
+  // and neither wraps the row on a 390px screen.
+  const pageWindow = pageNumbers(filters.page, pages);
   const live = matches.items.filter((match) => match.status === "live");
   // §4.2 (P3): the repeated per-card date is deleted wherever the list is
   // already scoped to one day — the day navigation or the single date the
@@ -827,9 +888,40 @@ export default function Schedule({ loaderData }: Route.ComponentProps) {
                       <span />
                     )}
                   </span>
-                  <span className="text-sm text-muted-foreground">
-                    Page {filters.page} of {pages}
-                  </span>
+                  {/* B-19: the page numbers themselves, so page 5 of 7 is
+                      one click away instead of four. The current page is a
+                      `<span aria-current="page">`, not a link to where the
+                      reader already is. */}
+                  <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                    {pageWindow.map(({ page, gapBefore }) => (
+                      <li
+                        key={page}
+                        className={
+                          gapBefore ? 'border-l border-rule-soft pl-2' : undefined
+                        }
+                      >
+                        {page === filters.page ? (
+                          <>
+                            <span
+                              aria-current="page"
+                              className="font-semibold text-foreground"
+                            >
+                              {page}
+                            </span>
+                            <span className="sr-only">{`, page ${page} of ${pages}`}</span>
+                          </>
+                        ) : (
+                          <a
+                            href={matchesPath(slug, { ...filters, page })}
+                            className={ACTION_LINK}
+                            aria-label={`Page ${page} of ${pages}`}
+                          >
+                            {page}
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
                   {next ? (
                     <a href={matchesPath(slug, next)} className={ACTION_LINK}>
                       Next

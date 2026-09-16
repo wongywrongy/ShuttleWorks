@@ -17,6 +17,16 @@
  * there and `tests/uiTwins.test.ts` pins the copies equal.
  */
 
+import { EYEBROW_CLASS } from '@scheduler/design-system/components';
+
+/**
+ * Re-exported so the tier reaches ONE eyebrow through the module it already
+ * reaches every other shared string through. The literal itself stays in
+ * `packages/design-system/components/textStyles.ts`, which both apps'
+ * Tailwind content globs scan, so the classes are still emitted.
+ */
+export { EYEBROW_CLASS };
+
 /** The raw card surface pair — border tint + raised background. */
 export const CARD_SKIN = 'border-rule-soft bg-surface-raised';
 
@@ -48,8 +58,18 @@ export const LIST_CARD_ROW =
 export const PAGE_TITLE = 'type-display text-page tracking-[-0.025em] text-foreground';
 export const SECTION_TITLE = 'text-section tracking-[-0.015em] text-foreground';
 
-/** The small-caps group heading (draw rounds, schedule time groups, player sections). */
-export const EYEBROW = 'text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground';
+/**
+ * The small-caps group heading (draw rounds, schedule time groups, player
+ * sections).
+ *
+ * `EYEBROW_CLASS` is THE eyebrow — 12px / 600 / 0.06em, one definition for
+ * both tiers — and this is it plus the public register's ink. The old
+ * spelling here said `font-bold` (700), so the same role rendered at two
+ * weights depending on which file you were reading, and the string was hand
+ * copied 17 more times across nine entrant files with three different
+ * weights between them (A-4/A-5/A-6).
+ */
+export const EYEBROW = `${EYEBROW_CLASS} text-muted-foreground`;
 
 /**
  * A rectangular chip (ADR 0027: nothing fully round, no dot). Tone is
@@ -76,9 +96,55 @@ export const FIELD_LABEL = 'mb-2 block text-xs font-medium text-foreground';
 /** The native-select filter control (schedule filter bar). */
 export const SELECT_CONTROL = `${FIELD_INPUT} font-normal`;
 
+/**
+ * The two hand-rolled button strings, and the one construction they share
+ * with the design system's `Button` (A-9, A-13).
+ *
+ * `Button` is a React component, so the page-scoped scripts under
+ * `public/assets/` cannot be it and the SSR wizard's controls sit inside
+ * markup that a component boundary would fragment. What they CAN be is the
+ * same string: `buttonVariants`' base chrome, spelled here verbatim —
+ * `transition-colors duration-fast ease-out-quick`, the focus ring on
+ * `ring-focus` with its offset, `select-none`, and the disabled set. Before
+ * this they carried a hover rule and nothing else, so a keyboard user got no
+ * focus ring on the wizard's Continue and Back controls at all.
+ *
+ * Press is colour, not movement: `Button`'s own comment — "No routine
+ * elevation or moving hit targets" — is the rule these follow, so there is
+ * deliberately no transform here and none in `Button`.
+ *
+ * RADIUS BY HEIGHT (ADR 0027, `tokens.css`): both are `rounded` (8px)
+ * because both are 40-44px controls. `rounded-md` (9px) belongs to the 44px
+ * `lg` size alone, and these wore it by copy rather than by rule.
+ *
+ * ONE deliberate divergence from `Button`: no `whitespace-nowrap`. This
+ * tier's no-truncation contract (`tests/noTruncation.test.ts`) forbids it
+ * outright, because a long label on a 390px screen has to wrap rather than
+ * run off the edge.
+ *
+ * Kept as FLAT single-quoted literals, not composed from a shared fragment:
+ * `tests/a11yContracts.test.ts` reads `BUTTON_SECONDARY`'s literal out of
+ * this file to measure its height, and `tests/uiTwins.test.ts` reads both to
+ * pin the `public/assets/` copies byte-identical.
+ */
+export const BUTTON_PRIMARY =
+  'inline-flex h-11 select-none items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold leading-none tracking-[0.01em] text-accent-ink shadow transition-colors duration-fast ease-out-quick ring-offset-surface-base hover:bg-action-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground';
+
+/**
+ * The destructive commit (B-18): `Button variant="destructive"` at the
+ * default size, as a string the page-scoped scripts can carry.
+ *
+ * Withdrawing an entry is the most destructive thing a public visitor can
+ * do on this product, and it was a 12px underlined link — the same shape as
+ * "Keep it" beside it and as every navigation on the page. A destructive
+ * commit is allowed to look like one.
+ */
+export const BUTTON_DESTRUCTIVE =
+  'inline-flex h-10 select-none items-center justify-center rounded border border-destructive bg-destructive px-3.5 text-sm font-semibold leading-none tracking-[0.01em] text-destructive-foreground transition-colors duration-fast ease-out-quick ring-offset-surface-base hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground';
+
 /** The secondary (outline) button for native-form wizards. */
 export const BUTTON_SECONDARY =
-  'inline-flex min-h-10 items-center justify-center rounded-md border border-rule-control px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-sunken';
+  'inline-flex min-h-10 select-none items-center justify-center rounded border border-rule-control px-4 py-2 text-sm font-semibold tracking-[0.01em] text-foreground transition-colors duration-fast ease-out-quick ring-offset-surface-base hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground';
 
 /**
  * The one separator per context (v3 consolidated plan, package 28): a middot

@@ -56,7 +56,7 @@ import {
   visibleBlocks,
 } from '../lib/phase';
 import type { Route } from './+types/enter';
-import { BUTTON_SECONDARY, CARD, INLINE_METADATA_SEPARATOR, INPUT_SKIN, PAGE_TITLE } from '../lib/ui';
+import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, INLINE_METADATA_SEPARATOR, INPUT_SKIN, PAGE_TITLE } from '../lib/ui';
 import { Chevron } from '../components/Chevron';
 
 export interface EnterLoaderData {
@@ -596,12 +596,17 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <span>
                 {justSignedUp
-                  ? 'Your entrant account is ready. Sign in to submit this entry.'
+                  // B-8: say WHY the sign-in is still needed. Sign-up not
+                  // signing in is by design (the uniform answer on both of
+                  // the backend's branches cannot mint a session without
+                  // telling the two apart), and a reader who is not told
+                  // that reads it as the form having half-worked.
+                  ? 'Your entrant account is created. For your security we do not sign you in automatically, so sign in to submit this entry.'
                   : 'Submitting needs an entrant account. Your answers are kept on this device while you sign in.'}
               </span>
               <a
                 href={`/e/login?next=/e/${encodeURIComponent(slug)}/enter/signed-in`}
-                className="inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover"
+                className={BUTTON_PRIMARY}
               >
                 Sign in to continue
               </a>
@@ -730,7 +735,7 @@ export default function Enter({ loaderData, actionData }: Route.ComponentProps) 
                     because a scriptless reader is already looking at the
                     review section below it. */}
                 <div hidden data-entry-wizard-controls="details" className="flex flex-wrap gap-2">
-                  <button type="button" data-wizard-next="details" className="inline-flex h-11 items-center justify-center rounded border border-action-primary-hover bg-accent px-3.5 text-sm font-semibold text-accent-ink shadow hover:bg-action-primary-hover">Review entry</button>
+                  <button type="button" data-wizard-next="details" className={BUTTON_PRIMARY}>Review entry</button>
                 </div>
               </div>
 

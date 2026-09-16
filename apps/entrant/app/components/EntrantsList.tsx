@@ -41,7 +41,7 @@
 import { eventCodeLabel } from '../lib/draws.types';
 import { eventLabel } from '../lib/eventLabels';
 import type { PersonReferenceDTO } from '../lib/person.types';
-import { LIST_CARD, SELECT_CONTROL } from '../lib/ui';
+import { EYEBROW_CLASS, LIST_CARD, SELECT_CONTROL } from '../lib/ui';
 import { personRefModel } from '../../public/assets/person-ref.js';
 import { findLabel, matchField, rowHasEvent, searchKey } from '../../public/assets/entrants-filter.js';
 import { PersonRef } from './PersonRef';
@@ -231,7 +231,7 @@ export function EntrantsList({
         <div className={`min-w-0 ${LIST_CARD}`}>
           <div
             aria-hidden
-            className={`hidden gap-x-4 px-3 pb-2 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:grid ${ROW_COLUMNS}`}
+            className={`hidden gap-x-4 px-3 pb-2 pt-3 ${EYEBROW_CLASS} text-muted-foreground sm:grid ${ROW_COLUMNS}`}
           >
             <span>Player</span>
             <span>Club</span>
@@ -249,7 +249,7 @@ export function EntrantsList({
               tabIndex={-1}
               className={`min-w-0 ${JUMP_CLEARANCE} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent`}
             >
-              <h3 className="border-t border-rule-soft bg-surface-sunken px-3 py-1 text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
+              <h3 className={`border-t border-rule-soft bg-surface-sunken px-3 py-1 ${EYEBROW_CLASS} text-muted-foreground`}>
                 {group.letter}
               </h3>
               <ul>

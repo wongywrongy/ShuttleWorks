@@ -407,6 +407,63 @@ describe('withdrawAffordance (E2)', () => {
     keep?.click();
     expect(root.textContent).not.toContain('Withdraw Ada Chen from');
   });
+
+  it('announces each step and carries focus with it (B-7)', () => {
+    // Every step replaces the control wholesale, so the focused button is
+    // destroyed under the reader and focus fell to `<body>`. A screen
+    // reader was told nothing at all.
+    const root = mount();
+    render(root, { tournaments: [card()], emailVerified: true });
+    const arm = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Withdraw entry',
+    ) as HTMLButtonElement;
+
+    const region = arm.closest('[role="status"]');
+    expect(region, 'the control is not a live region').toBeTruthy();
+    expect(region!.getAttribute('aria-live')).toBe('polite');
+    // First render must NOT steal focus: this is one card among many.
+    expect(document.activeElement).not.toBe(arm);
+
+    arm.click();
+    const confirm = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Withdraw entry',
+    ) as HTMLButtonElement;
+    expect(document.activeElement).toBe(confirm);
+
+    const keep = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Keep it',
+    ) as HTMLButtonElement;
+    keep.click();
+    const rearmed = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Withdraw entry',
+    ) as HTMLButtonElement;
+    // Backing out DOES move focus: the reader pressed something.
+    expect(document.activeElement).toBe(rearmed);
+  });
+
+  it('makes the confirm step a visibly destructive button (B-18)', () => {
+    // It was 12px underlined text — the same shape as "Keep it" beside it
+    // and as every navigation link on the page — for the most destructive
+    // act a public visitor can perform.
+    const root = mount();
+    render(root, { tournaments: [card()], emailVerified: true });
+    ([...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Withdraw entry',
+    ) as HTMLButtonElement).click();
+
+    const confirm = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Withdraw entry',
+    ) as HTMLButtonElement;
+    expect(confirm.className).toContain('bg-destructive');
+    expect(confirm.className).toContain('text-destructive-foreground');
+    expect(confirm.className).not.toContain('underline-offset-4');
+    // The paired cancel stays the quiet register — two solid buttons would
+    // make the destructive one no easier to tell apart than before.
+    const keep = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Keep it',
+    ) as HTMLButtonElement;
+    expect(keep.className).not.toContain('bg-destructive');
+  });
 });
 
 describe('the account panel (E5)', () => {

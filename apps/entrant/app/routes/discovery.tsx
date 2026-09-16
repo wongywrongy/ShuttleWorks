@@ -185,7 +185,7 @@ export default function Discovery({ loaderData }: Route.ComponentProps) {
             purpose as a short trailing subtitle. It used to be two stacked
             blocks above a third for the controls. */}
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <h1 className="type-display text-[1.75rem] tracking-[-0.02em] text-foreground">
+          <h1 className="type-display text-page tracking-[-0.02em] text-foreground">
             {model.season === null ? 'All tournaments' : `${model.season} season`}
           </h1>
           <p className="text-sm text-muted-foreground">

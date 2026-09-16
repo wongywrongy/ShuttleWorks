@@ -42,7 +42,7 @@ import {
   type Tab,
 } from '../lib/phase';
 import type { Route } from './+types/tournament';
-import { ACTION_LINK, LIST_CARD, LIST_CARD_ROW } from '../lib/ui';
+import { ACTION_LINK, EYEBROW_CLASS, LIST_CARD, LIST_CARD_ROW } from '../lib/ui';
 
 export interface TournamentLoaderData {
   page: EntryPageDTO;
@@ -157,6 +157,26 @@ export async function loader({
 }
 
 /**
+ * The `<title>` suffix for a named section, or `null` for the Overview —
+ * which keeps the phase-derived suffix it has always had, because "Enter
+ * now" on the landing section is the one thing a search result or a shared
+ * link most needs to say.
+ *
+ * A fixed map, not the raw query value: nothing a visitor types reaches the
+ * document title.
+ */
+function tabSuffixFor(requested: string | null): string | null {
+  switch (requested) {
+    case 'draws':
+      return 'Draws';
+    case 'players':
+      return 'Players';
+    default:
+      return null;
+  }
+}
+
+/**
  * Per-route meta/OG tags, derived from the loader's one call, carried over
  * from the SP-P6-1 entry page verbatim, minus its `/signed-in` branch (that
  * variant now belongs to the enter route).
@@ -167,17 +187,29 @@ export async function loader({
  * pins `data.page` as the only read. `data` is `undefined` when the loader
  * threw `notFound()`, so this inherits the uniform 404 structurally.
  */
-export const meta: Route.MetaFunction = ({ data }) => {
+export const meta: Route.MetaFunction = ({ data, location }) => {
   if (!data) {
     return [{ title: 'Entry page not found' }];
   }
 
   const { tournament, org, venue, page, events, publication } = data.page;
-  const titleSuffix = events.some((event) => event.isOpen)
-    ? 'Enter now'
-    : publication.results
-      ? 'Results'
-      : 'Tournament';
+  // B-14: the active SECTION names the document, because the three tabs are
+  // three pages as far as a browser's history, a bookmark bar and a set of
+  // open windows are concerned — and all three answered to one title.
+  //
+  // Read from the URL rather than from the loader's own resolved tab:
+  // `meta()` is held to a positive allowlist of `data.page` and nothing else
+  // (`tests/tournament.meta.test.ts`), because a `<meta>` tag is more public
+  // than the page body. `tabSuffix` maps the raw value through a fixed set,
+  // so a crafted `?tab=` selects a known word or none and never writes one —
+  // and the loader has already 404'd anything unrecognised before this runs.
+  const tabSuffix = tabSuffixFor(new URLSearchParams(location.search).get('tab'));
+  const titleSuffix = tabSuffix
+    ?? (events.some((event) => event.isOpen)
+      ? 'Enter now'
+      : publication.results
+        ? 'Results'
+        : 'Tournament');
   const title = tournament.name ? `${tournament.name} · ${titleSuffix}` : titleSuffix;
   const description = [tournament.date, venue?.name, page.introText]
     .filter((part): part is string => Boolean(part))
@@ -260,7 +292,7 @@ function EventsSection({
     const showFormat = new Set(draws.draws.map((card) => card.kind)).size > 1;
     return (
       <SectionCard title="Events" labelledBy="ov-events">
-        <div aria-hidden className={`hidden gap-3 px-4 pb-2 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:grid ${EVENT_ROW_COLUMNS}`}>
+        <div aria-hidden className={`hidden gap-3 px-4 pb-2 ${EYEBROW_CLASS} text-muted-foreground sm:grid ${EVENT_ROW_COLUMNS}`}>
           <span>Event</span>
           <span>Entrants</span>
           <span>Progress</span>
@@ -288,7 +320,7 @@ function EventsSection({
   const anyFee = page.events.some((event) => event.feeCents !== null);
   return (
     <SectionCard title="Events" labelledBy="ov-events">
-      <div aria-hidden className={`hidden gap-3 px-4 pb-2 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:grid ${ENTRY_EVENT_COLUMNS}`}>
+      <div aria-hidden className={`hidden gap-3 px-4 pb-2 ${EYEBROW_CLASS} text-muted-foreground sm:grid ${ENTRY_EVENT_COLUMNS}`}>
         <span>Event</span>
         <span>Entries</span>
         <span className="text-right">{currency ? 'Fee' : ''}</span>
@@ -550,7 +582,7 @@ function DrawsPanel({
     <div className="grid gap-4">
       <h2 className="sr-only">Draws</h2>
       <div className={LIST_CARD}>
-        <div aria-hidden className={`hidden gap-3 px-4 pb-2 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:grid ${EVENT_ROW_COLUMNS}`}>
+        <div aria-hidden className={`hidden gap-3 px-4 pb-2 pt-3 ${EYEBROW_CLASS} text-muted-foreground sm:grid ${EVENT_ROW_COLUMNS}`}>
           <span>Event</span>
           {/* V3-PE04.2: one column, one unit, "N players"/"N pairs", not a
               combined "registrations / draw participants" header describing
@@ -689,7 +721,7 @@ function ReserveList({ reserves, slug }: { reserves: ReserveRowDTO[]; slug: stri
       </div>
       {[...byEvent.entries()].map(([code, rows]) => (
         <div key={code} className="grid gap-1.5">
-          <h4 className="text-xs font-bold uppercase tracking-[0.06em] text-muted-foreground">
+          <h4 className={`${EYEBROW_CLASS} text-muted-foreground`}>
             {eventCodeLabel(code)}
           </h4>
           <ol className="grid gap-1">
