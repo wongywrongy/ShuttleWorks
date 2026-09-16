@@ -28,6 +28,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 from db.models import (
+    DEFAULT_TOURNAMENT_STATUS,
+    TOURNAMENT_STATUSES,
     AuthorityTransition,
     BracketEvent,
     BracketMatch,
@@ -49,6 +51,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from sync.compatibility import supports_checkpoint_schema, supports_operation_schema
+from sync.lifecycle import transition_authority
 from sync.errors import ProtocolError
 from sync.signing_keys import decode_key_material as _decode_key_material, key_id, read_verification_keys
 from sync.schemas import (
@@ -492,6 +495,22 @@ def _import_scalar(name: str, value: Any) -> Any:
     return value
 
 
+def _checkpoint_status(record: dict[str, Any]) -> str:
+    """The workspace status a checkout checkpoint may project.
+
+    The checkpoint arrives from another node, so its ``status`` is input, not
+    a value this process produced. An unknown one is refused with the
+    checkpoint's own error rather than left to ``ck_tournaments_status`` to
+    turn into a 500 halfway through the adoption transaction.
+    """
+    status = record.get("status", DEFAULT_TOURNAMENT_STATUS)
+    if status not in TOURNAMENT_STATUSES:
+        raise ProtocolError(
+            409, "invalid_checkpoint", "Checkpoint tournament status is invalid"
+        )
+    return status
+
+
 def _validate_checkpoint(checkpoint: dict[str, Any], expected_hash: str | None) -> uuid.UUID:
     if not isinstance(checkpoint, dict):
         record_authority_rejection("invalid_checkpoint")
@@ -622,7 +641,7 @@ def import_checkpoint(
     tournament = Tournament(
         id=tournament_id,
         name=record.get("name"),
-        status=record.get("status", "draft"),
+        status=_checkpoint_status(record),
         kind=record.get("kind", "bracket"),
         tournament_date=record.get("tournament_date"),
         tournament_end_date=record.get("tournament_end_date"),
@@ -975,7 +994,8 @@ def mark_ready(
     if authority.state != "preparing":
         record_authority_rejection("invalid_state")
         raise ProtocolError(409, "invalid_authority_state", "Authority cannot become ready")
-    authority.state = "active"
+    # The node itself presents the readiness proof; attribute it to the node.
+    transition_authority(session, authority, "ready", actor_id=node_id)
     authority.ready_at = utcnow()
     session.commit()
     record_authority_transition("ready")
@@ -1279,7 +1299,7 @@ def return_to_cloud(
             "snapshot_hash_mismatch",
             "Cloud projection digest does not match the final snapshot",
         )
-    authority.state = "closed"
+    transition_authority(session, authority, "close", actor_id=actor_id, reason=reason)
     authority.closed_at = utcnow()
     epoch = _next_epoch(session, tournament_id)
     cloud = _cloud_epoch(
@@ -1344,7 +1364,7 @@ def planned_transfer(
             declared_last_sequence=declared_last_sequence,
             highest_contiguous_sequence=cloud_sequence,
         )
-    authority.state = "closed"
+    transition_authority(session, authority, "close", actor_id=actor_id, reason=reason)
     authority.closed_at = utcnow()
     epoch = _next_epoch(session, tournament_id)
     replacement, replacement_capability = _preparing_epoch(
@@ -1937,7 +1957,7 @@ def ingest_batch(
             session.commit()
             raise ProtocolError(409, "operation_id_collision", "Operation ID has conflicting sequence")
         if operation.sequence < expected:
-            archived = session.get(EventOperation, operation.operation_id)
+            archived = session.get(EventOperation, (tournament_id, operation.operation_id))
             if archived is not None:
                 duplicates += 1
                 continue

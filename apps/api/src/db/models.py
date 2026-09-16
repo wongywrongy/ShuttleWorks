@@ -51,6 +51,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     MetaData,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -80,6 +81,22 @@ class MatchStatus(str, enum.Enum):
     PLAYING = "playing"
     FINISHED = "finished"
     RETIRED = "retired"
+
+
+# Workspace lifecycle vocabulary — the authority for ``tournaments.status``.
+# ``draft`` — being set up; ``active`` — running; ``archived`` — closed and
+# hidden from the Hub's live list.
+#
+# It lives here, beside ``MatchStatus`` and ``MODULE_STATUSES``, because it is
+# the one place every writer can name: the workspaces routes validate against
+# it, the blob writer and the workspace PATCH in ``repositories/local.py``
+# validate against it, and the checkout projection in ``sync/service.py``
+# validates against it — and ``repositories`` may not reach up into a domain
+# package (import-linter's persistence-direction contract).
+TOURNAMENT_STATUSES: tuple[str, ...] = ("draft", "active", "archived")
+
+#: The status a workspace is created in, and the column's server-side default.
+DEFAULT_TOURNAMENT_STATUS = "draft"
 
 
 def _utcnow() -> datetime:
@@ -123,9 +140,11 @@ class Tournament(Base):
     # old one on workspaces they already created.
     owner_email: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
     # ``draft`` / ``active`` / ``archived`` — used by the Step 6 status
-    # pill. Stored as plain string for ease of evolution; enforcement
-    # lives at the application layer.
-    status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    # pill. The vocabulary is ``TOURNAMENT_STATUSES`` above; every write path
+    # validates against it and ``ck_tournaments_status`` backs it up.
+    status: Mapped[str] = mapped_column(
+        String(20), default=DEFAULT_TOURNAMENT_STATUS, nullable=False
+    )
     # ``meet`` (default — intercollegiate dual / tri-meet workflow,
     # uses the Setup / Roster / Matches / Schedule / Live / TV tabs)
     # or ``bracket`` (single-elimination / round-robin draws, uses the
@@ -230,12 +249,18 @@ class Tournament(Base):
         # ``workspaces/tournaments.py`` ("kind must be 'meet' or 'bracket'").
         # Hardcoded rather than imported — ``db`` may not reach up into a
         # domain package (import-linter's persistence-direction contract).
-        # ``status`` is deliberately NOT constrained here: its comment above
-        # says enforcement lives at the application layer, and no validator
-        # in the API produces its allowed set. It is on P7a's deferred list.
         CheckConstraint(
             "kind IN ('meet', 'bracket')",
             name="ck_tournaments_kind",
+        ),
+        # P7a deferred this one because ``status`` had no authority in code to
+        # take its vocabulary from. ``TOURNAMENT_STATUSES`` above is now that
+        # authority. Spelled out rather than derived from the tuple, like the
+        # other four, so the string is character-identical to migration
+        # ``0012``.
+        CheckConstraint(
+            "status IN ('draft', 'active', 'archived')",
+            name="ck_tournaments_status",
         ),
     )
 
@@ -882,7 +907,13 @@ class EventOperation(Base):
 
     __tablename__ = "event_operations"
 
-    operation_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    # The key is COMPOSITE, and deliberately so. ``operation_id`` is minted by
+    # the client and replayed by the client, so it must stay the id the client
+    # sent; but an id is only ever meaningful inside the tenant that burned it.
+    # With a global key, a second tenant reusing an id another tenant already
+    # used was silently answered as a replay and its command never ran. The
+    # tenant is therefore part of the identity, not a column beside it.
+    operation_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False
     )
@@ -905,6 +936,9 @@ class EventOperation(Base):
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
     __table_args__ = (
+        # Tenant first, so ``session.get(EventOperation, (tournament_id,
+        # operation_id))`` reads in the order the identity is spoken.
+        PrimaryKeyConstraint("tournament_id", "operation_id"),
         UniqueConstraint(
             "tournament_id",
             "authority_epoch",
@@ -957,11 +991,11 @@ class SyncOutbox(Base):
 
     __tablename__ = "sync_outbox"
 
-    operation_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("event_operations.operation_id", ondelete="CASCADE"),
-        primary_key=True,
-    )
+    # Inherits its parent's composite identity rather than restating a global
+    # one: the outbox row belongs to exactly one operation, and an operation is
+    # identified by ``(tournament_id, operation_id)``.
+    tournament_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    operation_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     next_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -974,6 +1008,12 @@ class SyncOutbox(Base):
     )
 
     __table_args__ = (
+        PrimaryKeyConstraint("tournament_id", "operation_id"),
+        ForeignKeyConstraint(
+            ["tournament_id", "operation_id"],
+            ["event_operations.tournament_id", "event_operations.operation_id"],
+            ondelete="CASCADE",
+        ),
         Index(
             "ix_sync_outbox_pending",
             "acknowledged_at",
@@ -2495,11 +2535,18 @@ class CompetitionEvent(Base):
     level: Mapped[Optional[str]] = mapped_column(String(40))
     bracket_event_id: Mapped[Optional[str]] = mapped_column(String(100))
     meet_event_id: Mapped[Optional[str]] = mapped_column(String(40))
+    # S-3 (migration 0010). The other four competition tables carried a status
+    # and a CHECK; the event carried neither, so "has this event started" had
+    # to be re-derived from its draw every time somebody asked.
+    status: Mapped[str] = mapped_column(String(20), default="scheduled", server_default="scheduled", nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
     __mapper_args__ = {"version_id_col": version}
-    __table_args__ = (UniqueConstraint("tournament_id", "category_code"),)
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "category_code"),
+        CheckConstraint("status IN ('scheduled', 'in_progress', 'completed')", name="ck_competition_events_status"),
+    )
 
 
 class CompetitionUnit(Base):

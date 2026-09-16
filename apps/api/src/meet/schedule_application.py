@@ -120,7 +120,7 @@ class ScheduleCommitApplication:
         # twice.  The proposal store normally consumes the proposal, but this
         # check also makes direct event-node service retries safe.
         existing = self.repo.execute_query(
-            lambda session: session.get(EventOperation, operation_id)
+            lambda session: session.get(EventOperation, (tournament_id, operation_id))
         )
         if existing is not None:
             if (

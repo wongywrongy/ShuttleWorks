@@ -94,13 +94,13 @@ def test_match_action_commits_projection_operation_and_outbox(monkeypatch) -> No
         operation_id=operation_id,
     )
 
-    operation = session.get(EventOperation, operation_id)
+    operation = session.get(EventOperation, (tournament_id, operation_id))
     assert outcome.replay is False
     assert assignment.actual_start_slot == 4
     assert session.get(Tournament, tournament_id).data["actualStartSlot"] == 4
     assert operation.command_type == "bracket.match_action.v1"
     assert operation.payload["action"] == "start"
-    assert session.get(SyncOutbox, operation_id) is not None
+    assert session.get(SyncOutbox, (tournament_id, operation_id)) is not None
 
 
 def test_match_action_rolls_projection_back_when_operation_append_fails(

@@ -77,25 +77,52 @@ conversion requires explicit graph semantics, particularly for restoring a
 terminal match. Existing authority and competition command audit tables remain
 in place; they record different commands from the lifecycle history.
 
-## Missing specification for the remaining slice
+## The registration and competition slice (S-3, 2026-09-15)
 
-The supplied v2 plan refers to `state-machines-read-and-plan.md` sections 2–3 for
-all six new definitions and effects E-1 through E-7. The v2 plan is now filed
-in the documentation, but its referenced v1 document is still absent and the
-supplied v2 plan does not contain those tables. No competition rules have been
-inferred in their place.
+The v1 document the plan cited for the six machine tables was never filed. The
+definitions were derived from the code instead — the CHECK constraints, ADR 0030,
+`entries/lifecycle.py` and `competition/` — and filed as the
+[S-3 appendix](../explanation/state-machines-v2-defined-plan.md) of the v2 plan,
+which records the derivation edge by edge.
 
-The current schema already has partner invitations, submissions, competition
-units, memberships, and draw instances. Competition events have no status column.
-That makes the missing event graph and CHECK vocabulary a schema requirement,
-not something recoverable by exporting the existing ORM. The existing competition
-service also supports roster restoration and re-pairing; its assignments alone
-cannot establish intended terminal states or the seven specified effects.
+Eight machines join the registry. Six are the plan's: `partner_invitation` and
+`submission`, whose wrappers live in `entries/lifecycle.py`, and
+`competition_event`, `unit`, `unit_membership` and `draw_instance`, whose
+wrappers live in `competition/lifecycle.py`. Two more close **SMV2-3**:
+`sync_quarantine` and `authority_epoch` each had a CHECK constraint and
+transition code and no machine, which left S-3's acceptance criterion
+unmeetable. A test now derives that criterion from the models — every
+`status IN (...)` or `state IN (...)` constraint maps to exactly one machine, and
+their vocabularies must agree.
 
-Pending the source tables: S-3, the E-1…E-7 service functions and behavioral tests,
-versions for the six new machines, schema vocabulary parity, and the fourth I4
-allow-list entry (`unit.member_withdrew`). The current structural test allow-list
-contains the three implemented queue transitions: entry verification, capacity
-waitlisting, and solve reaping. S-8 retains today's operator withdrawal override
-and non-gating payment behavior. No new ruling has been assumed for event start
-or post-draw withdrawal.
+Competition events gained a status column and its CHECK in migration `0010`; the
+other four competition tables already had one. Existing rows land on `scheduled`.
+
+`unit.member_withdrew` is the fourth and final I4 allow-list entry: a complete
+unit that loses a member returns to the roster queue, which refuses nobody and
+is operator-reversible.
+
+Two rulings are new behaviour rather than a port. **S-8.4**: after the draw, a
+member withdrawal withdraws the unit and its remaining memberships instead of
+returning it to the queue; re-pairing is an operator act that creates a new
+unit. The ruling's opponent walkover is not implemented — bracket results enter
+only through the HTTP command path, and giving them a service entry point is a
+bracket-domain change; the appendix carries it as a marked TODO. **S-8.5**: an
+event goes `scheduled` to `in_progress` on the first recorded result, attributed
+to the system, which for a bracket event is its draw reaching `started`. The
+Meet-side signal is not wired, for the same kind of reason: it lands in
+`operations`, which may not name `competition`. S-8.1, S-8.2 and S-8.3 keep
+today's behaviour.
+
+`tests/backend/test_lifecycle_effects.py` asserts E-1 through E-7: for each
+effect, the state of every table it touches and the whole ordered list of
+history rows.
+
+Three competition paths keep their raw writes under the snapshot/import
+exclusion stated above — roster import, checkpoint restore, and the derived
+projection — and the appendix names each one and why. Two further writes are
+raw because they are roster-trigger preconditions rather than acts; each records
+the real transition afterwards, from the state the act started in.
+
+`competition` also joined `apps/api/.importlinter` (**SMV2-1**) with contracts
+matching the other domains, so the ADR 0030 seam is named from both sides.

@@ -55,7 +55,7 @@ def test_acknowledgement_retains_operation_and_marks_outbox(monkeypatch) -> None
 
     agent._mark_acknowledged(operations, highest=1)
     with factory() as session:
-        row = session.get(SyncOutbox, operation_id)
+        row = session.get(SyncOutbox, (tournament_id, operation_id))
         assert row.acknowledged_at is not None
         assert row.last_error_code is None
     assert agent.pending_batch(tournament_id, node_id) == []
@@ -68,7 +68,7 @@ def test_network_failure_schedules_bounded_retry(monkeypatch) -> None:
     agent._mark_retry(operations, "network_error")
 
     with factory() as session:
-        row = session.get(SyncOutbox, operation_id)
+        row = session.get(SyncOutbox, (tournament_id, operation_id))
         assert row.attempt_count == 1
         assert row.next_attempt_at is not None
         assert row.acknowledged_at is None
@@ -83,7 +83,7 @@ def test_permanent_protocol_failure_is_retained_and_removed_from_retry_queue(
     agent._mark_permanently_blocked(operations, "command_class_not_granted")
 
     with factory() as session:
-        row = session.get(SyncOutbox, operation_id)
+        row = session.get(SyncOutbox, (tournament_id, operation_id))
         assert row.acknowledged_at is None
         assert row.permanently_blocked_at is not None
         assert row.next_attempt_at is None
@@ -110,7 +110,7 @@ def test_drain_permanent_http_failure_is_blocked_and_visible(
     monkeypatch.setattr(agent, "_post_batch", reject)
     assert agent.drain_once() == 0
     with factory() as session:
-        row = session.get(SyncOutbox, operation_id)
+        row = session.get(SyncOutbox, (tournament_id, operation_id))
         assert row is not None
         assert row.permanently_blocked_at is not None
         assert row.next_attempt_at is None
@@ -141,7 +141,7 @@ def test_drain_retryable_http_failure_remains_queued(
     monkeypatch.setattr(agent.random, "uniform", lambda _low, _high: 1.0)
     assert agent.drain_once() == 0
     with factory() as session:
-        row = session.get(SyncOutbox, operation_id)
+        row = session.get(SyncOutbox, (tournament_id, operation_id))
         assert row is not None
         assert row.permanently_blocked_at is None
         assert row.next_attempt_at is not None

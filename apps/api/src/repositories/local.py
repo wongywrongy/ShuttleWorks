@@ -61,6 +61,7 @@ from core.time_utils import now_iso
 from core.tokens import _hash_token
 from db.models import (
     CLOUD_ONLY_MODULES,
+    TOURNAMENT_STATUSES,
     BracketEvent,
     Entry,
     EntryEvent,
@@ -300,8 +301,17 @@ class _LocalTournamentRepo:
         if row is None:
             return None
         for key, value in fields.items():
-            if key in _ALLOWED_UPDATE_FIELDS:
-                setattr(row, key, value)
+            if key not in _ALLOWED_UPDATE_FIELDS:
+                continue
+            # ``status`` is the one whitelisted field with a closed
+            # vocabulary (``TOURNAMENT_STATUSES``). Refusing here keeps the
+            # rejection the same for every caller, not only the ones that
+            # arrive through a Pydantic body, and keeps
+            # ``ck_tournaments_status`` a backstop rather than the first line
+            # of defence.
+            if key == "status" and value not in TOURNAMENT_STATUSES:
+                raise ValueError(f"invalid workspace status: {value!r}")
+            setattr(row, key, value)
         self.session.commit()
         self.session.refresh(row)
         return row
@@ -426,7 +436,7 @@ class _LocalTournamentRepo:
         if isinstance(general_data, dict):
             if general_data.get("timezone"):
                 row.time_zone = general_data["timezone"]
-            if general_data.get("status") in {"draft", "active", "archived"}:
+            if general_data.get("status") in TOURNAMENT_STATUSES:
                 row.status = general_data["status"]
         dates_setup = setup.get("dates") if isinstance(setup, dict) else None
         dates_data = dates_setup.get("data") if isinstance(dates_setup, dict) else None

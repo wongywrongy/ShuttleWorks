@@ -59,10 +59,13 @@ class BracketResultOutcome:
     replay: bool = False
 
 
-def _get_event_operation(session, operation_id: uuid.UUID):
+def _get_event_operation(session, tournament_id: uuid.UUID, operation_id: uuid.UUID):
     from db.models import EventOperation
 
-    return session.get(EventOperation, operation_id)
+    # Tenant-scoped by identity: the operation log's key is
+    # ``(tournament_id, operation_id)``, so an id one tenant has burned can
+    # never answer another tenant's command as a replay.
+    return session.get(EventOperation, (tournament_id, operation_id))
 
 
 @contextmanager
@@ -165,7 +168,7 @@ class BracketResultService:
             # operation path.  It is read from the existing snapshot for
             # compatibility with workspaces created before operation tables.
             if operation_id is not None:
-                stored_operation = _get_event_operation(db, operation_id)
+                stored_operation = _get_event_operation(db, tournament_id, operation_id)
                 if stored_operation is not None:
                     expected = {"winner_side": winner_side, "finished_at_slot": finished_at_slot,
                                 "walkover": walkover, "score": score, "reason": reason}
@@ -174,7 +177,9 @@ class BracketResultService:
                             or any((stored_operation.payload or {}).get(key) != value
                                    for key, value in expected.items())):
                         raise HTTPException(409, "Command ID was already used for a different result")
-            if operation_id is not None and self._is_replay(db, session, operation_id):
+            if operation_id is not None and self._is_replay(
+                db, session, tournament_id, operation_id
+            ):
                 return BracketResultOutcome(session=session, replay=True)
 
             pu = session.state.play_units.get(play_unit_id)
@@ -331,6 +336,7 @@ class BracketResultService:
     def _is_replay(
         db: Any,
         session: Any,
+        tournament_id: uuid.UUID,
         operation_id: uuid.UUID,
     ) -> bool:
         """Use the operation log as authority, with legacy snapshot fallback.
@@ -343,7 +349,7 @@ class BracketResultService:
         try:
             from db.models import EventOperation
 
-            if db.get(EventOperation, operation_id) is not None:
+            if db.get(EventOperation, (tournament_id, operation_id)) is not None:
                 return True
         except (ImportError, AttributeError):
             # A compatibility composition root may not yet expose operation
@@ -451,7 +457,7 @@ class BracketPinService:
                 status_code=404,
                 detail="no bracket configured for this tournament",
             )
-        existing = repo.execute_query(_get_event_operation, operation_id)
+        existing = repo.execute_query(_get_event_operation, tournament_id, operation_id)
         if existing is not None:
             return self._replay_or_reject(
                 repo, tournament_id, existing, play_unit_id, slot_id, court_id
@@ -530,7 +536,7 @@ class BracketPinService:
         with bracket_unit_of_work(repo) as db:
 
             repo.brackets.lock_tournament(tournament_id)
-            existing = db.get(EventOperation, operation_id)
+            existing = db.get(EventOperation, (tournament_id, operation_id))
             if existing is not None:
                 db.rollback()
                 return self._replay_or_reject(
@@ -658,7 +664,7 @@ class BracketMatchActionService:
                     status_code=404,
                     detail="no bracket configured for this tournament",
                 )
-            if db.get(EventOperation, operation_id) is not None:
+            if db.get(EventOperation, (tournament_id, operation_id)) is not None:
                 return BracketResultOutcome(session=state, replay=True)
             assignment = state.state.assignments.get(play_unit_id)
             if assignment is None:
@@ -808,7 +814,7 @@ class BracketAssignmentService:
                     status_code=404,
                     detail="no bracket configured for this tournament",
                 )
-            if db.get(EventOperation, operation_id) is not None:
+            if db.get(EventOperation, (tournament_id, operation_id)) is not None:
                 return BracketResultOutcome(session=state, replay=True)
             pu = state.state.play_units.get(play_unit_id)
             if pu is None:

@@ -73,13 +73,13 @@ def test_wan_unavailable_then_recovery_acknowledges_without_loss(monkeypatch):
     monkeypatch.setattr(agent, "_post_batch", flaky_post)
     assert agent.drain_once() == 0
     with factory() as session:
-        pending = session.get(SyncOutbox, operation.operation_id)
+        pending = session.get(SyncOutbox, (operation.tournament_id, operation.operation_id))
         assert pending is not None and pending.attempt_count == 1
         pending.next_attempt_at = None
         session.commit()
     assert agent.drain_once() == 1
     with factory() as session:
-        acknowledged = session.get(SyncOutbox, operation.operation_id)
+        acknowledged = session.get(SyncOutbox, (operation.tournament_id, operation.operation_id))
         assert acknowledged is not None and acknowledged.acknowledged_at is not None
     engine.dispose()
 

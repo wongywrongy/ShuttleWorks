@@ -286,7 +286,7 @@ def test_real_event_node_commit_persists_state_operation_and_outbox(monkeypatch,
     assert operation is not None
     assert operation.command_type == application.SCHEDULE_COMMIT_COMMAND
     assert operation.payload["scheduleVersion"] == 5
-    assert session.get(SyncOutbox, operation.operation_id) is not None
+    assert session.get(SyncOutbox, (tournament_id, operation.operation_id)) is not None
 
 
 def test_real_event_node_append_failure_rolls_back_schedule_projection(

@@ -15,6 +15,7 @@ from db.models import (
     Tournament,
     UnitMembership,
 )
+from competition import lifecycle
 
 
 class CompetitionError(ValueError):
@@ -41,7 +42,16 @@ def event_for(session, tournament_id, event_id):
     return event
 
 
-def assert_editable(session, event):
+DRAWN_STATUSES = ("generated", "started", "completed")
+
+
+def has_draw(session, event):
+    """Is this event drawn? The `assert_editable` predicate, given a name.
+
+    S-8.4 needs the same question answered without the refusal: a withdrawal
+    after the draw is allowed, it just ends the unit instead of returning it
+    to the roster queue.
+    """
     draw = (
         session.get(BracketEvent, (event.tournament_id, event.bracket_event_id))
         if event.bracket_event_id
@@ -52,11 +62,15 @@ def assert_editable(session, event):
         .where(
             DrawInstance.tournament_id == event.tournament_id,
             DrawInstance.competition_event_id == event.id,
-            DrawInstance.status.in_(["generated", "started", "completed"]),
+            DrawInstance.status.in_(list(DRAWN_STATUSES)),
         )
         .limit(1)
     )
-    if drawn or (draw is not None and draw.status in {"generated", "started", "completed"}):
+    return bool(drawn) or (draw is not None and draw.status in set(DRAWN_STATUSES))
+
+
+def assert_editable(session, event):
+    if has_draw(session, event):
         raise CompetitionError(
             "DRAW_NOT_EDITABLE", "This event has a draw; roster changes require a draw revision"
         )
@@ -100,7 +114,9 @@ def settle_unit(session, unit):
         raise CompetitionError(
             "ROSTER_SIZE", f"This format allows at most {fmt.roster_max} players"
         )
-    unit.status = "confirmed" if fmt.roster_min <= count <= fmt.roster_max else "pending"
+    lifecycle.set_unit_status(
+        session, unit, "confirmed" if fmt.roster_min <= count <= fmt.roster_max else "pending"
+    )
     session.flush()
 
 
@@ -336,13 +352,15 @@ def rebind(
         )
     before = outcome(member)
     source.version += 1
-    source.status = "pending"
+    lifecycle.set_unit_status(session, source, "pending", actor_id=actor_id)
     if target is None:
         target = CompetitionUnit(
             tournament_id=tournament_id, competition_event_id=target_event_id, status="pending"
         )
         session.add(target)
     else:
+        # Precondition for the roster trigger, not an act: the target is
+        # gaining a member, and `settle_unit` below records what it becomes.
         target.status = "pending"
     session.flush()
     member.unit_id = target.id
@@ -368,15 +386,42 @@ def rebind(
     return outcome(member, "moved")
 
 
-def withdraw_membership(session, tournament_id, entry_id, *, withdraw_unit=False, actor_id=None):
+def withdraw_membership(session, tournament_id, entry_id, *, withdraw_unit=None, actor_id=None):
+    """Take one membership out of its unit.
+
+    **S-8.4.** Before the draw, the unit returns to the roster queue and the
+    desk re-pairs it. After the draw it does not: the unit is withdrawn, its
+    remaining members with it, and re-pairing is an operator act that creates
+    a new unit. ``withdraw_unit`` defaults to that question rather than to a
+    constant; pass it explicitly to override.
+    """
     member = membership_for(session, tournament_id, entry_id)
     if member is None or member.status == "withdrawn":
         return
     unit = session.get(CompetitionUnit, (tournament_id, member.unit_id))
+    if withdraw_unit is None:
+        withdraw_unit = has_draw(
+            session, event_for(session, tournament_id, unit.competition_event_id)
+        )
     unit.version += 1
-    unit.status = "withdrawn" if withdraw_unit else "pending"
+    # Park the unit so the roster trigger allows its memberships to be edited;
+    # the move it really made is recorded below, from where it started.
+    origin = unit.status
+    unit.status = "pending"
     session.flush()
-    member.status = "withdrawn"
+    lifecycle.withdraw_member(session, member, actor_id=actor_id)
+    if withdraw_unit:
+        for other in members_of(session, unit, active=True):
+            lifecycle.withdraw_member(session, other, actor_id=actor_id)
+    session.flush()
+    lifecycle.set_unit_status(
+        session,
+        unit,
+        "withdrawn" if withdraw_unit else "pending",
+        event="member_withdrew_after_draw" if withdraw_unit else None,
+        source_state=origin,
+        actor_id=actor_id,
+    )
     audit(session, tournament_id, "withdraw", outcome(member), actor_id=actor_id)
     session.flush()
     from competition.projection import project
@@ -396,12 +441,17 @@ def withdraw_competition_unit(session, tournament_id, unit_id, *, expected_versi
         return {"id": str(unit.id), "status": unit.status, "version": unit.version}
     if unit.version != expected_version:
         raise CompetitionError("VERSION_CONFLICT", "The unit changed; reload before withdrawing")
+    # Park the unit so the roster trigger allows its memberships to be edited;
+    # the withdrawal itself is recorded below, from where it really started.
+    origin = unit.status
     unit.status = "pending"
     session.flush()
     for member in members_of(session, unit, active=True):
-        member.status = "withdrawn"
+        lifecycle.withdraw_member(session, member, actor_id=actor_id)
     session.flush()
-    unit.status = "withdrawn"
+    lifecycle.set_unit_status(
+        session, unit, "withdrawn", event="withdraw", source_state=origin, actor_id=actor_id
+    )
     audit(session, tournament_id, "withdraw_unit", {"unitId": str(unit.id)}, actor_id=actor_id)
     from competition.projection import project
 
