@@ -71,3 +71,80 @@ ENTRY = machine("entry", "unverified pending waitlisted confirmed rejected withd
     edge("withdraw", "unverified pending waitlisted confirmed", "withdrawn", "entrant", "before_withdrawal_deadline"),
     edge("operator_withdraw", "unverified pending waitlisted confirmed", "withdrawn"),
 ], "state")
+
+# ---- S-3, derived 2026-09-15 ------------------------------------------
+# Six registration/competition graphs plus the two CHECK vocabularies that
+# had transition code and no machine (SMV2-3). Derived from the CHECK
+# constraints, ADR 0030 and the existing write paths; the appendix in
+# docs/explanation/state-machines-v2-defined-plan.md records the derivation
+# line by line, including which paths are deliberately NOT modelled.
+
+PARTNER_INVITATION = machine("partner_invitation", "sent accepted expired revoked",
+                             "sent", "accepted expired revoked", [
+    edge("accept", "sent", "accepted", "entrant",
+         description="The named partner completed their own entry; the token is spent."),
+    edge("revoke", "sent", "revoked", "entrant",
+         description="A fresh invitation supersedes the live one, which is withdrawn with its token."),
+    edge("expire", "sent", "expired", "system",
+         description="The invitation deadline passed. No write path reaches this today; resolution refuses an expired token by deadline rather than by status."),
+])
+
+# No `submit` edge: a submission is created in the state it is meant to
+# hold, and `delete_draft` removes a draft rather than moving it.
+SUBMISSION = machine("submission", "draft submitted cancelled", "draft submitted", "cancelled", [
+    edge("cancel", "submitted", "cancelled",
+         description="The desk cancels a submitted record; its live entries are withdrawn and nothing is refunded."),
+])
+
+COMPETITION_EVENT = machine("competition_event", "scheduled in_progress completed",
+                            "scheduled", "completed", [
+    edge("start", "scheduled", "in_progress",
+         description="S-8.5: the director starts the event explicitly, before any result."),
+    edge("first_result", "scheduled", "in_progress", "system",
+         description="S-8.5: the first recorded result starts the event. Today the draw reaching `started` is that signal."),
+    edge("complete", "scheduled in_progress", "completed", "system",
+         description="The event's draw reached `completed`."),
+])
+
+UNIT = machine("unit", "pending confirmed withdrawn", "pending", "withdrawn", [
+    edge("roster_complete", "pending", "confirmed", "system", description="The roster reached the format's bounds."),
+    edge("member_withdrew", "confirmed", "pending", "system", consequential=False,
+         description="I4: a member left a complete unit before the draw. A queue position, not a decision — the desk re-pairs or withdraws."),
+    edge("member_withdrew_after_draw", "pending confirmed", "withdrawn", "system",
+         description="S-8.4: a member withdrew after the draw was made. Re-pairing is a new unit, so this one ends."),
+    edge("withdraw", "pending confirmed", "withdrawn",
+         description="The director withdraws the whole unit; every active membership goes with it."),
+])
+
+UNIT_MEMBERSHIP = machine("unit_membership", "active withdrawn", "active", "withdrawn", [
+    edge("withdraw", "active", "withdrawn", "system",
+         description="The entry behind this membership was withdrawn, or the unit was."),
+])
+
+# A draw instance MIRRORS the bracket event's status, so every ordered pair
+# is reachable: a re-import can move a started draw back to generated. The
+# graph is permissive on purpose and says so rather than refusing a move the
+# mirror has always made.
+DRAW_INSTANCE = machine("draw_instance", "draft generated started completed superseded",
+                        "draft generated started completed", "superseded", [
+    edge("generate", "draft started completed", "generated", "system"),
+    edge("start", "draft generated completed", "started", "system",
+         description="The first result on a generated event."),
+    edge("complete", "draft generated started", "completed", "system"),
+    edge("supersede", "draft generated started completed", "superseded", "system",
+         description="The event left the drawn states, or was deleted; this revision stops being current."),
+])
+
+
+SYNC_QUARANTINE = machine("sync_quarantine", "open resolved", "open", "resolved", [
+    edge("resolve", "open", "resolved",
+         description="An accepted correction operation supersedes the rejected envelope, which stays as evidence."),
+])
+
+AUTHORITY_EPOCH = machine("authority_epoch", "preparing active closed recovered cloud",
+                          "preparing active cloud", "closed recovered", [
+    edge("ready", "preparing", "active", description="The node presented its readiness proof."),
+    edge("close", "active", "closed", description="Check-in or handoff drained the operation log."),
+    edge("recover", "preparing active", "recovered",
+         description="Lost-node recovery rebuilt from a backup plus the receipted operation suffix."),
+], "state")

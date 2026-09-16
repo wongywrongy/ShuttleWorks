@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core.telemetry.instruments import record_authority_rejection
+from sync.lifecycle import transition_authority
 from sync.errors import ProtocolError
 from sync.service import (
     _active_authority,
@@ -156,7 +157,7 @@ def recover_lost_node(
             "Cloud does not retain every operation required to rebuild this backup",
         )
     recovery_hash = checkpoint_digest(recovery_checkpoint)
-    authority.state = "recovered"
+    transition_authority(session, authority, "recover", actor_id=actor_id, reason=reason)
     authority.closed_at = utcnow()
     authority.recovery_reason = reason
     epoch = _next_epoch(session, tournament_id)

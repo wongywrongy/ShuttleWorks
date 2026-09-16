@@ -75,6 +75,7 @@ root_packages =
     operations
     display
     entries
+    competition
     solve_rail
     ops
     scheduler_core
@@ -100,11 +101,26 @@ forbidden_modules =
     operations
     display
     entries
+    competition
     solve_rail
     ops
 ignore_imports =
     ; DEBT(REORG-1) L2 - see the header.
     repositories.local -> operations.match_state
+    ; DEBT(SMV2-1) L4 - the repository materializes the canonical competition
+    ; records inside the command transaction, exactly as L2 applies the match
+    ; transition there. Same shape, same reason: the transaction boundary is
+    ; genuinely at the repository and the records are genuinely the competition
+    ; service's. All three are function-local imports, like L2, and deferring
+    ; an import hides a cycle from Python, not from the architecture.
+    ;
+    ; These three edges also carry the only transitive reports this contract
+    ; would otherwise make against entries, identity and shared: competition
+    ; reaches all three legitimately from above persistence, and the repository
+    ; inherits them only through these calls.
+    repositories.local -> competition.draws
+    repositories.local -> competition.roster
+    repositories.local -> competition.projection
     ; DEBT(REORG-1) L1 - see the header. Persistence reads settings, settings
     ; reaches the CSRF check, and the CSRF check resolves a session. Neither
     ; db nor repositories names identity; they inherit it through the kernel.
@@ -145,6 +161,7 @@ forbidden_modules =
     operations
     display
     entries
+    competition
     solve_rail
     ops
     repositories
@@ -177,6 +194,7 @@ forbidden_modules =
     operations
     display
     entries
+    competition
     solve_rail
     ops
 
@@ -232,6 +250,7 @@ forbidden_modules =
     operations
     display
     entries
+    competition
     solve_rail
     ops
     repositories
@@ -244,10 +263,11 @@ forbidden_modules =
 ; ---------------------------------------------------------------------------
 
 ; Names: bracket (draw state on the workspace record), identity (membership and
-; invites), meet (pool standings), operations (match signals for the Hub).
+; invites), meet (pool standings), operations (match signals for the Hub), and
+; competition (its error type, to answer a roster refusal at the control plane).
 ; tournaments.py is the control plane; aggregating is its job.
 [importlinter:contract:workspaces-independence]
-name = Workspaces names only Bracket, Identity, Meet and Operations
+name = Workspaces names only Bracket, Identity, Meet, Operations and Competition
 type = forbidden
 allow_indirect_imports = True
 source_modules =
@@ -267,6 +287,7 @@ source_modules =
     identity
 forbidden_modules =
     workspaces
+    competition
     meet
     bracket
     operations
@@ -288,6 +309,7 @@ forbidden_modules =
     bracket
     display
     entries
+    competition
     ops
 
 ; Names nothing. Bracket reaches only shared/ and the kernel.
@@ -304,6 +326,7 @@ forbidden_modules =
     operations
     display
     entries
+    competition
     solve_rail
     ops
 
@@ -321,6 +344,7 @@ forbidden_modules =
     meet
     display
     entries
+    competition
     solve_rail
     ops
 
@@ -337,6 +361,7 @@ forbidden_modules =
     identity
     meet
     entries
+    competition
     solve_rail
     ops
 
@@ -351,17 +376,20 @@ source_modules =
     bracket
     operations
     entries
+    competition
     solve_rail
     ops
 forbidden_modules =
     display
 
 ; Names: bracket, because the public site publishes draws, seeds and winners
-; (SP-P7); and identity, to resolve the signed-in entrant on the public page.
+; (SP-P7); identity, to resolve the signed-in entrant on the public page; and
+; competition, which is the seam ADR 0030 draws - a confirmed entry becomes a
+; unit membership, and a withdrawal takes it back out again.
 ; It no longer names identity for the abuse throttle - ruling R1 moved that to
 ; core.throttle, which is what deleted the Phase 2 allowance.
 [importlinter:contract:entries-independence]
-name = Entries names only Bracket and Identity
+name = Entries names only Bracket, Identity and Competition
 type = forbidden
 allow_indirect_imports = True
 source_modules =
@@ -388,6 +416,7 @@ forbidden_modules =
     operations
     display
     entries
+    competition
     ops
 
 ; Names: operations, for the conflict metrics /health/metrics publishes, and
@@ -407,3 +436,24 @@ forbidden_modules =
     bracket
     display
     entries
+    competition
+
+; Names: entries, for the registration player id and roster prefix a bound
+; membership is derived from - the other half of the ADR 0030 seam that
+; `entries-independence` names from its side. Competition is the realization
+; layer: it reaches persistence and the kernel and nothing else above it.
+[importlinter:contract:competition-independence]
+name = Competition names only Entries
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    competition
+forbidden_modules =
+    workspaces
+    identity
+    meet
+    bracket
+    operations
+    display
+    solve_rail
+    ops

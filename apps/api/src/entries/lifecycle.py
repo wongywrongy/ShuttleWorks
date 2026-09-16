@@ -46,8 +46,8 @@ from typing import Any, Iterable, Optional, Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, object_session
 
-from db.models import Entry, EntryEvent, EntryPlayer, Submission
-from core.state_machines import ENTRY
+from db.models import Entry, EntryEvent, EntryPlayer, PartnerInvitation, Submission
+from core.state_machines import ENTRY, PARTNER_INVITATION, SUBMISSION
 from core.state_machine import GUARDS, TransitionError, apply, check
 
 # ---- the vocabulary ---------------------------------------------------
@@ -252,8 +252,10 @@ def withdraw(
     operator decides the exception.
 
     A bound entry keeps its membership row. Withdrawal marks that membership
-    withdrawn and returns its unit to pending; a published draw keeps its unit
-    reference for the director to reconcile explicitly.
+    withdrawn; before the draw its unit returns to pending for the desk to
+    re-pair, and after the draw the unit is withdrawn instead (S-8.4) — a
+    drawn unit that lost a member is not a roster gap, it is a unit that
+    cannot play, and re-pairing is a new unit.
     """
     if by_operator:
         if entry.state not in LIVE_STATES:
@@ -511,3 +513,51 @@ def confirm(session, entry, *, actor_id=None):
     transition_entry(entry, "confirm", "operator", session=session, actor_id=actor_id)
     recompute_reasons(session, entry)
     return entry
+
+
+# ---- the two registration graphs S-3 adds -----------------------------
+#
+# Definitions live in ``core.state_machines`` with the other six, because the
+# exporter reads one registry and that module must stay free of domain
+# imports. The wrappers, like ``transition_entry`` above, live here.
+
+
+def _transition(machine, row, event, actor, *, session, actor_id=None,
+                reason=None, source_state=None):
+    """Apply ``event`` to ``row`` and persist the history in this transaction.
+
+    ``source_state`` is the claim adapter: where a guarded ``UPDATE`` has
+    already spent the row (the partner-invitation token, the solve-job claim),
+    the mutation is real and the history still has to name the state the act
+    started from. The adapter carries that source without undoing the SQL.
+    """
+    session = session if session is not None else object_session(row)
+    subject = row
+    if source_state is not None and getattr(row, machine.state_attribute) != source_state:
+        from types import SimpleNamespace
+        subject = SimpleNamespace(id=row.id, tournament_id=row.tournament_id,
+                                  status=source_state, __tablename__=row.__tablename__)
+    try:
+        record = apply(machine, subject, event, actor, guards=GUARDS, session=session,
+                       actor_id=actor_id, reason=reason)
+    except TransitionError as exc:
+        raise LifecycleError(exc.code, exc.message) from exc
+    if subject is not row:
+        setattr(row, machine.state_attribute, getattr(subject, machine.state_attribute))
+    if session is not None:
+        record.persist(session)
+    return record
+
+
+def transition_invitation(invitation: PartnerInvitation, event: str, *, session=None,
+                          actor: str = "entrant", actor_id=None, source_state=None):
+    """``sent → accepted | revoked | expired``. See ``PARTNER_INVITATION``."""
+    return _transition(PARTNER_INVITATION, invitation, event, actor, session=session,
+                       actor_id=actor_id, source_state=source_state)
+
+
+def transition_submission(submission: Submission, event: str, *, session=None,
+                          actor: str = "operator", actor_id=None, reason=None):
+    """``submitted → cancelled``. See ``SUBMISSION``."""
+    return _transition(SUBMISSION, submission, event, actor, session=session,
+                       actor_id=actor_id, reason=reason)

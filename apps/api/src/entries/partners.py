@@ -111,7 +111,7 @@ def nominate(session: Session, entry: Entry, email: str) -> Optional[str]:
         if invitation.status == "accepted":
             raise InvitationUnavailable("This entry already has an accepted partner")
         if invitation.status == "sent":
-            invitation.status = "revoked"
+            lifecycle.transition_invitation(invitation, "revoke", session=session)
             invitation.token_hash = None
     session.flush()
     token = secrets.token_urlsafe(_TOKEN_BYTES)
@@ -281,7 +281,9 @@ def accept(
     partner_entry = result.entries[0]
     invitation.accepted_entry_id = partner_entry.id
     invitation.accepted_at = now
-    invitation.status = "accepted"
+    # The claiming UPDATE above spent the token by writing `revoked`; the act
+    # started from `sent`, which is what the history has to say.
+    lifecycle.transition_invitation(invitation, "accept", session=session, source_state="sent")
     invitation.token_hash = None
     entry.pending_reasons = _without(entry.pending_reasons, AWAITING_PARTNER)
     partner_entry.pending_reasons = _without(partner_entry.pending_reasons, AWAITING_PARTNER)

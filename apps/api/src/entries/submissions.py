@@ -698,4 +698,4 @@ def cancel_submission(session, submission):
         if entry.state in lifecycle.LIVE_STATES:
             event = session.get(EntryEvent, (entry.tournament_id, entry.entry_event_id))
             lifecycle.withdraw(session, entry, event, by_operator=True)
-    submission.status = 'cancelled'
+    lifecycle.transition_submission(submission, 'cancel', session=session)

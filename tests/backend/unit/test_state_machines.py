@@ -9,9 +9,11 @@ from core.state_machine import REGISTRY, Machine, Transition, TransitionError, a
 from core.state_machines import MATCH
 
 MACHINES = tuple(REGISTRY.values())
-# I4: expanding this set requires explicit review. unit.member_withdrew belongs
-# to the schema-dependent competition graph, not the four-machine first slice.
-NON_CONSEQUENTIAL = {"entry.waitlist_at_cap", "entry.verify", "solve_job.reap"}
+# I4: expanding this set requires explicit review. unit.member_withdrew is the
+# fourth and last entry the v2 plan names: a complete unit that loses a member
+# returns to the roster queue, which refuses nobody and is operator-reversible.
+NON_CONSEQUENTIAL = {"entry.waitlist_at_cap", "entry.verify", "solve_job.reap",
+                     "unit.member_withdrew"}
 
 
 @pytest.mark.parametrize("machine", MACHINES, ids=lambda m: m.name)
@@ -124,6 +126,48 @@ def test_existing_schema_vocabularies_match_graphs():
     constraint = next(c for c in Entry.__table__.constraints
                       if isinstance(c, CheckConstraint) and c.name == "ck_entries_state")
     assert ENTRY.states == set(re.findall(r"'([^']+)'", str(constraint.sqltext)))
+
+
+# S-3's acceptance criterion: every state the schema can hold appears in
+# exactly one machine. The map is explicit because the link between a table and
+# its graph is a decision, not something to infer from a name that happens to
+# match — `competition_units` is governed by the machine called `unit`.
+SCHEMA_VOCABULARIES = {
+    "matches": "match",
+    "entries": "entry",
+    "submissions": "submission",
+    "partner_invitations": "partner_invitation",
+    "competition_events": "competition_event",
+    "competition_units": "unit",
+    "unit_memberships": "unit_membership",
+    "draw_instances": "draw_instance",
+    "sync_quarantine": "sync_quarantine",
+    "tournament_authority_epochs": "authority_epoch",
+    "node_operator_enrollments": "node_operator_enrollment",
+    "operator_mfa_factors": "operator_mfa_factor",
+}
+
+
+def test_every_check_state_appears_in_exactly_one_machine():
+    import re
+    import sqlalchemy as sa
+    from db.models import Base
+
+    found = {}
+    for name, table in Base.metadata.tables.items():
+        for constraint in table.constraints:
+            if not isinstance(constraint, sa.CheckConstraint):
+                continue
+            match = re.fullmatch(r"(status|state) IN \(([^)]*)\)", str(constraint.sqltext).strip())
+            if match:
+                found[name] = (match.group(1), set(re.findall(r"'([^']+)'", match.group(2))))
+    assert set(found) == set(SCHEMA_VOCABULARIES)
+    for table, (attribute, states) in found.items():
+        machine = REGISTRY[SCHEMA_VOCABULARIES[table]]
+        assert machine.state_attribute == attribute, table
+        assert machine.states == states, table
+    # Exactly one: no two machines claim the same table's vocabulary.
+    assert len(set(SCHEMA_VOCABULARIES.values())) == len(SCHEMA_VOCABULARIES)
 
 
 def test_export_check_detects_drift_without_overwriting(tmp_path):
