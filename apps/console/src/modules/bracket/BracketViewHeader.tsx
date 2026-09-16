@@ -5,8 +5,8 @@ import { useTournamentId } from "../../hooks/useTournamentId";
 import { UTILITY_BUTTON } from "../../lib/utils";
 import { ActionsBar } from "../../components/control-plane";
 import { Seg, type SegOption } from "../../platform/engine-config/SettingsControls";
-import { formatLabel, disciplineLabel } from "./bracketLabels";
-import { descriptorFor } from "./formatRegistry";
+import { disciplineLabel } from "../../platform/domain/bracketLabels";
+import { descriptorFor, formatLabel } from "./formatRegistry";
 import type { BracketLayoutMode } from "./DrawView";
 import { BackCaret, NAV_LINK_ROW } from "../../components/NavCaret";
 

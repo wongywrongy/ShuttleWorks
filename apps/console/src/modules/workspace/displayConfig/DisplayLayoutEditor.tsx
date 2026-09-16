@@ -34,7 +34,7 @@
  * Below the tv* rows, a "Court order and visibility" list drives
  * `courtOrder`/`hiddenCourts` — the same two config fields
  * `MeetDisplayPage`/`CourtsView` apply to the real board (see
- * `publicDisplay/courtLayout.ts`). Drag-reorder + hide toggle mirror the
+ * `lib/courtLayout.ts`). Drag-reorder + hide toggle mirror the
  * position-grid column-management pattern (`meet/roster/positionGrid/
  * GridHeader.tsx` + `GridTable.tsx`): DndContext/SortableContext hoisted
  * around the whole list, `useSortable` per row, `arrayMove` on drop, and
@@ -78,8 +78,8 @@ import { useMatchStateSync } from '../../../hooks/useMatchStateSync';
 import { useMatchStateStore } from '../../../store/matchStateStore';
 import type { TournamentConfig } from '../../../api/dto';
 import { Row, Seg, Section } from '../../../platform/engine-config/SettingsControls';
-import { orderCourts, courtsWithActiveMatch, reorderIds } from '../../display/publicDisplay/courtLayout';
-import { DEFAULT_DWELL_SECONDS } from '../../display/publicDisplay/rotation';
+import { orderCourts, courtsWithActiveMatch, reorderIds } from '../../../lib/courtLayout';
+import { DEFAULT_DWELL_SECONDS } from '../../../lib/boardRotation';
 
 // Same required-field shape as BracketEngineSection's FALLBACK_CONFIG — the
 // TournamentConfig fields with no `?` in the DTO.

@@ -117,6 +117,27 @@ class MatchMetricsDTO(BaseModel):
     disputedCourts: int = 0
 
 
+class EventProgressDTO(BaseModel):
+    """One event's play-through, for the live Overview panel (debt-log D16).
+
+    "How far along is each event" is the second question a live day asks
+    after "is anything on court", and it was the one the Overview could not
+    answer: the workspace-level triplet (played / remaining / total) says the
+    day is half done without saying which half. The counts come from the rows
+    already loaded here for ``matches.played`` — no extra query, and by
+    construction the per-event totals sum to the workspace total.
+
+    ``code`` is the operator-facing event code ("MS", "XD"); ``label`` is the
+    fuller name where the engine has one, and is absent rather than a repeat
+    of the code.
+    """
+
+    code: str
+    label: Optional[str] = None
+    total: int = 0
+    played: int = 0
+
+
 class NextMatchDTO(BaseModel):
     """One active or upcoming match for the inspector's "Next up" list.
 
@@ -170,6 +191,11 @@ class EntriesMetricsDTO(BaseModel):
     #: True once every dated event's window has passed. The panels key on
     #: this rather than re-deriving it from dates they would have to be sent.
     closed: bool = False
+    #: The draws publication gate. A flag, not a count, but it belongs to the
+    #: entry page like every other field here, and the ready-phase readiness
+    #: checklist needs "is the draw public yet" in the same payload it reads
+    #: "are entries closed" from (debt-log D16).
+    drawsPublished: bool = False
 
 
 class WorkspaceSignalsDTO(BaseModel):
@@ -192,6 +218,10 @@ class WorkspaceSignalsDTO(BaseModel):
     collaboration: CollaborationDTO
     matches: MatchMetricsDTO = Field(default_factory=MatchMetricsDTO)
     nextUp: List[NextMatchDTO] = Field(default_factory=list)
+    #: Per-event play-through for the live panel (D16). Empty where the
+    #: engine's rows carry no event coordinate — an empty list is the honest
+    #: answer, and the panel renders nothing rather than one nameless bar.
+    events: List[EventProgressDTO] = Field(default_factory=list)
     # Lifecycle phase, derived from real match/result state (additive — the
     # ``status`` column stays operator-managed and drives ``health``):
     #   setup    — still being configured (no schedule / draw yet)
@@ -747,7 +777,99 @@ def _entries_metrics(entries: Optional[EntriesFacts]) -> Optional[EntriesMetrics
         confirmed=entries.confirmed,
         uncommitted=entries.uncommitted_confirmed,
         closed=entries.entries_closed,
+        drawsPublished=entries.draws_published,
     )
+
+
+#: Most events one payload will describe. A workspace with more than this
+#: many draws has a Matches destination for the detail; the Overview panel is
+#: a glance, and the Hub renders these signals for every workspace at once.
+_MAX_EVENT_ROWS = 24
+
+
+def _meet_event_code(match: dict) -> Optional[str]:
+    """The event code a meet match belongs to, or ``None``.
+
+    ``eventCode`` when the blob carries it; otherwise the LETTERS of the
+    authored ``eventRank`` ("MS1" -> "MS"), the same seam ``_meet_identity``
+    decomposes. A machine match id is never split — a match with neither
+    coordinate simply has no event, and is left out of the per-event counts
+    rather than being filed under a made-up one.
+    """
+    code = _first(match, "eventCode", "event_code")
+    if code:
+        return str(code).strip() or None
+    rank = _first(match, "eventRank", "event_rank")
+    if rank:
+        parts = re.match(r"^([A-Za-z]+)\d*$", str(rank).strip())
+        if parts:
+            return parts.group(1)
+    return None
+
+
+def _ordered_progress(rows: dict) -> List[EventProgressDTO]:
+    """``{code: (label, total, played)}`` -> a bounded, code-ordered list."""
+    return [
+        EventProgressDTO(code=code, label=label, total=total, played=played)
+        for code, (label, total, played) in sorted(rows.items())
+    ][:_MAX_EVENT_ROWS]
+
+
+def _meet_event_progress(data: dict, status_by_id: dict) -> List[EventProgressDTO]:
+    """Per-event played/total for a meet, from the already-loaded blob."""
+    rows: dict = {}
+    for match in data.get("matches") or []:
+        if not isinstance(match, dict):
+            continue
+        code = _meet_event_code(match)
+        if not code:
+            continue
+        label, total, played = rows.get(code, (None, 0, 0))
+        rows[code] = (
+            label,
+            total + 1,
+            played + (1 if status_by_id.get(match.get("id")) in _TERMINAL else 0),
+        )
+    return _ordered_progress(rows)
+
+
+def _bracket_event_progress(data: dict, counts: RowCounts) -> List[EventProgressDTO]:
+    """Per-event played/total for a bracket draw.
+
+    A bracket event's id IS its operator-facing code ("MS"), so the code needs
+    no derivation; ``discipline`` is the fuller name and is dropped when it
+    only repeats the code. ``played`` is the recorded-result set — the same
+    truth ``matches.played`` counts, so the rows cannot disagree with the
+    total they sit under.
+    """
+    session = data.get("bracket_session") or {}
+    units = session.get("play_units") or data.get("play_units") or []
+    if not units:
+        units = list(counts.bracket_units.values())
+    labels = {
+        str(event.get("id")): str(event.get("discipline") or "") or None
+        for event in (session.get("events") or data.get("bracket_events") or [])
+        if isinstance(event, dict)
+    }
+    resolved = counts.bracket_resolved_ids
+    rows: dict = {}
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        code = str(_first(unit, "event_id", "eventId") or "").strip()
+        if not code:
+            continue
+        # The grouped repository read spells the discipline ``event_code`` on
+        # the unit itself; the session blob carries it on the event. Either
+        # source, same fact.
+        label = labels.get(code) or str(_first(unit, "event_code", "eventCode") or "")
+        _, total, played = rows.get(code, (None, 0, 0))
+        rows[code] = (
+            label if label and label != code else None,
+            total + 1,
+            played + (1 if str(unit.get("id")) in resolved else 0),
+        )
+    return _ordered_progress(rows)
 
 
 def _derive_phase(data: dict, counts: RowCounts) -> str:
@@ -859,10 +981,12 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
     data_blob = getattr(row, "data", None) or {}
     if kind == "bracket":
         matches_metrics, next_up = _bracket_match_signals(data_blob, counts, to_do)
+        event_progress = _bracket_event_progress(data_blob, counts)
     else:
         matches_metrics, next_up = _meet_match_signals(
             data_blob, to_do, counts.match_status_by_id
         )
+        event_progress = _meet_event_progress(data_blob, counts.match_status_by_id)
 
     play_phase = _derive_phase(data_blob, counts)
     entry_phase = _entries_phase(counts.entries)
@@ -883,6 +1007,7 @@ def build_signals(row, modules, counts: RowCounts) -> WorkspaceSignalsDTO:
         collaboration=collaboration,
         matches=matches_metrics,
         nextUp=next_up,
+        events=event_progress,
         # E4: the entries phases are a PREFIX on the existing four, so the
         # play-state derivation is untouched and is what answers once the
         # desk is clear.

@@ -17,7 +17,7 @@ import {
   playUnitSideLabels,
   buildPlayUnitIdentities,
   buildPlayUnitLabels,
-} from '../bracket/bracketLabels';
+} from '../../platform/domain/bracketLabels';
 import { msToSlot, parseMatchStartMs, hasStaleActualTiming } from '../../lib/time';
 
 /** @deprecated Use `Match` from `platform/domain/match`. Kept as an alias. */

@@ -33,6 +33,7 @@ components/
 │   └── LockRibbon.tsx    # tiered lock chip (soft: edits clear schedule / hard: read-only, draw in play)
 ├── ActiveChoice.tsx      # the ONE selected-state treatment (see selectedContrastContract)
 ├── AppStatusPopover.tsx  # header status popover (last save, backups, etc.)
+├── boardChrome.tsx       # venue-board mark, banner, clock + accent resolver (Display board + Workspace board editor)
 ├── ErrorBoundary.tsx
 ├── InlineSearch.tsx      # search input wired to useSearchParamState
 ├── SchoolChip.tsx        # per-school accent chip (uses lib/schoolAccent.ts)

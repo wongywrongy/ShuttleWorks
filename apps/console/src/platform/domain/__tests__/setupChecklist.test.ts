@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { TournamentSummaryDTO, WorkspaceSignalsDTO } from '../../../api/dto';
-import { buildChecklist, checklistProgress, setupLabel, stepTarget } from '../setupChecklist';
+import {
+  buildChecklist,
+  buildReadinessChecklist,
+  checklistProgress,
+  setupLabel,
+  stepTarget,
+} from '../setupChecklist';
 
 const sig = (over: Partial<WorkspaceSignalsDTO> = {}): WorkspaceSignalsDTO => ({
   health: 'attention',
@@ -121,6 +127,100 @@ describe('checklistProgress', () => {
 
   it('is null with no steps', () => {
     expect(checklistProgress([])).toBeNull();
+  });
+});
+
+// D16: the READY phase asks a different question from setup — not "is this
+// workspace configured" but "is the day ready to run".
+describe('buildReadinessChecklist', () => {
+  it('returns nothing without signals (older payloads)', () => {
+    expect(buildReadinessChecklist(ws({ signals: undefined }))).toEqual([]);
+    expect(buildReadinessChecklist(null)).toEqual([]);
+  });
+
+  it('a meet with no entry page owes two checks, each routed', () => {
+    const steps = buildReadinessChecklist(
+      ws({
+        signals: sig({
+          setup: { scheduled: false },
+          matches: { total: 6, scheduled: 4, toDo: 0 },
+        }),
+      }),
+    );
+    expect(steps.map((s) => s.key)).toEqual(['draws', 'courts']);
+    expect(steps[0].label).toBe('Schedule generated');
+    expect(steps[0].action).toEqual({ label: 'Generate schedule', segment: 'schedule' });
+    expect(steps[1].done).toBe(false);
+    expect(steps[1].reason).toBe('4 of 6 matches have a court and a time');
+    expect(steps[1].action?.segment).toBe('schedule');
+  });
+
+  it('a bracket names draws and routes to the bracket surfaces', () => {
+    const steps = buildReadinessChecklist(
+      ws({
+        kind: 'bracket',
+        signals: sig({
+          setup: { bracketBuilt: true },
+          matches: { total: 4, scheduled: 4, toDo: 0 },
+        }),
+      }),
+    );
+    expect(steps[0].label).toBe('Draws generated');
+    expect(steps[0].done).toBe(true);
+    // A passed check offers no action — there is nothing to fix.
+    expect(steps[0].action).toBeNull();
+    expect(steps[1].done).toBe(true);
+    expect(buildReadinessChecklist(
+      ws({
+        kind: 'bracket',
+        signals: sig({ setup: {}, matches: { total: 4, scheduled: 0, toDo: 0 } }),
+      }),
+    )[0].action).toEqual({ label: 'Build the bracket', segment: 'bracket-draws' });
+  });
+
+  it('the entry-page checks appear only where there IS an entry page', () => {
+    const withPage = buildReadinessChecklist(
+      ws({
+        signals: sig({
+          setup: { scheduled: true },
+          matches: { total: 2, scheduled: 2, toDo: 0 },
+          entries: {
+            total: 3, pending: 0, waitlisted: 0, confirmed: 3, uncommitted: 0,
+            closed: false, drawsPublished: true,
+          },
+        }),
+      }),
+    );
+    expect(withPage.map((s) => s.key)).toEqual([
+      'draws', 'courts', 'publication', 'entriesClosed',
+    ]);
+    const publication = withPage.find((s) => s.key === 'publication');
+    expect(publication?.done).toBe(true);
+    const closed = withPage.find((s) => s.key === 'entriesClosed');
+    expect(closed?.done).toBe(false);
+    expect(closed?.action).toEqual({ label: 'Open the entries desk', segment: 'entries' });
+
+    const noPage = buildReadinessChecklist(
+      ws({ signals: sig({ setup: {}, matches: { total: 0, scheduled: 0, toDo: 0 } }) }),
+    );
+    expect(noPage.map((s) => s.key)).toEqual(['draws', 'courts']);
+  });
+
+  it('never blocks a row: the checks are independent, not a sequence', () => {
+    const steps = buildReadinessChecklist(
+      ws({
+        signals: sig({
+          setup: {},
+          matches: { total: 0, scheduled: 0, toDo: 0 },
+          entries: {
+            total: 0, pending: 0, waitlisted: 0, confirmed: 0, uncommitted: 0, closed: false,
+          },
+        }),
+      }),
+    );
+    expect(steps.every((s) => !s.blocked)).toBe(true);
+    expect(steps.every((s) => s.action !== null)).toBe(true);
+    expect(checklistProgress(steps)).toEqual({ ready: 0, total: 4 });
   });
 });
 

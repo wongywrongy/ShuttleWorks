@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DRAW_FORMATS, descriptorFor } from '../formatRegistry';
+import { DRAW_FORMATS, descriptorFor, formatLabel } from '../formatRegistry';
 
 describe('formatRegistry — DRAW_FORMATS', () => {
   it('registers all 8 formats in picker order', () => {
@@ -86,5 +86,20 @@ describe('descriptorFor', () => {
     expect(descriptorFor('mystery')).toBeUndefined();
     expect(descriptorFor(undefined)).toBeUndefined();
     expect(descriptorFor('')).toBeUndefined();
+  });
+});
+
+describe('formatLabel', () => {
+  it('delegates to the format registry for every known id', () => {
+    expect(formatLabel('se')).toBe('Single elimination');
+    expect(formatLabel('rr')).toBe('Round robin');
+    expect(formatLabel('de')).toBe('Double elimination');
+    expect(formatLabel('swiss')).toBe('Swiss');
+  });
+
+  it('passes unknown ids through and blanks nullish input', () => {
+    expect(formatLabel('mystery')).toBe('mystery');
+    expect(formatLabel(null)).toBe('');
+    expect(formatLabel(undefined)).toBe('');
   });
 });

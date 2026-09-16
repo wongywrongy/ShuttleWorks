@@ -8,7 +8,7 @@ import {
   dwellSecondsFor,
   rotationSlides,
   slideAt,
-} from '../rotation';
+} from '../boardRotation';
 
 const ALL = { standings: true, upNext: true };
 

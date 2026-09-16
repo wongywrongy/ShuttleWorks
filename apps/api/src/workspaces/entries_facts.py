@@ -79,6 +79,10 @@ class EntriesFacts:
     #: The director has opened the page. Not the same as an event being open:
     #: a page can be open while every event's window has closed.
     page_open: bool = False
+    #: The draws publication gate (SP-P7 §4) — read, never decided, here. The
+    #: ready-phase readiness checklist asks "is the draw public yet", and the
+    #: page row already loaded for the counts is where that answer lives.
+    draws_published: bool = False
     #: Any event currently inside its own opens/closes window.
     any_event_open: bool = False
     #: The earliest close still in the future, for "closing soon". None when
@@ -181,6 +185,7 @@ def build_entries_facts(
 
     return EntriesFacts(
         page_open=bool(getattr(page, "is_open", False)),
+        draws_published=bool(getattr(page, "draws_published", False)),
         any_event_open=bool(open_events),
         next_close_at=min(future_closes) if future_closes else None,
         entries_closed=entries_closed,

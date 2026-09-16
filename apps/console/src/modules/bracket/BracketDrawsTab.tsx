@@ -49,7 +49,7 @@ import {
   buildEventUpsertPayload,
   type BracketEventDTO,
 } from "./eventUpsertPayload";
-import { formatLabel, disciplineLabel } from "./bracketLabels";
+import { disciplineLabel } from "../../platform/domain/bracketLabels";
 import { useConfirmClick } from "../../hooks/useConfirmClick";
 import { workflowHref } from "../../platform/product-shell/workspaceNav";
 import {
@@ -60,6 +60,7 @@ import {
   CREATABLE_FORMATS,
   consolationPoliciesFor,
   descriptorFor,
+  formatLabel,
   type ConsolationPolicy,
   type FormatConfigField,
 } from "./formatRegistry";

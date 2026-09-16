@@ -10,7 +10,8 @@
 import { DetailPanel } from '../../components/control-plane';
 import { ParticipantPicker, type PickedSingle, type PickedPair } from './ParticipantPicker';
 import type { BracketEventDTO } from './eventUpsertPayload';
-import { formatLabel, disciplineLabel } from './bracketLabels';
+import { disciplineLabel } from '../../platform/domain/bracketLabels';
+import { formatLabel } from './formatRegistry';
 import { isDoublesCode } from '../../lib/doubles';
 import type { BracketPairingCommand } from './pairingMutation';
 

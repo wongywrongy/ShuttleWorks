@@ -16,11 +16,12 @@
  * There are now two rules over the same boundary:
  *
  *   no-cross-module          ERROR   any edge from a file not named below
- *   no-cross-module-debt     WARN    the three known clusters, enumerated
+ *   no-cross-module-debt     WARN    the known clusters, enumerated
  *
- * So a NEW cross-module import fails the build, while the sixteen existing
- * edges stay visible and un-fixed — this program is behaviour-preserving and
- * clearing them is a design decision, not a path update (debt-log D3, ADR 0011).
+ * So a NEW cross-module import fails the build, while the existing edges stay
+ * visible — clearing one is a design decision, not a path update (debt-log D3,
+ * ADR 0011). The ratchet started at sixteen edges in three clusters; D3 was
+ * ruled on 2026-09-15 and it now stands at nine in two, both of them seams.
  *
  * Deleting an entry from KNOWN_CROSS_MODULE below is how a cluster gets
  * retired: fix the edges, delete the line, and the error rule covers it. The
@@ -29,31 +30,49 @@
  */
 
 /**
- * The three clusters that exist today, by SOURCE. Each is a decision owed, not
- * an oversight — see debt-log D3.
+ * The clusters that exist today, by SOURCE — see debt-log D3, ruled on
+ * 2026-09-15. The workspace -> display cluster is RETIRED: the board editor
+ * shared the public board's pure layout/rotation maths and its chrome, so
+ * those three modules moved to `lib/courtLayout.ts`, `lib/boardRotation.ts`
+ * and `components/boardChrome.tsx` and neither module reaches into the other
+ * any more. What remains is not oversight, it is a seam each way.
  *
- *  1. workspace -> settings   an aggregator edge: WorkspaceShellSurface hosts
- *                             the six settings tabs it renders.
- *  2. workspace -> display    the display-config board reuses the public
- *                             board's real renderer, for visual fidelity.
- *  3. operations -> bracket   the genuine debt: Operations reaches into
- *                             Bracket's UI (MatchDetailPanel,
- *                             BracketScheduleModal, bracketLabels). Note the
- *                             API has NO such edge — import-linter contract 4
- *                             pins its absence — so this is a console-only
- *                             coupling that the backend seam map does not have.
+ *  1. workspace -> settings   seven MOUNT edges: the shell routes the
+ *                             workspace admin segments (`ws-members`,
+ *                             `ws-sharing`, `ws-modules`, `ws-sync`,
+ *                             `ws-settings`) to the settings surfaces that
+ *                             answer them. Each tab has exactly ONE consumer,
+ *                             so CODE_HEALTH 1b's promote-when-shared rule
+ *                             does not fire — there is nothing shared to move,
+ *                             and `components/` is not a parking space for
+ *                             single-consumer product surfaces. It is the same
+ *                             act as `ModuleOutlet` mounting `MeetProduct`,
+ *                             performed from a module instead of `app/`.
+ *  2. operations -> bracket   two RENDER edges: the Run surface mounts
+ *                             Bracket's own run controls in the shared
+ *                             MatchInspector, and the Plan board opens
+ *                             Bracket's schedule modal. Both are one module
+ *                             deliberately mounting another module's control
+ *                             — the control does bracket writes through the
+ *                             bracket API, so there is no shared home to move
+ *                             it to that would not just relabel the coupling.
+ *                             The one piece that WAS shared, `bracketLabels`,
+ *                             moved to `platform/domain/bracketLabels.ts`
+ *                             (2026-09-15), so `opsBlock` no longer reaches
+ *                             into Bracket at all. Note the API has NO such
+ *                             edge — import-linter contract 4 pins its
+ *                             absence — so this stays a console-only
+ *                             coupling that the backend seam map does not
+ *                             have.
  */
 // The module name is a CAPTURE GROUP in every entry, and that is load-bearing:
 // the debt rule below excludes same-module imports with `^src/modules/$1/`, and
 // `$1` binds to group 1 of the `from` pattern that matched. Written without the
-// group, the rule reported every internal import these six files make -- 51
+// group, the rule reported every internal import these files make -- 51
 // warnings instead of 16 -- which reads as a boundary problem and is not one.
 const KNOWN_CROSS_MODULE = [
   '^src/modules/(workspace)/WorkspaceShellSurface[.]tsx$',
-  '^src/modules/(workspace)/displayConfig/',
   '^src/modules/(operations)/OperationsProduct[.]tsx$',
-  '^src/modules/(operations)/OpsDetailRail[.]tsx$',
-  '^src/modules/(operations)/opsBlock[.]ts$',
   '^src/modules/(operations)/run/RunSurface[.]tsx$',
 ];
 
@@ -87,7 +106,7 @@ module.exports = {
     {
       name: 'no-cross-module-debt',
       comment:
-        'The sixteen cross-module edges that predate the ratchet, in three clusters (workspace->settings, workspace->display, operations->bracket). WARN so they stay visible without blocking; each is a design decision owed, not an oversight — debt-log D3 and ADR 0011. Retiring a cluster means fixing its edges and deleting its line from KNOWN_CROSS_MODULE, after which the error rule above covers it.',
+        'The cross-module edges that predate the ratchet — nine now, in two clusters (workspace->settings, operations->bracket), both ruled SEAMS on 2026-09-15 (debt-log D3, ADR 0011): one module deliberately mounts another module\'s surface. WARN so they stay visible without blocking. Retiring a cluster means fixing its edges and deleting its line from KNOWN_CROSS_MODULE, after which the error rule above covers it; workspace->display went that way when its shared layout, rotation and chrome moved to lib/ and components/.',
       severity: 'warn',
       from: { path: KNOWN_CROSS_MODULE },
       to: { path: '^src/modules/([^/]+)/', pathNot: ['^src/modules/$1/'] },

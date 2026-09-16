@@ -19,7 +19,7 @@ import type { BracketPlayerDTO } from '../../api/dto';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { useConfirmClick } from '../../hooks/useConfirmClick';
 import { EYEBROW_CLASS } from '../../lib/utils';
-import { sideLabel } from './bracketLabels';
+import { sideLabel } from "../../platform/domain/bracketLabels";
 import { badgeForEvent, badgesByPlayerId, type BadgeEntry } from './rosterEvents';
 import { formatBracketSlot } from './formatBracketSlot';
 import { labelledClock } from '../../lib/formatDateTime';

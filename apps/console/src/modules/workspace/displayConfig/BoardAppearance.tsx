@@ -36,7 +36,7 @@ import {
   BoardBanner,
   BoardMark,
   resolveBoardAccent,
-} from '../../display/publicDisplay/boardChrome';
+} from '../../../components/boardChrome';
 
 /** Longest edge, in CSS pixels, an uploaded board image is re-encoded to. */
 const MAX_IMAGE_EDGE = 640;

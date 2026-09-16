@@ -14,11 +14,13 @@ with no rule for which one to open is worse than one drawer.
 
 | File | Purpose |
 |---|---|
+| `boardRotation.ts` | Venue-board slide rotation: which slides run and which one is showing. Shared by Display (the board) and Workspace (the board editor). |
 | `bracketCommandQueue.ts` | Idempotent bracket-result command queue (the ADR 0007 path). |
 | `bracketOccupancy.ts` | Court/time occupancy for bracket scheduling. |
 | `bracketTabs.ts` | Live tab-id and view helpers for the Bracket module. |
 | `commandQueue.ts` | The generic idempotent operator command queue, IndexedDB-backed. |
 | `constraintChecker.ts` | Client-side constraint pre-checks before a solve is requested. |
+| `courtLayout.ts` | Venue-board court order, hide filter, column/pagination maths. Shared by Display (the board) and Workspace (the board editor). |
 | `disciplineNames.ts` | Discipline code to display name. |
 | `eventColors.ts` | Per-event colour assignment, shared by chips and boards. |
 | `getActiveAssignments.ts` | The currently-active assignment set for a match list. |

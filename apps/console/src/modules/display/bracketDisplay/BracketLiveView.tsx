@@ -2,8 +2,8 @@ import type { BracketTournamentDTO } from '../../../api/bracketDto';
 import { liveMatches, type LiveRow } from './bracketDisplayData';
 import { SideScores } from '../../../components/control-plane/MatchCard';
 import { SIGNAGE_NAME_WRAP, stepDownSignageNameSize, resolveGridColsClass } from '../publicDisplay/tvSizing';
-import { autoLayout } from '../publicDisplay/courtLayout';
-import { resolveBoardAccent } from '../publicDisplay/boardChrome';
+import { autoLayout } from '../../../lib/courtLayout';
+import { resolveBoardAccent } from '../../../components/boardChrome';
 
 /**
  * Read-only "what's playing now" view for the bracket TV — the bracket analog

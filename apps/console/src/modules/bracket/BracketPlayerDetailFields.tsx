@@ -34,7 +34,7 @@ import {
   BracketEventsField,
   type CommitEventFn,
 } from './BracketPlayerFields';
-import { disciplineLabel } from './bracketLabels';
+import { disciplineLabel } from "../../platform/domain/bracketLabels";
 import { isDoublesCode } from '../../lib/doubles';
 import { formatPersonName } from '../../platform/domain/sides';
 import { INPUT_INLINE_CLASS } from '../../lib/utils';

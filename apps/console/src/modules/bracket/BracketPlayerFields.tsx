@@ -31,7 +31,7 @@ import {
   commitBracketPairing,
   type BracketPairingCommand,
 } from './pairingMutation';
-import { disciplineLabel } from './bracketLabels';
+import { disciplineLabel } from "../../platform/domain/bracketLabels";
 import { EYEBROW_CLASS } from '../../lib/utils';
 import { isDoublesCode } from '../../lib/doubles';
 import { formatPersonName } from '../../platform/domain/sides';
